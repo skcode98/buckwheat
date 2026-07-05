@@ -96,6 +96,16 @@
   <string name="help_good_luck_description">Over time, you will learn to feel how much you really spend and how much you need. Learn to understand whether you can spend money on a trinket right now</string>
   <string name="copy_in_clipboard">Copied to clipboard</string>
   <string name="not_found_email_clients">No email clients found</string>
+  <string name="persist_tags_label">Persist tags across months</string>
+  <string name="persist_tags_description">Keep tags from previous months instead of clearing them when creating a new budget</string>
+  <string name="reminder_title">Log your spending</string>
+  <string name="reminder_text">Don\'t forget to record today\'s expenses</string>
+  <string name="reminder_channel_name">Daily reminder</string>
+  <string name="reminder_channel_description">Reminds you to log your daily spending</string>
+  <string name="reminder_label">Daily reminder</string>
+  <string name="reminder_description">Get a notification each day to log your spending</string>
+  <string name="sync_label">Sync with TrackInvest</string>
+  <string name="sync_description">Auto-export spending data to Downloads so TrackInvest can import it</string>
   <string name="cancel">Cancel</string>
   <string name="accept">Accept</string>
   <string name="today">Today</string>
@@ -143,4 +153,14 @@
   <string name="confirm_finish_budget_title">Finish budget</string>
   <string name="confirm_finish_budget_description">Your current budget will be completed, and you will no longer be able to make any further expenses</string>
   <string name="confirm_finish_budget">Finish budget</string>
+  <string name="month_over_month_title">Spending insights</string>
+  <string name="goals_title">Savings goals</string>
+  <string name="no_goals">No goals yet. Tap + to create one</string>
+  <string name="add_goal_title">New savings goal</string>
+  <string name="goal_name_label">Goal name</string>
+  <string name="goal_target_label">Target amount</string>
+  <string name="add_deadline">Add deadline (optional)</string>
+  <string name="contribute_to_goal">Contribute to %1$s</string>
+  <string name="amount_label">Amount</string>
+  <string name="goal_remaining">remaining</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.data
 
+import android.content.Context
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -15,7 +16,11 @@ import com.danilkinkin.buckwheat.base.balloon.BalloonController
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.effects.ConfettiController
+import com.danilkinkin.buckwheat.reminder.ReminderManager
+import com.danilkinkin.buckwheat.sync.SyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -36,6 +41,7 @@ data class PathState (
 class AppViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val settingsRepository: SettingsRepository,
+    @ApplicationContext private val app: Context,
 ) : ViewModel() {
 
     var _snackbarHostState = SnackbarHostState()
@@ -83,6 +89,16 @@ class AppViewModel @Inject constructor(
 
     var showSpentCardByDefault = settingsRepository.isShowSpentCardByDefault().asLiveData()
 
+    var persistTags = settingsRepository.isPersistTags().asLiveData()
+
+    var reminderEnabled = settingsRepository.isReminderEnabled().asLiveData()
+    var reminderHour = settingsRepository.getReminderHour().asLiveData()
+    var reminderMinute = settingsRepository.getReminderMinute().asLiveData()
+
+    var syncEnabled = settingsRepository.isSyncEnabled().asLiveData()
+    var syncHour = settingsRepository.getSyncHour().asLiveData()
+    var syncMinute = settingsRepository.getSyncMinute().asLiveData()
+
     fun getTutorialStage(name: TUTORS) = settingsRepository.getTutorialStage(name).asLiveData()
 
     fun setShowSpentCardByDefault(showByDefault: Boolean) {
@@ -94,6 +110,58 @@ class AppViewModel @Inject constructor(
     fun setIsDebug(debug: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchDebug(debug)
+        }
+    }
+
+    fun setPersistTags(persist: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchPersistTags(persist)
+        }
+    }
+
+    fun setReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchReminderEnabled(enabled)
+            if (enabled) {
+                val hour = settingsRepository.getReminderHour().first()
+                val minute = settingsRepository.getReminderMinute().first()
+                ReminderManager.schedule(app, hour, minute)
+            } else {
+                ReminderManager.cancel(app)
+            }
+        }
+    }
+
+    fun setReminderTime(hour: Int, minute: Int) {
+        viewModelScope.launch {
+            settingsRepository.setReminderTime(hour, minute)
+            val enabled = settingsRepository.isReminderEnabled().first()
+            if (enabled) {
+                ReminderManager.schedule(app, hour, minute)
+            }
+        }
+    }
+
+    fun setSyncEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchSyncEnabled(enabled)
+            if (enabled) {
+                val hour = settingsRepository.getSyncHour().first()
+                val minute = settingsRepository.getSyncMinute().first()
+                SyncManager.schedule(app, hour, minute)
+            } else {
+                SyncManager.cancel(app)
+            }
+        }
+    }
+
+    fun setSyncTime(hour: Int, minute: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSyncTime(hour, minute)
+            val enabled = settingsRepository.isSyncEnabled().first()
+            if (enabled) {
+                SyncManager.schedule(app, hour, minute)
+            }
         }
     }
 

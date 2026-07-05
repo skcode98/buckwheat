@@ -38,6 +38,7 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
@@ -65,8 +66,6 @@ fun Analytics(
 
     val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)
 
-    // Need to hide calendar after migration to transactions,
-    // because after migration can't restore some transactions like INCOME & SET_DAILY_BUDGET
     val afterMigrationToTransactions =
         remember(transactions) { mutableStateOf(transactions.none { it.type == TransactionType.INCOME }) }
 
@@ -145,23 +144,6 @@ fun Analytics(
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
-                            SpendsCountCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                count = spends.size,
-                            )
-                            if (!afterMigrationToTransactions.value) {
-                                Spacer(modifier = Modifier.height(36.dp))
-                                SpendsCalendar(
-                                    modifier = Modifier.zIndex(-1f),
-                                    budget = wholeBudget,
-                                    transactions = transactions,
-                                    startDate = spendsViewModel.startPeriodDate.value!!,
-                                    finishDate = spendsViewModel.finishPeriodDate.value!!,
-                                    actualFinishDate = finishPeriodActualDate,
-                                    currency = spendsViewModel.currency.value!!,
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(36.dp))
                             CategoriesChartCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 spends = spends,
@@ -181,6 +163,14 @@ fun Analytics(
                         icon = painterResource(R.drawable.ic_file_download),
                         text = stringResource(R.string.export_to_csv),
                         onClick = { exportCSVLaunch() },
+                    )
+
+                    ButtonRow(
+                        icon = painterResource(R.drawable.ic_analytics),
+                        text = stringResource(R.string.month_over_month_title),
+                        onClick = {
+                            appViewModel.openSheet(PathState(MONTH_OVER_MONTH_SHEET))
+                        },
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

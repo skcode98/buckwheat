@@ -22,8 +22,12 @@ import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.NewDayBudgetDescr
 import com.danilkinkin.buckwheat.effects.Confetti
 import com.danilkinkin.buckwheat.analytics.ANALYTICS_SHEET
 import com.danilkinkin.buckwheat.analytics.Analytics
+import com.danilkinkin.buckwheat.analytics.MONTH_OVER_MONTH_SHEET
+import com.danilkinkin.buckwheat.analytics.MonthOverMonth
 import com.danilkinkin.buckwheat.analytics.VIEWER_HISTORY_SHEET
 import com.danilkinkin.buckwheat.analytics.ViewerHistory
+import com.danilkinkin.buckwheat.goals.GOALS_SHEET
+import com.danilkinkin.buckwheat.goals.Goals
 import com.danilkinkin.buckwheat.onboarding.ON_BOARDING_SHEET
 import com.danilkinkin.buckwheat.onboarding.Onboarding
 import com.danilkinkin.buckwheat.recalcBudget.RECALCULATE_DAILY_BUDGET_SHEET
@@ -136,6 +140,22 @@ fun BottomSheets(
             onClose = {
                 coroutineScope.launch { state.hide() }
             },
+        )
+    }
+
+    BottomSheetWrapper(name = MONTH_OVER_MONTH_SHEET) { state ->
+        MonthOverMonth(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(name = GOALS_SHEET) { state ->
+        Goals(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
         )
     }
 

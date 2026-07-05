@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.asFlow
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.map
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
@@ -17,10 +18,12 @@ import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.lang.Long.min
@@ -41,25 +44,45 @@ val lastChangeDailyBudgetDateStoreKey = longPreferencesKey("lastChangeDailyBudge
 val startPeriodDateStoreKey = longPreferencesKey("startPeriodDate")
 val finishPeriodDateStoreKey = longPreferencesKey("finishPeriodDate")
 val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate")
+val knownTagsStoreKey = stringPreferencesKey("knownTags")
 
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
+    private val settingsRepository: SettingsRepository,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
 
-    fun getAllTags(): LiveData<List<String>> = transactionDao.getAll().map { transactions ->
-        transactions
-            .asSequence()
-            .filter { transaction -> transaction.comment.isNotEmpty() }
-            .groupBy { it.comment }
-            .map { it.key to it.value.size }
-            .sortedBy { -it.second }
-            .map { it.first }
-            .distinct()
-            .toList()
+    fun getAllTags(): LiveData<List<String>> {
+        val dbTagsFlow = transactionDao.getAll().asFlow().map { transactions ->
+            transactions
+                .asSequence()
+                .filter { it.comment.isNotEmpty() }
+                .groupBy { it.comment }
+                .map { it.key to it.value.size }
+                .sortedBy { -it.second }
+                .map { it.first }
+                .distinct()
+                .toList()
+        }
+
+        val knownTagsFlow = context.budgetDataStore.data.map { prefs ->
+            prefs[knownTagsStoreKey]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
+        }
+
+        val persistTagsEnabledFlow = context.settingsDataStore.data.map { prefs ->
+            prefs[persistTagsStoreKey] ?: false
+        }
+
+        return combine(dbTagsFlow, knownTagsFlow, persistTagsEnabledFlow) { dbTags, knownTags, persistEnabled ->
+            if (persistEnabled) {
+                (knownTags + dbTags).distinct()
+            } else {
+                dbTags
+            }
+        }.asLiveData()
     }
 
     fun getBudget() = context.budgetDataStore.data.map {
@@ -130,6 +153,14 @@ class SpendsRepository @Inject constructor(
     }
 
     suspend fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
+        val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
+
+        if (!persistTagsEnabled) {
+            context.budgetDataStore.edit {
+                it.remove(knownTagsStoreKey)
+            }
+        }
+
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[spentStoreKey] = BigDecimal.ZERO.toString()
@@ -434,6 +465,20 @@ class SpendsRepository @Inject constructor(
 
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
+
+        if (newTransaction.comment.isNotEmpty()) {
+            val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
+            if (persistTagsEnabled) {
+                context.budgetDataStore.edit {
+                    val existingKnown = it[knownTagsStoreKey]
+                        ?.split("|")
+                        ?.filter { s -> s.isNotEmpty() }
+                        ?: emptyList()
+                    val merged = (existingKnown + newTransaction.comment).distinct()
+                    it[knownTagsStoreKey] = merged.joinToString("|")
+                }
+            }
+        }
 
         context.budgetDataStore.edit {
             try {

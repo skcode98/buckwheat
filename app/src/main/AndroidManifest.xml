@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     
     <application
         android:name=".Application"
@@ -39,6 +41,22 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/minimal_app_widget_provider" />
         </receiver>
+
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".reminder.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".sync.SyncReceiver"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"

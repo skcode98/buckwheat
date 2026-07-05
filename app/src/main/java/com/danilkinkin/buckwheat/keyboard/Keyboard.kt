@@ -29,7 +29,6 @@ import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.util.Date
 
 val BUTTON_GAP = 6.dp
 
@@ -314,7 +313,7 @@ fun Keyboard(
                                                 Transaction(
                                                     type = TransactionType.SPENT,
                                                     value = editorViewModel.currentSpent,
-                                                    date = Date(),
+                                                    date = editorViewModel.currentDate,
                                                     comment = (editorViewModel.currentComment.value
                                                         ?: "").trim()
                                                 )

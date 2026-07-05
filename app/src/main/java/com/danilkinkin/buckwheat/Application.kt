@@ -2,7 +2,11 @@ package com.danilkinkin.buckwheat
 
 import android.app.Activity
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.os.Bundle
+import com.danilkinkin.buckwheat.reminder.ReminderReceiver
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import dagger.hilt.android.HiltAndroidApp
@@ -11,6 +15,8 @@ import dagger.hilt.android.HiltAndroidApp
 class Application : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        createNotificationChannel()
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
@@ -42,5 +48,20 @@ class Application : Application() {
 
             }
         })
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                ReminderReceiver.CHANNEL_ID,
+                getString(R.string.reminder_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.reminder_channel_description)
+            }
+            val notificationManager =
+                getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 }

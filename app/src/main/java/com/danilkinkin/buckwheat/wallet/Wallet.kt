@@ -31,6 +31,7 @@ import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.analytics.ANALYTICS_SHEET
+import com.danilkinkin.buckwheat.goals.GOALS_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.*
 import java.math.BigDecimal
@@ -256,6 +257,14 @@ fun Wallet(
                                 }
                             )
                         }
+
+                        ButtonRow(
+                            icon = painterResource(R.drawable.ic_balance_wallet),
+                            text = stringResource(R.string.goals_title),
+                            onClick = {
+                                appViewModel.openSheet(PathState(GOALS_SHEET))
+                            },
+                        )
 
                         val exportCSVLaunch = rememberExportCSV(
                             activityResultRegistryOwner = activityResultRegistryOwner
