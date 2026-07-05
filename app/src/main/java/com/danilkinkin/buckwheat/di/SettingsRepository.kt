@@ -20,6 +20,12 @@ val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
 val syncEnabledStoreKey = booleanPreferencesKey("syncEnabled")
 val syncHourStoreKey = intPreferencesKey("syncHour")
 val syncMinuteStoreKey = intPreferencesKey("syncMinute")
+val dailySpendOverviewStoreKey = booleanPreferencesKey("dailySpendOverview")
+val weeklyOverviewStoreKey = booleanPreferencesKey("weeklyOverview")
+val monthlyExportStoreKey = booleanPreferencesKey("monthlyExport")
+val monthlyOverviewStoreKey = booleanPreferencesKey("monthlyOverview")
+val factsInsightsStoreKey = booleanPreferencesKey("factsInsights")
+val goalsReminderStoreKey = booleanPreferencesKey("goalsReminder")
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -109,6 +115,44 @@ class SettingsRepository @Inject constructor(
             it[reminderHourStoreKey] = hour
             it[reminderMinuteStoreKey] = minute
         }
+    }
+
+    fun isDailySpendOverviewEnabled() = context.settingsDataStore.data.map {
+        it[dailySpendOverviewStoreKey] ?: false
+    }
+    fun isWeeklyOverviewEnabled() = context.settingsDataStore.data.map {
+        it[weeklyOverviewStoreKey] ?: false
+    }
+    fun isMonthlyExportEnabled() = context.settingsDataStore.data.map {
+        it[monthlyExportStoreKey] ?: false
+    }
+    fun isMonthlyOverviewEnabled() = context.settingsDataStore.data.map {
+        it[monthlyOverviewStoreKey] ?: false
+    }
+    fun isFactsInsightsEnabled() = context.settingsDataStore.data.map {
+        it[factsInsightsStoreKey] ?: false
+    }
+    fun isGoalsReminderEnabled() = context.settingsDataStore.data.map {
+        it[goalsReminderStoreKey] ?: false
+    }
+
+    suspend fun switchDailySpendOverview(enabled: Boolean) {
+        context.settingsDataStore.edit { it[dailySpendOverviewStoreKey] = enabled }
+    }
+    suspend fun switchWeeklyOverview(enabled: Boolean) {
+        context.settingsDataStore.edit { it[weeklyOverviewStoreKey] = enabled }
+    }
+    suspend fun switchMonthlyExport(enabled: Boolean) {
+        context.settingsDataStore.edit { it[monthlyExportStoreKey] = enabled }
+    }
+    suspend fun switchMonthlyOverview(enabled: Boolean) {
+        context.settingsDataStore.edit { it[monthlyOverviewStoreKey] = enabled }
+    }
+    suspend fun switchFactsInsights(enabled: Boolean) {
+        context.settingsDataStore.edit { it[factsInsightsStoreKey] = enabled }
+    }
+    suspend fun switchGoalsReminder(enabled: Boolean) {
+        context.settingsDataStore.edit { it[goalsReminderStoreKey] = enabled }
     }
 
     suspend fun activateTutorial(name: TUTORS) {

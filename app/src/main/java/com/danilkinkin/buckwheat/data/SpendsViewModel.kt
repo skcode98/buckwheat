@@ -6,7 +6,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.danilkinkin.buckwheat.data.entities.Category
+import com.danilkinkin.buckwheat.data.entities.Period
 import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.di.ImportResult
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
@@ -17,6 +21,9 @@ import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 enum class RestedBudgetDistributionMethod { REST, ADD_TODAY, ASK }
 
@@ -26,9 +33,19 @@ class SpendsViewModel @Inject constructor(
     private val spendsRepository: SpendsRepository,
 ) : ViewModel() {
     var tags = spendsRepository.getAllTags()
+    var tagsWithCount = spendsRepository.getAllTagsWithCount()
+    var categories = spendsRepository.getAllCategories()
+    var tagCategoryMappings = spendsRepository.getAllMappingsWithCategory()
     var transactions = spendsRepository.getAllTransactions()
     var spends = spendsRepository.getAllSpends()
+
+    // Search and filter state
+    val searchQuery = MutableStateFlow("")
+    val selectedTagFilter = MutableStateFlow<String?>(null)
+    val recurringApplied = MutableLiveData<List<Transaction>>(emptyList())
     var budget = spendsRepository.getBudget().asLiveData()
+    var needsBudget = spendsRepository.getNeedsBudget()
+    var wantsBudget = spendsRepository.getWantsBudget()
     var spent = spendsRepository.getSpent().asLiveData()
     var dailyBudget = spendsRepository.getDailyBudget().asLiveData()
     var spentFromDailyBudget = spendsRepository.getSpentFromDailyBudget().asLiveData()
@@ -47,9 +64,16 @@ class SpendsViewModel @Inject constructor(
     var periodFinished = MutableLiveData(false)
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
 
+    // Selection mode for batch operations
+    private val _selectionMode = MutableStateFlow(false)
+    val selectionMode: StateFlow<Boolean> = _selectionMode
+    private val _selectedTransactionIds = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedTransactionIds: StateFlow<Set<Int>> = _selectedTransactionIds
+
     init {
         runChangeDayAction()
         runScheduledDetectChangeDayTask()
+        checkRecurringTemplates()
     }
 
     // Budget handling
@@ -72,12 +96,34 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
+    fun setBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
+        viewModelScope.launch {
+            spendsRepository.setBudgets(needsBudget, wantsBudget, newFinishDate)
+            requireSetBudget.value = false
+            periodFinished.value = false
+        }
+    }
+
+    fun changeBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
+        viewModelScope.launch {
+            spendsRepository.changeBudgets(needsBudget, wantsBudget, newFinishDate)
+            requireSetBudget.value = false
+            periodFinished.value = false
+        }
+    }
+
     fun finishBudget() {
         viewModelScope.launch {
             spendsRepository.finishBudget(Date())
 
             requireSetBudget.value = false
             periodFinished.value = true
+        }
+    }
+
+    fun setStartPeriodDate(newStartDate: Date) {
+        viewModelScope.launch {
+            spendsRepository.setStartPeriodDate(newStartDate)
         }
     }
 
@@ -110,6 +156,167 @@ class SpendsViewModel @Inject constructor(
             lastRemovedTransaction.value?.let {
                 spendsRepository.addSpent(it)
             }
+        }
+    }
+
+    // Batch selection
+
+    fun toggleSelectionMode() {
+        _selectionMode.value = !_selectionMode.value
+        if (!_selectionMode.value) {
+            _selectedTransactionIds.value = emptySet()
+        }
+    }
+
+    fun toggleTransactionSelection(uid: Int) {
+        val current = _selectedTransactionIds.value.toMutableSet()
+        if (current.contains(uid)) current.remove(uid) else current.add(uid)
+        _selectedTransactionIds.value = current
+        if (current.isEmpty()) _selectionMode.value = false
+    }
+
+    fun clearSelection() {
+        _selectedTransactionIds.value = emptySet()
+        _selectionMode.value = false
+    }
+
+    fun selectTransactions(uids: Set<Int>) {
+        _selectedTransactionIds.value = uids
+        if (uids.isNotEmpty()) _selectionMode.value = true
+    }
+
+    fun deleteSelectedTransactions() {
+        viewModelScope.launch {
+            val ids = _selectedTransactionIds.value
+            if (ids.isEmpty()) return@launch
+            val txs = spendsRepository.getAllTransactionsSuspend()
+                .filter { it.uid in ids && it.type == TransactionType.SPENT }
+            spendsRepository.deleteTransactions(txs)
+            _selectedTransactionIds.value = emptySet()
+            _selectionMode.value = false
+        }
+    }
+
+    // Period history
+
+    val allPeriods = spendsRepository.getAllPeriods()
+
+    fun importTransactions(transactions: List<Transaction>, onResult: ((ImportResult) -> Unit)? = null) {
+        viewModelScope.launch {
+            val result = spendsRepository.importTransactions(transactions)
+            onResult?.invoke(result)
+        }
+    }
+
+    fun deletePeriod(id: Long) {
+        viewModelScope.launch { spendsRepository.deletePeriod(id) }
+    }
+
+    fun updatePeriodNote(id: Long, note: String) {
+        viewModelScope.launch { spendsRepository.updatePeriodNote(id, note) }
+    }
+
+    // Tags management
+
+    fun addKnownTag(tag: String) {
+        viewModelScope.launch {
+            spendsRepository.addKnownTag(tag)
+        }
+    }
+
+    fun deleteTag(tag: String) {
+        viewModelScope.launch {
+            spendsRepository.deleteTag(tag)
+        }
+    }
+
+    fun renameTag(oldTag: String, newTag: String) {
+        viewModelScope.launch {
+            spendsRepository.renameTag(oldTag, newTag)
+        }
+    }
+
+    // Category management
+
+    fun addCategory(name: String, color: Long, monthlyLimit: BigDecimal = BigDecimal.ZERO) {
+        viewModelScope.launch {
+            spendsRepository.addCategory(name, color, monthlyLimit)
+        }
+    }
+
+    fun renameCategory(id: Long, newName: String) {
+        viewModelScope.launch {
+            spendsRepository.renameCategory(id, newName)
+        }
+    }
+
+    fun updateCategory(id: Long, name: String, color: Long, monthlyLimit: BigDecimal) {
+        viewModelScope.launch {
+            spendsRepository.updateCategory(id, name, color, monthlyLimit)
+        }
+    }
+
+    fun deleteCategory(id: Long) {
+        viewModelScope.launch {
+            spendsRepository.deleteCategory(id)
+        }
+    }
+
+    fun setTagCategory(tagName: String, categoryId: Long?) {
+        viewModelScope.launch {
+            spendsRepository.setTagCategory(tagName, categoryId)
+        }
+    }
+
+    // Category limits
+
+    fun setCategoryLimit(categoryId: Long, limit: BigDecimal) {
+        viewModelScope.launch {
+            spendsRepository.setCategoryLimit(categoryId, limit)
+        }
+    }
+
+    fun checkRecurringTemplates() {
+        viewModelScope.launch {
+            val applied = spendsRepository.checkAndApplyRecurringTemplates()
+            if (applied.isNotEmpty()) {
+                recurringApplied.value = applied
+            }
+        }
+    }
+
+    fun dismissRecurringResult() {
+        recurringApplied.value = emptyList()
+    }
+
+    fun setSearchQuery(query: String) {
+        searchQuery.value = query
+    }
+
+    fun setSelectedTagFilter(tag: String?) {
+        selectedTagFilter.value = tag
+    }
+
+    // Spending streak
+
+    fun computeStreak(): Int {
+        val txs = spends.value ?: return 0
+        return spendsRepository.computeStreak(txs)
+    }
+
+    // Data backup / restore
+
+    fun exportBackup(destPath: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = spendsRepository.exportBackup(destPath)
+            onResult(ok)
+        }
+    }
+
+    fun importBackup(sourcePath: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = spendsRepository.importBackup(sourcePath)
+            onResult(ok)
         }
     }
 

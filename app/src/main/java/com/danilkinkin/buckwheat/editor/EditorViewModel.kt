@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.editor
 
 import androidx.lifecycle.*
+import com.danilkinkin.buckwheat.data.entities.SpendType
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
@@ -24,6 +25,8 @@ class EditorViewModel @Inject constructor(
     var currentDate: Date = Date()
     var currentSpent: BigDecimal = BigDecimal.ZERO
     var currentComment = MutableLiveData("")
+    var currentSpendType = MutableLiveData(SpendType.WANTS)
+    var currentCategoryId = MutableLiveData<Long?>(null)
     var rawSpentValue = MutableLiveData("")
 
     fun startEditingSpent(transaction: Transaction) {
@@ -31,6 +34,8 @@ class EditorViewModel @Inject constructor(
         currentSpent = transaction.value
         currentDate = transaction.date
         currentComment.value = transaction.comment
+        currentSpendType.value = transaction.spendType
+        currentCategoryId.value = transaction.categoryId
         rawSpentValue.value = tryConvertStringToNumber(transaction.value.toString()).join(third = false)
 
         stage.value = EditStage.EDIT_SPENT
@@ -53,6 +58,8 @@ class EditorViewModel @Inject constructor(
         currentSpent = BigDecimal.ZERO
         currentDate = Date()
         currentComment.value = ""
+        currentSpendType.value = SpendType.WANTS
+        currentCategoryId.value = null
         rawSpentValue.value = ""
 
         stage.value = EditStage.IDLE

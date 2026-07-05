@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -44,12 +45,25 @@ fun TaggingToolbar(
 
     val tags by spendsViewModel.tags.observeAsState(emptyList())
     val currentComment by editorViewModel.currentComment.observeAsState("")
+    val categories by spendsViewModel.categories.observeAsState(emptyList())
+    val mappings by spendsViewModel.tagCategoryMappings.observeAsState(emptyList())
 
     var showAddComment by remember { mutableStateOf(false) }
     var isEdit by remember { mutableStateOf(false) }
 
     observeLiveData(editorViewModel.stage) {
         showAddComment = it === EditStage.EDIT_SPENT
+    }
+
+    val categoryColorByTagName = remember(mappings, categories) {
+        val colorMap = categories.associate { it.id to Color(it.color) }
+        mappings.mapNotNull { m ->
+            colorMap[m.categoryId]?.let { color -> m.tagName to color }
+        }.toMap()
+    }
+
+    val categoryIdByTagName = remember(mappings) {
+        mappings.associate { it.tagName to it.categoryId }
     }
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -94,9 +108,18 @@ fun TaggingToolbar(
                         )
                     ) { with(localDensity) { 30.dp.toPx().toInt() } },
                 ) {
-                    Tag(value = tag, onClick = {
-                        editorViewModel.currentComment.value = tag
-                    })
+                    Tag(
+                        value = tag,
+                        isSelected = false,
+                        categoryColor = categoryColorByTagName[tag],
+                        onClick = {
+                            editorViewModel.currentComment.value = tag
+                            val catId = categoryIdByTagName[tag]
+                            if (catId != null) {
+                                editorViewModel.currentCategoryId.value = catId
+                            }
+                        },
+                    )
                 }
             }
             Spacer(modifier = Modifier.width(24.dp))

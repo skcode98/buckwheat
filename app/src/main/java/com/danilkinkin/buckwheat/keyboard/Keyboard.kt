@@ -17,6 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.entities.SpendType
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.TUTORS
@@ -294,13 +295,17 @@ fun Keyboard(
 
                                 runBlocking {
                                     if (editorViewModel.canCommitEditingSpent()) {
+                                        val comment = (editorViewModel.currentComment.value
+                                            ?: "").trim()
+                                        val categoryId = editorViewModel.currentCategoryId.value
+
                                         if (mode == EditMode.EDIT) {
                                             val newVersionOfSpent =
                                                 editorViewModel.editedTransaction!!.copy(
                                                     value = editorViewModel.currentSpent,
                                                     date = editorViewModel.currentDate,
-                                                    comment = (editorViewModel.currentComment.value
-                                                        ?: "").trim()
+                                                    comment = comment,
+                                                    categoryId = categoryId
                                                 )
 
                                             spendsViewModel.removeSpent(
@@ -314,11 +319,17 @@ fun Keyboard(
                                                     type = TransactionType.SPENT,
                                                     value = editorViewModel.currentSpent,
                                                     date = editorViewModel.currentDate,
-                                                    comment = (editorViewModel.currentComment.value
-                                                        ?: "").trim()
+                                                    comment = comment,
+                                                    spendType = editorViewModel.currentSpendType.value
+                                                        ?: SpendType.WANTS,
+                                                    categoryId = categoryId,
                                                 )
                                             )
                                             appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
+                                        }
+
+                                        if (comment.isNotBlank() && categoryId != null) {
+                                            spendsViewModel.setTagCategory(comment, categoryId)
                                         }
 
                                         editorViewModel.resetEditingSpent()

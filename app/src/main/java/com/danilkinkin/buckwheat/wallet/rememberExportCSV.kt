@@ -13,6 +13,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
@@ -28,6 +29,7 @@ fun rememberExportCSV(
     appViewModel: AppViewModel = hiltViewModel(),
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
+    spends: List<Transaction>? = null,
 ): () -> Unit {
     if (activityResultRegistryOwner === null) return {}
 
@@ -86,7 +88,7 @@ fun rememberExportCSV(
                 )
                 val dateFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
 
-                spendsViewModel.spends.value!!.forEach { spent ->
+                (spends ?: spendsViewModel.spends.value!!).forEach { spent ->
                     printer.printRecord(
                         spent.value,
                         spent.comment,

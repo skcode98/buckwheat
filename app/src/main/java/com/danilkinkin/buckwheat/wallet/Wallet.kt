@@ -11,7 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -32,6 +34,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.analytics.ANALYTICS_SHEET
 import com.danilkinkin.buckwheat.goals.GOALS_SHEET
+import com.danilkinkin.buckwheat.recurring.RECURRING_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.*
 import java.math.BigDecimal
@@ -51,8 +54,17 @@ fun Wallet(
     val haptic = LocalHapticFeedback.current
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
-    var budgetCache by remember { mutableStateOf(spendsViewModel.budget.value!!) }
     val budget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
+    val existingNeeds = spendsViewModel.needsBudget.value ?: BigDecimal.ZERO
+    val existingWants = spendsViewModel.wantsBudget.value ?: BigDecimal.ZERO
+    var budgetCache by remember { mutableStateOf(budget) }
+    var needsCache by remember {
+        mutableStateOf(
+            if (existingNeeds > BigDecimal.ZERO) existingNeeds
+            else if (budget > BigDecimal.ZERO) BigDecimal.ZERO
+            else BigDecimal.ZERO
+        )
+    }
     val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
     val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
@@ -90,7 +102,7 @@ fun Wallet(
     val offset = with(LocalDensity.current) { 50.dp.toPx().toInt() }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
-        Column {
+        Column(Modifier.fillMaxSize()) {
             val days = if (dateToValue.value !== null) {
                 countDaysToToday(dateToValue.value!!)
             } else {
@@ -143,6 +155,7 @@ fun Wallet(
             }
             Column(
                 modifier = Modifier
+                    .weight(1f)
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = navigationBarHeight)
             ) {
@@ -182,8 +195,15 @@ fun Wallet(
                             forceChange = forceChange,
                             onChange = { newBudget, finishDate ->
                                 budgetCache = newBudget
+                                if (needsCache > newBudget) needsCache = newBudget
                                 dateToValue.value = finishDate
                             }
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        NeedsBudgetInput(
+                            needsBudget = needsCache,
+                            totalBudget = budgetCache,
+                            onNeedsChange = { needsCache = it.coerceIn(BigDecimal.ZERO, budgetCache) },
                         )
                     } else {
                         BudgetSummary(
@@ -266,6 +286,14 @@ fun Wallet(
                             },
                         )
 
+                        ButtonRow(
+                            icon = painterResource(R.drawable.ic_autorenew),
+                            text = stringResource(R.string.recurring_title),
+                            onClick = {
+                                appViewModel.openSheet(PathState(RECURRING_SHEET))
+                            },
+                        )
+
                         val exportCSVLaunch = rememberExportCSV(
                             activityResultRegistryOwner = activityResultRegistryOwner
                         )
@@ -316,10 +344,11 @@ fun Wallet(
                             onClick = {
                                 spendsViewModel.changeDisplayCurrency(currency!!)
 
+                                val wants = budgetCache - needsCache
                                 if (spends!!.isNotEmpty() && !forceChange) {
-                                    spendsViewModel.changeBudget(budgetCache, dateToValue.value!!)
+                                    spendsViewModel.changeBudgets(needsCache, wants, dateToValue.value!!)
                                 } else {
-                                    spendsViewModel.setBudget(budgetCache, dateToValue.value!!)
+                                    spendsViewModel.setBudgets(needsCache, wants, dateToValue.value!!)
                                     appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
                                 }
 
@@ -365,6 +394,43 @@ fun Wallet(
             onClose = { openConfirmFinishBudgetDialog.value = false },
         )
     }
+}
+
+@Composable
+private fun NeedsBudgetInput(
+    needsBudget: BigDecimal,
+    totalBudget: BigDecimal,
+    onNeedsChange: (BigDecimal) -> Unit,
+) {
+    var rawNeeds by remember(needsBudget) {
+        mutableStateOf(
+            if (needsBudget > BigDecimal.ZERO) needsBudget.stripTrailingZeros().toPlainString()
+            else ""
+        )
+    }
+    OutlinedTextField(
+        value = rawNeeds,
+        onValueChange = {
+            rawNeeds = it
+            val parsed = it.toBigDecimalOrNull()
+            onNeedsChange(parsed ?: BigDecimal.ZERO)
+        },
+        label = { Text("Needs budget") },
+        placeholder = { Text("e.g. rent, utilities, debt (max ${totalBudget.toPlainString()})") },
+        singleLine = true,
+        leadingIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_label),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        textStyle = MaterialTheme.typography.bodyLarge,
+    )
 }
 
 @Preview

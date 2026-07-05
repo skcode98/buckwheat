@@ -13,14 +13,23 @@ android {
         applicationId = "com.danilkinkin.buckwheat"
         minSdk = 29
         targetSdk = 36
-        versionCode = 30
-        versionName = "4.9.0"
+        versionCode = 32
+        versionName = "4.11.0"
         testInstrumentationRunner = "com.danilkinkin.buckwheat.CustomTestRunner"
     }
 
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")
         arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getProperty("user.home") + "/.android/release.keystore")
+            storePassword = "buckwheat123"
+            keyAlias = "buckwheat"
+            keyPassword = "buckwheat123"
+        }
     }
 
     buildTypes {
@@ -30,7 +39,7 @@ android {
 
         getByName("release") {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

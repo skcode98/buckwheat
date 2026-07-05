@@ -163,4 +163,17 @@
   <string name="contribute_to_goal">Contribute to %1$s</string>
   <string name="amount_label">Amount</string>
   <string name="goal_remaining">remaining</string>
+  <string name="recurring_title">Recurring transactions</string>
+  <string name="no_recurring">No recurring transactions yet. Tap + to add one</string>
+  <string name="add_recurring_title">New recurring transaction</string>
+  <string name="recurring_day_hint">Day of month (1-31)</string>
+  <string name="recurring_day_label">Day %1$d of each month</string>
+  <string name="recurring_channel_name">Recurring transactions</string>
+  <string name="recurring_channel_description">Notifies when recurring transactions are auto-added</string>
+  <string name="recurring_notification_title">Recurring transactions added</string>
+  <string name="recurring_notification_text">%1$d recurring transaction(s) added today</string>
+  <string name="import_csv_title">Import from CSV</string>
+  <string name="import_csv_success">Imported</string>
+  <string name="import_csv_failed">Failed to import CSV</string>
+  <string name="period_history_title">Period history</string>
 </resources>

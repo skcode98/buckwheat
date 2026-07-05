@@ -1,12 +1,17 @@
 package com.danilkinkin.buckwheat.history
 
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,13 +31,41 @@ fun SpentItem(
     transaction: Transaction,
     currency: ExtendCurrency,
     modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
+    onSelect: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    Column(Modifier.padding(bottom = 14.dp)) {
+    val bgColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else Color.Transparent
+    Column(
+        modifier = Modifier
+            .padding(bottom = 14.dp)
+            .then(
+                if (isSelectionMode && onSelect != null) Modifier.clickable { onSelect() }
+                else Modifier
+            )
+            .then(if (isSelected) Modifier.background(bgColor) else Modifier)
+    ) {
         Row(modifier.fillMaxWidth()) {
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onSelect?.invoke() },
+                    modifier = Modifier
+                        .padding(start = 8.dp, top = 14.dp)
+                        .size(24.dp),
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                    ),
+                )
+            }
             Column(
                 Modifier
-                    .padding( start = 32.dp, top = 14.dp)
+                    .padding(
+                        start = if (isSelectionMode) 8.dp else 32.dp,
+                        top = 14.dp,
+                    )
                     .weight(1f)
             ) {
                 Text(

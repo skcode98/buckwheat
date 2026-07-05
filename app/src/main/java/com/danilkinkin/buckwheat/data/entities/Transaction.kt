@@ -12,6 +12,11 @@ enum class TransactionType {
     SPENT
 }
 
+enum class SpendType {
+    NEEDS,
+    WANTS
+}
+
 @Entity(tableName = "transactions")
 data class Transaction(
     @ColumnInfo(name = "type")
@@ -25,6 +30,12 @@ data class Transaction(
 
     @ColumnInfo(name = "comment", defaultValue = "")
     val comment: String = "",
+
+    @ColumnInfo(name = "spend_type", defaultValue = "WANTS")
+    val spendType: SpendType = SpendType.WANTS,
+
+    @ColumnInfo(name = "category_id")
+    val categoryId: Long? = null,
 ) {
     @PrimaryKey(autoGenerate = true) var uid: Int = 0
 }

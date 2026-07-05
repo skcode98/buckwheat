@@ -10,25 +10,40 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.map
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
+import com.danilkinkin.buckwheat.data.dao.TagWithCategory
+import com.danilkinkin.buckwheat.data.entities.Category
+import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
+import com.danilkinkin.buckwheat.data.entities.TagCategory
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.dao.CategoryDao
+import com.danilkinkin.buckwheat.data.dao.PeriodDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.data.entities.Period
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
+import com.danilkinkin.buckwheat.util.toLocalDate
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.Calendar
 import java.util.Date
 import javax.inject.Inject
 
@@ -45,15 +60,131 @@ val startPeriodDateStoreKey = longPreferencesKey("startPeriodDate")
 val finishPeriodDateStoreKey = longPreferencesKey("finishPeriodDate")
 val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate")
 val knownTagsStoreKey = stringPreferencesKey("knownTags")
+val needsBudgetStoreKey = stringPreferencesKey("needsBudget")
+val wantsBudgetStoreKey = stringPreferencesKey("wantsBudget")
+val needsDailyBudgetStoreKey = stringPreferencesKey("needsDailyBudget")
+val wantsDailyBudgetStoreKey = stringPreferencesKey("wantsDailyBudget")
+val spentFromNeedsDailyBudgetStoreKey = stringPreferencesKey("spentFromNeedsDailyBudget")
+val spentFromWantsDailyBudgetStoreKey = stringPreferencesKey("spentFromWantsDailyBudget")
+
+data class ImportResult(val inserted: Int, val skipped: Int)
 
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,
+    private val periodDao: PeriodDao,
+    private val recurringDao: RecurringDao,
+    private val categoryDao: CategoryDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
     private val settingsRepository: SettingsRepository,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
+
+    suspend fun getAllTransactionsSuspend(): List<Transaction> = transactionDao.getAllSuspend()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
+    suspend fun getAllSpendsSuspend(): List<Transaction> = transactionDao.getAllSuspend().filter { it.type == TransactionType.SPENT }
+
+    fun getAllPeriods(): LiveData<List<Period>> = periodDao.getAll()
+
+    fun getAllSpendsByDateRange(startDateMs: Long, endDateMs: Long): LiveData<List<Transaction>> =
+        transactionDao.getAll(TransactionType.SPENT, startDateMs, endDateMs)
+
+    suspend fun deletePeriod(id: Long) {
+        periodDao.getById(id)?.let { periodDao.delete(it) }
+    }
+
+    suspend fun updatePeriodNote(id: Long, note: String) {
+        periodDao.getById(id)?.let {
+            periodDao.update(it.copy(note = note))
+        }
+    }
+
+    suspend fun saveCurrentPeriod() {
+        val budget = getBudget().first()
+        if (budget <= BigDecimal.ZERO) return
+
+        val startDate = getStartPeriodDate().first()
+        val finishDate = getFinishPeriodDate().first() ?: return
+        val actualFinishDate = getFinishPeriodActualDate().first()
+
+        periodDao.insert(
+            Period(
+                startDate = startDate,
+                finishDate = finishDate,
+                actualFinishDate = actualFinishDate,
+                budget = budget,
+            )
+        )
+    }
+
+    suspend fun addKnownTag(tag: String) {
+        if (tag.isBlank()) return
+        context.budgetDataStore.edit {
+            val existingKnown = it[knownTagsStoreKey]
+                ?.split("|")
+                ?.filter { s -> s.isNotEmpty() }
+                ?: emptyList()
+            val merged = (existingKnown + tag).distinct()
+            it[knownTagsStoreKey] = merged.joinToString("|")
+        }
+    }
+
+    suspend fun deleteTag(tag: String) {
+        context.budgetDataStore.edit {
+            val existingKnown = it[knownTagsStoreKey]
+                ?.split("|")
+                ?.filter { s -> s.isNotEmpty() && s != tag }
+                ?: emptyList()
+            it[knownTagsStoreKey] = existingKnown.joinToString("|")
+        }
+        transactionDao.deleteByComment(tag)
+    }
+
+    suspend fun renameTag(oldTag: String, newTag: String) {
+        if (newTag.isBlank()) return
+        transactionDao.renameByComment(oldTag, newTag)
+        context.budgetDataStore.edit {
+            val existingKnown = it[knownTagsStoreKey]
+                ?.split("|")
+                ?.filter { s -> s.isNotEmpty() }
+                ?: emptyList()
+            val updated = existingKnown.map { if (it == oldTag) newTag else it }.distinct()
+            it[knownTagsStoreKey] = updated.joinToString("|")
+        }
+    }
+
+    suspend fun importTransactions(transactions: List<Transaction>): ImportResult {
+        val existing = transactionDao.getAllSuspend()
+        val (duplicates, newOnes) = transactions.partition { t ->
+            existing.any { e ->
+                e.comment == t.comment
+                        && e.value.compareTo(t.value) == 0
+                        && e.date.time / 1000 == t.date.time / 1000
+            }
+        }
+
+        if (newOnes.isNotEmpty()) {
+            transactionDao.insert(*newOnes.toTypedArray())
+
+            newOnes.forEach { t ->
+                if (t.comment.isNotEmpty()) {
+                    val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
+                    if (persistTagsEnabled) {
+                        context.budgetDataStore.edit {
+                            val existingKnown = it[knownTagsStoreKey]
+                                ?.split("|")
+                                ?.filter { s -> s.isNotEmpty() }
+                                ?: emptyList()
+                            val merged = (existingKnown + t.comment).distinct()
+                            it[knownTagsStoreKey] = merged.joinToString("|")
+                        }
+                    }
+                }
+            }
+        }
+
+        return ImportResult(inserted = newOnes.size, skipped = duplicates.size)
+    }
 
     fun getAllTags(): LiveData<List<String>> {
         val dbTagsFlow = transactionDao.getAll().asFlow().map { transactions ->
@@ -79,6 +210,38 @@ class SpendsRepository @Inject constructor(
         return combine(dbTagsFlow, knownTagsFlow, persistTagsEnabledFlow) { dbTags, knownTags, persistEnabled ->
             if (persistEnabled) {
                 (knownTags + dbTags).distinct()
+            } else {
+                dbTags
+            }
+        }.asLiveData()
+    }
+
+    fun getAllTagsWithCount(): LiveData<List<Pair<String, Int>>> {
+        val dbTagsFlow = transactionDao.getAll().asFlow().map { transactions ->
+            transactions
+                .asSequence()
+                .filter { it.comment.isNotEmpty() }
+                .groupBy { it.comment }
+                .map { it.key to it.value.size }
+                .sortedBy { -it.second }
+                .toList()
+        }
+
+        val knownTagsFlow = context.budgetDataStore.data.map { prefs ->
+            prefs[knownTagsStoreKey]?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
+        }
+
+        val persistTagsEnabledFlow = context.settingsDataStore.data.map { prefs ->
+            prefs[persistTagsStoreKey] ?: false
+        }
+
+        return combine(dbTagsFlow, knownTagsFlow, persistTagsEnabledFlow) { dbTags, knownTags, persistEnabled ->
+            if (persistEnabled) {
+                val knownPairs = knownTags.map { it to (dbTags.find { p -> p.first == it }?.second ?: 0) }
+                (knownPairs + dbTags)
+                    .groupBy { it.first }
+                    .map { (tag, pairs) -> tag to pairs.maxOf { it.second } }
+                    .sortedBy { -it.second }
             } else {
                 dbTags
             }
@@ -161,6 +324,8 @@ class SpendsRepository @Inject constructor(
             }
         }
 
+        saveCurrentPeriod()
+
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[spentStoreKey] = BigDecimal.ZERO.toString()
@@ -181,7 +346,6 @@ class SpendsRepository @Inject constructor(
             )
         }
 
-        transactionDao.deleteAll()
         transactionDao.insert(
             Transaction(
                 TransactionType.INCOME,
@@ -195,27 +359,95 @@ class SpendsRepository @Inject constructor(
         hideOverspendingWarn(false)
     }
 
+    suspend fun setBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
+        val total = needsBudget + wantsBudget
+        val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
+
+        if (!persistTagsEnabled) {
+            context.budgetDataStore.edit {
+                it.remove(knownTagsStoreKey)
+            }
+        }
+
+        saveCurrentPeriod()
+
+        context.budgetDataStore.edit {
+            it[budgetStoreKey] = total.toString()
+            it[needsBudgetStoreKey] = needsBudget.toString()
+            it[wantsBudgetStoreKey] = wantsBudget.toString()
+            it[spentStoreKey] = BigDecimal.ZERO.toString()
+            it[dailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[needsDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[wantsDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[spentFromDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[spentFromNeedsDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[spentFromWantsDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+            it[startPeriodDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+            it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
+            it.remove(finishPeriodActualDateStoreKey)
+        }
+
+        transactionDao.insert(
+            Transaction(
+                TransactionType.INCOME,
+                total,
+                getCurrentDateUseCase(),
+            )
+        )
+
+        setDailyBudget(whatBudgetForDay())
+        hideOverspendingWarn(false)
+    }
+
+    suspend fun changeBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
+        val total = needsBudget + wantsBudget
+        context.budgetDataStore.edit {
+            it[budgetStoreKey] = total.toString()
+            it[needsBudgetStoreKey] = needsBudget.toString()
+            it[wantsBudgetStoreKey] = wantsBudget.toString()
+            it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+            it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
+            it.remove(finishPeriodActualDateStoreKey)
+        }
+
+        val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().first()
+        transactionDao.update(incomeTransaction.copy(value = total))
+        updateDailyBudget(whatBudgetForDay())
+    }
+
+    suspend fun setStartPeriodDate(newStartDate: Date) {
+        val oldStart = getStartPeriodDate().first()
+        context.budgetDataStore.edit {
+            it[startPeriodDateStoreKey] = roundToDay(newStartDate).time
+        }
+        updateDailyBudget(whatBudgetForDay())
+    }
+
+    fun getNeedsBudget(): LiveData<BigDecimal> = context.budgetDataStore.data.map {
+        it[needsBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+    }.asLiveData()
+
+    fun getWantsBudget(): LiveData<BigDecimal> = context.budgetDataStore.data.map {
+        it[wantsBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+    }.asLiveData()
+
+    suspend fun getNeedsBudgetSuspend(): BigDecimal =
+        context.budgetDataStore.data.first()[needsBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+
+    suspend fun getWantsBudgetSuspend(): BigDecimal =
+        context.budgetDataStore.data.first()[wantsBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+
     suspend fun changeBudget(newBudget: BigDecimal, newFinishDate: Date) {
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
             it.remove(finishPeriodActualDateStoreKey)
-
-            Log.d(
-                "SpendsRepository",
-                "Change budget ["
-                        + "budget: ${it[budgetStoreKey]} "
-                        + "start date: ${Date(it[startPeriodDateStoreKey]!!)} "
-                        + "finish date: ${Date(it[finishPeriodDateStoreKey]!!)}"
-                        + "]"
-            )
         }
 
         val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().first()
-
         transactionDao.update(incomeTransaction.copy(value = newBudget))
-
         updateDailyBudget(whatBudgetForDay())
     }
 
@@ -281,6 +513,85 @@ class SpendsRepository @Inject constructor(
                 getCurrentDateUseCase(),
             )
         )
+    }
+
+    // Category management
+
+    fun getAllCategories(): LiveData<List<Category>> = categoryDao.getAll()
+
+    fun getAllMappingsWithCategory(): LiveData<List<TagWithCategory>> = categoryDao.getMappingsWithCategory()
+
+    suspend fun addCategory(name: String, color: Long, monthlyLimit: BigDecimal = BigDecimal.ZERO): Long =
+        categoryDao.insert(Category(name = name, color = color, monthlyLimit = monthlyLimit))
+
+    suspend fun renameCategory(id: Long, newName: String) {
+        categoryDao.getById(id)?.let { categoryDao.update(it.copy(name = newName)) }
+    }
+
+    suspend fun updateCategory(id: Long, name: String, color: Long, monthlyLimit: BigDecimal) {
+        categoryDao.getById(id)?.let { categoryDao.update(it.copy(name = name, color = color, monthlyLimit = monthlyLimit)) }
+    }
+
+    suspend fun deleteCategory(id: Long) {
+        categoryDao.deleteMappingsByCategory(id)
+        categoryDao.deleteById(id)
+    }
+
+    suspend fun getAllCategoriesSuspend(): List<Category> = categoryDao.getAllSuspend()
+
+    suspend fun getTagCategoryMapping(tagName: String): TagCategory? = categoryDao.getMappingByTag(tagName)
+
+    suspend fun setTagCategory(tagName: String, categoryId: Long?) {
+        categoryDao.deleteMappingByTag(tagName)
+        if (categoryId != null) {
+            categoryDao.insertMapping(TagCategory(tagName = tagName, categoryId = categoryId))
+        }
+    }
+
+    suspend fun getAllMappingsWithCategorySuspend(): List<TagWithCategory> = categoryDao.getMappingsWithCategorySuspend()
+
+    // Budget limits per category
+
+    suspend fun setCategoryLimit(categoryId: Long, limit: BigDecimal) {
+        categoryDao.getById(categoryId)?.let { cat ->
+            categoryDao.update(cat.copy(monthlyLimit = limit))
+        }
+    }
+
+    suspend fun getCategoryLimit(categoryId: Long): BigDecimal =
+        categoryDao.getById(categoryId)?.monthlyLimit ?: BigDecimal.ZERO
+
+    suspend fun checkAndApplyRecurringTemplates(): List<Transaction> {
+        val today = getCurrentDateUseCase()
+        val calendar = Calendar.getInstance().apply { time = today }
+        val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+        val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
+
+        if (dueTemplates.isEmpty()) return emptyList()
+
+        val existing = transactionDao.getAllSuspend()
+        val applied = mutableListOf<Transaction>()
+
+        dueTemplates.forEach { template ->
+            val alreadyExists = existing.any { e ->
+                e.type == TransactionType.SPENT
+                        && e.comment == template.comment
+                        && e.value.compareTo(template.amount) == 0
+                        && isSameDay(e.date, today)
+            }
+            if (!alreadyExists) {
+                val tx = Transaction(
+                    type = TransactionType.SPENT,
+                    value = template.amount,
+                    date = today,
+                    comment = template.comment,
+                )
+                transactionDao.insert(tx)
+                applied.add(tx)
+            }
+        }
+
+        return applied
     }
 
     suspend fun whatBudgetForDay(
@@ -522,6 +833,110 @@ class SpendsRepository @Inject constructor(
             } catch (e: Exception) {
                 context.errorForReport = e.stackTraceToString()
             }
+        }
+    }
+
+    fun computeStreak(txs: List<Transaction>): Int {
+        val dailyBudget = runBlocking {
+            context.budgetDataStore.data.first()[dailyBudgetStoreKey]?.toBigDecimal()
+        } ?: return 0
+        if (dailyBudget <= BigDecimal.ZERO) return 0
+
+        val sorted = txs.filter { it.type == TransactionType.SPENT }
+            .sortedByDescending { it.date.time }
+        if (sorted.isEmpty()) return 0
+
+        val calendar = Calendar.getInstance()
+        val today = roundToDay(calendar.time)
+
+        var streak = 0
+        var currentDay = today
+        var dayIdx = 0
+
+        while (true) {
+            val dayTransactions = mutableListOf<Transaction>()
+            while (dayIdx < sorted.size &&
+                isSameDay(sorted[dayIdx].date, currentDay)
+            ) {
+                dayTransactions.add(sorted[dayIdx])
+                dayIdx++
+            }
+
+            val dayTotal = dayTransactions.sumOf { it.value.toDouble() }
+                .let { BigDecimal.valueOf(it) }
+
+            if (dayTotal <= dailyBudget) {
+                streak++
+                calendar.time = currentDay
+                calendar.add(Calendar.DAY_OF_MONTH, -1)
+                currentDay = roundToDay(calendar.time)
+            } else {
+                break
+            }
+
+            if (dayIdx >= sorted.size) break
+        }
+
+        return streak
+    }
+
+    fun exportBackup(destPath: String): Boolean {
+        return try {
+            val dbFile = context.getDatabasePath("buckwheat-db")
+            val dbDir = dbFile.parentFile
+            val destDir = File(destPath).parentFile
+            if (destDir != null && !destDir.exists()) destDir.mkdirs()
+
+            copyFile(dbFile, File(destPath))
+
+            val walFile = File(dbFile.absolutePath + "-wal")
+            if (walFile.exists()) {
+                copyFile(walFile, File(destPath + "-wal"))
+            }
+            val shmFile = File(dbFile.absolutePath + "-shm")
+            if (shmFile.exists()) {
+                copyFile(shmFile, File(destPath + "-shm"))
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SpendsRepository", "Export backup failed", e)
+            false
+        }
+    }
+
+    fun importBackup(sourcePath: String): Boolean {
+        return try {
+            val dbFile = context.getDatabasePath("buckwheat-db")
+            val srcFile = File(sourcePath)
+
+            copyFile(srcFile, dbFile)
+
+            val srcWal = File(sourcePath + "-wal")
+            if (srcWal.exists()) {
+                copyFile(srcWal, File(dbFile.absolutePath + "-wal"))
+            }
+            val srcShm = File(sourcePath + "-shm")
+            if (srcShm.exists()) {
+                copyFile(srcShm, File(dbFile.absolutePath + "-shm"))
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SpendsRepository", "Import backup failed", e)
+            false
+        }
+    }
+
+    private fun copyFile(src: File, dst: File) {
+        FileInputStream(src).use { input ->
+            FileOutputStream(dst).use { output ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    suspend fun deleteTransactions(transactions: List<Transaction>) {
+        for (tx in transactions) {
+            removeSpent(tx)
         }
     }
 

@@ -125,6 +125,14 @@ fun MainScreen(
         if (it) appViewModel.openSheet(PathState(ON_BOARDING_SHEET))
     }
 
+    observeLiveData(spendsViewModel.recurringApplied) { applied ->
+        if (applied.isNotEmpty()) {
+            val names = applied.joinToString(", ") { it.comment.ifBlank { "${it.value.setScale(2)}" } }
+            appViewModel.showSnackbar("Recurring applied: $names")
+            spendsViewModel.dismissRecurringResult()
+        }
+    }
+
     observeLiveData(spendsViewModel.periodFinished) {
         if (it) appViewModel.openSheet(PathState(ANALYTICS_SHEET))
     }
@@ -207,7 +215,6 @@ fun MainScreen(
                 ) {
                     Box {
                         History()
-                        StatusBarStub()
                         SnackbarHost()
                     }
                 }

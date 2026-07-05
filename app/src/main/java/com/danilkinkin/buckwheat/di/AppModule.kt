@@ -33,4 +33,16 @@ object AppModule {
     @Singleton
     @Provides
     fun provideStorageDao(db: DatabaseModule) = db.storageDao()
+
+    @Singleton
+    @Provides
+    fun provideRecurringDao(db: DatabaseModule) = db.recurringDao()
+
+    @Singleton
+    @Provides
+    fun providePeriodDao(db: DatabaseModule) = db.periodDao()
+
+    @Singleton
+    @Provides
+    fun provideCategoryDao(db: DatabaseModule) = db.categoryDao()
 }

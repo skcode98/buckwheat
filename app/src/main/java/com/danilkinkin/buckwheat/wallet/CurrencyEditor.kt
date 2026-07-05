@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.wallet
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -48,7 +49,7 @@ fun CurrencyEditor(
         .coerceAtLeast(16.dp)
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
-        Column {
+        Column(Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -62,6 +63,7 @@ fun CurrencyEditor(
             }
             Column(
                 modifier = Modifier
+                    .weight(1f)
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = navigationBarHeight)
             ) {

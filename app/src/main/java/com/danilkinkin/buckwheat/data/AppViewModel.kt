@@ -95,6 +95,13 @@ class AppViewModel @Inject constructor(
     var reminderHour = settingsRepository.getReminderHour().asLiveData()
     var reminderMinute = settingsRepository.getReminderMinute().asLiveData()
 
+    var dailySpendOverviewEnabled = settingsRepository.isDailySpendOverviewEnabled().asLiveData()
+    var weeklyOverviewEnabled = settingsRepository.isWeeklyOverviewEnabled().asLiveData()
+    var monthlyExportEnabled = settingsRepository.isMonthlyExportEnabled().asLiveData()
+    var monthlyOverviewEnabled = settingsRepository.isMonthlyOverviewEnabled().asLiveData()
+    var factsInsightsEnabled = settingsRepository.isFactsInsightsEnabled().asLiveData()
+    var goalsReminderEnabled = settingsRepository.isGoalsReminderEnabled().asLiveData()
+
     var syncEnabled = settingsRepository.isSyncEnabled().asLiveData()
     var syncHour = settingsRepository.getSyncHour().asLiveData()
     var syncMinute = settingsRepository.getSyncMinute().asLiveData()
@@ -139,6 +146,42 @@ class AppViewModel @Inject constructor(
             if (enabled) {
                 ReminderManager.schedule(app, hour, minute)
             }
+        }
+    }
+
+    fun setDailySpendOverviewEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchDailySpendOverview(enabled)
+        }
+    }
+
+    fun setWeeklyOverviewEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchWeeklyOverview(enabled)
+        }
+    }
+
+    fun setMonthlyExportEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchMonthlyExport(enabled)
+        }
+    }
+
+    fun setMonthlyOverviewEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchMonthlyOverview(enabled)
+        }
+    }
+
+    fun setFactsInsightsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchFactsInsights(enabled)
+        }
+    }
+
+    fun setGoalsReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.switchGoalsReminder(enabled)
         }
     }
 

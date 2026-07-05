@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.recurring.RecurringManager
 import com.danilkinkin.buckwheat.sync.SyncManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -26,6 +27,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
                 val minute = prefs[com.danilkinkin.buckwheat.di.syncMinuteStoreKey] ?: 0
                 SyncManager.schedule(context, hour, minute)
             }
+
+            RecurringManager.schedule(context)
         }
     }
 }

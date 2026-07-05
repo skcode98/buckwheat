@@ -28,6 +28,12 @@ import com.danilkinkin.buckwheat.analytics.VIEWER_HISTORY_SHEET
 import com.danilkinkin.buckwheat.analytics.ViewerHistory
 import com.danilkinkin.buckwheat.goals.GOALS_SHEET
 import com.danilkinkin.buckwheat.goals.Goals
+import com.danilkinkin.buckwheat.recurring.RECURRING_SHEET
+import com.danilkinkin.buckwheat.recurring.RecurringSheet
+import com.danilkinkin.buckwheat.settings.CATEGORIES_MANAGER_SHEET
+import com.danilkinkin.buckwheat.settings.CategoriesManagerSheet
+import com.danilkinkin.buckwheat.settings.TAGS_MANAGER_SHEET
+import com.danilkinkin.buckwheat.settings.TagsManagerSheet
 import com.danilkinkin.buckwheat.onboarding.ON_BOARDING_SHEET
 import com.danilkinkin.buckwheat.onboarding.Onboarding
 import com.danilkinkin.buckwheat.recalcBudget.RECALCULATE_DAILY_BUDGET_SHEET
@@ -113,7 +119,8 @@ fun BottomSheets(
         Settings(
             onTriedWidget = {
                 coroutineScope.launch { state.callback(emptyMap()) }
-            }
+            },
+            activityResultRegistryOwner = activityResultRegistryOwner,
         )
     }
 
@@ -153,6 +160,30 @@ fun BottomSheets(
 
     BottomSheetWrapper(name = GOALS_SHEET) { state ->
         Goals(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(name = RECURRING_SHEET) { state ->
+        RecurringSheet(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(name = TAGS_MANAGER_SHEET) { state ->
+        TagsManagerSheet(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(name = CATEGORIES_MANAGER_SHEET) { state ->
+        CategoriesManagerSheet(
             onClose = {
                 coroutineScope.launch { state.hide() }
             }

@@ -58,6 +58,10 @@
             android:name=".sync.SyncReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".recurring.RecurringReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

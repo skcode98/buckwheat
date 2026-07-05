@@ -3,7 +3,10 @@ package com.danilkinkin.buckwheat.analytics
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,16 +19,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,6 +79,7 @@ import java.time.YearMonth
 import java.time.temporal.TemporalAdjusters
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.pow
 
 data class SpendingDay(
@@ -88,6 +98,7 @@ fun SpendsCalendar(
     finishDate: Date,
     actualFinishDate: Date? = null,
     currency: ExtendCurrency,
+    onDayClick: (SpendingDay) -> Unit = {},
 ) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
@@ -96,6 +107,7 @@ fun SpendsCalendar(
         val days: MutableMap<LocalDate, SpendingDay> =
             emptyMap<LocalDate, SpendingDay>().toMutableMap()
         var currDay: SpendingDay? = null
+        var lastBudget = BigDecimal.ZERO
 
         transactions.forEach {
             if (it.type == TransactionType.INCOME) {
@@ -107,24 +119,22 @@ fun SpendsCalendar(
                     days[currDay!!.date.toLocalDate()] = currDay!!
                 }
 
-                if (it.type == TransactionType.SET_DAILY_BUDGET) {
-                    currDay = SpendingDay(
-                        date = it.date,
-                        spends = listOf(),
-                        spending = BigDecimal.ZERO,
-                        budget = it.value,
-                    )
-
-                    return@forEach
-                }
+                val isBudgetTx = it.type == TransactionType.SET_DAILY_BUDGET
+                if (isBudgetTx) lastBudget = it.value
 
                 currDay = SpendingDay(
                     date = it.date,
-                    spends = listOf(it),
-                    spending = it.value,
-                    budget = currDay?.budget ?: BigDecimal.ZERO,
+                    spends = if (isBudgetTx) listOf() else listOf(it),
+                    spending = if (isBudgetTx) BigDecimal.ZERO else it.value,
+                    budget = if (isBudgetTx) it.value else lastBudget,
                 )
 
+                return@forEach
+            }
+
+            if (it.type == TransactionType.SET_DAILY_BUDGET) {
+                lastBudget = it.value
+                currDay = currDay!!.copy(budget = it.value)
                 return@forEach
             }
 
@@ -140,14 +150,25 @@ fun SpendsCalendar(
         days.toMutableMap()
     }
 
-    val calendarState by remember {
-        mutableStateOf(
-            CalendarState(
-                context = context,
-                disableBeforeDate = startDate,
-                disableAfterDate = (actualFinishDate ?: finishDate).coerceAtMost(Date()),
-            )
+    val calendarState = remember(startDate, finishDate, actualFinishDate, transactions) {
+        CalendarState(
+            context = context,
+            disableBeforeDate = startDate,
+            disableAfterDate = (actualFinishDate ?: finishDate).coerceAtMost(Date()),
         )
+    }
+
+    val months = calendarState.listMonths
+    val today = LocalDate.now()
+    val initialMonthIdx = months.indexOfFirst { m ->
+        m.yearMonth.year == today.year && m.yearMonth.month == today.month
+    }.let { if (it < 0) 0 else it }
+    var currentMonthIdx by remember(startDate, transactions) { mutableIntStateOf(initialMonthIdx) }
+    var weekMode by remember { mutableStateOf(false) }
+    var currentWeekStart by remember { mutableStateOf(today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))) }
+
+    if (currentMonthIdx >= months.size) {
+        currentMonthIdx = months.size - 1
     }
 
     Card(
@@ -161,57 +182,239 @@ fun SpendsCalendar(
             ),
         )
     ) {
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-            Icon(
+        Column {
+            Row(
                 modifier = Modifier
-                    .padding(top = 0.5.dp)
-                    .size(14.dp),
-                painter = painterResource(R.drawable.ic_info),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                contentDescription = null,
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = stringResource(R.string.spends_calendar_hint),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
-                ),
-            )
-        }
-        Layout(
-            modifier = Modifier
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            measurePolicy = verticalGridMeasurePolicy(7),
-            content = {
-                val calendarUiState = calendarState.calendarUiState.value
-
-                calendarState.listMonths.forEach { month ->
-                    MonthHeader(
-                        modifier = Modifier.layoutId("fullWidth"),
-                        yearMonth = month.yearMonth
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row {
+                    Icon(
+                        modifier = Modifier
+                            .padding(top = 0.5.dp)
+                            .size(14.dp),
+                        painter = painterResource(R.drawable.ic_info),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        contentDescription = null,
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.spends_calendar_hint),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
+                        ),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(
+                        selected = !weekMode,
+                        onClick = { weekMode = false },
+                        label = { Text("Month", style = MaterialTheme.typography.labelSmall) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.height(28.dp),
+                    )
+                    FilterChip(
+                        selected = weekMode,
+                        onClick = { weekMode = true },
+                        label = { Text("Week", style = MaterialTheme.typography.labelSmall) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
+                        modifier = Modifier.height(28.dp),
+                    )
+                }
+            }
 
-                    DaysOfWeek(locale)
+            val currentMonth = months.getOrNull(currentMonthIdx)
+            val calendarUiState = calendarState.calendarUiState.value
 
-                    month.weeks.forEach { week ->
-                        val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
-                        val currentDay =
-                            beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
+            if (weekMode) {
+                // Week view
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { currentWeekStart = currentWeekStart.minusDays(7) },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = "${currentWeekStart.month.name.take(3)} ${currentWeekStart.dayOfMonth} - ${currentWeekStart.plusDays(6).month.name.take(3)} ${currentWeekStart.plusDays(6).dayOfMonth}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    IconButton(
+                        onClick = { currentWeekStart = currentWeekStart.plusDays(7) },
+                        enabled = currentWeekStart.plusDays(6).isBefore(calendarUiState.disabledAfter?.plusDays(1) ?: LocalDate.MAX),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_forward),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
 
-                        if (
-                            currentDay.plusDays(6).isAfter(calendarUiState.disabledBefore) &&
-                            currentDay.isBefore(calendarUiState.disabledAfter!!.plusDays(1))
-                        ) {
+                DaysOfWeek(locale)
+
+                Layout(
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp),
+                    measurePolicy = verticalGridMeasurePolicy(7),
+                    content = {
+                        val weekDays = (0..6).map { currentWeekStart.plusDays(it.toLong()) }
+                        weekDays.forEach { day ->
+                            if (!calendarUiState.isDisabledDay(day)) {
+                                Day(
+                                    day = day,
+                                    spendingDays = spendingDays,
+                                    onClick = { spendingDays[day]?.let { onDayClick(it) } },
+                                )
+                            } else {
+                                Box(modifier = Modifier.size(CELL_SIZE))
+                            }
+                        }
+                    }
+                )
+
+                ColorLegend()
+            } else if (currentMonth != null) {
+                // Month view
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (currentMonthIdx > 0) currentMonthIdx--
+                        },
+                        enabled = currentMonthIdx > 0,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = prettyYearMonth(currentMonth.yearMonth),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    IconButton(
+                        onClick = {
+                            if (currentMonthIdx < months.size - 1) currentMonthIdx++
+                        },
+                        enabled = currentMonthIdx < months.size - 1,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_forward),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+
+                MonthHeader(
+                    modifier = Modifier.layoutId("fullWidth"),
+                    yearMonth = currentMonth.yearMonth,
+                )
+
+                DaysOfWeek(locale)
+
+                Layout(
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp),
+                    measurePolicy = verticalGridMeasurePolicy(7),
+                    content = {
+                        currentMonth.weeks.forEach { week ->
+                            val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
+                            val currentDay =
+                                beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
+
                             Week(
                                 week = week,
                                 calendarUiState = calendarUiState,
                                 spendingDays = spendingDays,
+                                onDayClick = { localDate ->
+                                    spendingDays[localDate]?.let { onDayClick(it) }
+                                },
                             )
                         }
                     }
-                }
+                )
+
+                ColorLegend()
             }
-        )
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun ColorLegend() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(Color(0xFF4CAF50), CircleShape)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "Under budget",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(Color(0xFFFFC107), CircleShape)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "Near limit",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(Color(0xFFE53935), CircleShape)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "Over budget",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -229,7 +432,6 @@ internal fun MonthHeader(modifier: Modifier = Modifier, yearMonth: YearMonth) {
     }
 }
 
-
 @Composable
 internal fun DaysOfWeek(locale: Locale) {
     val week = getWeek(locale)
@@ -241,12 +443,12 @@ internal fun DaysOfWeek(locale: Locale) {
     }
 }
 
-
 @Composable
 internal fun Week(
     calendarUiState: CalendarUiState,
     week: Week,
     spendingDays: Map<LocalDate, SpendingDay>,
+    onDayClick: (LocalDate) -> Unit = {},
 ) {
     val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
 
@@ -254,11 +456,13 @@ internal fun Week(
         val currentDay = beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek()[0]))
             .plusDays(day.toLong())
 
-        if (currentDay.month == week.yearMonth.month && !calendarUiState.isDisabledDay(currentDay)) {
+        if (currentDay.month == week.yearMonth.month) {
+            val isDisabled = calendarUiState.isDisabledDay(currentDay)
             Day(
                 modifier = Modifier,
                 day = currentDay,
-                spendingDays = spendingDays,
+                spendingDays = if (isDisabled) emptyMap() else spendingDays,
+                onClick = { if (!isDisabled) onDayClick(currentDay) },
             )
         } else {
             Box(
@@ -293,7 +497,8 @@ internal fun DayOfWeekHeading(day: String, modifier: Modifier = Modifier) {
 internal fun Day(
     day: LocalDate,
     spendingDays: Map<LocalDate, SpendingDay>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
     val spendingDay = if (spendingDays[day] === null || spendingDays[day]!!.spending.isZero()) {
         null
@@ -334,13 +539,15 @@ internal fun Day(
     } else {
         0f
     }
+    val fillSizePercent = percent.coerceIn(0f, 1f)
 
     Box(
         modifier = modifier
             .height(CELL_SIZE)
             .widthIn(min = CELL_SIZE)
             .fillMaxWidth()
-            .zIndex(if (spendingDay === null) 0f else -percent + 1000f),
+            .zIndex(if (spendingDay === null) 0f else -percent + 1000f)
+            .clickable(enabled = spendingDay != null) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -363,10 +570,10 @@ internal fun Day(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            if (spendingDay !== null) {
+            if (spendingDay !== null && fillSizePercent > 0f) {
                 Box(
                     modifier = Modifier
-                        .requiredSize(CELL_SIZE * percent)
+                        .size(CELL_SIZE * fillSizePercent)
                         .background(
                             color = harmonizedColor.container.copy(
                                 if (percent > 1f) (1 - (percent.coerceIn(
