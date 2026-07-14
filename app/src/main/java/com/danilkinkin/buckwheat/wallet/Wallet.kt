@@ -69,7 +69,7 @@ fun Wallet(
     val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
-    val dateToValue = remember { mutableStateOf(spendsViewModel.finishPeriodDate.value) }
+    val dateToValue = remember(finishPeriodDate) { mutableStateOf(finishPeriodDate) }
     val currency by spendsViewModel.currency.observeAsState()
     val spends by spendsViewModel.spends.observeAsState()
     val restedBudgetDistributionMethod by spendsViewModel.restedBudgetDistributionMethod.observeAsState()

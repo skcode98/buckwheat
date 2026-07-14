@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,13 +39,12 @@ fun rememberExportCSV(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val startPeriodDate by remember {
-        mutableStateOf(spendsViewModel.startPeriodDate.value?.toLocalDate())
-    }
-    val finishPeriodDate by remember {
-        mutableStateOf(spendsViewModel.finishPeriodDate.value?.let {
-            LocalDate.now().coerceAtMost(it.toLocalDate())
-        })
+    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState()
+
+    val startLocalDate = startPeriodDate?.toLocalDate()
+    val finishLocalDate = finishPeriodDate?.let {
+        LocalDate.now().coerceAtMost(it.toLocalDate())
     }
 
     val snackBarExportToCSVSuccess = stringResource(R.string.export_to_csv_success)
@@ -52,17 +52,19 @@ fun rememberExportCSV(
 
     val yearFormatter = DateTimeFormatter.ofPattern("yyyy")
 
-    val from = if (
-        yearFormatter.format(startPeriodDate) == yearFormatter.format(finishPeriodDate)
-    ) {
-        DateTimeFormatter.ofPattern("dd-MM").format(startPeriodDate)
+    val fileName = if (startLocalDate != null && finishLocalDate != null) {
+        val from = if (
+            yearFormatter.format(startLocalDate) == yearFormatter.format(finishLocalDate)
+        ) {
+            DateTimeFormatter.ofPattern("dd-MM").format(startLocalDate)
+        } else {
+            DateTimeFormatter.ofPattern("dd-MM-yyyy").format(startLocalDate)
+        }
+        val to = DateTimeFormatter.ofPattern("dd-MM-yyyy").format(finishLocalDate)
+        stringResource(R.string.export_to_csv_file_name, from, to)
     } else {
-        DateTimeFormatter.ofPattern("dd-MM-yyyy").format(startPeriodDate)
+        stringResource(R.string.export_to_csv_file_name, "unknown", "unknown")
     }
-    val to = DateTimeFormatter.ofPattern("dd-MM-yyyy").format(finishPeriodDate)
-
-
-    val fileName = stringResource(R.string.export_to_csv_file_name, from, to)
 
     CompositionLocalProvider(
         LocalActivityResultRegistryOwner provides activityResultRegistryOwner

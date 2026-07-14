@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.asFlow
 import androidx.room.Room
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
@@ -15,6 +16,7 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.DatabaseModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
@@ -48,11 +50,11 @@ class RecurringReceiver : BroadcastReceiver() {
                 var created = 0
 
                 for (template in dueTemplates) {
-                    val existing = transactionDao.getAll(TransactionType.SPENT).value?.any { t ->
+                    val existing = transactionDao.getAll(TransactionType.SPENT).asFlow().first().any { t ->
                         t.value == template.amount
                                 && t.comment == template.comment
                                 && isSameDay(t.date, todayStart)
-                    } ?: false
+                    }
 
                     if (!existing) {
                         transactionDao.insert(

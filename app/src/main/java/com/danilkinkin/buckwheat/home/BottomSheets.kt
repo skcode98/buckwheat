@@ -99,7 +99,7 @@ fun BottomSheets(
         name = FINISH_DATE_SELECTOR_SHEET,
     ) { state ->
         FinishDateSelector(
-            selectDate = state.args["initialDate"] as Date?,
+            selectDate = state.args["initialDate"] as? Date,
             onBackPressed = {
                 coroutineScope.launch {
                     state.hide()

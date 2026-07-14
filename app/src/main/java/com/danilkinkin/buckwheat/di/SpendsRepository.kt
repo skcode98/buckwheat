@@ -318,15 +318,13 @@ class SpendsRepository @Inject constructor(
     suspend fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
         val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
 
-        if (!persistTagsEnabled) {
-            context.budgetDataStore.edit {
-                it.remove(knownTagsStoreKey)
-            }
-        }
-
         saveCurrentPeriod()
 
         context.budgetDataStore.edit {
+            if (!persistTagsEnabled) {
+                it.remove(knownTagsStoreKey)
+            }
+
             it[budgetStoreKey] = newBudget.toString()
             it[spentStoreKey] = BigDecimal.ZERO.toString()
             it[dailyBudgetStoreKey] = BigDecimal.ZERO.toString()
@@ -335,6 +333,7 @@ class SpendsRepository @Inject constructor(
             it[startPeriodDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
             it.remove(finishPeriodActualDateStoreKey)
+            it[hideOverspendingWarnStoreKey] = false
 
             Log.d(
                 "SpendsRepository",
@@ -355,23 +354,19 @@ class SpendsRepository @Inject constructor(
         )
 
         setDailyBudget(whatBudgetForDay())
-
-        hideOverspendingWarn(false)
     }
 
     suspend fun setBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
         val total = needsBudget + wantsBudget
         val persistTagsEnabled = context.settingsDataStore.data.first()[persistTagsStoreKey] ?: false
 
-        if (!persistTagsEnabled) {
-            context.budgetDataStore.edit {
-                it.remove(knownTagsStoreKey)
-            }
-        }
-
         saveCurrentPeriod()
 
         context.budgetDataStore.edit {
+            if (!persistTagsEnabled) {
+                it.remove(knownTagsStoreKey)
+            }
+
             it[budgetStoreKey] = total.toString()
             it[needsBudgetStoreKey] = needsBudget.toString()
             it[wantsBudgetStoreKey] = wantsBudget.toString()
@@ -386,6 +381,7 @@ class SpendsRepository @Inject constructor(
             it[startPeriodDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
             it.remove(finishPeriodActualDateStoreKey)
+            it[hideOverspendingWarnStoreKey] = false
         }
 
         transactionDao.insert(
@@ -397,7 +393,6 @@ class SpendsRepository @Inject constructor(
         )
 
         setDailyBudget(whatBudgetForDay())
-        hideOverspendingWarn(false)
     }
 
     suspend fun changeBudgets(needsBudget: BigDecimal, wantsBudget: BigDecimal, newFinishDate: Date) {
@@ -411,8 +406,10 @@ class SpendsRepository @Inject constructor(
             it.remove(finishPeriodActualDateStoreKey)
         }
 
-        val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().first()
-        transactionDao.update(incomeTransaction.copy(value = total))
+        val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().firstOrNull()
+        if (incomeTransaction != null) {
+            transactionDao.update(incomeTransaction.copy(value = total))
+        }
         updateDailyBudget(whatBudgetForDay())
     }
 
@@ -446,8 +443,10 @@ class SpendsRepository @Inject constructor(
             it.remove(finishPeriodActualDateStoreKey)
         }
 
-        val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().first()
-        transactionDao.update(incomeTransaction.copy(value = newBudget))
+        val incomeTransaction = transactionDao.getAll(TransactionType.INCOME).asFlow().first().firstOrNull()
+        if (incomeTransaction != null) {
+            transactionDao.update(incomeTransaction.copy(value = newBudget))
+        }
         updateDailyBudget(whatBudgetForDay())
     }
 
@@ -482,8 +481,10 @@ class SpendsRepository @Inject constructor(
         }
 
 
-        val setDailyBudgetTransaction = transactionDao.getAll(TransactionType.SET_DAILY_BUDGET).asFlow().first().last()
-        transactionDao.update(setDailyBudgetTransaction.copy(value = newDailyBudget))
+        val setDailyBudgetTransaction = transactionDao.getAll(TransactionType.SET_DAILY_BUDGET).asFlow().first().lastOrNull()
+        if (setDailyBudgetTransaction != null) {
+            transactionDao.update(setDailyBudgetTransaction.copy(value = newDailyBudget))
+        }
     }
 
     suspend fun setDailyBudget(newDailyBudget: BigDecimal) {

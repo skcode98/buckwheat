@@ -130,17 +130,17 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setNotificationTime(type: NotificationType, hour: Int, minute: Int) {
         context.settingsDataStore.edit {
-            it[notificationHourKeys[type]!!] = hour
-            it[notificationMinuteKeys[type]!!] = minute
+            it[notificationHourKeys.getValue(type)] = hour
+            it[notificationMinuteKeys.getValue(type)] = minute
         }
     }
 
     fun getNotificationHour(type: NotificationType) = context.settingsDataStore.data.map {
-        it[notificationHourKeys[type]!!] ?: type.defaultHour
+        it[notificationHourKeys.getValue(type)] ?: type.defaultHour
     }
 
     fun getNotificationMinute(type: NotificationType) = context.settingsDataStore.data.map {
-        it[notificationMinuteKeys[type]!!] ?: type.defaultMinute
+        it[notificationMinuteKeys.getValue(type)] ?: type.defaultMinute
     }
 
     fun isDailySpendOverviewEnabled() = context.settingsDataStore.data.map {

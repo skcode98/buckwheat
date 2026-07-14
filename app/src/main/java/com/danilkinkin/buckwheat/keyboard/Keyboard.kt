@@ -69,7 +69,7 @@ fun Keyboard(
                 Log.d("newValue", "'${newValue}'")
 
                 if (newValue == "") {
-                    if (mode === EditMode.ADD) runBlocking {
+                    if (mode === EditMode.ADD) coroutineScope.launch {
                         editorViewModel.resetEditingSpent()
 
                         isMutate = false
@@ -78,7 +78,7 @@ fun Keyboard(
             }
         }
 
-        if (isMutate) runBlocking {
+        if (isMutate) coroutineScope.launch {
             editorViewModel.rawSpentValue.value =
                 tryConvertStringToNumber(newValue).join(third = false)
 

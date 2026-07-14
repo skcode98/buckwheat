@@ -91,7 +91,7 @@ fun BudgetConstructor(
 
         mutableStateOf(BigDecimal(restBudget))
     }
-    val dateToValue = remember { mutableStateOf(spendsViewModel.finishPeriodDate.value) }
+    val dateToValue = remember(finishPeriodDate) { mutableStateOf(finishPeriodDate) }
     var showUseSuggestion by remember {
         val useBudget = budget != budgetCache && !budget.isZero()
 
@@ -241,7 +241,7 @@ fun BudgetConstructor(
                     callback = { result ->
                         if (!result.containsKey("finishDate")) return@PathState
 
-                        dateToValue.value = result["finishDate"] as Date
+                        dateToValue.value = (result["finishDate"] as? Date) ?: return@PathState
 
                         onChange(budgetCache, dateToValue.value)
                     }
