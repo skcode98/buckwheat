@@ -62,6 +62,8 @@ import com.danilkinkin.buckwheat.data.SystemBarState
 import com.danilkinkin.buckwheat.editor.Editor
 import com.danilkinkin.buckwheat.history.History
 import com.danilkinkin.buckwheat.keyboard.Keyboard
+import com.danilkinkin.buckwheat.notifications.NotificationDetailScreen
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import com.danilkinkin.buckwheat.onboarding.ON_BOARDING_SHEET
 import com.danilkinkin.buckwheat.recalcBudget.RECALCULATE_DAILY_BUDGET_SHEET
 import com.danilkinkin.buckwheat.ui.colorBackground
@@ -76,6 +78,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainScreen(
     activityResultRegistryOwner: ActivityResultRegistryOwner?,
+    notificationType: NotificationType? = null,
+    onDismissNotification: () -> Unit = {},
     spendsViewModel: SpendsViewModel = viewModel(),
     appViewModel: AppViewModel = viewModel(),
 ) {
@@ -336,6 +340,14 @@ fun MainScreen(
 
         if (windowSizeClass == WindowWidthSizeClass.Compact) {
             SnackbarHost()
+        }
+
+        notificationType?.let {
+            NotificationDetailScreen(
+                type = it,
+                onClose = onDismissNotification,
+                spendsViewModel = spendsViewModel,
+            )
         }
     }
 }

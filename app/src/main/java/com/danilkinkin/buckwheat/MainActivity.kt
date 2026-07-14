@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat
 
 import OverrideLocalize
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,6 +25,8 @@ import androidx.lifecycle.lifecycleScope
 import com.danilkinkin.buckwheat.base.balloon.BalloonProvider
 
 import com.danilkinkin.buckwheat.home.MainScreen
+import com.danilkinkin.buckwheat.notifications.EXTRA_NOTIFICATION_TYPE
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import dagger.hilt.android.AndroidEntryPoint
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.ThemeMode
@@ -49,9 +52,12 @@ class MainActivity : ComponentActivity() {
     // Broke tests. Set to true for tests
     private val isDone: MutableState<Boolean> = mutableStateOf(false)
     private val isReady: MutableState<Boolean> = mutableStateOf(false)
+    private val notificationType: MutableState<NotificationType?> = mutableStateOf(null)
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        notificationType.value = readNotificationType(intent)
+
         val context = this.applicationContext
         WindowCompat.setDecorFitsSystemWindows(window, false)
         installSplashScreen().setKeepOnScreenCondition { !isDone.value }
@@ -93,7 +99,11 @@ class MainActivity : ComponentActivity() {
                                 LocalWindowSize provides widthSizeClass,
                                 LocalWindowInsets provides windowInsets,
                             ) {
-                                MainScreen(activityResultRegistryOwner)
+                                MainScreen(
+                                    activityResultRegistryOwner = activityResultRegistryOwner,
+                                    notificationType = notificationType.value,
+                                    onDismissNotification = { notificationType.value = null },
+                                )
 
                                 LaunchedEffect(Unit) {
                                     // App rendered and splash screen can be hidden
@@ -104,6 +114,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        notificationType.value = readNotificationType(intent)
+    }
+
+    private fun readNotificationType(intent: Intent?): NotificationType? {
+        val name = intent?.getStringExtra(EXTRA_NOTIFICATION_TYPE) ?: return null
+        return try {
+            NotificationType.valueOf(name)
+        } catch (_: IllegalArgumentException) {
+            null
         }
     }
 }
