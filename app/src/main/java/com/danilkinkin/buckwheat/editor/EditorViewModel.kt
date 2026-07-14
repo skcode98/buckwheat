@@ -21,18 +21,18 @@ class EditorViewModel @Inject constructor(
     var mode = MutableLiveData(EditMode.ADD)
     var stage = MutableLiveData(EditStage.IDLE)
 
-    var editedTransaction: Transaction? = null
-    var currentDate: Date = Date()
-    var currentSpent: BigDecimal = BigDecimal.ZERO
+    var editedTransaction = MutableLiveData<Transaction?>(null)
+    var currentDate = MutableLiveData(Date())
+    var currentSpent = MutableLiveData(BigDecimal.ZERO)
     var currentComment = MutableLiveData("")
     var currentSpendType = MutableLiveData(SpendType.WANTS)
     var currentCategoryId = MutableLiveData<Long?>(null)
     var rawSpentValue = MutableLiveData("")
 
     fun startEditingSpent(transaction: Transaction) {
-        editedTransaction = transaction
-        currentSpent = transaction.value
-        currentDate = transaction.date
+        editedTransaction.value = transaction
+        currentSpent.value = transaction.value
+        currentDate.value = transaction.date
         currentComment.value = transaction.comment
         currentSpendType.value = transaction.spendType
         currentCategoryId.value = transaction.categoryId
@@ -43,21 +43,21 @@ class EditorViewModel @Inject constructor(
     }
 
     fun startCreatingSpent() {
-        currentSpent = BigDecimal.ZERO
+        currentSpent.value = BigDecimal.ZERO
 
         stage.value = EditStage.CREATING_SPENT
     }
 
     fun modifyEditingSpent(value: BigDecimal) {
-        currentSpent = value
+        currentSpent.value = value
 
         stage.value = EditStage.EDIT_SPENT
     }
 
     fun resetEditingSpent(keepMeta: Boolean = false) {
-        currentSpent = BigDecimal.ZERO
+        currentSpent.value = BigDecimal.ZERO
         if (!keepMeta) {
-            currentDate = Date()
+            currentDate.value = Date()
             currentComment.value = ""
             currentSpendType.value = SpendType.WANTS
             currentCategoryId.value = null
@@ -66,13 +66,14 @@ class EditorViewModel @Inject constructor(
 
         stage.value = EditStage.IDLE
         mode.value = EditMode.ADD
-        editedTransaction = null
+        editedTransaction.value = null
     }
 
     fun canCommitEditingSpent(): Boolean {
         if (stage.value !== EditStage.EDIT_SPENT) return false
 
-        val formatSpent = currentSpent
+        val spent = currentSpent.value ?: BigDecimal.ZERO
+        val formatSpent = spent
             .setScale(2, RoundingMode.HALF_EVEN)
             .stripTrailingZeros()
             .toPlainString()

@@ -383,22 +383,22 @@ class SpendsViewModel @Inject constructor(
             val restedBudgetDistributionMethod =
                 spendsRepository.getRestedBudgetDistributionMethod().first()
 
-            val finishDayNotReached = if (finishPeriodActualDate === null) {
-                finishPeriodDate !== null
+            val finishDayNotReached = if (finishPeriodActualDate == null) {
+                finishPeriodDate != null
                         && countDaysToToday(finishPeriodDate) > 0
             } else {
                 countDaysToToday(finishPeriodActualDate) > 0
             }
 
-            val finishTimeReached = if (finishPeriodActualDate === null) {
-                finishPeriodDate !== null
+            val finishTimeReached = if (finishPeriodActualDate == null) {
+                finishPeriodDate != null
                         && finishPeriodDate.time <= Date().time
             } else {
                 finishPeriodActualDate.time <= Date().time
             }
 
             when {
-                lastChangeDailyBudgetDate !== null
+                lastChangeDailyBudgetDate != null
                         && !isToday(lastChangeDailyBudgetDate)
                         && finishDayNotReached -> {
                     if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
@@ -428,7 +428,7 @@ class SpendsViewModel @Inject constructor(
                     }
                 }
 
-                lastChangeDailyBudgetDate === null -> {
+                lastChangeDailyBudgetDate == null -> {
                     requireSetBudget.value = true
                 }
 

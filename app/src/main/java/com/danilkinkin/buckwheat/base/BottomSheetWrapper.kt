@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.base
 
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -149,6 +150,7 @@ fun BottomSheetWrapper(
 
             Box {
                 CompositionLocalProvider(
+                    LocalActivityResultRegistryOwner provides LocalActivityResultRegistryOwner.current!!,
                     LocalBottomSheetScrollState provides BottomSheetScrollState(
                         topPadding = statusBarHeight * statusBarFillProgress,
                     )

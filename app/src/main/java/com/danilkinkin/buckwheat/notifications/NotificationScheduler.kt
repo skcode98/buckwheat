@@ -37,12 +37,11 @@ object NotificationScheduler {
     }
 
     fun scheduleMonthlyExport(context: Context, hour: Int = 18, minute: Int = 0) {
-        scheduleRepeating(
+        scheduleMonthly(
             context = context,
             type = NotificationType.MONTHLY_EXPORT,
             hour = hour,
             minute = minute,
-            interval = AlarmManager.INTERVAL_DAY,
         )
     }
 
@@ -51,12 +50,11 @@ object NotificationScheduler {
     }
 
     fun scheduleMonthlyOverview(context: Context, hour: Int = 18, minute: Int = 0) {
-        scheduleRepeating(
+        scheduleMonthly(
             context = context,
             type = NotificationType.MONTHLY_OVERVIEW,
             hour = hour,
             minute = minute,
-            interval = AlarmManager.INTERVAL_DAY,
         )
     }
 
@@ -124,6 +122,41 @@ object NotificationScheduler {
             AlarmManager.RTC_WAKEUP,
             calendar.timeInMillis,
             interval,
+            pendingIntent,
+        )
+    }
+
+    private fun scheduleMonthly(
+        context: Context,
+        type: NotificationType,
+        hour: Int,
+        minute: Int,
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            action = type.action
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            type.requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            if (before(Calendar.getInstance())) {
+                add(Calendar.MONTH, 1)
+            }
+        }
+
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
             pendingIntent,
         )
     }

@@ -34,6 +34,7 @@ import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.ui.*
 import com.danilkinkin.buckwheat.util.*
 import com.danilkinkin.buckwheat.wallet.WALLET_SHEET
+import java.math.BigDecimal
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -55,19 +56,19 @@ fun RowScope.RestBudgetPill(
     val tutorial by appViewModel.getTutorialStage(TUTORS.OPEN_WALLET).observeAsState(TUTORIAL_STAGE.NONE)
 
     observeLiveData(spendsViewModel.dailyBudget) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent.value ?: BigDecimal.ZERO)
     }
 
     observeLiveData(spendsViewModel.spentFromDailyBudget) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent.value ?: BigDecimal.ZERO)
     }
 
     observeLiveData(editorViewModel.stage) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent.value ?: BigDecimal.ZERO)
     }
 
     DisposableEffect(currency) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent.value ?: BigDecimal.ZERO)
 
         onDispose { }
     }

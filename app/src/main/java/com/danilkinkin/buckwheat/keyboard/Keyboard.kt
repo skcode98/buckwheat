@@ -21,6 +21,7 @@ import com.danilkinkin.buckwheat.data.entities.SpendType
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
+import java.util.Date
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
@@ -255,7 +256,7 @@ fun Keyboard(
                             type = KeyboardButtonType.DELETE,
                             icon = painterResource(R.drawable.ic_delete_forever),
                             onClick = {
-                                editorViewModel.editedTransaction?.let {
+                                editorViewModel.editedTransaction.value?.let {
                                     spendsViewModel.removeSpent(
                                         it
                                     )
@@ -302,16 +303,19 @@ fun Keyboard(
                                         val categoryId = editorViewModel.currentCategoryId.value
 
                                         if (mode == EditMode.EDIT) {
-                                            val newVersionOfSpent =
-                                                editorViewModel.editedTransaction?.copy(
-                                                    value = editorViewModel.currentSpent,
-                                                    date = editorViewModel.currentDate,
-                                                    comment = comment,
-                                                    categoryId = categoryId
-                                                ) ?: return@runBlocking
+                                            val tx = editorViewModel.editedTransaction.value
+                                                ?: return@runBlocking
+                                            val newVersionOfSpent = tx.copy(
+                                                value = editorViewModel.currentSpent.value
+                                                    ?: BigDecimal.ZERO,
+                                                date = editorViewModel.currentDate.value
+                                                    ?: Date(),
+                                                comment = comment,
+                                                categoryId = categoryId
+                                            )
 
                                             spendsViewModel.removeSpent(
-                                                editorViewModel.editedTransaction ?: return@runBlocking,
+                                                tx,
                                                 silent = true
                                             )
                                             spendsViewModel.addSpent(newVersionOfSpent)
@@ -319,8 +323,10 @@ fun Keyboard(
                                             spendsViewModel.addSpent(
                                                 Transaction(
                                                     type = TransactionType.SPENT,
-                                                    value = editorViewModel.currentSpent,
-                                                    date = editorViewModel.currentDate,
+                                                    value = editorViewModel.currentSpent.value
+                                                        ?: BigDecimal.ZERO,
+                                                    date = editorViewModel.currentDate.value
+                                                        ?: Date(),
                                                     comment = comment,
                                                     spendType = editorViewModel.currentSpendType.value
                                                         ?: SpendType.WANTS,

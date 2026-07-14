@@ -141,12 +141,10 @@ fun DebugMenu(
 
 
             val dailyBudget = spendsViewModel.dailyBudget.value ?: BigDecimal.ZERO
-            val currentSpent = editorViewModel.currentSpent
+            val currentSpent = editorViewModel.currentSpent.value ?: BigDecimal.ZERO
 
             val restTodayBudget = dailyBudget - spentFromDailyBudget - currentSpent
 
-            MonospaceText("Бюджет на сегодня ------------- $dailyBudget")
-            MonospaceText("Потрачено из дн. бюджета ------ $spentFromDailyBudget")
             MonospaceText("Текущяя трата ----------------- $currentSpent")
             MonospaceText("Осталось на сегодня ----------- $restTodayBudget")
             Spacer(Modifier.height(16.dp))

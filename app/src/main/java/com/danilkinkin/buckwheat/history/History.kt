@@ -74,8 +74,6 @@ fun History(
     val scrollToBottom = remember { mutableStateOf(true) }
     val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).observeAsState(TUTORIAL_STAGE.NONE)
     var isUserTrySwipe by remember { mutableStateOf(false) }
-    var pendingUndoTransaction by remember { mutableStateOf<Transaction?>(null) }
-
     val searchQuery by spendsViewModel.searchQuery.collectAsState()
     val selectedTag by spendsViewModel.selectedTagFilter.collectAsState()
     val selectionMode by spendsViewModel.selectionMode.collectAsState()
@@ -370,16 +368,14 @@ fun History(
                                 onDismiss = {
                                     row.transaction?.let { tx ->
                                         spendsViewModel.removeSpent(tx)
-                                        pendingUndoTransaction = tx
                                         appViewModel.showSnackbar(
                                             message = "Spend deleted",
                                             actionLabel = "Undo",
                                             duration = SnackbarDuration.Long,
                                             snackbarResult = { result ->
                                                 if (result == SnackbarResult.ActionPerformed) {
-                                                    pendingUndoTransaction?.let { spendsViewModel.addSpent(it) }
+                                                    spendsViewModel.addSpent(tx)
                                                 }
-                                                pendingUndoTransaction = null
                                             }
                                         )
                                     }

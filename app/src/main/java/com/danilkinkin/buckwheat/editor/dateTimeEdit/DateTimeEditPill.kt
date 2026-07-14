@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,6 +20,7 @@ import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import java.time.LocalDate
 import java.util.Calendar
+import java.util.Date
 
 @Composable
 fun DateTimeEditPill(
@@ -26,9 +28,14 @@ fun DateTimeEditPill(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
-    var cachedDate by remember { mutableStateOf(editorViewModel.currentDate) }
+    val editorDate by editorViewModel.currentDate.observeAsState(Date())
+    var cachedDate by remember { mutableStateOf(editorDate) }
     var isPickTime by remember { mutableStateOf(false) }
     var isPickDate by remember { mutableStateOf(false) }
+
+    LaunchedEffect(editorDate) {
+        cachedDate = editorDate
+    }
 
     Row(
         modifier = Modifier
@@ -72,7 +79,7 @@ fun DateTimeEditPill(
                 )
 
                 cachedDate = calendar.time
-                editorViewModel.currentDate = cachedDate
+                editorViewModel.currentDate.value = cachedDate
                 isPickTime = false
             },
             onClose = {
@@ -101,7 +108,7 @@ fun DateTimeEditPill(
                 )
 
                 cachedDate = calendar.time
-                editorViewModel.currentDate = cachedDate
+                editorViewModel.currentDate.value = cachedDate
                 isPickDate = false
             },
             onClose = {

@@ -27,6 +27,12 @@ val monthlyExportStoreKey = booleanPreferencesKey("monthlyExport")
 val monthlyOverviewStoreKey = booleanPreferencesKey("monthlyOverview")
 val factsInsightsStoreKey = booleanPreferencesKey("factsInsights")
 val goalsReminderStoreKey = booleanPreferencesKey("goalsReminder")
+val notificationHourKeys = NotificationType.entries.associate {
+    it to intPreferencesKey("${it.name}_hour")
+}
+val notificationMinuteKeys = NotificationType.entries.associate {
+    it to intPreferencesKey("${it.name}_minute")
+}
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -61,7 +67,11 @@ class SettingsRepository @Inject constructor(
     }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->
-            TUTORIAL_STAGE.valueOf(value)
+            try {
+                TUTORIAL_STAGE.valueOf(value)
+            } catch (_: IllegalArgumentException) {
+                TUTORIAL_STAGE.NONE
+            }
         } ?: TUTORIAL_STAGE.NONE
     }
 
@@ -120,17 +130,17 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setNotificationTime(type: NotificationType, hour: Int, minute: Int) {
         context.settingsDataStore.edit {
-            it[intPreferencesKey("${type.name}_hour")] = hour
-            it[intPreferencesKey("${type.name}_minute")] = minute
+            it[notificationHourKeys[type]!!] = hour
+            it[notificationMinuteKeys[type]!!] = minute
         }
     }
 
     fun getNotificationHour(type: NotificationType) = context.settingsDataStore.data.map {
-        it[intPreferencesKey("${type.name}_hour")] ?: type.defaultHour
+        it[notificationHourKeys[type]!!] ?: type.defaultHour
     }
 
     fun getNotificationMinute(type: NotificationType) = context.settingsDataStore.data.map {
-        it[intPreferencesKey("${type.name}_minute")] ?: type.defaultMinute
+        it[notificationMinuteKeys[type]!!] ?: type.defaultMinute
     }
 
     fun isDailySpendOverviewEnabled() = context.settingsDataStore.data.map {
