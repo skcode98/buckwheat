@@ -114,8 +114,7 @@ fun TaggingToolbar(
                         categoryColor = categoryColorByTagName[tag],
                         onClick = {
                             editorViewModel.currentComment.value = tag
-                            val catId = categoryIdByTagName[tag]
-                            if (catId != null) {
+                            categoryIdByTagName[tag]?.let { catId ->
                                 editorViewModel.currentCategoryId.value = catId
                             }
                         },

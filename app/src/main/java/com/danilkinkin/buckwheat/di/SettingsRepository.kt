@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.map
@@ -115,6 +116,21 @@ class SettingsRepository @Inject constructor(
             it[reminderHourStoreKey] = hour
             it[reminderMinuteStoreKey] = minute
         }
+    }
+
+    suspend fun setNotificationTime(type: NotificationType, hour: Int, minute: Int) {
+        context.settingsDataStore.edit {
+            it[intPreferencesKey("${type.name}_hour")] = hour
+            it[intPreferencesKey("${type.name}_minute")] = minute
+        }
+    }
+
+    fun getNotificationHour(type: NotificationType) = context.settingsDataStore.data.map {
+        it[intPreferencesKey("${type.name}_hour")] ?: type.defaultHour
+    }
+
+    fun getNotificationMinute(type: NotificationType) = context.settingsDataStore.data.map {
+        it[intPreferencesKey("${type.name}_minute")] ?: type.defaultMinute
     }
 
     fun isDailySpendOverviewEnabled() = context.settingsDataStore.data.map {

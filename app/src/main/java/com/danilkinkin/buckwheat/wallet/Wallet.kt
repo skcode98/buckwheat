@@ -93,7 +93,7 @@ fun Wallet(
         mutableStateOf(
             (finishPeriodDate !== null && isSameDay(
                 startPeriodDate.time,
-                finishPeriodDate!!.time
+                finishPeriodDate?.time ?: 0L
             ))
                     || forceChange
         )
@@ -104,7 +104,7 @@ fun Wallet(
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column(Modifier.fillMaxSize()) {
             val days = if (dateToValue.value !== null) {
-                countDaysToToday(dateToValue.value!!)
+                countDaysToToday(dateToValue.value ?: Date())
             } else {
                 0
             }
@@ -240,15 +240,11 @@ fun Wallet(
                     },
                     endCaption = when (currency?.type) {
                         ExtendCurrency.Type.FROM_LIST -> "${
-                            Currency.getInstance(
-                                currency!!.value
-                            ).displayName.titleCase()
+                            currency?.value?.let { Currency.getInstance(it) }?.displayName?.titleCase() ?: ""
                         } (${
-                            Currency.getInstance(
-                                currency!!.value
-                            ).symbol
+                            currency?.value?.let { Currency.getInstance(it) }?.symbol ?: ""
                         })"
-                        ExtendCurrency.Type.CUSTOM -> currency!!.value!!
+                        ExtendCurrency.Type.CUSTOM -> currency?.value ?: ""
                         else -> ""
                     },
                 )
@@ -268,7 +264,7 @@ fun Wallet(
                     ),
                 ) {
                     Column {
-                        if (spends!!.isNotEmpty()) {
+                        if (spends?.isNotEmpty() ?: false) {
                             ButtonRow(
                                 icon = painterResource(R.drawable.ic_analytics),
                                 text = stringResource(R.string.view_analytics),
@@ -338,17 +334,17 @@ fun Wallet(
                             budget = budgetCache,
                             restBudget = restBudget,
                             days = days,
-                            currency = currency!!,
+                            currency = currency ?: ExtendCurrency.none(),
                         )
                         Button(
                             onClick = {
-                                spendsViewModel.changeDisplayCurrency(currency!!)
+                                spendsViewModel.changeDisplayCurrency(currency ?: ExtendCurrency.none())
 
                                 val wants = budgetCache - needsCache
-                                if (spends!!.isNotEmpty() && !forceChange) {
-                                    spendsViewModel.changeBudgets(needsCache, wants, dateToValue.value!!)
+                                if ((spends?.isNotEmpty() ?: false) && !forceChange) {
+                                    spendsViewModel.changeBudgets(needsCache, wants, dateToValue.value ?: Date())
                                 } else {
-                                    spendsViewModel.setBudgets(needsCache, wants, dateToValue.value!!)
+                                    spendsViewModel.setBudgets(needsCache, wants, dateToValue.value ?: Date())
                                     appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
                                 }
 
@@ -359,12 +355,12 @@ fun Wallet(
                                 .fillMaxWidth()
                                 .heightIn(60.dp)
                                 .padding(horizontal = 16.dp),
-                            enabled = dateToValue.value !== null && countDaysToToday(dateToValue.value!!) > 0 && budgetCache > BigDecimal(
+                            enabled = dateToValue.value !== null && countDaysToToday(dateToValue.value ?: Date()) > 0 && budgetCache > BigDecimal(
                                 0
                             )
                         ) {
                             Text(
-                                text = if (spends!!.isNotEmpty() && !forceChange) {
+                                text = if ((spends?.isNotEmpty() ?: false) && !forceChange) {
                                     stringResource(R.string.change_budget)
                                 } else {
                                     stringResource(R.string.apply)

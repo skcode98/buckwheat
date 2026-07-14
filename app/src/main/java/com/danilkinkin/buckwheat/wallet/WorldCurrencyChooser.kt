@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.base.Divider
 import com.danilkinkin.buckwheat.base.RenderAdaptivePane
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -214,7 +215,7 @@ fun WorldCurrencyChooserContent(
                 }
                 Button(
                     onClick = {
-                        onSelect(selectCurrency.value!!)
+                        onSelect(selectCurrency.value ?: return@Button)
                         onClose()
                     },
                     colors = ButtonDefaults.textButtonColors(),

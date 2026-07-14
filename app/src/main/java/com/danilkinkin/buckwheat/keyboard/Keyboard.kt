@@ -20,6 +20,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.SpendType
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import java.math.BigDecimal
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
@@ -81,7 +82,7 @@ fun Keyboard(
                 tryConvertStringToNumber(newValue).join(third = false)
 
             if (editorViewModel.stage.value === EditStage.IDLE) editorViewModel.startCreatingSpent()
-            editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value!!.toBigDecimal())
+            editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value?.toBigDecimal() ?: BigDecimal.ZERO)
         } else if (newValue == "") {
             editorViewModel.rawSpentValue.value = newValue
         }
@@ -131,7 +132,7 @@ fun Keyboard(
                             tryConvertStringToNumber("0").join(third = false)
 
                         if (editorViewModel.stage.value === EditStage.IDLE) editorViewModel.startCreatingSpent()
-                        editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value!!.toBigDecimal())
+                        editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value?.toBigDecimal() ?: BigDecimal.ZERO)
                     }
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 },
@@ -274,15 +275,16 @@ fun Keyboard(
                                 if (debugProgress == -1) {
                                     editorViewModel.resetEditingSpent()
 
-                                    appViewModel.setIsDebug(!appViewModel.isDebug.value!!)
+                                    val debugOn = appViewModel.isDebug.value ?: false
+                                    appViewModel.setIsDebug(!debugOn)
 
                                     coroutineScope.launch {
                                         appViewModel.showSnackbar(
                                             "Debug ${
-                                                if (appViewModel.isDebug.value!!) {
-                                                    "ON"
-                                                } else {
+                                                if (debugOn) {
                                                     "OFF"
+                                                } else {
+                                                    "ON"
                                                 }
                                             }"
                                         )
@@ -301,15 +303,15 @@ fun Keyboard(
 
                                         if (mode == EditMode.EDIT) {
                                             val newVersionOfSpent =
-                                                editorViewModel.editedTransaction!!.copy(
+                                                editorViewModel.editedTransaction?.copy(
                                                     value = editorViewModel.currentSpent,
                                                     date = editorViewModel.currentDate,
                                                     comment = comment,
                                                     categoryId = categoryId
-                                                )
+                                                ) ?: return@runBlocking
 
                                             spendsViewModel.removeSpent(
-                                                editorViewModel.editedTransaction!!,
+                                                editorViewModel.editedTransaction ?: return@runBlocking,
                                                 silent = true
                                             )
                                             spendsViewModel.addSpent(newVersionOfSpent)
@@ -332,7 +334,14 @@ fun Keyboard(
                                             spendsViewModel.setTagCategory(comment, categoryId)
                                         }
 
-                                        editorViewModel.resetEditingSpent()
+                                        if (mode == EditMode.ADD) {
+                                            coroutineScope.launch {
+                                                appViewModel.showSnackbar("Spend added")
+                                            }
+                                            editorViewModel.resetEditingSpent(keepMeta = true)
+                                        } else {
+                                            editorViewModel.resetEditingSpent()
+                                        }
                                     }
                                 }
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)

@@ -84,7 +84,7 @@ fun DateTimeEditPill(
     if (isPickDate) {
         DatePickerDialog(
             initDate = cachedDate.toLocalDate(),
-            disableBeforeDate = spendsViewModel.startPeriodDate.value!!.toLocalDate(),
+            disableBeforeDate = spendsViewModel.startPeriodDate.value?.toLocalDate() ?: LocalDate.now(),
             disableAfterDate = LocalDate.now(),
             onSelect = { newDate ->
                 val calendarNew = Calendar.getInstance()

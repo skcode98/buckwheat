@@ -243,7 +243,7 @@ private fun PreviewWithIconsWithChip() {
             endContent = {
                 SuggestionChip(
                     label = { Text(text = "Suggestion") },
-                    onClick = { /*TODO*/ },
+                    onClick = { },
                 )
             },
             text = "Text row loooooooooooooooooooooooooooooooong",
@@ -261,7 +261,7 @@ private fun PreviewWithIconsWithChipAndEndIcon() {
             endContent = {
                 SuggestionChip(
                     label = { Text(text = "Suggestion") },
-                    onClick = { /*TODO*/ },
+                    onClick = { },
                 )
             },
             text = "Text row loooooooooooooooooooooooooooooooong",
@@ -279,7 +279,7 @@ private fun PreviewWithIconsWithChipWithWrapText() {
             endContent = {
                 SuggestionChip(
                     label = { Text(text = "Suggestion") },
-                    onClick = { /*TODO*/ },
+                    onClick = { },
                 )
             },
             wrapMainText = true,
@@ -298,7 +298,7 @@ private fun PreviewWithIconsWithChipWithDescriptionWithEndContentAndEnIcon() {
             endContent = {
                 SuggestionChip(
                     label = { Text(text = "Suggestion") },
-                    onClick = { /*TODO*/ },
+                    onClick = { },
                 )
             },
             wrapMainText = true,
@@ -318,7 +318,7 @@ private fun PreviewWithIconsWithChipWithDescriptionWithEndContent() {
             endContent = {
                 SuggestionChip(
                     label = { Text(text = "Suggestion") },
-                    onClick = { /*TODO*/ },
+                    onClick = { },
                 )
             },
             wrapMainText = true,

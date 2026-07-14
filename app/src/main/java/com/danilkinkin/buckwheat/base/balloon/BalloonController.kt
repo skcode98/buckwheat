@@ -45,7 +45,7 @@ class BalloonController {
         tooltipId: Int,
     ) {
         showedBalloons.value = showedBalloons.value?.minus(tooltipId)
-        balloons.value!![tooltipId]?.onClose()
+        balloons.value?.get(tooltipId)?.onClose()
     }
 
     fun destroy(

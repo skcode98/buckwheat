@@ -32,10 +32,6 @@ object AppModule {
 
     @Singleton
     @Provides
-    fun provideStorageDao(db: DatabaseModule) = db.storageDao()
-
-    @Singleton
-    @Provides
     fun provideRecurringDao(db: DatabaseModule) = db.recurringDao()
 
     @Singleton

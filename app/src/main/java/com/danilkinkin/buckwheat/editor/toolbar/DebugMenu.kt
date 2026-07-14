@@ -140,7 +140,7 @@ fun DebugMenu(
             Spacer(Modifier.height(16.dp))
 
 
-            val dailyBudget = spendsViewModel.dailyBudget.value!!
+            val dailyBudget = spendsViewModel.dailyBudget.value ?: BigDecimal.ZERO
             val currentSpent = editorViewModel.currentSpent
 
             val restTodayBudget = dailyBudget - spentFromDailyBudget - currentSpent

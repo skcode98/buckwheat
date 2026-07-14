@@ -56,7 +56,7 @@ fun FinishDateSelector(
             calendarState = calendarState,
             onDayClicked = { calendarState.setSelectedDay(it) },
             onBackPressed = onBackPressed,
-            onApply = { onApply(calendarState.calendarUiState.value.selectedEndDate!!.toDate()) }
+            onApply = { onApply(calendarState.calendarUiState.value.selectedEndDate?.toDate() ?: Date()) }
         )
     }
 }
@@ -136,8 +136,8 @@ private fun FinishDateSelectorTopAppBar(
                     )
                     val days = if (calendarState.calendarUiState.value.hasSelectedDates) {
                         countDays(
-                            calendarState.calendarUiState.value.selectedEndDate!!.toDate(),
-                            calendarState.calendarUiState.value.selectedStartDate!!.toDate(),
+                            calendarState.calendarUiState.value.selectedEndDate?.toDate() ?: Date(),
+                            calendarState.calendarUiState.value.selectedStartDate?.toDate() ?: Date(),
                         )
                     } else {
                         0

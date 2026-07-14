@@ -104,7 +104,7 @@ fun WholeBudgetCard(
                                 CountDaysChip(
                                     Modifier,
                                     fromDate = startDate,
-                                    toDate = finishDate!!
+                                    toDate = finishDate ?: Date()
                                 )
                             }
                         } else if (finishDate !== null && bigVariant) {

@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import com.danilkinkin.buckwheat.recurring.RecurringReceiver
 import com.danilkinkin.buckwheat.reminder.ReminderReceiver
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
@@ -53,6 +54,9 @@ class Application : Application() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager =
+                getSystemService(NotificationManager::class.java)
+
             val channel = NotificationChannel(
                 ReminderReceiver.CHANNEL_ID,
                 getString(R.string.reminder_channel_name),
@@ -60,8 +64,6 @@ class Application : Application() {
             ).apply {
                 description = getString(R.string.reminder_channel_description)
             }
-            val notificationManager =
-                getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
 
             val recurringChannel = NotificationChannel(
@@ -72,6 +74,17 @@ class Application : Application() {
                 description = getString(R.string.recurring_channel_description)
             }
             notificationManager.createNotificationChannel(recurringChannel)
+
+            NotificationType.entries.forEach { type ->
+                val notificationChannel = NotificationChannel(
+                    type.channelId,
+                    type.getChannelName(),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = type.getChannelDescription()
+                }
+                notificationManager.createNotificationChannel(notificationChannel)
+            }
         }
     }
 }

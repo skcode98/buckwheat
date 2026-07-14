@@ -53,7 +53,7 @@ fun Paint.applyFontToPaint(context: Context, style: TextStyle): Paint {
 
         this.style = Paint.Style.FILL
         color = style.color.getColor(context).toArgb()
-        textSize = Resources.getSystem().displayMetrics.density * style.fontSize!!.value
+        textSize = Resources.getSystem().displayMetrics.density * (style.fontSize?.value ?: 0f)
         textAlign = if (style.textAlign == TextAlign.Right) Paint.Align.RIGHT else Paint.Align.LEFT
     }
 

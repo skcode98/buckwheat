@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,9 +65,7 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.analytics.CategorySpendingLimitsCard
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.prettyDate
-import com.danilkinkin.buckwheat.util.toLocalDateTime
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
 import kotlinx.coroutines.Dispatchers
@@ -196,7 +193,7 @@ fun Analytics(
     val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
     val allTransactions by spendsViewModel.transactions.observeAsState(emptyList())
     val allSpends by spendsViewModel.spends.observeAsState(emptyList())
-    val wholeBudget = spendsViewModel.budget.value!!
+    val wholeBudget = spendsViewModel.budget.value ?: BigDecimal.ZERO
     val scrollState = rememberScrollState()
 
     val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)
@@ -217,9 +214,9 @@ fun Analytics(
     }
 
     val effectiveStartDate = selectedPeriod?.startDate
-        ?: spendsViewModel.startPeriodDate.value!!
+        ?: spendsViewModel.startPeriodDate.value ?: Date()
     val effectiveFinishDate = selectedPeriod?.finishDate
-        ?: spendsViewModel.finishPeriodDate.value!!
+        ?: spendsViewModel.finishPeriodDate.value ?: Date()
     val effectiveActualFinishDate = selectedPeriod?.actualFinishDate
         ?: finishPeriodActualDate
     val effectiveBudget = selectedPeriod?.budget
@@ -290,7 +287,7 @@ fun Analytics(
                     Column(Modifier.fillMaxWidth()) {
                         WholeBudgetCard(
                             budget = effectiveBudget,
-                            currency = spendsViewModel.currency.value!!,
+                            currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                             startDate = effectiveStartDate,
                             finishDate = effectiveFinishDate,
                             actualFinishDate = effectiveActualFinishDate,
@@ -300,7 +297,7 @@ fun Analytics(
                             needsBudget = spendsViewModel.needsBudget,
                             wantsBudget = spendsViewModel.wantsBudget,
                             spends = filteredSpends,
-                            currency = spendsViewModel.currency.value!!,
+                            currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         if (filteredSpends.isNotEmpty()) {
@@ -332,7 +329,7 @@ fun Analytics(
                                         .fillMaxHeight(),
                                     isMin = true,
                                     spends = filteredSpends,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 MinMaxSpentCard(
@@ -341,19 +338,19 @@ fun Analytics(
                                         .fillMaxHeight(),
                                     isMin = false,
                                     spends = filteredSpends,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                             CategoriesChartCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 spends = filteredSpends,
-                                currency = spendsViewModel.currency.value!!,
+                                currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             CategorySpendingLimitsCard(
                                 spends = filteredSpends,
-                                currency = spendsViewModel.currency.value!!,
+                                currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                                 spendsViewModel = spendsViewModel,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -365,7 +362,7 @@ fun Analytics(
                                     startDate = effectiveStartDate,
                                     finishDate = effectiveFinishDate,
                                     actualFinishDate = effectiveActualFinishDate,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                                     onDayClick = { day ->
                                         clickedDaySpends.value = listOf(day)
                                     },
@@ -405,7 +402,11 @@ fun Analytics(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                CategoryOverview()
+                CategoryOverview(
+                    spendsViewModel = spendsViewModel,
+                    transactions = filteredTransactions,
+                    currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 

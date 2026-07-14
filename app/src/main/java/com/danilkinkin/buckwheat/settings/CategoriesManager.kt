@@ -85,7 +85,7 @@ fun CategoriesManagerSheet(
 
     val categoryTotals = remember(allTransactions, startMs, endMs) {
         allTransactions.filter { it.categoryId != null && it.type == com.danilkinkin.buckwheat.data.entities.TransactionType.SPENT }
-            .groupBy { it.categoryId!! }
+            .groupBy { it.categoryId ?: 0L }
             .mapValues { (_, txs) -> txs.sumOf { it.value.toDouble() }.let { BigDecimal.valueOf(it) } }
     }
 

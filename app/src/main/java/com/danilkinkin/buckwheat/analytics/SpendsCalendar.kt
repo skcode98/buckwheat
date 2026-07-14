@@ -13,11 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -114,9 +112,9 @@ fun SpendsCalendar(
                 return@forEach
             }
 
-            if (currDay == null || !isSameDay(currDay!!.date.time, it.date.time)) {
+            if (currDay == null || !isSameDay(currDay?.date?.time ?: 0L, it.date.time)) {
                 if (currDay !== null) {
-                    days[currDay!!.date.toLocalDate()] = currDay!!
+                    currDay?.let { d -> days[d.date.toLocalDate()] = d }
                 }
 
                 val isBudgetTx = it.type == TransactionType.SET_DAILY_BUDGET
@@ -134,17 +132,17 @@ fun SpendsCalendar(
 
             if (it.type == TransactionType.SET_DAILY_BUDGET) {
                 lastBudget = it.value
-                currDay = currDay!!.copy(budget = it.value)
+                currDay = currDay?.copy(budget = it.value)
                 return@forEach
             }
 
-            currDay = currDay!!.copy(
-                spending = currDay!!.spending + it.value, spends = currDay!!.spends.plus(it)
+            currDay = currDay?.copy(
+                spending = (currDay?.spending ?: BigDecimal.ZERO) + it.value, spends = (currDay?.spends ?: emptyList()).plus(it)
             )
         }
 
         if (currDay != null) {
-            days[currDay!!.date.toLocalDate()] = currDay!!
+            currDay?.let { d -> days[d.date.toLocalDate()] = d }
         }
 
         days.toMutableMap()
@@ -349,6 +347,7 @@ fun SpendsCalendar(
                                 week = week,
                                 calendarUiState = calendarUiState,
                                 spendingDays = spendingDays,
+                                locale = locale,
                                 onDayClick = { localDate ->
                                     spendingDays[localDate]?.let { onDayClick(it) }
                                 },
@@ -436,10 +435,17 @@ internal fun MonthHeader(modifier: Modifier = Modifier, yearMonth: YearMonth) {
 internal fun DaysOfWeek(locale: Locale) {
     val week = getWeek(locale)
 
-    for (day in week) {
-        DayOfWeekHeading(
-            day = prettyWeekDay(day),
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp),
+    ) {
+        for (day in week) {
+            DayOfWeekHeading(
+                day = prettyWeekDay(day),
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -448,12 +454,13 @@ internal fun Week(
     calendarUiState: CalendarUiState,
     week: Week,
     spendingDays: Map<LocalDate, SpendingDay>,
+    locale: Locale = Locale.getDefault(),
     onDayClick: (LocalDate) -> Unit = {},
 ) {
     val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
 
     for (day in 0..6) {
-        val currentDay = beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek()[0]))
+        val currentDay = beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
             .plusDays(day.toLong())
 
         if (currentDay.month == week.yearMonth.month) {
@@ -477,16 +484,13 @@ internal fun DayOfWeekHeading(day: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .height(CELL_SIZE)
-            .widthIn(min = CELL_SIZE)
             .fillMaxWidth()
-            .background(Color.Transparent), contentAlignment = Alignment.Center
+            .background(Color.Transparent),
+        contentAlignment = Alignment.Center
     ) {
         Text(
-            modifier = Modifier
-                .fillMaxSize()
-                .wrapContentHeight(Alignment.CenterVertically),
-            textAlign = TextAlign.Center,
             text = day,
+            textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5F),
         )
@@ -500,7 +504,7 @@ internal fun Day(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
 ) {
-    val spendingDay = if (spendingDays[day] === null || spendingDays[day]!!.spending.isZero()) {
+    val spendingDay = if (spendingDays[day] === null || (spendingDays[day]?.spending?.isZero() ?: true)) {
         null
     } else {
         spendingDays[day]
@@ -508,7 +512,7 @@ internal fun Day(
 
     val harmonizedColor = if (spendingDay !== null) toPalette(
         harmonize(
-            if (spendingDay.spending <= spendingDay.budget) {
+            if (spendingDay.spending <= spendingDay.budget && spendingDay.budget > BigDecimal.ZERO) {
                 combineColors(
                     listOf(
                         colorNotGood,

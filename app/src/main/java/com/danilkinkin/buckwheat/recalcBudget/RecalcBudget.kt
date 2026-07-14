@@ -24,6 +24,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -123,7 +124,7 @@ fun RecalcBudget(
                         text = numberFormat(
                             context,
                             howMuchNotSpent,
-                            currency = spendsViewModel.currency.value!!,
+                            currency = spendsViewModel.currency.value ?: ExtendCurrency.none(),
                         ),
                         style = MaterialTheme.typography.displayLarge,
                         textAlign = TextAlign.Center,

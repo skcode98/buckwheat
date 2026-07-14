@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
+import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.entities.Goal
 import com.danilkinkin.buckwheat.util.prettyDate
 import java.math.BigDecimal
@@ -55,6 +56,7 @@ const val GOALS_SHEET = "goals"
 @Composable
 fun Goals(
     goalsViewModel: GoalsViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel(),
     onClose: () -> Unit = {},
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -100,7 +102,11 @@ fun Goals(
                         GoalCard(
                             goal = goal,
                             onContribute = { amount ->
+                                val willComplete = (goal.savedAmount + amount) >= goal.targetAmount
                                 goalsViewModel.contributeToGoal(goal.id, amount)
+                                if (willComplete) {
+                                    appViewModel.showSnackbar("Goal \"${goal.name}\" completed!")
+                                }
                             },
                             onDelete = {
                                 goalsViewModel.deleteGoal(goal.id)
@@ -189,6 +195,15 @@ private fun GoalCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                val progressPercent = if (goal.targetAmount > BigDecimal.ZERO) {
+                    (goal.savedAmount / goal.targetAmount * BigDecimal(100))
+                        .setScale(0, RoundingMode.DOWN).toInt()
+                } else 0
+                Text(
+                    text = "$progressPercent%",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 if (goal.deadline != null) {
                     Text(
                         text = prettyDate(goal.deadline, showTime = false),
@@ -211,14 +226,9 @@ private fun GoalCard(
             Spacer(Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 if (!goal.completed && remaining > BigDecimal.ZERO) {
                     Text(
                         text = "${formatAmount(remaining)} ${stringResource(R.string.goal_remaining)}",
@@ -272,7 +282,7 @@ private fun ContributeDialog(
                     }
                 },
                 enabled = amountText.toBigDecimalOrNull() != null
-                        && amountText.toBigDecimalOrNull()!! > BigDecimal.ZERO,
+                        && (amountText.toBigDecimalOrNull() ?: BigDecimal.ZERO) > BigDecimal.ZERO,
             ) {
                 Text(stringResource(R.string.accept))
             }

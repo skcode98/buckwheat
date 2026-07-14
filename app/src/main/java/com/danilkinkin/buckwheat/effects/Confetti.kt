@@ -157,7 +157,7 @@ class ConfettiController {
         shiftXCoefficient: Float = 0.5f,
     ) {
         if (onSpawn.value !== null) {
-            onSpawn.value!!(
+            onSpawn.value?.invoke(
                 count,
                 ejectVector,
                 ejectPoint,
@@ -296,7 +296,7 @@ fun Confetti(
 
             it.lifetime = it.lifetime?.minus(diffTimestamp)
 
-            it.mustDestroy = it.mustDestroy || (it.lifetime !== null && it.lifetime!! <= 0L)
+            it.mustDestroy = it.mustDestroy || (it.lifetime !== null && (it.lifetime ?: 0L) <= 0L)
 
             if (
                 it.position.x < -forceDestroyZoneOffset ||

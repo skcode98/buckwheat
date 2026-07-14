@@ -111,7 +111,7 @@ fun MinimalWidgetContent() {
                             context.resources,
                             R.drawable.ic_add,
                             null,
-                        )!!
+                        )
 
                         Image(
                             modifier = GlanceModifier.size(
@@ -121,7 +121,8 @@ fun MinimalWidgetContent() {
                                     else -> 28.dp
                                 }
                             ),
-                            provider = ImageProvider(drawable.toBitmap()),
+                            provider = ImageProvider(drawable?.toBitmap()
+                                ?: android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)),
                             colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
                             contentDescription = null,
                         )
@@ -195,7 +196,7 @@ fun MinimalWidgetContent() {
                             context.resources,
                             R.drawable.ic_arrow_forward,
                             null,
-                        )!!
+                        )
 
                         Image(
                             modifier = GlanceModifier.size(
@@ -205,7 +206,8 @@ fun MinimalWidgetContent() {
                                     else -> 20.dp
                                 }
                             ),
-                            provider = ImageProvider(drawable.toBitmap()),
+                            provider = ImageProvider(drawable?.toBitmap()
+                                ?: android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)),
                             colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
                             contentDescription = null,
                         )

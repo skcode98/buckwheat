@@ -37,19 +37,15 @@ fun CategorySpendingLimitsCard(
     spendsViewModel: SpendsViewModel,
 ) {
     val categories by spendsViewModel.categories.observeAsState(emptyList())
-    val mappings by spendsViewModel.tagCategoryMappings.observeAsState(emptyList())
-    val untaggedTagName = ""
 
     val categoriesWithLimits = categories.filter { it.monthlyLimit > BigDecimal.ZERO }
     if (categoriesWithLimits.isEmpty()) return
 
     val spendPerCategory = mutableMapOf<Long, BigDecimal>()
-    val tagToCategory = mappings.associate { it.tagName to it.categoryId }
 
     for (tx in spends) {
         if (tx.type != TransactionType.SPENT) continue
-        val tag = tx.comment.ifBlank { untaggedTagName }
-        val catId = tagToCategory[tag] ?: -1L
+        val catId = tx.categoryId ?: continue
         if (catId in categoriesWithLimits.map { it.id }) {
             spendPerCategory[catId] = (spendPerCategory[catId] ?: BigDecimal.ZERO) + tx.value
         }

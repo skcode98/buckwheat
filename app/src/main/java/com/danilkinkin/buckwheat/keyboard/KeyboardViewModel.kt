@@ -40,7 +40,7 @@ class KeyboardViewModel @Inject constructor(
 
     fun executeAction(action: KeyboardAction, value: Int? = null) {
         if (manualDispatcher !== null) {
-            manualDispatcher!!(action, value)
+            manualDispatcher?.invoke(action, value)
         }
 
         if (editCommandDispatcher === null) return

@@ -30,6 +30,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -57,6 +58,9 @@ import com.danilkinkin.buckwheat.BuildConfig
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.analytics.rememberImportCSV
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
+import com.danilkinkin.buckwheat.goals.GOALS_SHEET
 import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.base.TextRow
@@ -64,6 +68,7 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.dateTimeEdit.TimePickerDialog
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
 import java.math.BigDecimal
@@ -76,6 +81,7 @@ const val SETTINGS_SHEET = "settings"
 
 @Composable
 fun Settings(
+    onClose: () -> Unit = {},
     onTriedWidget: () -> Unit = {},
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
 ) {
@@ -91,12 +97,21 @@ fun Settings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(24.dp),
-                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = stringResource(R.string.settings_title),
                     style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.align(Alignment.Center),
                 )
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Close",
+                    )
+                }
             }
             Column(
                 modifier = Modifier
@@ -110,6 +125,8 @@ fun Settings(
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 CategoriesSection()
                 TagsSection()
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                GoalsSection()
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 ImportExportSection(activityResultRegistryOwner = activityResultRegistryOwner)
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -285,8 +302,7 @@ private fun BudgetSettingsDialog(
                 onClick = {
                     if (overall > BigDecimal.ZERO && finishDate.after(startDate)) {
                         val wants = overall - needs
-                        spendsViewModel.changeBudgets(needs, wants, finishDate)
-                        spendsViewModel.setStartPeriodDate(startDate)
+                        spendsViewModel.changeBudgetsAndStartDate(needs, wants, finishDate, startDate)
                         onDismiss()
                     }
                 },
@@ -601,6 +617,51 @@ private fun TagsSection(
 }
 
 @Composable
+private fun GoalsSection(
+    appViewModel: AppViewModel = hiltViewModel(),
+) {
+    SectionHeader("Goals")
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clickable { appViewModel.openSheet(com.danilkinkin.buckwheat.data.PathState(GOALS_SHEET)) },
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Manage goals",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Open",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(2.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ImportExportSection(
     appViewModel: AppViewModel = hiltViewModel(),
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
@@ -707,6 +768,14 @@ private fun SyncSection(
     SyncSwitcher(appViewModel = appViewModel)
 }
 
+private data class NotificationCardData(
+    val type: NotificationType,
+    val icon: Int,
+    val enabled: androidx.lifecycle.LiveData<Boolean>,
+    val onToggle: (Boolean) -> Unit,
+    val description: String,
+)
+
 @Composable
 private fun NotificationSettingsSection(
     appViewModel: AppViewModel = hiltViewModel(),
@@ -715,57 +784,76 @@ private fun NotificationSettingsSection(
 
     ReminderSwitcher(appViewModel = appViewModel)
 
-    NotificationToggleRow(
-        enabled = appViewModel.dailySpendOverviewEnabled,
-        onToggle = { appViewModel.setDailySpendOverviewEnabled(it) },
-        title = "Daily spend overview",
-        description = "Receive a summary of today's spending each evening",
-    )
-    NotificationToggleRow(
-        enabled = appViewModel.weeklyOverviewEnabled,
-        onToggle = { appViewModel.setWeeklyOverviewEnabled(it) },
-        title = "Weekly overview",
-        description = "Get a weekly spending recap every Sunday",
-    )
-    NotificationToggleRow(
-        enabled = appViewModel.monthlyExportEnabled,
-        onToggle = { appViewModel.setMonthlyExportEnabled(it) },
-        title = "Monthly export",
-        description = "Receive a CSV export at the end of each budget period",
-    )
-    NotificationToggleRow(
-        enabled = appViewModel.monthlyOverviewEnabled,
-        onToggle = { appViewModel.setMonthlyOverviewEnabled(it) },
-        title = "Monthly overview",
-        description = "Get a monthly spending breakdown on the last day",
-    )
-    NotificationToggleRow(
-        enabled = appViewModel.factsInsightsEnabled,
-        onToggle = { appViewModel.setFactsInsightsEnabled(it) },
-        title = "Facts & insights",
-        description = "Receive interesting stats and tips about your spending",
-    )
-    NotificationToggleRow(
-        enabled = appViewModel.goalsReminderEnabled,
-        onToggle = { appViewModel.setGoalsReminderEnabled(it) },
-        title = "Goals reminder",
-        description = "Get reminded about your saving goals and progress",
-    )
+    val cards = remember {
+        listOf(
+            NotificationCardData(
+                type = NotificationType.DAILY_SPEND_OVERVIEW,
+                icon = R.drawable.ic_clock,
+                enabled = appViewModel.dailySpendOverviewEnabled,
+                onToggle = { appViewModel.setDailySpendOverviewEnabled(it) },
+                description = "Receive a summary of today's spending each evening",
+            ),
+            NotificationCardData(
+                type = NotificationType.WEEKLY_OVERVIEW,
+                icon = R.drawable.ic_calendar,
+                enabled = appViewModel.weeklyOverviewEnabled,
+                onToggle = { appViewModel.setWeeklyOverviewEnabled(it) },
+                description = "Get a weekly spending recap every Sunday",
+            ),
+            NotificationCardData(
+                type = NotificationType.MONTHLY_EXPORT,
+                icon = R.drawable.ic_file_download,
+                enabled = appViewModel.monthlyExportEnabled,
+                onToggle = { appViewModel.setMonthlyExportEnabled(it) },
+                description = "Receive a CSV export at the end of each budget period",
+            ),
+            NotificationCardData(
+                type = NotificationType.MONTHLY_OVERVIEW,
+                icon = R.drawable.ic_analytics,
+                enabled = appViewModel.monthlyOverviewEnabled,
+                onToggle = { appViewModel.setMonthlyOverviewEnabled(it) },
+                description = "Get a monthly spending breakdown on the last day",
+            ),
+            NotificationCardData(
+                type = NotificationType.FACTS_INSIGHTS,
+                icon = R.drawable.ic_info,
+                enabled = appViewModel.factsInsightsEnabled,
+                onToggle = { appViewModel.setFactsInsightsEnabled(it) },
+                description = "Receive interesting stats and tips about your spending",
+            ),
+            NotificationCardData(
+                type = NotificationType.GOALS_REMINDER,
+                icon = R.drawable.ic_balance_wallet,
+                enabled = appViewModel.goalsReminderEnabled,
+                onToggle = { appViewModel.setGoalsReminderEnabled(it) },
+                description = "Get reminded about your saving goals and progress",
+            ),
+        )
+    }
+
+    cards.forEach { card ->
+        NotificationOverviewCard(
+            appViewModel = appViewModel,
+            card = card,
+        )
+    }
 }
 
 @Composable
-private fun NotificationToggleRow(
-    enabled: androidx.lifecycle.LiveData<Boolean>,
-    onToggle: (Boolean) -> Unit,
-    title: String,
-    description: String,
+private fun NotificationOverviewCard(
+    appViewModel: AppViewModel,
+    card: NotificationCardData,
 ) {
-    val checked by enabled.observeAsState(false)
+    val checked by card.enabled.observeAsState(false)
+    val hour by appViewModel.getNotificationHour(card.type).observeAsState(card.type.defaultHour)
+    val minute by appViewModel.getNotificationMinute(card.type).observeAsState(card.type.defaultMinute)
+    var showTimePicker by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable { onToggle(!checked) },
+            .clickable { card.onToggle(!checked) },
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -779,28 +867,68 @@ private fun NotificationToggleRow(
                     .padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    modifier = Modifier.weight(1f),
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                Icon(
+                    painter = painterResource(card.icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = if (checked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = card.type.getChannelName(),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = card.type.getScheduleDescription(hour ?: card.type.defaultHour, minute ?: card.type.defaultMinute),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = if (checked) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        ),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                if (checked) {
+                    Text(
+                        modifier = Modifier.clickable { showTimePicker = true },
+                        text = String.format("%02d:%02d", hour ?: card.type.defaultHour, minute ?: card.type.defaultMinute),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.primary,
+                        ),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
                 Switch(
                     checked = checked,
-                    onCheckedChange = onToggle,
+                    onCheckedChange = card.onToggle,
                     colors = SwitchDefaults.colors(
                         checkedTrackColor = MaterialTheme.colorScheme.primary,
                     ),
                 )
             }
             Text(
-                text = description,
+                text = card.description,
                 style = MaterialTheme.typography.bodySmall.copy(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 ),
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
             )
         }
+    }
+
+    if (showTimePicker) {
+        TimePickerDialog(
+            initTime = LocalTime.of(
+                hour ?: card.type.defaultHour,
+                minute ?: card.type.defaultMinute,
+            ),
+            onSelect = { h, m, _ ->
+                appViewModel.setNotificationTime(card.type, h, m)
+                showTimePicker = false
+            },
+            onClose = { showTimePicker = false },
+        )
     }
 }
 
@@ -809,7 +937,6 @@ private fun GeneralSettingsSection(
     onTriedWidget: () -> Unit = {},
 ) {
     SectionHeader("General")
-    ReminderSwitcher()
     ThemeSwitcher()
     LangSwitcher()
     TryWidget(onTried = onTriedWidget)

@@ -7,7 +7,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.danilkinkin.buckwheat.data.dao.CategoryDao
 import com.danilkinkin.buckwheat.data.dao.PeriodDao
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
-import com.danilkinkin.buckwheat.data.dao.StorageDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.Category
 import com.danilkinkin.buckwheat.data.entities.Period
@@ -79,8 +78,6 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 abstract class DatabaseModule : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
-
-    abstract fun storageDao(): StorageDao
 
     abstract fun recurringDao(): RecurringDao
 

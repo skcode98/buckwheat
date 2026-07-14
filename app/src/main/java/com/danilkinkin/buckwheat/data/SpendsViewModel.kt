@@ -62,6 +62,7 @@ class SpendsViewModel @Inject constructor(
     var requireDistributionRestedBudget = MutableLiveData(false)
     var requireSetBudget = MutableLiveData(false)
     var periodFinished = MutableLiveData(false)
+    var addSpentError = MutableLiveData<String?>(null)
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
 
     // Selection mode for batch operations
@@ -112,6 +113,20 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
+    fun changeBudgetsAndStartDate(
+        needsBudget: BigDecimal,
+        wantsBudget: BigDecimal,
+        newFinishDate: Date,
+        newStartDate: Date,
+    ) {
+        viewModelScope.launch {
+            spendsRepository.changeBudgets(needsBudget, wantsBudget, newFinishDate)
+            spendsRepository.setStartPeriodDate(newStartDate)
+            requireSetBudget.value = false
+            periodFinished.value = false
+        }
+    }
+
     fun finishBudget() {
         viewModelScope.launch {
             spendsRepository.finishBudget(Date())
@@ -137,7 +152,12 @@ class SpendsViewModel @Inject constructor(
 
     fun addSpent(transactionForAdd: Transaction) {
         viewModelScope.launch {
-            spendsRepository.addSpent(transactionForAdd)
+            try {
+                spendsRepository.addSpent(transactionForAdd)
+                addSpentError.value = null
+            } catch (e: Exception) {
+                addSpentError.value = e.message ?: "Failed to add spend"
+            }
         }
     }
 

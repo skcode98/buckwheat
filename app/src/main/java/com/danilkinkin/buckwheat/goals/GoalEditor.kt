@@ -64,7 +64,7 @@ fun GoalEditor(
                 ) {
                     Text(
                         if (deadlineMillis != null) {
-                            "Deadline: ${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(deadlineMillis!!))}"
+                            "Deadline: ${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(deadlineMillis ?: 0L))}"
                         } else {
                             stringResource(R.string.add_deadline)
                         }
@@ -81,7 +81,7 @@ fun GoalEditor(
                     }
                 },
                 enabled = name.isNotBlank() && targetText.toBigDecimalOrNull() != null
-                        && targetText.toBigDecimalOrNull()!! > BigDecimal.ZERO,
+                        && (targetText.toBigDecimalOrNull() ?: BigDecimal.ZERO) > BigDecimal.ZERO,
             ) {
                 Text(stringResource(R.string.accept))
             }

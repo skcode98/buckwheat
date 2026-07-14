@@ -74,6 +74,7 @@ fun History(
     val scrollToBottom = remember { mutableStateOf(true) }
     val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).observeAsState(TUTORIAL_STAGE.NONE)
     var isUserTrySwipe by remember { mutableStateOf(false) }
+    var pendingUndoTransaction by remember { mutableStateOf<Transaction?>(null) }
 
     val searchQuery by spendsViewModel.searchQuery.collectAsState()
     val selectedTag by spendsViewModel.selectedTagFilter.collectAsState()
@@ -112,7 +113,7 @@ fun History(
         transactions.forEach { spent ->
             if (lastSpentDate === null || !isSameDay(
                     spent.date.time,
-                    lastSpentDate!!.toDate().time
+                    lastSpentDate?.toDate()?.time ?: 0L
                 )
             ) {
                 if (lastSpentDate !== null) {
@@ -122,7 +123,7 @@ fun History(
                             key = "total-${lastSpentDate}",
                             contentHash = "total-${lastSpentDate}",
                             transaction = null,
-                            day = lastSpentDate!!,
+                            day = lastSpentDate ?: LocalDate.now(),
                             dayTotal = lastDayTotal,
                         )
                     )
@@ -137,7 +138,7 @@ fun History(
                         key = "header-${lastSpentDate}",
                         contentHash = "header-${lastSpentDate}",
                         transaction = null,
-                        day = lastSpentDate!!,
+                        day = lastSpentDate ?: LocalDate.now(),
                         dayTotal = null,
                     )
                 )
@@ -151,7 +152,7 @@ fun History(
                     key = "spent-${spent.uid}",
                     contentHash = "spent-${spent.uid}",
                     transaction = spent,
-                    day = lastSpentDate!!,
+                    day = lastSpentDate ?: LocalDate.now(),
                     dayTotal = null,
                 )
             )
@@ -161,10 +162,10 @@ fun History(
             composedList.add(
                 RowEntity(
                     type = RowEntityType.DayTotal,
-                    key = "total-${lastSpentDate!!}",
+                    key = "total-${lastSpentDate}",
                     contentHash = "total-${lastSpentDate}",
                     transaction = null,
-                    day = lastSpentDate!!,
+                    day = lastSpentDate ?: LocalDate.now(),
                     dayTotal = lastDayTotal,
                 )
             )
@@ -343,7 +344,7 @@ fun History(
                     when (row.type) {
                         RowEntityType.DayDivider -> HistoryDateDivider(row.day)
                         RowEntityType.DayTotal -> TotalPerDay(
-                            spentPerDay = row.dayTotal!!,
+                            spentPerDay = row.dayTotal ?: BigDecimal.ZERO,
                             currency = currency.value,
                         )
                         RowEntityType.Spent -> if (!readOnly && !selectionMode) SwipeActions(
@@ -355,7 +356,7 @@ fun History(
                                 icon = painterResource(R.drawable.ic_edit),
                                 stayDismissed = false,
                                 onDismiss = {
-                                    editorViewModel.startEditingSpent(row.transaction!!)
+                                    row.transaction?.let { editorViewModel.startEditingSpent(it) }
                                     onClose()
                                 }
                             ),
@@ -367,7 +368,21 @@ fun History(
                                 icon = painterResource(R.drawable.ic_delete_forever),
                                 stayDismissed = true,
                                 onDismiss = {
-                                    spendsViewModel.removeSpent(row.transaction!!)
+                                    row.transaction?.let { tx ->
+                                        spendsViewModel.removeSpent(tx)
+                                        pendingUndoTransaction = tx
+                                        appViewModel.showSnackbar(
+                                            message = "Spend deleted",
+                                            actionLabel = "Undo",
+                                            duration = SnackbarDuration.Long,
+                                            snackbarResult = { result ->
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    pendingUndoTransaction?.let { spendsViewModel.addSpent(it) }
+                                                }
+                                                pendingUndoTransaction = null
+                                            }
+                                        )
+                                    }
                                 }
                             ),
                             onTried = { isUserTrySwipe = true },
@@ -427,22 +442,24 @@ fun History(
                                 Box(
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 ) {
+                                    val tx = row.transaction ?: return@Box
                                     SpentItem(
-                                        transaction = row.transaction!!,
+                                        transaction = tx,
                                         currency = currency.value,
-                                        isSelected = row.transaction!!.uid in selectedIds,
+                                        isSelected = tx.uid in selectedIds,
                                         isSelectionMode = selectionMode,
-                                        onSelect = { spendsViewModel.toggleTransactionSelection(row.transaction!!.uid) },
+                                        onSelect = { spendsViewModel.toggleTransactionSelection(tx.uid) },
                                     )
                                 }
                             }
                         } else {
+                            val tx = row.transaction ?: return@animatedItemsIndexed
                             SpentItem(
-                                transaction = row.transaction!!,
+                                transaction = tx,
                                 currency = currency.value,
-                                isSelected = row.transaction!!.uid in selectedIds,
+                                isSelected = tx.uid in selectedIds,
                                 isSelectionMode = selectionMode,
-                                onSelect = if (selectionMode) {{ spendsViewModel.toggleTransactionSelection(row.transaction!!.uid) }} else null,
+                                onSelect = if (selectionMode) {{ spendsViewModel.toggleTransactionSelection(tx.uid) }} else null,
                             )
                         }
                     }
@@ -473,7 +490,8 @@ fun History(
             }
 
             if (historyList.isEmpty()) {
-                NoSpends(Modifier.weight(1f))
+                val message = if (allTransactions.isEmpty()) "No spends yet" else "No results matching your search"
+                NoSpends(Modifier.weight(1f), message = message)
             }
         }
 

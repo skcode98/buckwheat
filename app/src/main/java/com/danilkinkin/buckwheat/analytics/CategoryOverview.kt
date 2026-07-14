@@ -1,7 +1,6 @@
 package com.danilkinkin.buckwheat.analytics
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
@@ -29,43 +26,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.SpendsViewModel
-import com.danilkinkin.buckwheat.data.dao.CategorySpentTotal
-import com.danilkinkin.buckwheat.data.entities.Category
-import com.danilkinkin.buckwheat.util.isSameDay
+import com.danilkinkin.buckwheat.data.entities.Transaction
 import java.math.BigDecimal
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Date
 
 @Composable
 fun CategoryOverview(
-    spendsViewModel: SpendsViewModel = hiltViewModel(),
+    spendsViewModel: SpendsViewModel,
+    transactions: List<Transaction>,
+    currency: ExtendCurrency,
 ) {
     val categories by spendsViewModel.categories.observeAsState(emptyList())
     val tagCategoryMappings by spendsViewModel.tagCategoryMappings.observeAsState(emptyList())
-    val allTransactions by spendsViewModel.transactions.observeAsState(emptyList())
-    val currency = spendsViewModel.currency.observeAsState(initial = com.danilkinkin.buckwheat.data.ExtendCurrency.none())
 
     if (categories.isEmpty()) return
 
-    val now = LocalDate.now()
-    val startOfMonth = now.withDayOfMonth(1)
-    val startOfNextMonth = startOfMonth.plusMonths(1)
-    val startMs = startOfMonth.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val endMs = startOfNextMonth.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-    val thisMonthTransactions = remember(allTransactions, startMs, endMs) {
-        allTransactions.filter { tx ->
-            tx.date.time in startMs until endMs
-        }
-    }
-
-    val thisMonthCategoryTotals = remember(thisMonthTransactions) {
-        val spentTxs = thisMonthTransactions.filter { it.categoryId != null }
-        spentTxs.groupBy { it.categoryId!! }
-            .mapValues { (_, txs) -> txs.sumOf { it.value.toDouble() }.let { BigDecimal.valueOf(it) } }
+    val categoryTotals = remember(transactions) {
+        val spentTxs = transactions.filter { it.categoryId != null }
+        spentTxs.groupBy { it.categoryId ?: 0L }
+            .mapValues { (_, txs) -> txs.map { it.value }.fold(BigDecimal.ZERO) { a, b -> a + b } }
     }
 
     val mappingsByCategory = remember(tagCategoryMappings) {
@@ -82,7 +62,7 @@ fun CategoryOverview(
         Spacer(Modifier.height(12.dp))
 
         categories.forEach { category ->
-            val spent = thisMonthCategoryTotals[category.id] ?: BigDecimal.ZERO
+            val spent = categoryTotals[category.id] ?: BigDecimal.ZERO
             val limit = category.monthlyLimit
             val progress = if (limit > BigDecimal.ZERO)
                 (spent / limit).toFloat().coerceIn(0f, 1f) else 0f

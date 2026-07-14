@@ -14,13 +14,13 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorOnEditor
 
 @Composable
-fun NoSpends(modifier: Modifier = Modifier) {
+fun NoSpends(modifier: Modifier = Modifier, message: String = stringResource(R.string.no_spends)) {
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = stringResource(R.string.no_spends),
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = colorOnEditor.copy(alpha = 0.7f)
         )

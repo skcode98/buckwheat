@@ -54,12 +54,14 @@ class EditorViewModel @Inject constructor(
         stage.value = EditStage.EDIT_SPENT
     }
 
-    fun resetEditingSpent() {
+    fun resetEditingSpent(keepMeta: Boolean = false) {
         currentSpent = BigDecimal.ZERO
-        currentDate = Date()
-        currentComment.value = ""
-        currentSpendType.value = SpendType.WANTS
-        currentCategoryId.value = null
+        if (!keepMeta) {
+            currentDate = Date()
+            currentComment.value = ""
+            currentSpendType.value = SpendType.WANTS
+            currentCategoryId.value = null
+        }
         rawSpentValue.value = ""
 
         stage.value = EditStage.IDLE

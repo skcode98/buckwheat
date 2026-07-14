@@ -59,8 +59,8 @@ fun BottomSheetWrapper(
 
     observeLiveData(appViewModel.sheetStates) { sheets ->
         if (sheets.containsKey(name)) {
-            state.bindCallback(sheets[name]!!.callback)
-            coroutineScope.launch { state.show(sheets[name]!!.args) }
+            state.bindCallback(sheets[name]?.callback ?: {})
+            coroutineScope.launch { state.show(sheets[name]?.args ?: emptyMap()) }
         } else if (state.targetValue !== ModalBottomSheetValue.Hidden) {
             coroutineScope.launch { state.hide() }
         }

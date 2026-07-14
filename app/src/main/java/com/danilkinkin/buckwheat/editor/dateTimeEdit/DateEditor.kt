@@ -72,7 +72,7 @@ fun DatePickerDialog(
                     )
                     Text(
                         text = prettyDate(
-                            date = datePickerState.calendarUiState.value.selectedStartDate!!.toDate(),
+                            date = datePickerState.calendarUiState.value.selectedStartDate?.toDate() ?: java.util.Date(),
                             pattern = "EEEE, dd MMM",
                             simplifyIfToday = true,
                         ),
@@ -107,7 +107,7 @@ fun DatePickerDialog(
                         TextButton(
                             onClick = {
                                 onSelect(
-                                    datePickerState.calendarUiState.value.selectedStartDate!!
+                                    datePickerState.calendarUiState.value.selectedStartDate ?: LocalDate.now()
                                 )
                             }
                         ) {

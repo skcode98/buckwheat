@@ -114,7 +114,7 @@ fun ExtendWidgetContent() {
                                 context.resources,
                                 R.drawable.ic_info,
                                 null,
-                            )!!
+                            )
 
                             Image(
                                 modifier = GlanceModifier.size(
@@ -123,7 +123,8 @@ fun ExtendWidgetContent() {
                                         else -> 16.dp
                                     }
                                 ),
-                                provider = ImageProvider(drawable.toBitmap()),
+                                provider = ImageProvider(drawable?.toBitmap()
+                                    ?: android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)),
                                 colorFilter = ColorFilter.tint(contentColor),
                                 contentDescription = null,
                             )
@@ -298,7 +299,7 @@ fun ExtendWidgetContent() {
                             context.resources,
                             R.drawable.ic_add,
                             null,
-                        )!!
+                        )
 
                         Image(
                             modifier = GlanceModifier.size(
@@ -310,7 +311,8 @@ fun ExtendWidgetContent() {
                                     else -> 24.dp
                                 }
                             ),
-                            provider = ImageProvider(drawable.toBitmap()),
+                            provider = ImageProvider(drawable?.toBitmap()
+                                ?: android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)),
                             colorFilter = ColorFilter.tint(
                                 accentColor
                             ),
@@ -351,7 +353,7 @@ fun ExtendWidgetContent() {
                             context.resources,
                             R.drawable.ic_arrow_forward,
                             null,
-                        )!!
+                        )
 
                         Image(
                             modifier = GlanceModifier.size(
@@ -360,7 +362,8 @@ fun ExtendWidgetContent() {
                                     else -> 24.dp
                                 }
                             ),
-                            provider = ImageProvider(drawable.toBitmap()),
+                            provider = ImageProvider(drawable?.toBitmap()
+                                ?: android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)),
                             colorFilter = ColorFilter.tint(accentColor),
                             contentDescription = null,
                         )

@@ -75,8 +75,8 @@ fun MonthOverMonth(
 
     val currencySymbol = remember(currency) {
         when (currency?.type) {
-            ExtendCurrency.Type.FROM_LIST -> Currency.getInstance(currency!!.value).symbol
-            ExtendCurrency.Type.CUSTOM -> currency!!.value ?: ""
+            ExtendCurrency.Type.FROM_LIST -> currency?.value?.let { Currency.getInstance(it) }?.symbol ?: ""
+            ExtendCurrency.Type.CUSTOM -> currency?.value ?: ""
             else -> ""
         }
     }

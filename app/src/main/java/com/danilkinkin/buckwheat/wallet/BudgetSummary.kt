@@ -10,6 +10,8 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.analytics.RestAndSpentBudgetCard
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import java.math.BigDecimal
+import java.util.Date
 
 @Composable
 fun BudgetSummary(
@@ -17,7 +19,7 @@ fun BudgetSummary(
     onEdit: () -> Unit = {},
 ) {
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val wholeBudget = spendsViewModel.budget.value!!
+    val wholeBudget = spendsViewModel.budget.value ?: BigDecimal.ZERO
 
     Column(Modifier.padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 16.dp)) {
         RestAndSpentBudgetCard(
@@ -36,12 +38,12 @@ fun BudgetSummary(
                 bigVariant = false,
                 budget = wholeBudget,
                 currency = currency,
-                startDate = spendsViewModel.startPeriodDate.value!!,
-                finishDate = spendsViewModel.finishPeriodDate.value!!,
+                startDate = spendsViewModel.startPeriodDate.value ?: Date(),
+                finishDate = spendsViewModel.finishPeriodDate.value ?: Date(),
             )
             DaysLeftCard(
-                startDate = spendsViewModel.startPeriodDate.value!!,
-                finishDate = spendsViewModel.finishPeriodDate.value!!,
+                startDate = spendsViewModel.startPeriodDate.value ?: Date(),
+                finishDate = spendsViewModel.finishPeriodDate.value ?: Date(),
             )
         }
         EditButton(onClick = { onEdit() })

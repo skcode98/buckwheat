@@ -174,7 +174,7 @@ fun SpendsChart(
                 scale,
             )
 
-            val x = startOffset + widthWithPaddings * ((indexMarked!! - firstShowIndex) / size)
+            val x = startOffset + widthWithPaddings * (((indexMarked ?: 0) - firstShowIndex) / size)
             val y = topOffset + heightWithPaddings * (1 - scale)
 
             drawCircle(

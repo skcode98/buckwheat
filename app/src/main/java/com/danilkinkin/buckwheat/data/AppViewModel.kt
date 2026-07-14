@@ -16,6 +16,8 @@ import com.danilkinkin.buckwheat.base.balloon.BalloonController
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.effects.ConfettiController
+import com.danilkinkin.buckwheat.notifications.NotificationScheduler
+import com.danilkinkin.buckwheat.notifications.NotificationType
 import com.danilkinkin.buckwheat.reminder.ReminderManager
 import com.danilkinkin.buckwheat.sync.SyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -149,41 +151,99 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    private suspend fun rescheduleNotification(type: NotificationType, enabled: Boolean) {
+        if (enabled) {
+            val hour = settingsRepository.getNotificationHour(type).first()
+            val minute = settingsRepository.getNotificationMinute(type).first()
+            when (type) {
+                NotificationType.DAILY_SPEND_OVERVIEW ->
+                    NotificationScheduler.scheduleDailyOverview(app, hour, minute)
+                NotificationType.WEEKLY_OVERVIEW ->
+                    NotificationScheduler.scheduleWeeklyOverview(app, hour, minute)
+                NotificationType.MONTHLY_EXPORT ->
+                    NotificationScheduler.scheduleMonthlyExport(app, hour, minute)
+                NotificationType.MONTHLY_OVERVIEW ->
+                    NotificationScheduler.scheduleMonthlyOverview(app, hour, minute)
+                NotificationType.FACTS_INSIGHTS ->
+                    NotificationScheduler.scheduleFactsInsights(app, hour, minute)
+                NotificationType.GOALS_REMINDER ->
+                    NotificationScheduler.scheduleGoalsReminder(app, hour, minute)
+            }
+        } else {
+            NotificationScheduler.cancel(app, type)
+        }
+    }
+
     fun setDailySpendOverviewEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchDailySpendOverview(enabled)
+            rescheduleNotification(NotificationType.DAILY_SPEND_OVERVIEW, enabled)
         }
     }
 
     fun setWeeklyOverviewEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchWeeklyOverview(enabled)
+            rescheduleNotification(NotificationType.WEEKLY_OVERVIEW, enabled)
         }
     }
 
     fun setMonthlyExportEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchMonthlyExport(enabled)
+            rescheduleNotification(NotificationType.MONTHLY_EXPORT, enabled)
         }
     }
 
     fun setMonthlyOverviewEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchMonthlyOverview(enabled)
+            rescheduleNotification(NotificationType.MONTHLY_OVERVIEW, enabled)
         }
     }
 
     fun setFactsInsightsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchFactsInsights(enabled)
+            rescheduleNotification(NotificationType.FACTS_INSIGHTS, enabled)
         }
     }
 
     fun setGoalsReminderEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.switchGoalsReminder(enabled)
+            rescheduleNotification(NotificationType.GOALS_REMINDER, enabled)
         }
     }
+
+    fun setNotificationTime(type: NotificationType, hour: Int, minute: Int) {
+        viewModelScope.launch {
+            settingsRepository.setNotificationTime(type, hour, minute)
+            val enabled = when (type) {
+                NotificationType.DAILY_SPEND_OVERVIEW ->
+                    settingsRepository.isDailySpendOverviewEnabled().first()
+                NotificationType.WEEKLY_OVERVIEW ->
+                    settingsRepository.isWeeklyOverviewEnabled().first()
+                NotificationType.MONTHLY_EXPORT ->
+                    settingsRepository.isMonthlyExportEnabled().first()
+                NotificationType.MONTHLY_OVERVIEW ->
+                    settingsRepository.isMonthlyOverviewEnabled().first()
+                NotificationType.FACTS_INSIGHTS ->
+                    settingsRepository.isFactsInsightsEnabled().first()
+                NotificationType.GOALS_REMINDER ->
+                    settingsRepository.isGoalsReminderEnabled().first()
+            }
+            if (enabled) {
+                rescheduleNotification(type, true)
+            }
+        }
+    }
+
+    fun getNotificationHour(type: NotificationType) =
+        settingsRepository.getNotificationHour(type).asLiveData()
+
+    fun getNotificationMinute(type: NotificationType) =
+        settingsRepository.getNotificationMinute(type).asLiveData()
 
     fun setSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -209,11 +269,11 @@ class AppViewModel @Inject constructor(
     }
 
     fun openSheet(state: PathState) {
-        sheetStates.value = sheetStates.value!!.plus(Pair(state.name, state))
+        sheetStates.value = mapOf(Pair(state.name, state))
     }
 
     fun closeSheet(name: String) {
-        sheetStates.value = sheetStates.value!!.minus(name)
+        sheetStates.value = sheetStates.value?.minus(name) ?: emptyMap()
     }
 
     fun passTutorial(name: TUTORS) {

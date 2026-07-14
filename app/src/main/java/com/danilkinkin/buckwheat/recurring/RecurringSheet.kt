@@ -246,7 +246,7 @@ private fun RecurringEditor(
                     }
                 },
                 enabled = amountText.toBigDecimalOrNull() != null
-                        && amountText.toBigDecimalOrNull()!! > BigDecimal.ZERO
+                        && (amountText.toBigDecimalOrNull() ?: BigDecimal.ZERO) > BigDecimal.ZERO
                         && dayText.toIntOrNull() in 1..31
                         && commentText.isNotBlank(),
             ) {

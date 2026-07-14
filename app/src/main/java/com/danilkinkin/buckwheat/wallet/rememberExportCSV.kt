@@ -88,7 +88,7 @@ fun rememberExportCSV(
                 )
                 val dateFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
 
-                (spends ?: spendsViewModel.spends.value!!).forEach { spent ->
+                (spends ?: (spendsViewModel.spends.value ?: emptyList())).forEach { spent ->
                     printer.printRecord(
                         spent.value,
                         spent.comment,

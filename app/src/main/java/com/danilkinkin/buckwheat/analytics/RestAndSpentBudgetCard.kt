@@ -46,7 +46,7 @@ fun RestAndSpentBudgetCard(
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val showSpentCard by appViewModel.showSpentCardByDefault.observeAsState(false)
 
-    val wholeBudget = spendsViewModel.budget.value!!
+    val wholeBudget = spendsViewModel.budget.value ?: BigDecimal.ZERO
     val restBudget by spendsViewModel.howMuchBudgetRest().observeAsState(BigDecimal.ZERO)
 
     val percent = remember (restBudget) { restBudget.divide(wholeBudget, 4, RoundingMode.HALF_EVEN) }

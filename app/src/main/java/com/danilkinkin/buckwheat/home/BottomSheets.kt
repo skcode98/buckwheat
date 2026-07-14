@@ -117,6 +117,7 @@ fun BottomSheets(
         name = SETTINGS_SHEET,
     ) { state ->
         Settings(
+            onClose = { coroutineScope.launch { state.hide() } },
             onTriedWidget = {
                 coroutineScope.launch { state.callback(emptyMap()) }
             },

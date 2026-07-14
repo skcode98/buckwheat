@@ -41,7 +41,7 @@ fun CurrencyEditor(
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
-    var currency by remember { mutableStateOf(spendsViewModel.currency.value!!) }
+    var currency by remember { mutableStateOf(spendsViewModel.currency.value ?: ExtendCurrency.none()) }
     val openCurrencyChooserDialog = remember { mutableStateOf(false) }
     val openCustomCurrencyEditorDialog = remember { mutableStateOf(false) }
 
@@ -102,7 +102,7 @@ fun CurrencyEditor(
                     onValueChange = { openCustomCurrencyEditorDialog.value = true },
                     text = stringResource(R.string.currency_custom),
                     endCaption = if (currency.type === ExtendCurrency.Type.CUSTOM) {
-                        currency.value!!
+                        currency.value ?: ""
                     } else {
                         ""
                     },

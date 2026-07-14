@@ -97,7 +97,7 @@ fun BudgetConstructor(
 
         val length = if (finishPeriodDate !== null) {
             countDays(
-                finishPeriodDate!!,
+                finishPeriodDate ?: Date(),
                 startPeriodDate,
             )
         } else {
@@ -108,7 +108,7 @@ fun BudgetConstructor(
         val useDate = length != 0
                 && (finishPeriodDate == null || !isSameDay(
             finishDate.time,
-            finishPeriodDate!!.time
+            finishPeriodDate?.time ?: 0L
         ))
 
         mutableStateOf(
@@ -119,7 +119,7 @@ fun BudgetConstructor(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Column {
-        val days = if (dateToValue.value != null) countDaysToToday(dateToValue.value!!) else 0
+        val days = if (dateToValue.value != null) countDaysToToday(dateToValue.value ?: Date()) else 0
 
         UseLastSuggestionChip(
             visible = showUseSuggestion,
@@ -136,7 +136,7 @@ fun BudgetConstructor(
                 budgetCache = budget
 
                 val length = countDays(
-                    finishPeriodDate!!,
+                    finishPeriodDate ?: Date(),
                     startPeriodDate,
                 )
                 val finishDate = LocalDate.now().plusDays(length.toLong() - 1).toDate()
@@ -224,7 +224,7 @@ fun BudgetConstructor(
             text = if (days > 0) {
                 String.format(
                     pluralStringResource(R.plurals.finish_date_label, days),
-                    prettyDate(dateToValue.value!!, showTime = false, forceShowDate = true),
+                    prettyDate(dateToValue.value ?: Date(), showTime = false, forceShowDate = true),
                     days,
                 )
             } else {

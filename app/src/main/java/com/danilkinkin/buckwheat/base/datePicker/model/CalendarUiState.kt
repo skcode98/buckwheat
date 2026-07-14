@@ -59,7 +59,7 @@ data class CalendarUiState(
         if (selectedStartDate == null && selectedEndDate == null) return false
         if (selectedStartDate == start || selectedStartDate == end) return true
         if (selectedEndDate == null) {
-            return !selectedStartDate!!.isBefore(start) && !selectedStartDate.isAfter(end)
+            return !(selectedStartDate?.isBefore(start) ?: false) && !(selectedStartDate?.isAfter(end) ?: false)
         }
         return !end.isBefore(selectedStartDate) && !start.isAfter(selectedEndDate)
     }
