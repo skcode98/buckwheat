@@ -8,35 +8,30 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.asFlow
-import androidx.room.Room
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
+import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
-import com.danilkinkin.buckwheat.di.DatabaseModule
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class RecurringReceiver : BroadcastReceiver() {
+    @Inject lateinit var transactionDao: TransactionDao
+    @Inject lateinit var recurringDao: RecurringDao
+
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = Room.databaseBuilder(
-                    context.applicationContext,
-                    DatabaseModule::class.java,
-                    "buckwheat-db",
-                )
-                    .fallbackToDestructiveMigration(false)
-                    .build()
-
-                val recurringDao = db.recurringDao()
-                val transactionDao = db.transactionDao()
-
                 val today = Calendar.getInstance()
                 val dayOfMonth = today.get(Calendar.DAY_OF_MONTH)
                 val todayStart = Calendar.getInstance().apply {
@@ -68,8 +63,6 @@ class RecurringReceiver : BroadcastReceiver() {
                         created++
                     }
                 }
-
-                db.close()
 
                 if (created > 0) {
                     showNotification(context, created)

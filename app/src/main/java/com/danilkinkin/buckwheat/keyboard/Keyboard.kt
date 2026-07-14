@@ -296,7 +296,7 @@ fun Keyboard(
 
                                 debugProgress = 0
 
-                                runBlocking {
+                                coroutineScope.launch {
                                     if (editorViewModel.canCommitEditingSpent()) {
                                         val comment = (editorViewModel.currentComment.value
                                             ?: "").trim()
@@ -304,7 +304,7 @@ fun Keyboard(
 
                                         if (mode == EditMode.EDIT) {
                                             val tx = editorViewModel.editedTransaction.value
-                                                ?: return@runBlocking
+                                                ?: return@launch
                                             val newVersionOfSpent = tx.copy(
                                                 value = editorViewModel.currentSpent.value
                                                     ?: BigDecimal.ZERO,

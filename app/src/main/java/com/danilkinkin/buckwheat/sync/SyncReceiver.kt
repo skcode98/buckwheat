@@ -8,11 +8,11 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import androidx.lifecycle.asFlow
-import androidx.room.Room
-import com.danilkinkin.buckwheat.di.DatabaseModule
+import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -20,24 +20,19 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class SyncReceiver : BroadcastReceiver() {
+    @Inject lateinit var transactionDao: TransactionDao
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != SyncManager.ACTION_EXPORT_SPENDS) return
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = Room.databaseBuilder(
-                    context.applicationContext,
-                    DatabaseModule::class.java,
-                    "buckwheat-db",
-                )
-                    .fallbackToDestructiveMigration(false)
-                    .build()
-
-                val dao = db.transactionDao()
-                val allSpends = dao.getAll(TransactionType.SPENT).asFlow().first()
+                val allSpends = transactionDao.getAll(TransactionType.SPENT).asFlow().first()
                 val today = roundToDay(Date())
 
                 val todaySpends = allSpends.filter {
@@ -77,8 +72,6 @@ class SyncReceiver : BroadcastReceiver() {
                         }
                     }
                 }
-
-                db.close()
             } catch (e: Exception) {
                 Log.e("SyncReceiver", "Export failed", e)
             } finally {

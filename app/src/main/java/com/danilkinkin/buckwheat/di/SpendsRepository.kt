@@ -840,10 +840,9 @@ class SpendsRepository @Inject constructor(
         }
     }
 
-    fun computeStreak(txs: List<Transaction>): Int {
-        val dailyBudget = runBlocking {
-            context.budgetDataStore.data.first()[dailyBudgetStoreKey]?.toBigDecimal()
-        } ?: return 0
+    suspend fun computeStreak(txs: List<Transaction>): Int {
+        val dailyBudget = context.budgetDataStore.data.first()[dailyBudgetStoreKey]?.toBigDecimal()
+            ?: return 0
         if (dailyBudget <= BigDecimal.ZERO) return 0
 
         val sorted = txs.filter { it.type == TransactionType.SPENT }

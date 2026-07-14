@@ -132,8 +132,8 @@ suspend fun switchTheme(context: Context, mode: ThemeMode) {
     context.appTheme = mode
 }
 
-fun syncTheme(context: Context) {
-    val currentValue = runBlocking { context.settingsDataStore.data.first() }
+suspend fun syncTheme(context: Context) {
+    val currentValue = context.settingsDataStore.data.first()
 
     val mode = ThemeMode.valueOf(
         currentValue[stringPreferencesKey("theme")] ?: ThemeMode.SYSTEM.toString()

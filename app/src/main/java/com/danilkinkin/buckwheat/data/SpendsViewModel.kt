@@ -319,7 +319,7 @@ class SpendsViewModel @Inject constructor(
 
     // Spending streak
 
-    fun computeStreak(): Int {
+    suspend fun computeStreak(): Int {
         val txs = spends.value ?: return 0
         return spendsRepository.computeStreak(txs)
     }
