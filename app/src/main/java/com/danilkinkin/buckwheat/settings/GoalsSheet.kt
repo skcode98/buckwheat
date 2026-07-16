@@ -11,6 +11,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -52,7 +53,7 @@ fun GoalsSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Goals",
+                    text = stringResource(R.string.goals_title),
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
@@ -67,7 +68,7 @@ fun GoalsSheet(
                     value = nameText,
                     onValueChange = { nameText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Goal name") },
+                    placeholder = { Text(stringResource(R.string.goal_name_hint)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 )
@@ -76,7 +77,7 @@ fun GoalsSheet(
                     value = targetText,
                     onValueChange = { targetText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Target") },
+                    placeholder = { Text(stringResource(R.string.goal_target_hint)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -131,18 +132,18 @@ fun GoalsSheet(
                 showAllocateDialog = null
                 allocateAmount = ""
             },
-            title = { Text("Allocate to Goal") },
+            title = { Text(stringResource(R.string.goal_allocate_title)) },
             text = {
                 Column {
                     Text(
-                        "How much to allocate?",
+                        stringResource(R.string.goal_allocate_prompt),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = allocateAmount,
                         onValueChange = { allocateAmount = it },
-                        placeholder = { Text("Amount") },
+                        placeholder = { Text(stringResource(R.string.goal_target_hint)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
@@ -152,14 +153,15 @@ fun GoalsSheet(
                 TextButton(
                     onClick = {
                         val amount = allocateAmount.toBigDecimalOrNull()
-                        if (amount != null && showAllocateDialog != null) {
-                            viewModel.allocateToGoal(showAllocateDialog!!, amount)
+                        val goalId = showAllocateDialog
+                        if (amount != null && goalId != null) {
+                            viewModel.allocateToGoal(goalId, amount)
                             showAllocateDialog = null
                             allocateAmount = ""
                         }
                     },
                 ) {
-                    Text("Allocate")
+                    Text(stringResource(R.string.goal_allocate))
                 }
             },
             dismissButton = {
@@ -169,7 +171,7 @@ fun GoalsSheet(
                         allocateAmount = ""
                     },
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )
@@ -202,7 +204,7 @@ private fun GoalRow(
             )
             if (goal.completed) {
                 Text(
-                    text = "Completed!",
+                    text = stringResource(R.string.goal_completed),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -219,20 +221,20 @@ private fun GoalRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "$${goal.currentAmount} / $${goal.targetAmount}",
+                text = stringResource(R.string.goal_progress, goal.currentAmount, goal.targetAmount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.weight(1f),
             )
             if (!goal.completed) {
                 TextButton(onClick = onAllocate) {
-                    Text("Allocate")
+                    Text(stringResource(R.string.goal_allocate))
                 }
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     painter = painterResource(R.drawable.ic_delete_forever),
-                    contentDescription = "Delete goal",
+                    contentDescription = stringResource(R.string.goal_delete_desc),
                 )
             }
         }

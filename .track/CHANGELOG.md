@@ -54,6 +54,9 @@
 - **NPE in CurrencyEditor** — `CurrencyEditor.kt:43` `spendsViewModel.currency.value!!` could NPE; replaced with safe default
 - **Force-unwrap `spends!!`** in Wallet display — replaced `spends!!.isNotEmpty()` with `spends?.isNotEmpty() == true`
 - **Force-unwrap `currency!!`** in Wallet currency caption — rewrote with `when (val c = currency)` null-safe pattern
+- **Force-unwrap `showAllocateDialog!!`** in `GoalsSheet.kt:157` — replaced with local val capture pattern
+- **Hardcoded UI strings** in `Settings.kt`, `GoalsSheet.kt`, `RecurringPaymentsSheet.kt` — moved all text to `strings.xml` with `stringResource()` references (10 new string resources added)
+- **Missing stringResource imports** — added `stringResource` imports to `GoalsSheet.kt` and `RecurringPaymentsSheet.kt`
 
 ### Known State
 - This is a simpler baseline than `our-fixes`:

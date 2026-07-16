@@ -76,6 +76,26 @@ fun Settings(
                     },
                 )
                 TextRow(
+                    icon = painterResource(R.drawable.ic_autorenew),
+                    text = stringResource(R.string.recurring_payments_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(RECURRING_PAYMENTS_SHEET)
+                        )
+                    },
+                )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_balance_wallet),
+                    text = stringResource(R.string.goals_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(GOALS_SHEET)
+                        )
+                    },
+                )
+                TextRow(
                     icon = painterResource(R.drawable.ic_analytics),
                     text = stringResource(R.string.past_periods_title),
                     endIcon = painterResource(R.drawable.ic_arrow_right),
@@ -92,26 +112,6 @@ fun Settings(
                     modifier = Modifier.clickable {
                         appViewModel.openSheet(
                             com.danilkinkin.buckwheat.data.PathState(SEARCH_HISTORY_SHEET)
-                        )
-                    },
-                )
-                TextRow(
-                    icon = painterResource(R.drawable.ic_autorenew),
-                    text = "Recurring Payments",
-                    endIcon = painterResource(R.drawable.ic_arrow_right),
-                    modifier = Modifier.clickable {
-                        appViewModel.openSheet(
-                            com.danilkinkin.buckwheat.data.PathState(RECURRING_PAYMENTS_SHEET)
-                        )
-                    },
-                )
-                TextRow(
-                    icon = painterResource(R.drawable.ic_balance_wallet),
-                    text = "Goals",
-                    endIcon = painterResource(R.drawable.ic_arrow_right),
-                    modifier = Modifier.clickable {
-                        appViewModel.openSheet(
-                            com.danilkinkin.buckwheat.data.PathState(GOALS_SHEET)
                         )
                     },
                 )

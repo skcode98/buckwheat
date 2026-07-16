@@ -11,6 +11,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,7 +51,7 @@ fun RecurringPaymentsSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Recurring Payments",
+                    text = stringResource(R.string.recurring_payments_title),
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
@@ -67,7 +68,7 @@ fun RecurringPaymentsSheet(
                         value = amountText,
                         onValueChange = { amountText = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Amount") },
+                        placeholder = { Text(stringResource(R.string.recurring_amount_hint)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                     )
@@ -76,7 +77,7 @@ fun RecurringPaymentsSheet(
                         value = dayText,
                         onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
                         modifier = Modifier.width(80.dp),
-                        placeholder = { Text("Day") },
+                        placeholder = { Text(stringResource(R.string.recurring_day_hint)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(
@@ -116,7 +117,7 @@ fun RecurringPaymentsSheet(
                     value = commentText,
                     onValueChange = { commentText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Description (e.g. Netflix)") },
+                    placeholder = { Text(stringResource(R.string.recurring_comment_hint)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -177,7 +178,7 @@ private fun RecurringTemplateRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "$${template.amount}",
+                    text = "$" + template.amount.toString(),
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Spacer(Modifier.width(8.dp))
@@ -188,7 +189,7 @@ private fun RecurringTemplateRow(
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "Day ${template.dayOfMonth}",
+                    text = stringResource(R.string.recurring_day_label, template.dayOfMonth),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
@@ -201,7 +202,7 @@ private fun RecurringTemplateRow(
         IconButton(onClick = onDelete) {
             Icon(
                 painter = painterResource(R.drawable.ic_delete_forever),
-                contentDescription = "Delete",
+                contentDescription = stringResource(R.string.tags_management_delete),
             )
         }
     }

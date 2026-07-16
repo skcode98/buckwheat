@@ -273,8 +273,11 @@ com.danilkinkin.buckwheat/
 | `as T` unsafe cast | Use `as? T` with null check |
 | `.first()` on potentially empty list | Use `.firstOrNull()` and handle null |
 | LiveData `.value` on background thread | Use `.asFlow().first()` |
-| `remember {}` without keys (stale data) | Add observed state as key |
+| `remember {}` without keys (stale data) | Add observed state as key; prefer `observeAsState()` |
 | Multiple separate `DataStore.edit {}` blocks | Combine into one `edit {}` block |
+| Hardcoded UI strings (breaks i18n) | Always use `stringResource(R.string.*)` with string in `strings.xml` |
+| `!!` on `LiveData.value` in composables | Use `?.` with `?:` safe default or null-guard + local capture |
+| `showAllocateDialog!!` after null check | Use local val capture: `val id = showAllocateDialog; if (id != null) { ... }` |
 | Manual `Room.databaseBuilder()` in receivers | Use `@AndroidEntryPoint` + injected DAOs |
 | Split `goAsync()`/`finish()` in receivers | Already correct — keep this pattern |
 
