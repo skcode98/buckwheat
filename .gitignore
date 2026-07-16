@@ -13,3 +13,6 @@ local.properties
 
 # Auto-managed session state (opencode compaction fix plugin)
 .track/.session-state.json
+
+# Visual Studio
+.vs/

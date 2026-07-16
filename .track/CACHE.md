@@ -2,6 +2,9 @@
 
 ## Build Commands
 ```powershell
+# Quick compile check (faster than full build)
+.\gradlew.bat :app:compileDebugKotlin
+
 # Full debug build (always run this after changes)
 .\gradlew.bat assembleDebug
 
@@ -32,6 +35,7 @@
 | Transaction DAO | `app/.../data/dao/TransactionDao.kt` |
 | Storage DAO | `app/.../data/dao/StorageDao.kt` |
 | Keyboard | `app/.../keyboard/Keyboard.kt` |
+| Voice Input Parser | `app/.../keyboard/VoiceInputParser.kt` |
 | Budget Constructor | `app/.../wallet/BudgetConstructor.kt` |
 | Wallet | `app/.../wallet/Wallet.kt` |
 | Bottom Sheets | `app/.../home/BottomSheets.kt` |

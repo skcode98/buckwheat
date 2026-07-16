@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- Date/time pill now visible and editable on fresh entry (ADD mode) — `Editor.kt:50`, `DateTimeEditPill.kt:29`
+- New spends in ADD mode use `editorViewModel.currentDate` instead of `Date()` — `Keyboard.kt:317`
+- **Voice input feature** — microphone button on the keyboard:
+  - New `VoiceInputParser.kt` — parses natural language (e.g. "tea 20 now", "lunch 150 yesterday at 2pm") into amount, comment, and date
+  - New `ic_mic.xml` microphone vector icon
+  - `RECORD_AUDIO` permission in `AndroidManifest.xml`
+  - Mic bar at top of keyboard with speech recognition via `SpeechRecognizer`
+  - Auto-parses transcription, fills editor fields, and commits the transaction immediately
+- Finish date selector now allows past dates (`disableBeforeDate = null`) — `FinishDateSelector.kt:47`
+- **Analytics calendar** — heatmap now shows one month at a time with `<` `>` navigation; each day is clickable. Clicking a day closes the analytics sheet and opens the editor with that date pre-set (uses `EditorViewModel` directly via shared Hilt scope)
+
 ### Changed
 - Fresh fork from upstream/master @ `4b60102` — clean slate
 - All prior work saved to `our-fixes` branch

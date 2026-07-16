@@ -26,6 +26,7 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.base.TextRow
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.wallet.rememberImportCSV
 
 const val SETTINGS_SHEET = "settings"
 
@@ -83,6 +84,23 @@ fun Settings(
                             com.danilkinkin.buckwheat.data.PathState(PAST_PERIODS_SHEET)
                         )
                     },
+                )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_search),
+                    text = stringResource(R.string.search_history_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(SEARCH_HISTORY_SHEET)
+                        )
+                    },
+                )
+                val importCSV = rememberImportCSV()
+                TextRow(
+                    icon = painterResource(R.drawable.ic_file_download),
+                    text = stringResource(R.string.import_csv),
+                    modifier = Modifier.clickable { importCSV() },
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
                 )
                 TextRow(
                     text = stringResource(R.string.version, BuildConfig.VERSION_NAME),

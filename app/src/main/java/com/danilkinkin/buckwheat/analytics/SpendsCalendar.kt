@@ -3,7 +3,9 @@ package com.danilkinkin.buckwheat.analytics
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,14 +22,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.MeasurePolicy
@@ -42,8 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.datePicker.CELL_SIZE
-import com.danilkinkin.buckwheat.base.datePicker.model.CalendarState
-import com.danilkinkin.buckwheat.base.datePicker.model.CalendarUiState
 import com.danilkinkin.buckwheat.base.datePicker.model.Week
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -55,6 +58,7 @@ import com.danilkinkin.buckwheat.ui.colorGood
 import com.danilkinkin.buckwheat.ui.colorNotGood
 import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.getWeek
+import com.danilkinkin.buckwheat.util.getNumberWeeks
 import com.danilkinkin.buckwheat.util.harmonize
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.isZero
@@ -88,6 +92,7 @@ fun SpendsCalendar(
     finishDate: Date,
     actualFinishDate: Date? = null,
     currency: ExtendCurrency,
+    onDayClick: (LocalDate) -> Unit = {},
 ) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
@@ -140,15 +145,11 @@ fun SpendsCalendar(
         days.toMutableMap()
     }
 
-    val calendarState by remember {
-        mutableStateOf(
-            CalendarState(
-                context = context,
-                disableBeforeDate = startDate,
-                disableAfterDate = (actualFinishDate ?: finishDate).coerceAtMost(Date()),
-            )
-        )
-    }
+    val disabledBefore = startDate.toLocalDate()
+    val disabledAfter = (actualFinishDate ?: finishDate).toLocalDate()
+        .coerceAtMost(LocalDate.now())
+
+    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
 
     Card(
         modifier = modifier,
@@ -161,57 +162,87 @@ fun SpendsCalendar(
             ),
         )
     ) {
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
-            Icon(
-                modifier = Modifier
-                    .padding(top = 0.5.dp)
-                    .size(14.dp),
-                painter = painterResource(R.drawable.ic_info),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                contentDescription = null,
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = stringResource(R.string.spends_calendar_hint),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
-                ),
-            )
-        }
-        Layout(
-            modifier = Modifier
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            measurePolicy = verticalGridMeasurePolicy(7),
-            content = {
-                val calendarUiState = calendarState.calendarUiState.value
-
-                calendarState.listMonths.forEach { month ->
-                    MonthHeader(
-                        modifier = Modifier.layoutId("fullWidth"),
-                        yearMonth = month.yearMonth
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+            ) {
+                IconButton(
+                    onClick = { currentMonth = currentMonth.minusMonths(1) }
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_back),
+                        contentDescription = "Previous month",
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
-
+                }
+                MonthHeader(
+                    modifier = Modifier.weight(1f),
+                    yearMonth = currentMonth,
+                )
+                IconButton(
+                    onClick = { currentMonth = currentMonth.plusMonths(1) }
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_forward),
+                        contentDescription = "Next month",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            Row(Modifier.padding(start = 16.dp, end = 16.dp)) {
+                Icon(
+                    modifier = Modifier
+                        .padding(top = 0.5.dp)
+                        .size(14.dp),
+                    painter = painterResource(R.drawable.ic_info),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    contentDescription = null,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.spends_calendar_hint),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
+                    ),
+                )
+            }
+            Layout(
+                modifier = Modifier
+                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                measurePolicy = verticalGridMeasurePolicy(7),
+                content = {
                     DaysOfWeek(locale)
 
-                    month.weeks.forEach { week ->
-                        val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
-                        val currentDay =
-                            beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
+                    val weeksCount = currentMonth.getNumberWeeks(context)
+                    val weeks = (0 until weeksCount).map {
+                        Week(number = it, yearMonth = currentMonth)
+                    }
 
+                    weeks.forEach { week ->
+                        val beginningWeek = week.yearMonth.atDay(1)
+                            .plusWeeks(week.number.toLong())
+                        val startOfWeek = beginningWeek
+                            .with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
+
+                        val endOfWeek = startOfWeek.plusDays(6)
                         if (
-                            currentDay.plusDays(6).isAfter(calendarUiState.disabledBefore) &&
-                            currentDay.isBefore(calendarUiState.disabledAfter!!.plusDays(1))
+                            endOfWeek.isAfter(disabledBefore) &&
+                            startOfWeek.isBefore(disabledAfter.plusDays(1))
                         ) {
-                            Week(
+                            WeekRow(
                                 week = week,
-                                calendarUiState = calendarUiState,
+                                disabledBefore = disabledBefore,
+                                disabledAfter = disabledAfter,
                                 spendingDays = spendingDays,
+                                currentMonth = currentMonth,
+                                onDayClick = onDayClick,
                             )
                         }
                     }
                 }
-            }
-        )
+            )
+        }
     }
 }
 
@@ -243,10 +274,13 @@ internal fun DaysOfWeek(locale: Locale) {
 
 
 @Composable
-internal fun Week(
-    calendarUiState: CalendarUiState,
+internal fun WeekRow(
     week: Week,
+    disabledBefore: LocalDate,
+    disabledAfter: LocalDate,
     spendingDays: Map<LocalDate, SpendingDay>,
+    currentMonth: YearMonth,
+    onDayClick: (LocalDate) -> Unit,
 ) {
     val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
 
@@ -254,11 +288,17 @@ internal fun Week(
         val currentDay = beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek()[0]))
             .plusDays(day.toLong())
 
-        if (currentDay.month == week.yearMonth.month && !calendarUiState.isDisabledDay(currentDay)) {
+        val isInMonth = currentDay.month == week.yearMonth.month
+        val isDisabled = currentDay.isBefore(disabledBefore) ||
+            currentDay.isAfter(disabledAfter)
+
+        if (isInMonth) {
             Day(
                 modifier = Modifier,
                 day = currentDay,
                 spendingDays = spendingDays,
+                enabled = !isDisabled,
+                onDayClick = onDayClick,
             )
         } else {
             Box(
@@ -293,7 +333,9 @@ internal fun DayOfWeekHeading(day: String, modifier: Modifier = Modifier) {
 internal fun Day(
     day: LocalDate,
     spendingDays: Map<LocalDate, SpendingDay>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onDayClick: (LocalDate) -> Unit = {},
 ) {
     val spendingDay = if (spendingDays[day] === null || spendingDays[day]!!.spending.isZero()) {
         null
@@ -340,30 +382,36 @@ internal fun Day(
             .height(CELL_SIZE)
             .widthIn(min = CELL_SIZE)
             .fillMaxWidth()
-            .zIndex(if (spendingDay === null) 0f else -percent + 1000f),
+            .zIndex(if (spendingDay === null) 0f else -percent + 1000f)
+            .then(
+                if (enabled) Modifier.clip(RoundedCornerShape(10.dp)).clickable(
+                    onClick = { onDayClick(day) }
+                ) else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .size(CELL_SIZE - 2.dp)
                 .background(
-                    color = combineColors(
+                    color = if (enabled) combineColors(
                         MaterialTheme.colorScheme.surface,
                         MaterialTheme.colorScheme.surfaceVariant,
                         angle = 0.3f,
-                    ).copy(0.8f),
+                    ).copy(0.8f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(0.3f),
                     shape = RoundedCornerShape(10.dp),
                 )
                 .border(
                     width = 2.dp,
-                    color = harmonizedColor.container.copy(
+                    color = if (enabled) harmonizedColor.container.copy(
                         (if (percent < 1f) 0.4f else 1f).coerceAtMost(harmonizedColor.container.alpha)
-                    ),
+                    ) else Color.Transparent,
                     shape = RoundedCornerShape(10.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            if (spendingDay !== null) {
+            if (spendingDay !== null && enabled) {
                 Box(
                     modifier = Modifier
                         .requiredSize(CELL_SIZE * percent)
@@ -388,7 +436,8 @@ internal fun Day(
                     .wrapContentSize(Alignment.Center),
                 text = day.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = harmonizedColor.onContainer,
+                color = if (enabled) harmonizedColor.onContainer
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
             )
         }
     }

@@ -47,9 +47,7 @@ fun Editor(
                 ) { focusController.focus() }
         ) {
             EditorToolbar()
-            if (mode == EditMode.EDIT) {
-                DateTimeEditPill()
-            }
+            DateTimeEditPill()
             CurrentSpendEditor(
                 modifier = Modifier
                     .fillMaxWidth()

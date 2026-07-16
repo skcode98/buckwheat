@@ -559,6 +559,10 @@ class SpendsRepository @Inject constructor(
         }
     }
 
+    suspend fun importTransactions(transactions: List<Transaction>) {
+        transactions.forEach { addSpent(it) }
+    }
+
     suspend fun removeSpent(transactionForRemove: Transaction) {
         this.transactionDao.deleteById(transactionForRemove.uid)
 

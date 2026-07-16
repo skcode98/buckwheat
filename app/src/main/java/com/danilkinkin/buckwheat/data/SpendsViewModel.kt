@@ -72,6 +72,12 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
+    fun importTransactions(transactions: List<Transaction>) {
+        viewModelScope.launch {
+            spendsRepository.importTransactions(transactions)
+        }
+    }
+
     fun finishBudget() {
         viewModelScope.launch {
             spendsRepository.finishBudget(Date())

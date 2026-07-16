@@ -41,8 +41,10 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
+import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
+import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
 
 const val ANALYTICS_SHEET = "finishPeriod"
@@ -56,6 +58,7 @@ fun Analytics(
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
     onCreateNewPeriod: () -> Unit = {},
     onClose: () -> Unit = {},
+    editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
     val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
     val transactions by spendsViewModel.transactions.observeAsState(emptyList())
@@ -159,6 +162,13 @@ fun Analytics(
                                     finishDate = spendsViewModel.finishPeriodDate.value!!,
                                     actualFinishDate = finishPeriodActualDate,
                                     currency = spendsViewModel.currency.value!!,
+                                    onDayClick = { date ->
+                                        editorViewModel.resetEditingSpent()
+                                        editorViewModel.currentDate =
+                                            date.toDate()
+                                        editorViewModel.startCreatingSpent()
+                                        onClose()
+                                    },
                                 )
                             }
                             Spacer(modifier = Modifier.height(36.dp))

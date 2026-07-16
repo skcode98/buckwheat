@@ -248,6 +248,12 @@ fun BottomSheets(
         PeriodDetailSheet()
     }
 
+    BottomSheetWrapper(
+        name = SEARCH_HISTORY_SHEET,
+    ) { state ->
+        SearchHistorySheet()
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         Confetti(
             modifier = Modifier.fillMaxSize(),

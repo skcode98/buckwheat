@@ -151,4 +151,10 @@
   <string name="past_periods_empty">No past periods yet</string>
   <string name="past_periods_date_range">%1$s — %2$s</string>
   <string name="period_detail_title">Period Details</string>
+  <string name="import_csv">Import from CSV</string>
+  <string name="import_csv_success">Transactions imported</string>
+  <string name="import_csv_failed">Failed to import CSV</string>
+  <string name="import_csv_empty">No valid transactions found in CSV</string>
+  <string name="search_history_hint">Search by tag…</string>
+  <string name="search_history_title">Search History</string>
 </resources>

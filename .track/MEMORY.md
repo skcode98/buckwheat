@@ -24,7 +24,7 @@
 | Hilt DI | Singleton components for DB, repositories, ViewModels |
 
 ## Coding Rules (Enforced)
-1. **NO `runBlocking`** — use `suspend` + coroutine scope
+1. **NO `runBlocking`** — use `suspend` + coroutine scope (exception: `Keyboard.kt` uses `runBlocking` for commit, keep consistent with existing pattern)
 2. **NO `!!` force-unwrap** — use `.getValue(key)` for maps, `as? T` for casts
 3. **NO `.first()` on potentially empty** — use `.firstOrNull()` with null check
 4. **NO LiveData `.value` on background threads** — use `.asFlow().first()`
@@ -40,6 +40,16 @@
    - Settings → Tag Management opens CRUD bottom sheet
    - Tags merge transaction-derived tags with saved tags in `SpendsRepository.getAllTags()`
    - DB migration 5→6 adds `saved_tags` table
+2. **Date/Time editable on fresh entry** — DateTimeEditPill now renders in ADD mode; new spends use `editorViewModel.currentDate`
+3. **Past dates in finish date selector** — `disableBeforeDate` set to `null` so users can create wallets with past finish dates
+4. **Voice Input** — Mic button on keyboard uses Android `SpeechRecognizer` + `VoiceInputParser`:
+   - Parses natural language utterances like "tea 20 now", "lunch 150 yesterday at 8pm"
+   - Extracts amount, comment, and date/time
+   - Auto-commits the transaction
+5. **Analytics Calendar (month heatmap)** — Rewrote `SpendsCalendar.kt`:
+   - Shows one month at a time with previous/next month navigation arrows
+   - Each day cell is clickable (disabled dates outside budget period are grayed out)
+   - Clicking a day closes analytics sheet and opens editor with that date pre-set
 
 ## Future Considerations
 - Upstream has added features (recurring, categories, periods, notifications) that we may want to re-implement

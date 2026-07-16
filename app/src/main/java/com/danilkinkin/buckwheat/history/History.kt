@@ -52,7 +52,8 @@ fun History(
     appViewModel: AppViewModel = viewModel(),
     editorViewModel: EditorViewModel = viewModel(),
     readOnly: Boolean = false,
-    onClose: () -> Unit = {}
+    onClose: () -> Unit = {},
+    searchQuery: String = "",
 ) {
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -71,7 +72,15 @@ fun History(
         var lastSpentDate: LocalDate? = null
         var lastDayTotal: BigDecimal = BigDecimal.ZERO
 
-        transactions
+        val filtered = if (searchQuery.isNotBlank()) {
+            transactions.filter { t ->
+                t.comment.contains(searchQuery, ignoreCase = true)
+            }
+        } else {
+            transactions
+        }
+
+        filtered
             .forEach { spent ->
                 if (lastSpentDate === null || !isSameDay(
                         spent.date.time,
