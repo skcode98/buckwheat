@@ -15,8 +15,11 @@ import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
+import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.util.countDays
@@ -25,6 +28,7 @@ import com.danilkinkin.buckwheat.util.roundToDay
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.firstOrNull
 import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -48,6 +52,7 @@ class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,
     private val savedTagDao: SavedTagDao,
+    private val budgetPeriodDao: BudgetPeriodDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
@@ -151,6 +156,11 @@ class SpendsRepository @Inject constructor(
     }
 
     suspend fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
+        val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
+        if (oldSpent > BigDecimal.ZERO) {
+            archiveCurrentPeriod()
+        }
+
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[spentStoreKey] = BigDecimal.ZERO.toString()
@@ -183,6 +193,54 @@ class SpendsRepository @Inject constructor(
         setDailyBudget(whatBudgetForDay())
 
         hideOverspendingWarn(false)
+    }
+
+    private suspend fun archiveCurrentPeriod() {
+        val oldBudget = getBudget().firstOrNull() ?: BigDecimal.ZERO
+        val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
+        val startDate = getStartPeriodDate().firstOrNull()
+            ?: return
+        val finishDate = getFinishPeriodDate().firstOrNull()
+            ?: return
+        val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
+        val currency = getCurrency().firstOrNull()
+        val currencyCode = when (currency?.type) {
+            com.danilkinkin.buckwheat.data.ExtendCurrency.Type.CUSTOM -> currency.value ?: ""
+            com.danilkinkin.buckwheat.data.ExtendCurrency.Type.NONE -> ""
+            else -> currency?.value ?: ""
+        }
+
+        val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
+        val spends = transactions.filter { it.type == TransactionType.SPENT }
+
+        if (spends.isEmpty()) return
+
+        val totalSpent = spends.map { it.value }.fold(BigDecimal.ZERO) { acc, v -> acc + v }
+
+        val periodId = budgetPeriodDao.insert(
+            BudgetPeriod(
+                budget = oldBudget,
+                startDate = startDate,
+                finishDate = finishDate,
+                actualFinishDate = actualFinishDate,
+                currencyCode = currencyCode,
+                totalSpent = totalSpent,
+            )
+        )
+
+        budgetPeriodDao.insertArchivedTransactions(
+            transactions.map { tx ->
+                ArchivedTransaction(
+                    periodId = periodId.toInt(),
+                    type = tx.type,
+                    value = tx.value,
+                    date = tx.date,
+                    comment = tx.comment,
+                )
+            }
+        )
+
+        Log.d("SpendsRepository", "Archived period #$periodId with ${transactions.size} transactions")
     }
 
     suspend fun changeBudget(newBudget: BigDecimal, newFinishDate: Date) {

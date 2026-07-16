@@ -37,4 +37,8 @@ object AppModule {
     @Singleton
     @Provides
     fun provideSavedTagDao(db: DatabaseModule) = db.savedTagDao()
+
+    @Singleton
+    @Provides
+    fun provideBudgetPeriodDao(db: DatabaseModule) = db.budgetPeriodDao()
 }

@@ -236,6 +236,18 @@ fun BottomSheets(
         TagsManagementSheet()
     }
 
+    BottomSheetWrapper(
+        name = PAST_PERIODS_SHEET,
+    ) { state ->
+        PastPeriodsSheet()
+    }
+
+    BottomSheetWrapper(
+        name = PERIOD_DETAIL_SHEET,
+    ) { state ->
+        PeriodDetailSheet()
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         Confetti(
             modifier = Modifier.fillMaxSize(),

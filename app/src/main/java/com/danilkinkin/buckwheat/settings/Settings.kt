@@ -75,6 +75,16 @@ fun Settings(
                     },
                 )
                 TextRow(
+                    icon = painterResource(R.drawable.ic_analytics),
+                    text = stringResource(R.string.past_periods_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(PAST_PERIODS_SHEET)
+                        )
+                    },
+                )
+                TextRow(
                     text = stringResource(R.string.version, BuildConfig.VERSION_NAME),
                 )
                 About(Modifier.padding(start = 16.dp, end = 16.dp))

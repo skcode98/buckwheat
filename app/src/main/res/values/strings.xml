@@ -147,4 +147,8 @@
   <string name="tags_management_add_hint">Add new tag</string>
   <string name="tags_management_edit">Edit tag</string>
   <string name="tags_management_delete">Delete tag</string>
+  <string name="past_periods_title">Past Periods</string>
+  <string name="past_periods_empty">No past periods yet</string>
+  <string name="past_periods_date_range">%1$s — %2$s</string>
+  <string name="period_detail_title">Period Details</string>
 </resources>
