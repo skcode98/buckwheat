@@ -42,6 +42,20 @@
 | Theme | `app/.../ui/Theme.kt` |
 | Locale | `app/.../ui/Locale.kt` |
 | Export CSV | `app/.../wallet/rememberExportCSV.kt` |
+| Currency Editor | `app/.../wallet/CurrencyEditor.kt` |
+| Goals Sheet | `app/.../settings/GoalsSheet.kt` |
+| Goals VM | `app/.../settings/GoalsViewModel.kt` |
+| Recurring Payments Sheet | `app/.../settings/RecurringPaymentsSheet.kt` |
+| Recurring Payments VM | `app/.../settings/RecurringPaymentsViewModel.kt` |
+| Tags Management Sheet | `app/.../settings/TagsManagementSheet.kt` |
+| Tags Management VM | `app/.../settings/TagsManagementViewModel.kt` |
+| SavingsGoal DAO | `app/.../data/dao/SavingsGoalDao.kt` |
+| Recurring DAO | `app/.../data/dao/RecurringDao.kt` |
+| BudgetPeriod DAO | `app/.../data/dao/BudgetPeriodDao.kt` |
+| RecurringTemplate entity | `app/.../data/entities/RecurringTemplate.kt` |
+| SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
+| BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
+| ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |
 | Gradle (root) | `build.gradle.kts` |

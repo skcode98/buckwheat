@@ -13,6 +13,17 @@
   - Auto-parses transcription, fills editor fields, and commits the transaction immediately
 - Finish date selector now allows past dates (`disableBeforeDate = null`) — `FinishDateSelector.kt:47`
 - **Analytics calendar** — heatmap now shows one month at a time with `<` `>` navigation; each day is clickable. Clicking a day closes the analytics sheet and opens the editor with that date pre-set (uses `EditorViewModel` directly via shared Hilt scope)
+- **Goal tracking** — `SavingsGoal` entity, DAO, bottom sheet (`GoalsSheet`), ViewModel (`GoalsViewModel`):
+  - CRUD for savings goals with target amount and current progress
+  - Linear progress indicator per goal
+  - Manual allocation dialog (creates a SPENT transaction with the goal name)
+- **Recurring payments** — `RecurringTemplate` entity, DAO, bottom sheet (`RecurringPaymentsSheet`), ViewModel (`RecurringPaymentsViewModel`):
+  - CRUD for recurring expense templates with amount, comment, day-of-month
+  - Enable/disable toggle per template
+  - Auto-processed on day change in `SpendsViewModel.runChangeDayAction()`
+- **Period-scoped analytics** — `Analytics.kt` and `History.kt` now use `periodSpends`/`periodTransactions` (filtered to current budget period) instead of all transactions
+- **Date range queries** — `TransactionDao` now exposes `getAll(type, startDate, endDate)` and `getAll(startDate, endDate)` for period scoping
+- **Tag management merge** — `TagsManagementSheet` now shows transaction-derived tags alongside saved tags; `TagItem` data class merges both sources
 
 ### Changed
 - Fresh fork from upstream/master @ `4b60102` — clean slate
@@ -24,7 +35,7 @@
 - Updated `.track/AGENTS.md` section 8 with compaction recovery protocol
 - Updated `.opencode/skills/buckwheat/SKILL.md` with compaction recovery section
 - Added `.track/.session-state.json` to `.gitignore`
-- Added tag management feature (persistent saved tags via Room `saved_tags` table):
+- Added tag management feature (persistent tags via Room `saved_tags` table):
   - New `SavedTag` entity + `SavedTagDao` for persistent tag storage
   - Database migration 5→6 creates `saved_tags` table
   - New `TagsManagementSheet` bottom sheet with scrollable CRUD list (add, edit, delete)
@@ -32,6 +43,17 @@
   - Saved tags merged with transaction-derived tags in `SpendsRepository.getAllTags()`
   - Tags survive budget resets (no longer lost when `transactionDao.deleteAll()` is called)
   - New string resources for tag management UI
+- DB version bumped to 8 — auto-migration 7→8 adds `recurring_templates` and `savings_goals` tables
+- `SpendsViewModel` now injects `RecurringDao` for processing recurring payments on day change
+- `SpendsViewModel` added `periodSpends` and `periodTransactions` (MediatorLiveData filtering by budget period)
+- Added `filterByPeriod()` helper in `SpendsViewModel`
+
+### Fixed
+- **NPE crash on budget setup** — `Wallet.kt:53` `budget.value!!` and `Wallet.kt:308` `currency!!` in apply button handler could NPE if LiveData hadn't emitted yet; replaced with safe-access patterns
+- **NPE crash on CSV export** — `rememberExportCSV.kt` used `remember { mutableStateOf(...) }` without keys, capturing null dates permanently; `DateTimeFormatter.format(null)` crashed. Changed to `observeAsState()` with null-safe formatting
+- **NPE in CurrencyEditor** — `CurrencyEditor.kt:43` `spendsViewModel.currency.value!!` could NPE; replaced with safe default
+- **Force-unwrap `spends!!`** in Wallet display — replaced `spends!!.isNotEmpty()` with `spends?.isNotEmpty() == true`
+- **Force-unwrap `currency!!`** in Wallet currency caption — rewrote with `when (val c = currency)` null-safe pattern
 
 ### Known State
 - This is a simpler baseline than `our-fixes`:
