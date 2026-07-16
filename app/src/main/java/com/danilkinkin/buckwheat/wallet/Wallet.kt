@@ -50,7 +50,7 @@ fun Wallet(
     val haptic = LocalHapticFeedback.current
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
-    var budgetCache by remember { mutableStateOf(spendsViewModel.budget.value!!) }
+    var budgetCache by remember { mutableStateOf(spendsViewModel.budget.value ?: BigDecimal.ZERO) }
     val budget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
     val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
     val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
@@ -217,18 +217,21 @@ fun Wallet(
                     onClick = {
                         appViewModel.openSheet(PathState(CURRENCY_EDITOR))
                     },
-                    endCaption = when (currency?.type) {
-                        ExtendCurrency.Type.FROM_LIST -> "${
-                            Currency.getInstance(
-                                currency!!.value
-                            ).displayName.titleCase()
-                        } (${
-                            Currency.getInstance(
-                                currency!!.value
-                            ).symbol
-                        })"
-                        ExtendCurrency.Type.CUSTOM -> currency!!.value!!
-                        else -> ""
+                    endCaption = when (val c = currency) {
+                        null -> ""
+                        else -> when (c.type) {
+                            ExtendCurrency.Type.FROM_LIST -> if (c.value != null) "${
+                                Currency.getInstance(
+                                    c.value
+                                ).displayName.titleCase()
+                            } (${
+                                Currency.getInstance(
+                                    c.value
+                                ).symbol
+                            })" else ""
+                            ExtendCurrency.Type.CUSTOM -> c.value ?: ""
+                            else -> ""
+                        }
                     },
                 )
                 AnimatedVisibility(
@@ -247,7 +250,7 @@ fun Wallet(
                     ),
                 ) {
                     Column {
-                        if (spends!!.isNotEmpty()) {
+                        if (spends?.isNotEmpty() == true) {
                             ButtonRow(
                                 icon = painterResource(R.drawable.ic_analytics),
                                 text = stringResource(R.string.view_analytics),
@@ -301,17 +304,21 @@ fun Wallet(
                             budget = budgetCache,
                             restBudget = restBudget,
                             days = days,
-                            currency = currency!!,
+                            currency = currency ?: ExtendCurrency.none(),
                         )
                         Button(
                             onClick = {
-                                spendsViewModel.changeDisplayCurrency(currency!!)
+                                val currentCurrency = currency
+                                val currentSpends = spends
+                                if (currentCurrency != null && currentSpends != null && dateToValue.value != null) {
+                                    spendsViewModel.changeDisplayCurrency(currentCurrency)
 
-                                if (spends!!.isNotEmpty() && !forceChange) {
-                                    spendsViewModel.changeBudget(budgetCache, dateToValue.value!!)
-                                } else {
-                                    spendsViewModel.setBudget(budgetCache, dateToValue.value!!)
-                                    appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
+                                    if (currentSpends.isNotEmpty() && !forceChange) {
+                                        spendsViewModel.changeBudget(budgetCache, dateToValue.value!!)
+                                    } else {
+                                        spendsViewModel.setBudget(budgetCache, dateToValue.value!!)
+                                        appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
+                                    }
                                 }
 
                                 onClose()
