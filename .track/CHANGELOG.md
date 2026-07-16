@@ -2,36 +2,23 @@
 
 ## [Unreleased]
 
-### Fixed (Batch 2 — 6 thread-safety fixes)
-- **Keyboard.kt** — `runBlocking` in onClick → `coroutineScope.launch` (blocked main thread on button tap)
-- **SpendsRepository.kt** — `computeStreak()` → `suspend fun` (removed `runBlocking` from I/O function)
-- **Locale.kt** — `syncOverrideLocale()` → `suspend fun` (was blocking in `LaunchedEffect`)
-- **Theme.kt** — `syncTheme()` → `suspend fun` (same)
-- **RecurringReceiver.kt** — `@AndroidEntryPoint` with injected DAOs (removed manual Room DB creation)
-- **SyncReceiver.kt** — same pattern
-- **build.yml** — restored CI workflow
+### Changed
+- Fresh fork from upstream/master @ `4b60102` — clean slate
+- All prior work saved to `our-fixes` branch
+- Restored CI build workflow (`.github/workflows/build.yml`)
+- Added `.track/` directory with AGENTS.md, CHANGELOG.md, ARCHITECTURE.md, MEMORY.md, CACHE.md, CODE_FLOW.md
 
-### Fixed (Batch 1 — 9 bug fixes)
-- **SpendsRepository.kt** — `.first().first()` → `.first().firstOrNull()` with null check (crash on empty lists)
-- **SpendsRepository.kt** — `.last()` → `.lastOrNull()` with null check
-- **BudgetConstructor.kt** — `as Date` → `as? Date` with `?: return`
-- **BottomSheets.kt** — `as Date?` → `as? Date`
-- **RecurringReceiver.kt** — LiveData `.value` → `.asFlow().first()` (background thread access)
-- **Keyboard.kt** — `runBlocking` → `coroutineScope.launch` (UI thread)
-- **CurrentSpendEditor.kt** — `runBlocking` → `coroutineScope.launch` (UI thread)
-- **SettingsRepository.kt** — `[type]!!` → `.getValue(type)` (meaningful error instead of NPE)
-- **SpendsRepository.kt** — Merged split DataStore edits into single `edit {}` blocks
-- **BudgetConstructor.kt/Wallet.kt** — Added `finishPeriodDate` key to `remember` (stale data)
-- **rememberExportCSV.kt** — Observe dates as state, null-safe formatting
+### Known State
+- This is a simpler baseline than `our-fixes`:
+  - 2 Room tables (transactions, storage) — no recurring, periods, categories yet
+  - No notification system, no sync, no reminder
+  - These will need to be re-built or ported from `our-fixes`
 
-### Fixed (Initial batch — 6 bugs + crash)
-- **BottomSheetWrapper.kt** — Added `LocalActivityResultRegistryOwner provides LocalActivityResultRegistryOwner.current!!` to `CompositionLocalProvider` (Settings crash)
-- **SettingsRepository.kt** — Fixed TUTORIAL_STAGE crash when no cached stages exist
-- **NotificationScheduler.kt** — Fixed monthly alarm scheduling (was using day-of-week instead of day-of-month)
-- **History.kt** — Fixed undo race condition
-- **SpendsViewModel.kt** — Fixed use of JavaScript `===`/`!==` operators (compiled but always evaluated to false)
-- **SettingsRepository.kt** — Fixed key caching issue
-- **EditorViewModel.kt** — Fixed observability issue
-
-### Added
-- **MainActivity.kt / MainScreen.kt** — Re-implemented notification detail screen wiring
+## Removed (from our-fixes to fresh fork)
+- Removed all notification system code (NotificationScheduler, notification channels, AlarmManager)
+- Removed recurring transactions (RecurringDao, RecurringRepository, RecurringReceiver)
+- Removed period tracking (PeriodDao, Period entity)
+- Removed category/tag system (CategoryDao, Category entity, TagCategory)
+- Removed sync/export (SyncManager, SyncReceiver)
+- Removed reminder system (ReminderReceiver)
+- Removed all prior fix commits (saved to our-fixes branch)

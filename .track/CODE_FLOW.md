@@ -21,81 +21,60 @@ Keyboard composable (Keyboard.kt)
 BudgetConstructor.kt
   → user sets budget value and finish date
   → onChange(budget, finishDate)
-    → SpendsViewModel.setBudget() or setBudgets() or changeBudget()
-      → SpendsRepository.setBudget() / setBudgets() / changeBudget()
-        → saveCurrentPeriod() — persists current period to Period table
-        → budgetDataStore.edit { ... } — writes new budget, dates
+    → SpendsViewModel.setBudget() or changeBudget()
+      → SpendsRepository.setBudget() / changeBudget()
+        → saveCurrentPeriod() — inserts period record
+        → budgetDataStore.edit { ... } — writes new budget, spent, dates
         → transactionDao.insert(INCOME transaction)
         → setDailyBudget(whatBudgetForDay())
 ```
 
-## 3. Notification Detail Screen
-```
-Notification tap → Intent → MainActivity.onCreate()
-  → MainActivity reads intent extras (notificationType)
-  → setContent { MainScreen(notificationType) }
-    → MainScreen detects notificationType → opens relevant bottom sheet
-      → AppViewModel.sheetStates updated
-```
-
-## 4. Recurring Transactions (Background)
-```
-RecurringReceiver (BroadcastReceiver)
-  → System AlarmManager triggers at scheduled time
-  → onReceive → goAsync() → CoroutineScope(IO).launch
-    → recurringDao.getDueOnDay(dayOfMonth)
-    → for each due template:
-        → Check if already spent today via transactionDao (asFlow().first())
-        → If not: transactionDao.insert(Transaction(...))
-    → If created > 0: showNotification()
-  → pendingResult.finish()
-```
-
-## 5. Sync/Export (Background)
-```
-SyncReceiver (BroadcastReceiver)
-  → Triggered by SyncManager via ACTION_EXPORT_SPENDS
-  → onReceive → goAsync() → CoroutineScope(IO).launch
-    → transactionDao.getAll(SPENT).asFlow().first()
-    → filter today's spends
-    → generate CSV content
-    → write to MediaStore Downloads
-  → pendingResult.finish()
-```
-
-## 6. Settings -> Theme/Locale Sync
+## 3. Settings → Theme/Locale Sync
 ```
 MainActivity.onCreate()
   → LaunchedEffect(Unit) {
-      syncTheme(localContext)        // reads DataStore → sets appTheme
-      syncOverrideLocale(localContext) // reads DataStore → sets appLocale
+      syncTheme(localContext)          // reads DataStore → sets appTheme
+      syncOverrideLocale(localContext)  // reads DataStore → sets appLocale
       isReady = true
     }
 ```
 
-## 7. Tutorial System
+## 4. Tutorial System
 ```
 AppViewModel manages tutorial stages
   → Each feature checks if its tutorial should be shown via appViewModel
-  → Tutorial stages stored in settingsDataStore (TUTORS keys)
+  → Tutorial stages stored in settingsDataStore (TUTOR_* keys)
   → activateTutorial() / dismissTutorial() control flow
 ```
 
-## 8. History with Undo
+## 5. History with Undo
 ```
 History composable
   → Shows list of transactions sorted by date
   → "Undo" button → spendsViewModel.removeSpent(transaction)
     → SpendsRepository reverses the transaction effects
     → Updates DataStore (spent, daily budget) and removes from Room
-  → Race condition: ensure sequential execution via single coroutine
 ```
 
-## 9. Sheet Navigation
+## 6. Sheet Navigation
 ```
 AppViewModel.sheetStates: SnapshotStateList<SheetContainerState>
   → Composable bottom sheets observe this list
   → Sheets stack on top of each other
   → Dismissing a sheet pops it from the stack
   → Each sheet has args (Map<String, Any?>) for data passing
+```
+
+## 7. Export CSV
+```
+Wallet → rememberExportCSV.kt
+  → Creates file and writes CSV of current period's transactions
+  → Uses ActivityResultContracts.CreateDocument to pick save location
+```
+
+## 8. Widget Display
+```
+GlanceAppWidget (MinimalWidget / ExtendWidget)
+  → WidgetReceiver receives update requests
+  → Data from DataStore + Room via Glance composables
 ```

@@ -1,25 +1,40 @@
 # Memory & Decisions
 
 ## Active Context
-- **Base branch**: `master` (fork of `danilkinkin/buckwheat` upstream/master @ `4b60102`)
-- **Our fixes branch**: `our-fixes` on origin (all previous work saved here)
+- **Base branch**: `master` — clean fork of `danilkinkin/buckwheat` upstream/master @ `4b60102`
+- **Our saved work**: `our-fixes` branch on origin (all prior changes preserved there)
 - **Upstream**: `https://github.com/danilkinkin/buckwheat.git`
 - **Origin**: `https://github.com/skcode98/buckwheat`
 
-## Recent Decisions
-1. **Hilt for Receivers** — Both `RecurringReceiver` and `SyncReceiver` switched from manual Room DB creation to Hilt `@AndroidEntryPoint` with injected DAOs. This avoids duplicate DB instances and migration inconsistency.
-2. **Suspend over runBlocking** — Any function doing I/O (DataStore reads, Room calls) called from `LaunchedEffect` or coroutine scope should be `suspend`, never use `runBlocking`.
-3. **Safe casts** — Always use `as? T` instead of `as T` when casting from `Map<String, Any?>` or similar untyped sources.
-4. **Room DAO convention** — Non-suspend DAO methods rely on `allowMainThreadQueries()`. For background thread safety, prefer suspend DAO methods or `asFlow().first()`.
+## Current State
+- The upstream master is a **simpler codebase** than our-fixes:
+  - Only 2 Room tables: `transactions` and `storage`
+  - No recurring transactions, no periods, no categories, no sync, no reminder, no notifications
+  - These features were all added in our saved `our-fixes` branch
+- This is a clean slate to start fresh development from upstream
+
+## Architecture Decisions
+| Decision | Rationale |
+|----------|-----------|
+| Single Activity | `MainActivity` with `setContent` |
+| Sheet Navigation | Custom stack-based (AppViewModel.sheetStates) — no Jetpack Navigation |
+| Custom Keyboard | Dedicated number pad instead of system keyboard |
+| DataStore for Budget | Budget state stored in DataStore, not Room (avoids migration hell for frequent state) |
+| Room for Transactions | Full transaction history in Room with schema migrations |
+| Hilt DI | Singleton components for DB, repositories, ViewModels |
+
+## Coding Rules (Enforced)
+1. **NO `runBlocking`** — use `suspend` + coroutine scope
+2. **NO `!!` force-unwrap** — use `.getValue(key)` for maps, `as? T` for casts
+3. **NO `.first()` on potentially empty** — use `.firstOrNull()` with null check
+4. **NO LiveData `.value` on background threads** — use `.asFlow().first()`
+5. **NO `remember {}` without keys** — add observed state as key
+6. **NO manual Room DB creation** — use Hilt `@AndroidEntryPoint` + injected DAOs
+7. **NO split DataStore `edit {}` calls** — combine into single block
 
 ## Open Issues
-1. **allowMainThreadQueries()** — Still enabled in `AppModule.kt`. Removing it requires converting all non-suspend DAO methods to suspend (RecurringDao, PeriodDao, TransactionDao non-suspend methods). Large refactor — defer to future.
-2. **computeStreak()** — Dead code (defined but never called). Converted to `suspend` anyway.
-3. **Deprecated Java Locale API** — `Locale(String)` constructor deprecated in Java 19+. Should migrate to `Locale.Builder` or `Locale.of()`.
+1. **allowMainThreadQueries()** — Still enabled. Removing requires making DAO methods suspend.
 
-## Patterns to Follow
-- ViewModels: use `viewModelScope.launch` for coroutines
-- Composables: use `rememberCoroutineScope()` for event-driven coroutines
-- BroadcastReceivers: use `@AndroidEntryPoint` + injected fields, never manual DB creation
-- DataStore: prefer single `edit {}` block when writing multiple keys atomically
-- LiveData in coroutines: use `.asFlow().first()` instead of `.value`
+## Future Considerations
+- Upstream has added features (recurring, categories, periods, notifications) that we may want to re-implement
+- Our `our-fixes` branch contains working implementations that can be referenced
