@@ -1,15 +1,19 @@
 package com.danilkinkin.buckwheat.data
 
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
+import java.util.Calendar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -24,6 +28,7 @@ enum class RestedBudgetDistributionMethod { REST, ADD_TODAY, ASK }
 class SpendsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val spendsRepository: SpendsRepository,
+    private val recurringDao: RecurringDao,
 ) : ViewModel() {
     var tags = spendsRepository.getAllTags()
     var transactions = spendsRepository.getAllTransactions()
@@ -36,6 +41,44 @@ class SpendsViewModel @Inject constructor(
     var finishPeriodDate = spendsRepository.getFinishPeriodDate().asLiveData()
     var finishPeriodActualDate = spendsRepository.getFinishPeriodActualDate().asLiveData()
     var lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().asLiveData()
+
+    val periodSpends: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
+        var lastSpends: List<Transaction> = emptyList()
+        var lastStart: Date? = null
+        var lastFinish: Date? = null
+
+        addSource(spends) { list ->
+            lastSpends = list
+            value = filterByPeriod(list, lastStart, lastFinish)
+        }
+        addSource(startPeriodDate) { date ->
+            lastStart = date
+            value = filterByPeriod(lastSpends, date, lastFinish)
+        }
+        addSource(finishPeriodDate) { date ->
+            lastFinish = date
+            value = filterByPeriod(lastSpends, lastStart, date)
+        }
+    }
+
+    val periodTransactions: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
+        var lastTransactions: List<Transaction> = emptyList()
+        var lastStart: Date? = null
+        var lastFinish: Date? = null
+
+        addSource(transactions) { list ->
+            lastTransactions = list
+            value = filterByPeriod(list, lastStart, lastFinish)
+        }
+        addSource(startPeriodDate) { date ->
+            lastStart = date
+            value = filterByPeriod(lastTransactions, date, lastFinish)
+        }
+        addSource(finishPeriodDate) { date ->
+            lastFinish = date
+            value = filterByPeriod(lastTransactions, lastStart, date)
+        }
+    }
 
     var currency = spendsRepository.getCurrency().asLiveData()
     var restedBudgetDistributionMethod =
@@ -216,11 +259,34 @@ class SpendsViewModel @Inject constructor(
                 }
             }
 
+            // Process due recurring payments
+            val dayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
+            val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
+            dueTemplates.forEach { template ->
+                spendsRepository.addSpent(
+                    Transaction(
+                        type = TransactionType.SPENT,
+                        value = template.amount,
+                        date = Date(),
+                        comment = template.comment,
+                    )
+                )
+            }
+
             // Bug fix https://github.com/danilkinkin/buckwheat/issues/28
             if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
                 hideOverspendingWarn(false)
             }
         }
+    }
+
+    private fun filterByPeriod(
+        list: List<Transaction>,
+        startDate: Date?,
+        finishDate: Date?,
+    ): List<Transaction> {
+        if (startDate == null || finishDate == null) return list
+        return list.filter { !it.date.before(startDate) && !it.date.after(finishDate) }
     }
 
     private fun runScheduledDetectChangeDayTask() {

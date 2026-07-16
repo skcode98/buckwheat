@@ -57,6 +57,10 @@ class SpendsRepository @Inject constructor(
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
+    fun getTransactionsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
+        transactionDao.getAll(startDate.time, endDate.time)
+    fun getSpendsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
+        transactionDao.getAll(TransactionType.SPENT, startDate.time, endDate.time)
 
     fun getAllTags(): LiveData<List<String>> {
         val merged = MediatorLiveData<List<String>>()
@@ -157,7 +161,9 @@ class SpendsRepository @Inject constructor(
 
     suspend fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
         val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
-        if (oldSpent > BigDecimal.ZERO) {
+        val hasStoredTransactions = transactionDao.getAll().asFlow().first()
+            .any { it.type == TransactionType.SPENT }
+        if (oldSpent > BigDecimal.ZERO || hasStoredTransactions) {
             archiveCurrentPeriod()
         }
 
@@ -196,12 +202,16 @@ class SpendsRepository @Inject constructor(
     }
 
     private suspend fun archiveCurrentPeriod() {
+        val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
+        val spends = transactions.filter { it.type == TransactionType.SPENT }
+
+        if (spends.isEmpty()) return
+
         val oldBudget = getBudget().firstOrNull() ?: BigDecimal.ZERO
-        val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
         val startDate = getStartPeriodDate().firstOrNull()
-            ?: return
+            ?: spends.minOf { it.date }
         val finishDate = getFinishPeriodDate().firstOrNull()
-            ?: return
+            ?: spends.maxOf { it.date }
         val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
         val currency = getCurrency().firstOrNull()
         val currencyCode = when (currency?.type) {
@@ -209,11 +219,6 @@ class SpendsRepository @Inject constructor(
             com.danilkinkin.buckwheat.data.ExtendCurrency.Type.NONE -> ""
             else -> currency?.value ?: ""
         }
-
-        val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
-        val spends = transactions.filter { it.type == TransactionType.SPENT }
-
-        if (spends.isEmpty()) return
 
         val totalSpent = spends.map { it.value }.fold(BigDecimal.ZERO) { acc, v -> acc + v }
 
@@ -514,18 +519,25 @@ class SpendsRepository @Inject constructor(
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
 
+        val finishPeriodDate = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
+            ?.let { value -> Date(value) }
+        val dailyBudget = context.budgetDataStore.data.first()[dailyBudgetStoreKey]
+            ?.toBigDecimal()
+        val spent = context.budgetDataStore.data.first()[spentStoreKey]
+            ?.toBigDecimal()
+        val spentFromDailyBudget = context.budgetDataStore.data.first()[spentFromDailyBudgetStoreKey]
+            ?.toBigDecimal()
+
+        if (finishPeriodDate == null || dailyBudget == null || spent == null || spentFromDailyBudget == null) {
+            return
+        }
+
         context.budgetDataStore.edit {
             try {
                 if (isSameDay(newTransaction.date, getCurrentDateUseCase())) {
-                    val spentFromDailyBudget = it[spentFromDailyBudgetStoreKey]?.toBigDecimal()!!
                     it[spentFromDailyBudgetStoreKey] =
                         (spentFromDailyBudget + newTransaction.value).toString()
                 } else {
-                    val finishPeriodDate =
-                        it[finishPeriodDateStoreKey]?.let { value -> Date(value) }!!
-                    val dailyBudget = it[dailyBudgetStoreKey]?.toBigDecimal()!!
-                    val spent = it[spentStoreKey]?.toBigDecimal()!!
-
                     val spreadDeltaSpentPerRestDays = newTransaction.value
                         .divide(
                             countDays(finishPeriodDate, getCurrentDateUseCase()).toBigDecimal(),

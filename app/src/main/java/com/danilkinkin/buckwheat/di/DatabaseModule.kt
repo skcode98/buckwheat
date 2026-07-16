@@ -5,12 +5,16 @@ import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
+import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.StorageDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedTag
+import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Storage
 import com.danilkinkin.buckwheat.data.entities.Transaction
 
@@ -38,6 +42,9 @@ val AutoMigration5to6: Migration = object : Migration(5, 6) {
         )
     }
 }
+
+// Create recurring_templates and savings_goals tables
+class AutoMigration7to8 : AutoMigrationSpec
 
 // Create archive tables for completed budget periods
 val AutoMigration6to7: Migration = object : Migration(6, 7) {
@@ -94,12 +101,13 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 }
 
 @Database(
-    entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class],
-    version = 7,
+    entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
+    version = 8,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
         AutoMigration(from = 3, to = 4, spec = AutoMigration3to4::class),
+        AutoMigration(from = 7, to = 8, spec = AutoMigration7to8::class),
     ],
     exportSchema = true
 )
@@ -113,6 +121,10 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savedTagDao(): SavedTagDao
 
     abstract fun budgetPeriodDao(): BudgetPeriodDao
+
+    abstract fun recurringDao(): RecurringDao
+
+    abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
         val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7)

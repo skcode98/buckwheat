@@ -44,6 +44,22 @@ metadata:
 - DataStore keys: budget, finishDate, actualFinishDate, dailyBudget, spent, currency, etc.
 - Settings DataStore: theme mode, locale, debug mode, tutorial stages, hideOverspendingWarn
 
+## Common Mistakes & Fixes
+
+### Tags Management shows empty despite having transactions with comments
+**Root cause**: `TagsManagementViewModel` only read from `saved_tags` table (explicitly saved tags), ignoring comment-based tags in the `transactions` table.
+**Fix**: Merge both sources via `SpendsRepository.getAllTags()` which already aggregates unique tag names from transaction comments + saved tags. Use a `TagItem` model with nullable `id` to distinguish auto-derived (no id) vs saved tags.
+
+### Importing transactions without a budget causes data loss
+**Root cause**: `addSpent()` used `!!` on DataStore keys that don't exist until a budget is set. NPE was silently caught, so transactions were stored in DB but DataStore budget values (spent, dailyBudget) were never updated. Later `setBudget()` checked DataStore `oldSpent > 0` — it was 0, so `archiveCurrentPeriod()` was skipped, then `transactionDao.deleteAll()` wiped imported data.
+**Fix**:
+1. `addSpent()` — use null-safe access on all DataStore keys; return early if budget not set (transaction already in DB)
+2. `setBudget()` — also check `transactionDao.getAll()` for SPENT records before deciding to archive
+3. `archiveCurrentPeriod()` — don't `return` when `finishDate`/`startDate` are null; compute from `spends.minOf/maxOf { it.date }`
+
+### Past Periods sheet is empty
+**Root cause**: Past periods (`budget_periods` table) are only populated by `archiveCurrentPeriod()`, which is called exclusively inside `setBudget()`. Importing transactions via CSV never creates a past period. The fix for data loss above ensures imports survive budget setup and get properly archived.
+
 ## Key Architecture
 
 ```

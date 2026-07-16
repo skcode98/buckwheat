@@ -243,6 +243,18 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = RECURRING_PAYMENTS_SHEET,
+    ) {
+        RecurringPaymentsSheet()
+    }
+
+    BottomSheetWrapper(
+        name = GOALS_SHEET,
+    ) {
+        GoalsSheet()
+    }
+
+    BottomSheetWrapper(
         name = PERIOD_DETAIL_SHEET,
     ) { state ->
         PeriodDetailSheet()

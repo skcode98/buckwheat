@@ -13,6 +13,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE type = :type ORDER BY date ASC")
     fun getAll(type: TransactionType): LiveData<List<Transaction>>
 
+    @Query("SELECT * FROM transactions WHERE type = :type AND date >= :startDate AND date <= :endDate ORDER BY date ASC")
+    fun getAll(type: TransactionType, startDate: Long, endDate: Long): LiveData<List<Transaction>>
+
+    @Query("SELECT * FROM transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC")
+    fun getAll(startDate: Long, endDate: Long): LiveData<List<Transaction>>
+
     @Query("SELECT * FROM transactions WHERE uid = :uid")
     fun getById(uid: Int): Transaction?
 

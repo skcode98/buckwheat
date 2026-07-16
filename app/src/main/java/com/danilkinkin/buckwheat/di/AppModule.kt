@@ -41,4 +41,12 @@ object AppModule {
     @Singleton
     @Provides
     fun provideBudgetPeriodDao(db: DatabaseModule) = db.budgetPeriodDao()
+
+    @Singleton
+    @Provides
+    fun provideRecurringDao(db: DatabaseModule) = db.recurringDao()
+
+    @Singleton
+    @Provides
+    fun provideSavingsGoalDao(db: DatabaseModule) = db.savingsGoalDao()
 }

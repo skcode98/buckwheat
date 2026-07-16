@@ -61,8 +61,8 @@ fun Analytics(
     editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
     val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
-    val transactions by spendsViewModel.transactions.observeAsState(emptyList())
-    val spends by spendsViewModel.spends.observeAsState(emptyList())
+    val transactions by spendsViewModel.periodTransactions.observeAsState(emptyList())
+    val spends by spendsViewModel.periodSpends.observeAsState(emptyList())
     val wholeBudget = spendsViewModel.budget.value!!
     val scrollState = rememberScrollState()
 

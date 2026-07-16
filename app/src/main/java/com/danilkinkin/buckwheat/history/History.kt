@@ -67,7 +67,7 @@ fun History(
     val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).observeAsState(TUTORIAL_STAGE.NONE)
     var isUserTrySwipe by remember { mutableStateOf(false) }
 
-    observeLiveData(spendsViewModel.spends) { transactions ->
+    observeLiveData(spendsViewModel.periodSpends) { transactions ->
         val composedList = emptyList<RowEntity>().toMutableList()
         var lastSpentDate: LocalDate? = null
         var lastDayTotal: BigDecimal = BigDecimal.ZERO

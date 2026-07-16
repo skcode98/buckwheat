@@ -157,4 +157,6 @@
   <string name="import_csv_empty">No valid transactions found in CSV</string>
   <string name="search_history_hint">Search by tag…</string>
   <string name="search_history_title">Search History</string>
+  <string name="recurring_payments_title">Recurring Payments</string>
+  <string name="goals_title">Goals</string>
 </resources>

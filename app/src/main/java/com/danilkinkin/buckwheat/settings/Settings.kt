@@ -95,6 +95,26 @@ fun Settings(
                         )
                     },
                 )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_autorenew),
+                    text = "Recurring Payments",
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(RECURRING_PAYMENTS_SHEET)
+                        )
+                    },
+                )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_balance_wallet),
+                    text = "Goals",
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(GOALS_SHEET)
+                        )
+                    },
+                )
                 val importCSV = rememberImportCSV()
                 TextRow(
                     icon = painterResource(R.drawable.ic_file_download),

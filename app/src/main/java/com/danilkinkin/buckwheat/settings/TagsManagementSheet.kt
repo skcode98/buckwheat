@@ -21,7 +21,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
-import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 
 const val TAGS_MANAGEMENT_SHEET = "tagsManagement"
@@ -32,7 +31,7 @@ fun TagsManagementSheet(
     viewModel: TagsManagementViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
-    val tags by viewModel.tags.observeAsState(emptyList())
+    val tags by viewModel.allTags.observeAsState(emptyList())
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -102,7 +101,7 @@ fun TagsManagementSheet(
                 contentPadding = PaddingValues(horizontal = 24.dp),
             ) {
                 items(tags) { tag ->
-                    if (editingId == tag.id) {
+                    if (tag.id != null && editingId == tag.id) {
                         EditingTagRow(
                             currentName = editingText,
                             onNameChange = { editingText = it },
@@ -117,13 +116,20 @@ fun TagsManagementSheet(
                             },
                         )
                     } else {
-                        TagRow(
+                        TagItemRow(
                             tag = tag,
-                            onEdit = {
-                                editingId = tag.id
-                                editingText = tag.name
-                            },
-                            onDelete = { viewModel.deleteTag(tag.id) },
+                            onEdit = if (tag.id != null) {
+                                {
+                                    editingId = tag.id
+                                    editingText = tag.name
+                                }
+                            } else null,
+                            onSave = if (tag.id == null) {
+                                { viewModel.addTag(tag.name) }
+                            } else null,
+                            onDelete = if (tag.id != null) {
+                                { viewModel.deleteTag(tag.id) }
+                            } else null,
                         )
                     }
                 }
@@ -133,10 +139,11 @@ fun TagsManagementSheet(
 }
 
 @Composable
-private fun TagRow(
-    tag: SavedTag,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+private fun TagItemRow(
+    tag: TagItem,
+    onEdit: (() -> Unit)?,
+    onSave: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -162,17 +169,29 @@ private fun TagRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        IconButton(onClick = onEdit) {
-            Icon(
-                painter = painterResource(R.drawable.ic_edit),
-                contentDescription = stringResource(R.string.tags_management_edit),
-            )
+        if (onSave != null) {
+            IconButton(onClick = onSave) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_add),
+                    contentDescription = stringResource(R.string.tags_management_add_hint),
+                )
+            }
         }
-        IconButton(onClick = onDelete) {
-            Icon(
-                painter = painterResource(R.drawable.ic_delete_forever),
-                contentDescription = stringResource(R.string.tags_management_delete),
-            )
+        if (onEdit != null) {
+            IconButton(onClick = onEdit) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_edit),
+                    contentDescription = stringResource(R.string.tags_management_edit),
+                )
+            }
+        }
+        if (onDelete != null) {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_delete_forever),
+                    contentDescription = stringResource(R.string.tags_management_delete),
+                )
+            }
         }
     }
 }
