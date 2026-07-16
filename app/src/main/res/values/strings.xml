@@ -143,4 +143,8 @@
   <string name="confirm_finish_budget_title">Finish budget</string>
   <string name="confirm_finish_budget_description">Your current budget will be completed, and you will no longer be able to make any further expenses</string>
   <string name="confirm_finish_budget">Finish budget</string>
+  <string name="tags_management_title">Tag Management</string>
+  <string name="tags_management_add_hint">Add new tag</string>
+  <string name="tags_management_edit">Edit tag</string>
+  <string name="tags_management_delete">Delete tag</string>
 </resources>

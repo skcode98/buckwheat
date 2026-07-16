@@ -35,6 +35,20 @@
 ## Open Issues
 1. **allowMainThreadQueries()** — Still enabled. Removing requires making DAO methods suspend.
 
+## Implemented Features (on current master)
+1. **Tag Management** — Persistent tags stored in Room `saved_tags` table (not lost on budget reset):
+   - Settings → Tag Management opens CRUD bottom sheet
+   - Tags merge transaction-derived tags with saved tags in `SpendsRepository.getAllTags()`
+   - DB migration 5→6 adds `saved_tags` table
+
 ## Future Considerations
 - Upstream has added features (recurring, categories, periods, notifications) that we may want to re-implement
 - Our `our-fixes` branch contains working implementations that can be referenced
+
+## Decisions (Session Compaction Fix)
+| Decision | Rationale |
+|----------|-----------|
+| Plugin-based approach for compaction fix | Hooks into `experimental.session.compacting` to inject structured state without modifying core opencode |
+| `.track/.session-state.json` for structured state | Lightweight JSON file that the plugin reads/writes to preserve nextMove, files, lastTask |
+| `.track/` files as canonical source of truth | MEMORY.md (context), CHANGELOG.md (changes), CACHE.md (cache) are already maintained; plugin reads them rather than duplicating state |
+| `.gitignore` the auto-managed state file | `.session-state.json` is transient and varies per session; not committed |

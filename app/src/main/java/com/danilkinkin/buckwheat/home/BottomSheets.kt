@@ -230,6 +230,12 @@ fun BottomSheets(
         TryWidgetDialog()
     }
 
+    BottomSheetWrapper(
+        name = TAGS_MANAGEMENT_SHEET,
+    ) { state ->
+        TagsManagementSheet()
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         Confetti(
             modifier = Modifier.fillMaxSize(),

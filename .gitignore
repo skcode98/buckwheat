@@ -10,3 +10,6 @@
 .cxx
 local.properties
 .java-version
+
+# Auto-managed session state (opencode compaction fix plugin)
+.track/.session-state.json

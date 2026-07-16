@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.map
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -14,6 +15,7 @@ import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
@@ -45,21 +47,40 @@ val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate"
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,
+    private val savedTagDao: SavedTagDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
 
-    fun getAllTags(): LiveData<List<String>> = transactionDao.getAll().map { transactions ->
-        transactions
-            .asSequence()
-            .filter { transaction -> transaction.comment.isNotEmpty() }
-            .groupBy { it.comment }
-            .map { it.key to it.value.size }
-            .sortedBy { -it.second }
-            .map { it.first }
-            .distinct()
-            .toList()
+    fun getAllTags(): LiveData<List<String>> {
+        val merged = MediatorLiveData<List<String>>()
+        val transactionSource = transactionDao.getAll().map { transactions ->
+            transactions
+                .asSequence()
+                .filter { transaction -> transaction.comment.isNotEmpty() }
+                .groupBy { it.comment }
+                .map { it.key to it.value.size }
+                .sortedBy { -it.second }
+                .map { it.first }
+                .distinct()
+                .toList()
+        }
+        val savedSource = savedTagDao.getAll().map { tags -> tags.map { it.name } }
+
+        var lastTransactionTags: List<String> = emptyList()
+        var lastSavedTags: List<String> = emptyList()
+
+        merged.addSource(transactionSource) { tags ->
+            lastTransactionTags = tags
+            merged.value = (lastTransactionTags + lastSavedTags).distinct()
+        }
+        merged.addSource(savedSource) { tags ->
+            lastSavedTags = tags
+            merged.value = (lastTransactionTags + lastSavedTags).distinct()
+        }
+
+        return merged
     }
 
     fun getBudget() = context.budgetDataStore.data.map {

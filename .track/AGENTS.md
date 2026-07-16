@@ -345,3 +345,14 @@ AppViewModel.activateTutorial(TUTORS.X) / dismissTutorial()
 4. **BUILD**: Always run `.\gradlew.bat assembleDebug` after changes to verify compilation.
 5. **COMMIT**: Only when asked. Use concise messages matching repo style.
 6. **TRACKING FILES** are in `.track/` directory — always maintain them.
+
+### Compaction Recovery
+
+When a new session starts (after session compaction), follow this recovery protocol:
+
+1. The `.opencode/plugins/compaction-fix.ts` plugin injects preserved state (active task, recent changes, decisions) into the compaction prompt
+2. Read `.track/MEMORY.md` to restore full context and decisions
+3. Read `.track/CHANGELOG.md` to see what changed before compaction
+4. Read `.track/CACHE.md` for build commands and references
+5. **Update `.track/.session-state.json`** with the current `nextMove` and `files` before significant work, so compaction captures accurate state
+6. If `.track/.session-state.json` is empty or stale, manually record the current task and files being worked on
