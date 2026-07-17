@@ -22,7 +22,6 @@ object AppModule {
         "buckwheat-db",
     )
         .fallbackToDestructiveMigration()
-        .allowMainThreadQueries()
         .addMigrations(*DatabaseModule.MANUAL_MIGRATIONS)
         .build()
 

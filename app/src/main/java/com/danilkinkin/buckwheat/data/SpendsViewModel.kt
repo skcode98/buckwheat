@@ -18,6 +18,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
@@ -43,40 +44,56 @@ class SpendsViewModel @Inject constructor(
     var lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().asLiveData()
 
     val periodSpends: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
+        value = emptyList()
+
         var lastSpends: List<Transaction> = emptyList()
         var lastStart: Date? = null
         var lastFinish: Date? = null
 
         addSource(spends) { list ->
             lastSpends = list
-            value = filterByPeriod(list, lastStart, lastFinish)
+            if (lastStart != null && lastFinish != null) {
+                value = filterByPeriod(list, lastStart, lastFinish)
+            }
         }
         addSource(startPeriodDate) { date ->
             lastStart = date
-            value = filterByPeriod(lastSpends, date, lastFinish)
+            if (lastFinish != null) {
+                value = filterByPeriod(lastSpends, date, lastFinish)
+            }
         }
         addSource(finishPeriodDate) { date ->
             lastFinish = date
-            value = filterByPeriod(lastSpends, lastStart, date)
+            if (lastStart != null) {
+                value = filterByPeriod(lastSpends, lastStart, date)
+            }
         }
     }
 
     val periodTransactions: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
+        value = emptyList()
+
         var lastTransactions: List<Transaction> = emptyList()
         var lastStart: Date? = null
         var lastFinish: Date? = null
 
         addSource(transactions) { list ->
             lastTransactions = list
-            value = filterByPeriod(list, lastStart, lastFinish)
+            if (lastStart != null && lastFinish != null) {
+                value = filterByPeriod(list, lastStart, lastFinish)
+            }
         }
         addSource(startPeriodDate) { date ->
             lastStart = date
-            value = filterByPeriod(lastTransactions, date, lastFinish)
+            if (lastFinish != null) {
+                value = filterByPeriod(lastTransactions, date, lastFinish)
+            }
         }
         addSource(finishPeriodDate) { date ->
             lastFinish = date
-            value = filterByPeriod(lastTransactions, lastStart, date)
+            if (lastStart != null) {
+                value = filterByPeriod(lastTransactions, lastStart, date)
+            }
         }
     }
 
@@ -91,6 +108,10 @@ class SpendsViewModel @Inject constructor(
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
 
     init {
+        runBlocking {
+            requireSetBudget.value =
+                spendsRepository.getLastChangeDailyBudgetDate().first() == null
+        }
         runChangeDayAction()
         runScheduledDetectChangeDayTask()
     }

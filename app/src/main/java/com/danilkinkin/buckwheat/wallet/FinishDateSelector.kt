@@ -44,7 +44,7 @@ fun FinishDateSelector(
                 context,
                 selectionMode = CalendarSelectionMode.RANGE,
                 selectDate = selectDate,
-                disableBeforeDate = null,
+                disableBeforeDate = Date(),
             )
         }
 

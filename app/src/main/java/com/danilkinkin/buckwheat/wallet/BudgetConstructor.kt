@@ -63,7 +63,7 @@ fun BudgetConstructor(
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
 
-    var rawBudget by remember {
+    var rawBudget by remember(budget) {
         if (budget.isZero()) {
             return@remember mutableStateOf("")
         }
@@ -82,7 +82,7 @@ fun BudgetConstructor(
 
         mutableStateOf(converted.first + converted.second)
     }
-    var budgetCache by remember {
+    var budgetCache by remember(budget) {
         val restBudget =
             (budget - spent - spentFromDailyBudget)
                 .setScale(2, RoundingMode.HALF_UP)
@@ -91,29 +91,29 @@ fun BudgetConstructor(
 
         mutableStateOf(BigDecimal(restBudget))
     }
-    val dateToValue = remember { mutableStateOf(spendsViewModel.finishPeriodDate.value) }
-    var showUseSuggestion by remember {
-        val useBudget = budget != budgetCache && !budget.isZero()
+    val dateToValue = remember { mutableStateOf(finishPeriodDate) }
+    val showUseSuggestion by remember {
+        derivedStateOf {
+            val useBudget = budget != budgetCache && !budget.isZero()
 
-        val length = if (finishPeriodDate !== null) {
-            countDays(
-                finishPeriodDate!!,
-                startPeriodDate,
-            )
-        } else {
-            0
-        }
-        val finishDate = LocalDate.now().plusDays(length.toLong() - 1).toDate()
+            val length = if (finishPeriodDate !== null) {
+                countDays(
+                    finishPeriodDate!!,
+                    startPeriodDate,
+                )
+            } else {
+                0
+            }
+            val finishDate = LocalDate.now().plusDays(length.toLong() - 1).toDate()
 
-        val useDate = length != 0
-                && (finishPeriodDate == null || !isSameDay(
-            finishDate.time,
-            finishPeriodDate!!.time
-        ))
+            val useDate = length != 0
+                    && (finishPeriodDate == null || !isSameDay(
+                finishDate.time,
+                finishPeriodDate!!.time
+            ))
 
-        mutableStateOf(
             useBudget || useDate
-        )
+        }
     }
 
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -148,7 +148,6 @@ fun BudgetConstructor(
                     finishDate,
                 )
 
-                showUseSuggestion = false
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         )

@@ -56,7 +56,7 @@ fun Wallet(
     val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
-    val dateToValue = remember { mutableStateOf(spendsViewModel.finishPeriodDate.value) }
+    val dateToValue = remember { mutableStateOf(finishPeriodDate) }
     val currency by spendsViewModel.currency.observeAsState()
     val spends by spendsViewModel.periodSpends.observeAsState()
     val restedBudgetDistributionMethod by spendsViewModel.restedBudgetDistributionMethod.observeAsState()
@@ -308,12 +308,13 @@ fun Wallet(
                         )
                         Button(
                             onClick = {
-                                val currentCurrency = currency
                                 val currentSpends = spends
-                                if (currentCurrency != null && currentSpends != null && dateToValue.value != null) {
-                                    spendsViewModel.changeDisplayCurrency(currentCurrency)
+                                if (dateToValue.value != null) {
+                                    if (currency != null) {
+                                        spendsViewModel.changeDisplayCurrency(currency!!)
+                                    }
 
-                                    if (currentSpends.isNotEmpty() && !forceChange) {
+                                    if (currentSpends?.isNotEmpty() == true && !forceChange) {
                                         spendsViewModel.changeBudget(budgetCache, dateToValue.value!!)
                                     } else {
                                         spendsViewModel.setBudget(budgetCache, dateToValue.value!!)

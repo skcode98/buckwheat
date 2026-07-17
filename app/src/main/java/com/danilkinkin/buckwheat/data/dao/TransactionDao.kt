@@ -20,17 +20,17 @@ interface TransactionDao {
     fun getAll(startDate: Long, endDate: Long): LiveData<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE uid = :uid")
-    fun getById(uid: Int): Transaction?
+    suspend fun getById(uid: Int): Transaction?
 
     @Insert
-    fun insert(vararg transaction: Transaction)
+    suspend fun insert(vararg transaction: Transaction)
 
     @Update(entity = Transaction::class, onConflict = OnConflictStrategy.REPLACE)
-    fun update(vararg transaction: Transaction)
+    suspend fun update(vararg transaction: Transaction)
 
     @Query("DELETE FROM transactions WHERE uid = :uid")
-    fun deleteById(uid: Int)
+    suspend fun deleteById(uid: Int)
 
     @Query("DELETE FROM transactions")
-    fun deleteAll()
+    suspend fun deleteAll()
 }
