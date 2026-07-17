@@ -346,8 +346,7 @@ class SpendsRepository @Inject constructor(
         val dailyBudget = getDailyBudget().first()
         val spentFromDailyBudget = getSpentFromDailyBudget().first()
         val finishPeriodDate =
-            getFinishPeriodDate().first() ?: throw Exception("Finish period date is null")
-
+            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
 
         val restDays =
             countDays(finishPeriodDate, getCurrentDateUseCase()) - if (excludeCurrentDay) 1 else 0
@@ -404,7 +403,7 @@ class SpendsRepository @Inject constructor(
         val dailyBudget = getDailyBudget().first()
         val spentFromDailyBudget = getSpentFromDailyBudget().first()
         val finishPeriodDate =
-            getFinishPeriodDate().first() ?: throw Exception("Finish period date is null")
+            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
         val lastChangeDailyBudgetDate =
             getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
 
@@ -466,7 +465,7 @@ class SpendsRepository @Inject constructor(
         val dailyBudget = getDailyBudget().first()
         val spentFromDailyBudget = getSpentFromDailyBudget().first()
         val finishPeriodDate =
-            getFinishPeriodDate().first() ?: throw Exception("Finish period date is null")
+            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
         val lastChangeDailyBudgetDate =
             getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
 

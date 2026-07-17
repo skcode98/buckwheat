@@ -122,7 +122,11 @@ fun MainScreen(
     }
 
     observeLiveData(spendsViewModel.requireSetBudget) {
-        if (it) appViewModel.openSheet(PathState(ON_BOARDING_SHEET))
+        if (it) {
+            appViewModel.openSheet(PathState(ON_BOARDING_SHEET))
+        } else {
+            appViewModel.closeSheet(ON_BOARDING_SHEET)
+        }
     }
 
     observeLiveData(spendsViewModel.periodFinished) {
