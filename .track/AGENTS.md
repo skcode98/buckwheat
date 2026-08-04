@@ -14,7 +14,7 @@
 - **Database**: Room 2.7.2
 - **State**: Preferences DataStore (budget state) + Room (transaction history)
 - **Min SDK**: 29 | **Target SDK**: 36 | **Compile SDK**: 36
-- **AGP**: 8.11.1 | **Gradle**: uses wrapper
+- **AGP**: 8.7.3 | **Gradle**: uses wrapper
 
 ---
 

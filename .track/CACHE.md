@@ -75,7 +75,7 @@ git push origin master
 | Library | Version |
 |---------|---------|
 | Kotlin | 2.2.0 |
-| AGP | 8.11.1 |
+| AGP | 8.7.3 (downgraded from 8.11.1 for Android Studio Narwhal 2024.2.1) |
 | Hilt | 2.57 |
 | Room | 2.7.2 |
 | Compose BOM | 1.8.3 |
@@ -105,7 +105,8 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `startPeriodDate` — period start (Long ms)
 - `finishPeriodDate` — period finish (Long ms)
 - `finishPeriodActualDate` — actual finish (Long ms, set when budget finished early)
-- `lastChangeDailyBudgetDate` — last daily budget update (Long ms)
+- `lastChangeDailyBudgetDate` — last daily budget update (Long ms; also written by ASK one-shot handling)
+- `lastRecurringAppliedDate` — last day recurring payments were applied (Long ms; backfill marker)
 - `currency` — currency code (String)
 - `restedBudgetDistributionMethod` — overspend handling (String)
 - `hideOverspendingWarn` — overspend warning flag (Boolean)

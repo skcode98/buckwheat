@@ -19,7 +19,11 @@ fun parseVoiceInput(input: String): VoiceInputResult? {
         RegexOption.IGNORE_CASE,
     ).find(trimmed) ?: return null
 
-    val amount = amountMatch.groupValues[1].replace(",", ".")
+    // Keep the raw matched digits (including any thousands/decimal separator) — the
+    // downstream parseAmountToBigDecimal distinguishes "1,234" (thousands) from
+    // "12,50" (decimal comma). Naively replacing "," with "." would turn "1,234"
+    // into 1.234 instead of 1234.
+    val amount = amountMatch.groupValues[1]
 
     var textWithoutAmount = trimmed
         .replaceFirst(amountMatch.value, "")
@@ -40,16 +44,23 @@ fun parseVoiceInput(input: String): VoiceInputResult? {
         targetDate.add(Calendar.DAY_OF_YEAR, 1)
     }
 
+    // Only treat a number as a time when there is a strong signal: an "at" prefix,
+    // a colon-separated minute, or an explicit am/pm suffix. A bare number in the
+    // comment (e.g. "2 coffees") must not be interpreted as a time of day.
     val timeMatch = Regex(
-        """(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?""",
+        """(?:(at)\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?""",
         RegexOption.IGNORE_CASE,
-    ).find(textWithoutAmount)
+    ).find(textWithoutAmount)?.takeIf { match ->
+        !match.groupValues[1].isNullOrEmpty() ||
+                !match.groupValues[3].isNullOrEmpty() ||
+                match.groupValues[4].isNotEmpty()
+    }
 
     if (timeMatch != null) {
-        var hour = timeMatch.groupValues[1].toInt()
+        var hour = timeMatch.groupValues[2].toInt()
         val minute =
-            timeMatch.groupValues[2].let { if (it.isEmpty()) 0 else it.toInt() }
-        val ampm = timeMatch.groupValues[3].lowercase()
+            timeMatch.groupValues[3].let { if (it.isEmpty()) 0 else it.toInt() }
+        val ampm = timeMatch.groupValues[4].lowercase()
 
         when {
             ampm.startsWith("pm") && hour < 12 -> hour += 12

@@ -99,11 +99,11 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         val restBudget = (budget - spent) - dailyBudget
         val splitBudget = restBudget + dailyBudget - spentFromDailyBudget
 
-        return (splitBudget / restDays.toBigDecimal().coerceAtLeast(BigDecimal(1)))
-            .setScale(
-                0,
-                RoundingMode.FLOOR
-            )
+        return splitBudget.divide(
+            restDays.toBigDecimal().coerceAtLeast(BigDecimal.ONE),
+            0,
+            RoundingMode.FLOOR
+        )
     }
 
     private fun observeData(context: Context) {

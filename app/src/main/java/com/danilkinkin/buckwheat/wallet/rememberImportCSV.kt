@@ -14,11 +14,12 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import kotlinx.coroutines.launch
 import org.apache.commons.csv.CSVFormat
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -68,11 +69,9 @@ fun rememberImportCSV(
                     val comment = record["comment"] ?: ""
                     val dateStr = record["commit_time"] ?: continue
 
-                    val amount = try {
-                        BigDecimal(amountStr.replace(",", "."))
-                    } catch (e: NumberFormatException) {
-                        continue
-                    }
+                    val amount = parseAmountToBigDecimal(amountStr)
+                        ?.setScale(2, RoundingMode.HALF_EVEN)
+                        ?: continue
 
                     val date = parseDate(dateStr, dateFormatters)
                     if (date == null) continue

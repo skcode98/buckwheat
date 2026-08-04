@@ -44,6 +44,7 @@ val spentStoreKey = stringPreferencesKey("spent")
 val dailyBudgetStoreKey = stringPreferencesKey("dailyBudget")
 val spentFromDailyBudgetStoreKey = stringPreferencesKey("spentFromDailyBudget")
 val lastChangeDailyBudgetDateStoreKey = longPreferencesKey("lastChangeDailyBudgetDate")
+val lastRecurringAppliedDateStoreKey = longPreferencesKey("lastRecurringAppliedDate")
 val startPeriodDateStoreKey = longPreferencesKey("startPeriodDate")
 val finishPeriodDateStoreKey = longPreferencesKey("finishPeriodDate")
 val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate")
@@ -93,19 +94,19 @@ class SpendsRepository @Inject constructor(
     }
 
     fun getBudget() = context.budgetDataStore.data.map {
-        (it[budgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2)
+        (it[budgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
     }
 
     fun getSpent() = context.budgetDataStore.data.map {
-        (it[spentStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2)
+        (it[spentStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
     }
 
     fun getDailyBudget() = context.budgetDataStore.data.map {
-        (it[dailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2)
+        (it[dailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
     }
 
     fun getSpentFromDailyBudget() = context.budgetDataStore.data.map {
-        (it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2)
+        (it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
     }
 
     fun getStartPeriodDate() = context.budgetDataStore.data.map {
@@ -122,6 +123,24 @@ class SpendsRepository @Inject constructor(
 
     fun getLastChangeDailyBudgetDate() = context.budgetDataStore.data.map {
         it[lastChangeDailyBudgetDateStoreKey]?.let { value -> Date(value) }
+    }
+
+    fun getLastRecurringAppliedDate() = context.budgetDataStore.data.map {
+        it[lastRecurringAppliedDateStoreKey]?.let { value -> Date(value) }
+    }
+
+    // Records that the daily-budget redistribution prompt was handled for today, without
+    // folding spentFromDailyBudget (used when the user dismisses the ASK sheet).
+    suspend fun markDailyBudgetDistributionHandled() {
+        context.budgetDataStore.edit {
+            it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+        }
+    }
+
+    suspend fun setLastRecurringAppliedDate(date: Date) {
+        context.budgetDataStore.edit {
+            it[lastRecurringAppliedDateStoreKey] = roundToDay(date).time
+        }
     }
 
     fun getCurrency() = context.budgetDataStore.data.map {
@@ -202,15 +221,25 @@ class SpendsRepository @Inject constructor(
 
     private suspend fun archiveCurrentPeriod() {
         val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
-        val spends = transactions.filter { it.type == TransactionType.SPENT }
+        if (transactions.isEmpty()) return
 
-        if (spends.isEmpty()) return
+        val startDate = getStartPeriodDate().firstOrNull()
+            ?: transactions.minOf { it.date }
+        val finishDate = getFinishPeriodDate().firstOrNull()
+            ?: transactions.maxOf { it.date }
+
+        // Only archive transactions that belong to this period. Out-of-period rows
+        // (e.g. CSV imports for the next period, recurring backfill before the start)
+        // must stay in the active table — they are scope-guarded and must not be
+        // archived into a past period.
+        val inPeriod = transactions.filter {
+            !it.date.before(startDate) && !it.date.after(finishDate)
+        }
+        val spends = inPeriod.filter { it.type == TransactionType.SPENT }
+
+        if (inPeriod.isEmpty()) return
 
         val oldBudget = getBudget().firstOrNull() ?: BigDecimal.ZERO
-        val startDate = getStartPeriodDate().firstOrNull()
-            ?: spends.minOf { it.date }
-        val finishDate = getFinishPeriodDate().firstOrNull()
-            ?: spends.maxOf { it.date }
         val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
         val currency = getCurrency().firstOrNull()
         val currencyCode = when (currency?.type) {
@@ -233,7 +262,7 @@ class SpendsRepository @Inject constructor(
         )
 
         budgetPeriodDao.insertArchivedTransactions(
-            transactions.map { tx ->
+            inPeriod.map { tx ->
                 ArchivedTransaction(
                     periodId = periodId.toInt(),
                     type = tx.type,
@@ -244,7 +273,11 @@ class SpendsRepository @Inject constructor(
             }
         )
 
-        Log.d("SpendsRepository", "Archived period #$periodId with ${transactions.size} transactions")
+        Log.d(
+            "SpendsRepository",
+            "Archived period #$periodId with ${inPeriod.size} transactions "
+                    + "(${transactions.size - inPeriod.size} out-of-period kept)"
+        )
     }
 
     suspend fun changeBudget(newBudget: BigDecimal, newFinishDate: Date) {
@@ -311,9 +344,9 @@ class SpendsRepository @Inject constructor(
 
     suspend fun setDailyBudget(newDailyBudget: BigDecimal) {
         context.budgetDataStore.edit {
-            val spent: BigDecimal = it[spentStoreKey]?.toBigDecimal()!!
+            val spent: BigDecimal = it[spentStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
             val spentFromDailyBudget: BigDecimal =
-                it[spentFromDailyBudgetStoreKey]?.toBigDecimal()!!
+                it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
 
             it[dailyBudgetStoreKey] = newDailyBudget.toString()
             it[spentStoreKey] = (spent + spentFromDailyBudget).toString()
@@ -570,17 +603,34 @@ class SpendsRepository @Inject constructor(
     }
 
     suspend fun importTransactions(transactions: List<Transaction>) {
+        // Idempotency: skip rows that already exist (same type, value, date, comment) and
+        // dedupe repeated rows within the file itself, so re-importing the same CSV never
+        // creates duplicate transactions.
+        val existingKeys = transactionDao.getAll().asFlow().first().map { tx ->
+            "${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}"
+        }.toHashSet()
+
+        val unique = LinkedHashMap<String, Transaction>()
+        transactions.forEach { tx ->
+            val key = "${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}"
+            if (key !in existingKeys && key !in unique) {
+                unique[key] = tx
+            }
+        }
+        val filtered = unique.values.toList()
+        if (filtered.isEmpty()) return
+
         val currentPeriodStart = context.budgetDataStore.data.first()[startPeriodDateStoreKey]
             ?.let { Date(it) }
         val currentPeriodFinish = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
             ?.let { Date(it) }
 
         if (currentPeriodStart == null || currentPeriodFinish == null) {
-            transactions.forEach { addSpent(it) }
+            filtered.forEach { addSpent(it) }
             return
         }
 
-        transactions.forEach { transaction ->
+        filtered.forEach { transaction ->
             val isInCurrentPeriod = !transaction.date.before(currentPeriodStart) && !transaction.date.after(currentPeriodFinish)
             if (isInCurrentPeriod) {
                 addSpent(transaction)
@@ -603,11 +653,25 @@ class SpendsRepository @Inject constructor(
                 return@edit
             }
 
-            if (isSameDay(transactionForRemove.date, getCurrentDateUseCase())) {
+            val lastChangeDailyBudgetDate = it[lastChangeDailyBudgetDateStoreKey]
+                ?.let { value -> Date(value) }
+
+            // The daily-budget fold (setDailyBudget) moves yesterday's spends from
+            // `spentFromDailyBudget` into `spent`. So the counter a removal must touch is
+            // decided by whether that fold has already run today — not merely by the
+            // transaction's date. Otherwise removing a previous-day spend before the fold
+            // runs would drain `spent` and leave a stale value in `spentFromDailyBudget`.
+            val foldRanToday = lastChangeDailyBudgetDate !== null
+                    && isSameDay(lastChangeDailyBudgetDate, getCurrentDateUseCase())
+            val transactionIsToday = isSameDay(transactionForRemove.date, getCurrentDateUseCase())
+
+            if (transactionIsToday || !foldRanToday) {
                 val spentFromDailyBudget = it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: return@edit
 
                 it[spentFromDailyBudgetStoreKey] =
-                    (spentFromDailyBudget - transactionForRemove.value).toString()
+                    (spentFromDailyBudget - transactionForRemove.value)
+                        .coerceAtLeast(BigDecimal.ZERO)
+                        .toString()
             } else {
                 val finishPeriodDate = it[finishPeriodDateStoreKey]
                     ?.let { value -> Date(value) } ?: return@edit
@@ -638,7 +702,9 @@ class SpendsRepository @Inject constructor(
                 )
 
                 it[dailyBudgetStoreKey] = (dailyBudget + spreadDeltaSpentPerRestDays).toString()
-                it[spentStoreKey] = (spent - transactionForRemove.value).toString()
+                it[spentStoreKey] = (spent - transactionForRemove.value)
+                    .coerceAtLeast(BigDecimal.ZERO)
+                    .toString()
             }
         }
     }

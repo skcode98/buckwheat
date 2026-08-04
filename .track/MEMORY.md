@@ -7,15 +7,30 @@
 - **Origin**: `https://github.com/skcode98/buckwheat`
 
 ## Current State
-- The upstream master is a **simpler codebase** than our-fixes:
-  - Only 2 Room tables: `transactions` and `storage`
-  - No recurring transactions, no periods, no categories, no sync, no reminder, no notifications
-  - These features were all added in our saved `our-fixes` branch
-- This is a clean slate to start fresh development from upstream
+- `master` is **our fork** (`skcode98/buckwheat`, based on upstream master @ `4b60102`) with the implemented feature set below
+- **2026-08-05 bug-fix wave (uncommitted until verified)**: 15 fixes shipped across voice AI, budget/period arithmetic, goals, tags, recurring payments, CSV import, and startup I/O — details in `CHANGELOG.md`; verified with `compileDebugKotlin` (BUILD SUCCESSFUL) + `SpendsRepositoryTest` (18/18)
+- Last pushed commit `a309c29`: budget scope guards, voice AI off-main-thread, UI freeze fix, AGP 8.7.3 downgrade (Android Studio Narwhal 2024.2.1 supports max AGP 8.7.3)
 
-## Architecture Decisions
+## 2026-08-05 Bug-Fix Wave — Decisions
 | Decision | Rationale |
 |----------|-----------|
+| Recurring backfill uses its own DataStore key `lastRecurringAppliedDate`, NOT `lastChangeDailyBudgetDate` | The ASK-branch no longer advances the budget date, so recurring needs an independent "already applied" marker |
+| Recurring first run seeds the key **without** charging retroactively | A brand-new install must not suddenly insert a year of recurring payments |
+| Backfill walks day-by-day (max 366 days guard) instead of only today's day-of-month | Payments are no longer skipped when the app is closed on the due day |
+| Day-of-month 29/30/31 templates simply don't fire in shorter months (deliberate, not fixed) | Clamping to the last day would silently move the charge; day-of-month is the declared contract |
+| ASK redistribution is a one-shot per day (`markDailyBudgetDistributionHandled()` writes `lastChangeDailyBudgetDate`) | Dismissing the sheet must not re-trigger every 5s poll and double-charge recurring |
+| `removeSpent` picks the counter by `foldRanToday` (`lastChangeDailyBudgetDate` is today), not just `isSameDay(tx.date, today)` | The value's home (`spent` vs `spentFromDailyBudget`) depends on whether the daily fold ran, not the tx date |
+| `archiveCurrentPeriod` filters to in-period rows | Out-of-period CSV imports / backfills must not be swept into the archived period |
+| CSV import is idempotent via a (type, value, date, comment) signature set | Re-importing the same file must not duplicate rows; also dedupes within the file |
+| `SavedTag.name` is now a unique index (migration 8→9 dedupes legacy rows first) | DB-level guarantee that the tag list can't have duplicates |
+| Shared `parseAmountToBigDecimal()` lives in `util/numberExtensions.kt`; it distinguishes thousands ("1,234") from decimal comma ("12,50") | One parser used by voice, AI fallback, and CSV import |
+| Voice commit in EDIT mode mirrors the Apply button (silent `removeSpent` + `addSpent`) | Voice must replace the edited transaction, not append a duplicate |
+| Time parsing in `parseVoiceInput` requires a strong signal (at-prefix, colon-minutes, or am/pm suffix) | A bare number in a comment ("2 coffees") must not be read as a time |
+| Finish-day boundary stays 23:59:59.999 (finish stored as `roundToDay(finish) + DAY - 1000`) | Deliberate: period is valid through the last millisecond of the finish day |
+| AI date fallback to `Date()` when `tryParseVoiceAiDate` fails is acceptable | Malformed AI date → "now" is the sane default; no crash path |
+| Voice results-after-dispose is safe (rememberCoroutineScope cancels the launch on dispose) | May drop one in-flight result, never crashes — left as-is |
+
+## Architecture Decisions
 | Single Activity | `MainActivity` with `setContent` |
 | Sheet Navigation | Custom stack-based (AppViewModel.sheetStates) — no Jetpack Navigation |
 | Custom Keyboard | Dedicated number pad instead of system keyboard |
@@ -60,7 +75,7 @@
 7. **Recurring Payments** — `RecurringTemplate` entity + DAO + `RecurringPaymentsSheet`/`RecurringPaymentsViewModel`:
    - Create recurring expense templates with amount, comment, day-of-month
    - Enable/disable toggle per template
-   - Auto-processed on day change in `SpendsViewModel.runChangeDayAction()`
+   - Auto-processed by `SpendsViewModel.processDueRecurringPayments()` — backfills every day since `lastRecurringAppliedDate` (so a closed app never skips a payment); first run seeds the key without retroactive charges
 8. **Period-Scoped Analytics** — Analytics, History, and Wallet now use `periodSpends`/`periodTransactions` (filtered by current budget period start/end dates in DataStore)
 
 ## Future Considerations

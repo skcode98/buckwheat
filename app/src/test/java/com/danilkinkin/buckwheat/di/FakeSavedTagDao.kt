@@ -16,6 +16,14 @@ class FakeSavedTagDao : SavedTagDao {
         return tags.firstOrNull { it.id == id }
     }
 
+    override suspend fun getByName(name: String): SavedTag? {
+        return tags.firstOrNull { it.name == name }
+    }
+
+    override suspend fun existsByName(name: String): Boolean {
+        return tags.any { it.name == name }
+    }
+
     override suspend fun insert(tag: SavedTag): Long {
         tags.add(tag)
         return tag.id.toLong()

@@ -12,6 +12,12 @@ interface SavedTagDao {
     @Query("SELECT * FROM saved_tags WHERE id = :id")
     suspend fun getById(id: Int): SavedTag?
 
+    @Query("SELECT * FROM saved_tags WHERE name = :name")
+    suspend fun getByName(name: String): SavedTag?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_tags WHERE name = :name)")
+    suspend fun existsByName(name: String): Boolean
+
     @Insert
     suspend fun insert(tag: SavedTag): Long
 

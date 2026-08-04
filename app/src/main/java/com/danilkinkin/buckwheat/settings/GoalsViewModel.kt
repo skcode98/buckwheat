@@ -10,6 +10,8 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
@@ -33,25 +35,33 @@ class GoalsViewModel @Inject constructor(
         }
     }
 
+    // Serializes allocateToGoal so a check-then-act race can't double-spend the budget:
+    // two concurrent allocations previously both read `budgetRest`, both passed the
+    // `budgetRest < amount` check, and together exceeded the rest. All checks and writes
+    // for a goal allocation now happen inside a single lock.
+    private val allocationMutex = Mutex()
+
     fun allocateToGoal(goalId: Long, amount: BigDecimal) {
         if (amount <= BigDecimal.ZERO) return
         viewModelScope.launch {
-            val goal = savingsGoalDao.getById(goalId) ?: return@launch
-            val budgetRest = spendsRepository.howMuchBudgetRest()
-            if (budgetRest < amount) return@launch
-            val newAmount = goal.currentAmount + amount
-            val completed = newAmount >= goal.targetAmount
-            savingsGoalDao.update(
-                goal.copy(currentAmount = newAmount, completed = completed)
-            )
-            spendsRepository.addSpent(
-                Transaction(
-                    type = TransactionType.SPENT,
-                    value = amount,
-                    date = Date(),
-                    comment = "\u2192 ${goal.name}",
+            allocationMutex.withLock {
+                val goal = savingsGoalDao.getById(goalId) ?: return@withLock
+                val budgetRest = spendsRepository.howMuchBudgetRest()
+                if (budgetRest < amount) return@withLock
+                val newAmount = goal.currentAmount + amount
+                val completed = newAmount >= goal.targetAmount
+                savingsGoalDao.update(
+                    goal.copy(currentAmount = newAmount, completed = completed)
                 )
-            )
+                spendsRepository.addSpent(
+                    Transaction(
+                        type = TransactionType.SPENT,
+                        value = amount,
+                        date = Date(),
+                        comment = "\u2192 ${goal.name}",
+                    )
+                )
+            }
         }
     }
 

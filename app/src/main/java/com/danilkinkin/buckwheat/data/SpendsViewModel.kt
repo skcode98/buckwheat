@@ -13,12 +13,14 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
+import com.danilkinkin.buckwheat.util.roundToDay
 import java.util.Calendar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
@@ -103,21 +105,35 @@ class SpendsViewModel @Inject constructor(
     var hideOverspendingWarn = spendsRepository.getHideOverspendingWarn().asLiveData()
 
     var restBudget: LiveData<BigDecimal> = MediatorLiveData<BigDecimal>().apply {
+        // Emit nothing until every source has produced its first value, so the widget
+        // never flashes an intermediate (wrong) "rest" while the DataStore flows stream in.
+        var budgetReady = false
+        var spentReady = false
+        var spentFromDailyBudgetReady = false
         var lastBudget: BigDecimal = BigDecimal.ZERO
         var lastSpent: BigDecimal = BigDecimal.ZERO
         var lastSpentFromDailyBudget: BigDecimal = BigDecimal.ZERO
 
+        fun update() {
+            if (budgetReady && spentReady && spentFromDailyBudgetReady) {
+                value = lastBudget - lastSpent - lastSpentFromDailyBudget
+            }
+        }
+
         addSource(budget) { b ->
             lastBudget = b
-            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+            budgetReady = true
+            update()
         }
         addSource(spent) { s ->
             lastSpent = s
-            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+            spentReady = true
+            update()
         }
         addSource(spentFromDailyBudget) { s ->
             lastSpentFromDailyBudget = s
-            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+            spentFromDailyBudgetReady = true
+            update()
         }
     }
 
@@ -127,7 +143,7 @@ class SpendsViewModel @Inject constructor(
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
 
     init {
-        runBlocking {
+        viewModelScope.launch {
             requireSetBudget.value =
                 spendsRepository.getLastChangeDailyBudgetDate().first() == null
         }
@@ -231,89 +247,132 @@ class SpendsViewModel @Inject constructor(
     fun howMuchBudgetRest(): LiveData<BigDecimal> = restBudget
 
     // Background tasks
+    private val changeDayMutex = Mutex()
+
     private fun runChangeDayAction() {
         viewModelScope.launch {
-            val lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().first()
-            val finishPeriodDate = spendsRepository.getFinishPeriodDate().first()
-            val finishPeriodActualDate = spendsRepository.getFinishPeriodActualDate().first()
-            val dailyBudget = spendsRepository.getDailyBudget().first()
-            val spentFromDailyBudget = spendsRepository.getSpentFromDailyBudget().first()
-            val restedBudgetDistributionMethod =
-                spendsRepository.getRestedBudgetDistributionMethod().first()
+            // runChangeDayAction is triggered from init AND from the 5s polling loop, and it
+            // suspends on DataStore reads — without a lock two overlapping runs could both
+            // pass the "day changed" check and redistribute the budget / charge recurring
+            // payments twice.
+            changeDayMutex.withLock {
+                val lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().first()
+                val finishPeriodDate = spendsRepository.getFinishPeriodDate().first()
+                val finishPeriodActualDate = spendsRepository.getFinishPeriodActualDate().first()
+                val dailyBudget = spendsRepository.getDailyBudget().first()
+                val spentFromDailyBudget = spendsRepository.getSpentFromDailyBudget().first()
+                val restedBudgetDistributionMethod =
+                    spendsRepository.getRestedBudgetDistributionMethod().first()
 
-            val finishDayNotReached = if (finishPeriodActualDate === null) {
-                finishPeriodDate !== null
-                        && countDaysToToday(finishPeriodDate) > 0
-            } else {
-                countDaysToToday(finishPeriodActualDate) > 0
-            }
+                val finishDayNotReached = if (finishPeriodActualDate === null) {
+                    finishPeriodDate !== null
+                            && countDaysToToday(finishPeriodDate) > 0
+                } else {
+                    countDaysToToday(finishPeriodActualDate) > 0
+                }
 
-            val finishTimeReached = if (finishPeriodActualDate === null) {
-                finishPeriodDate !== null
-                        && finishPeriodDate.time <= Date().time
-            } else {
-                finishPeriodActualDate.time <= Date().time
-            }
+                val finishTimeReached = if (finishPeriodActualDate === null) {
+                    finishPeriodDate !== null
+                            && finishPeriodDate.time <= Date().time
+                } else {
+                    finishPeriodActualDate.time <= Date().time
+                }
 
-            when {
-                lastChangeDailyBudgetDate !== null
-                        && !isToday(lastChangeDailyBudgetDate)
-                        && finishDayNotReached -> {
-                    if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
-                        when (restedBudgetDistributionMethod) {
-                            RestedBudgetDistributionMethod.ASK -> {
-                                requireDistributionRestedBudget.value = true
+                when {
+                    lastChangeDailyBudgetDate !== null
+                            && !isToday(lastChangeDailyBudgetDate)
+                            && finishDayNotReached -> {
+                        if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
+                            when (restedBudgetDistributionMethod) {
+                                RestedBudgetDistributionMethod.ASK -> {
+                                    requireDistributionRestedBudget.value = true
+                                    // One-shot per day: even if the user dismisses the sheet,
+                                    // don't re-evaluate this branch every poll (which used to
+                                    // freeze the daily budget and double-charge recurring payments).
+                                    spendsRepository.markDailyBudgetDistributionHandled()
+                                }
+
+                                RestedBudgetDistributionMethod.REST -> {
+                                    val whatBudgetForDay =
+                                        spendsRepository.whatBudgetForDay(applyTodaySpends = true)
+                                    setDailyBudget(whatBudgetForDay)
+                                }
+
+                                RestedBudgetDistributionMethod.ADD_TODAY -> {
+                                    val notSpent = spendsRepository.howMuchNotSpent(
+                                        excludeSkippedPart = true,
+                                    )
+
+                                    setDailyBudget(notSpent)
+                                }
                             }
-
-                            RestedBudgetDistributionMethod.REST -> {
-                                val whatBudgetForDay =
-                                    spendsRepository.whatBudgetForDay(applyTodaySpends = true)
-                                setDailyBudget(whatBudgetForDay)
-                            }
-
-                            RestedBudgetDistributionMethod.ADD_TODAY -> {
-                                val notSpent = spendsRepository.howMuchNotSpent(
-                                    excludeSkippedPart = true,
-                                )
-
-                                setDailyBudget(notSpent)
-                            }
+                        } else {
+                            val whatBudgetForDay =
+                                spendsRepository.whatBudgetForDay(applyTodaySpends = true)
+                            setDailyBudget(whatBudgetForDay)
                         }
-                    } else {
-                        val whatBudgetForDay =
-                            spendsRepository.whatBudgetForDay(applyTodaySpends = true)
-                        setDailyBudget(whatBudgetForDay)
                     }
 
-                    // Process due recurring payments only on day change
-                    val dayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
-                    val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
-                    dueTemplates.forEach { template ->
-                        spendsRepository.addSpent(
-                            Transaction(
-                                type = TransactionType.SPENT,
-                                value = template.amount,
-                                date = Date(),
-                                comment = template.comment,
-                            )
-                        )
+                    lastChangeDailyBudgetDate === null -> {
+                        requireSetBudget.value = true
+                    }
+
+                    finishTimeReached -> {
+                        periodFinished.value = true
                     }
                 }
 
-                lastChangeDailyBudgetDate === null -> {
-                    requireSetBudget.value = true
-                }
+                processDueRecurringPayments()
 
-                finishTimeReached -> {
-                    periodFinished.value = true
+                // Bug fix https://github.com/danilkinkin/buckwheat/issues/28
+                if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
+                    hideOverspendingWarn(false)
                 }
-            }
-
-            // Bug fix https://github.com/danilkinkin/buckwheat/issues/28
-            if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
-                hideOverspendingWarn(false)
             }
         }
+    }
+
+    // Applies recurring payments for every day since the last application, so payments
+    // are never skipped when the app is closed on the due day. Self-guarded by a dedicated
+    // DataStore key, independent of the budget-distribution date.
+    private suspend fun processDueRecurringPayments() {
+        val lastApplied = spendsRepository.getLastRecurringAppliedDate().first()
+        val today = roundToDay(Date())
+        val finishPeriodDate = spendsRepository.getFinishPeriodDate().first()
+            ?: return
+        if (finishPeriodDate.time < today.time) return
+
+        // First run: seed without charging retroactively
+        if (lastApplied == null) {
+            spendsRepository.setLastRecurringAppliedDate(today)
+            return
+        }
+
+        var cursor = roundToDay(lastApplied)
+        var guard = 0
+        val maxBackfillDays = 366
+        while (cursor.time < today.time && guard < maxBackfillDays) {
+            val calendar = Calendar.getInstance().apply { time = cursor }
+            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+            val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
+            if (dueTemplates.isNotEmpty()) {
+                dueTemplates.forEach { template ->
+                    spendsRepository.addSpent(
+                        Transaction(
+                            type = TransactionType.SPENT,
+                            value = template.amount,
+                            date = Date(cursor.time),
+                            comment = template.comment,
+                        )
+                    )
+                }
+            }
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            cursor = calendar.time
+            guard++
+        }
+
+        spendsRepository.setLastRecurringAppliedDate(today)
     }
 
     private fun filterByPeriod(

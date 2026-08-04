@@ -76,6 +76,19 @@ val AutoMigration6to7: Migration = object : Migration(6, 7) {
     }
 }
 
+// Make saved_tags.name unique (dedupe first, since legacy data may contain duplicates)
+val AutoMigration8to9: Migration = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "DELETE FROM `saved_tags` WHERE `id` NOT IN " +
+                    "(SELECT MIN(`id`) FROM `saved_tags` GROUP BY `name`)"
+        )
+        database.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_saved_tags_name` ON `saved_tags`(`name`)"
+        )
+    }
+}
+
 // Rename Spent to Transaction
 val AutoMigration4to5: Migration = object : Migration(4, 5) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -102,7 +115,7 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 
 @Database(
     entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 8,
+    version = 9,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -127,6 +140,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9)
     }
 }

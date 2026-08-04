@@ -49,6 +49,7 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
 import com.danilkinkin.buckwheat.util.join
+import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -208,35 +209,59 @@ fun Keyboard(
                 }
                 val text = matches[0]
                 coroutineScope.launch {
-                    val parsed = parseVoiceInputWithAiFallback(context, text)
-                        ?: parseVoiceInput(text)
-                    if (parsed == null || parsed.amount == "0") {
+                    try {
+                        val parsed = parseVoiceInputWithAiFallback(context, text)
+                            ?: parseVoiceInput(text)
+                        val amount = parsed?.amount?.let(::parseAmountToBigDecimal)
+                        if (parsed == null || amount == null || amount.signum() == 0) {
+                            voiceStatus = "Couldn't understand"
+                            return@launch
+                        }
+                        val amountString = amount.stripTrailingZeros().toPlainString()
+
+                        voiceStatus = null
+                        editorViewModel.rawSpentValue.value = amountString
+                        editorViewModel.currentComment.value = parsed.comment
+                        editorViewModel.currentDate = parsed.date
+
+                        if (editorViewModel.stage.value === EditStage.IDLE) {
+                            editorViewModel.startCreatingSpent()
+                        }
+                        editorViewModel.modifyEditingSpent(amount)
+
+                        if (editorViewModel.canCommitEditingSpent()) {
+                            if (mode == EditMode.EDIT) {
+                                // Voice input while editing must replace the edited
+                                // transaction (mirroring the Apply button), not append
+                                // a new spend and leave the original behind.
+                                val newVersionOfSpent =
+                                    editorViewModel.editedTransaction!!.copy(
+                                        value = amount,
+                                        date = parsed.date,
+                                        comment = parsed.comment.trim(),
+                                    )
+
+                                spendsViewModel.removeSpent(
+                                    editorViewModel.editedTransaction!!,
+                                    silent = true
+                                )
+                                spendsViewModel.addSpent(newVersionOfSpent)
+                            } else {
+                                spendsViewModel.addSpent(
+                                    Transaction(
+                                        type = TransactionType.SPENT,
+                                        value = amount,
+                                        date = parsed.date,
+                                        comment = parsed.comment,
+                                    )
+                                )
+                                appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
+                            }
+                            editorViewModel.resetEditingSpent()
+                        }
+                    } catch (e: Exception) {
+                        Log.d("VoiceAI", "Failed to commit voice input", e)
                         voiceStatus = "Couldn't understand"
-                        return@launch
-                    }
-                    voiceStatus = null
-                    editorViewModel.rawSpentValue.value = parsed.amount
-                    editorViewModel.currentComment.value = parsed.comment
-                    editorViewModel.currentDate = parsed.date
-
-                    if (editorViewModel.stage.value === EditStage.IDLE) {
-                        editorViewModel.startCreatingSpent()
-                    }
-                    editorViewModel.modifyEditingSpent(
-                        parsed.amount.toBigDecimal()
-                    )
-
-                    if (editorViewModel.canCommitEditingSpent()) {
-                        spendsViewModel.addSpent(
-                            Transaction(
-                                type = TransactionType.SPENT,
-                                value = BigDecimal(parsed.amount),
-                                date = parsed.date,
-                                comment = parsed.comment,
-                            )
-                        )
-                        appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
-                        editorViewModel.resetEditingSpent()
                     }
                 }
             }
@@ -324,6 +349,9 @@ fun Keyboard(
                     )
                     .clickable {
                         voiceStatus = null
+                        // Guard against double-starting the recognizer: a tap while already
+                        // listening would call startListening() again and crash the session.
+                        if (isListening) return@clickable
                         if (
                             ContextCompat.checkSelfPermission(
                                 context,

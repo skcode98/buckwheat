@@ -23,6 +23,7 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 const val GOALS_SHEET = "goals"
 
@@ -185,7 +186,10 @@ private fun GoalRow(
     onDelete: () -> Unit,
 ) {
     val progress = if (goal.targetAmount > BigDecimal.ZERO) {
-        (goal.currentAmount / goal.targetAmount).toFloat().coerceIn(0f, 1f)
+        goal.currentAmount
+            .divide(goal.targetAmount, 2, RoundingMode.HALF_EVEN)
+            .toFloat()
+            .coerceIn(0f, 1f)
     } else 0f
 
     Column(

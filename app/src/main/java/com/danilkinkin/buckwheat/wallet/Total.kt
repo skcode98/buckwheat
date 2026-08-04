@@ -41,7 +41,7 @@ fun Total(
                     R.string.per_day,
                     numberFormat(
                         context,
-                        (budget / days.toBigDecimal()).setScale(0, RoundingMode.FLOOR),
+                        budget.divide(days.toBigDecimal(), 0, RoundingMode.FLOOR),
                         currency,
                     ),
                 ),

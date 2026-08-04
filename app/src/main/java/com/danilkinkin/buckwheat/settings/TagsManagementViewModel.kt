@@ -39,16 +39,24 @@ class TagsManagementViewModel @Inject constructor(
     }
 
     fun addTag(name: String) {
-        if (name.isBlank()) return
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
         viewModelScope.launch {
-            savedTagDao.insert(SavedTag(name = name.trim()))
+            if (!savedTagDao.existsByName(trimmed)) {
+                savedTagDao.insert(SavedTag(name = trimmed))
+            }
         }
     }
 
     fun updateTag(id: Int, name: String) {
-        if (name.isBlank()) return
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
         viewModelScope.launch {
-            savedTagDao.update(SavedTag(name = name.trim()).also { it.id = id })
+            val other = savedTagDao.getByName(trimmed)
+            // Don't rename onto an existing tag's name
+            if (other == null || other.id == id) {
+                savedTagDao.update(SavedTag(name = trimmed).also { it.id = id })
+            }
         }
     }
 
