@@ -571,7 +571,24 @@ class SpendsRepository @Inject constructor(
     }
 
     suspend fun importTransactions(transactions: List<Transaction>) {
-        transactions.forEach { addSpent(it) }
+        val currentPeriodStart = context.budgetDataStore.data.first()[startPeriodDateStoreKey]
+            ?.let { Date(it) }
+        val currentPeriodFinish = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
+            ?.let { Date(it) }
+
+        if (currentPeriodStart == null || currentPeriodFinish == null) {
+            transactions.forEach { addSpent(it) }
+            return
+        }
+
+        transactions.forEach { transaction ->
+            val isInCurrentPeriod = !transaction.date.before(currentPeriodStart) && !transaction.date.after(currentPeriodFinish)
+            if (isInCurrentPeriod) {
+                addSpent(transaction)
+            } else {
+                transactionDao.insert(transaction)
+            }
+        }
     }
 
     suspend fun removeSpent(transactionForRemove: Transaction) {

@@ -162,6 +162,24 @@ class SpendsRepositoryTest {
         assert(spendsRepository.getDailyBudget().first() == 990.toBigDecimal().setScale(2))
     }
 
+    // Imported entries outside the active budget period should stay in history, but must not consume the current budget
+    @Test
+    fun importOlderThanCurrentPeriodSpendShouldNotAffectBudget() = runTest {
+        setBudget()
+
+        val olderSpend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value.toLocalDateTime().minusDays(1).toDate(),
+        )
+
+        spendsRepository.importTransactions(listOf(olderSpend))
+
+        assert(spendsRepository.getAllSpends().value!!.contains(olderSpend))
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
+        assert(spendsRepository.getSpent().first() == 0.toBigDecimal().setScale(2))
+    }
+
     // Check spent in same day added correctly
     @Test
     fun addSpentTest() = runTest {
