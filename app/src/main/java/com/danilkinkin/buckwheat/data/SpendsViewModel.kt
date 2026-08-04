@@ -102,6 +102,25 @@ class SpendsViewModel @Inject constructor(
         spendsRepository.getRestedBudgetDistributionMethod().asLiveData()
     var hideOverspendingWarn = spendsRepository.getHideOverspendingWarn().asLiveData()
 
+    var restBudget: LiveData<BigDecimal> = MediatorLiveData<BigDecimal>().apply {
+        var lastBudget: BigDecimal = BigDecimal.ZERO
+        var lastSpent: BigDecimal = BigDecimal.ZERO
+        var lastSpentFromDailyBudget: BigDecimal = BigDecimal.ZERO
+
+        addSource(budget) { b ->
+            lastBudget = b
+            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+        }
+        addSource(spent) { s ->
+            lastSpent = s
+            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+        }
+        addSource(spentFromDailyBudget) { s ->
+            lastSpentFromDailyBudget = s
+            value = lastBudget - lastSpent - lastSpentFromDailyBudget
+        }
+    }
+
     var requireDistributionRestedBudget = MutableLiveData(false)
     var requireSetBudget = MutableLiveData(false)
     var periodFinished = MutableLiveData(false)
@@ -209,15 +228,7 @@ class SpendsViewModel @Inject constructor(
 
     // Need to be refactored
 
-    fun howMuchBudgetRest(): LiveData<BigDecimal> {
-        val data = MutableLiveData<BigDecimal>()
-
-        viewModelScope.launch {
-            data.value = spendsRepository.howMuchBudgetRest()
-        }
-
-        return data
-    }
+    fun howMuchBudgetRest(): LiveData<BigDecimal> = restBudget
 
     // Background tasks
     private fun runChangeDayAction() {
@@ -273,6 +284,20 @@ class SpendsViewModel @Inject constructor(
                             spendsRepository.whatBudgetForDay(applyTodaySpends = true)
                         setDailyBudget(whatBudgetForDay)
                     }
+
+                    // Process due recurring payments only on day change
+                    val dayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
+                    val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
+                    dueTemplates.forEach { template ->
+                        spendsRepository.addSpent(
+                            Transaction(
+                                type = TransactionType.SPENT,
+                                value = template.amount,
+                                date = Date(),
+                                comment = template.comment,
+                            )
+                        )
+                    }
                 }
 
                 lastChangeDailyBudgetDate === null -> {
@@ -282,20 +307,6 @@ class SpendsViewModel @Inject constructor(
                 finishTimeReached -> {
                     periodFinished.value = true
                 }
-            }
-
-            // Process due recurring payments
-            val dayOfMonth = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
-            val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
-            dueTemplates.forEach { template ->
-                spendsRepository.addSpent(
-                    Transaction(
-                        type = TransactionType.SPENT,
-                        value = template.amount,
-                        date = Date(),
-                        comment = template.comment,
-                    )
-                )
             }
 
             // Bug fix https://github.com/danilkinkin/buckwheat/issues/28

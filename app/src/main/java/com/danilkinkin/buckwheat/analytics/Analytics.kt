@@ -38,8 +38,11 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import java.math.BigDecimal
+import java.util.*
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -63,7 +66,10 @@ fun Analytics(
     val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
     val transactions by spendsViewModel.periodTransactions.observeAsState(emptyList())
     val spends by spendsViewModel.periodSpends.observeAsState(emptyList())
-    val wholeBudget = spendsViewModel.budget.value!!
+    val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
+    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
+    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
     val scrollState = rememberScrollState()
 
     val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)
@@ -100,9 +106,9 @@ fun Analytics(
                     Column(Modifier.fillMaxWidth()) {
                         WholeBudgetCard(
                             budget = wholeBudget,
-                            currency = spendsViewModel.currency.value!!,
-                            startDate = spendsViewModel.startPeriodDate.value!!,
-                            finishDate = spendsViewModel.finishPeriodDate.value!!,
+                            currency = currency,
+                            startDate = startPeriodDate,
+                            finishDate = finishPeriodDate,
                             actualFinishDate = finishPeriodActualDate,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -118,8 +124,8 @@ fun Analytics(
                                     FillCircleStub()
                                 } else {
                                     DaysLeftCard(
-                                        startDate = spendsViewModel.startPeriodDate.value!!,
-                                        finishDate = spendsViewModel.finishPeriodDate.value!!,
+                                        startDate = startPeriodDate,
+                                        finishDate = finishPeriodDate,
                                     )
                                 }
                             }
@@ -135,7 +141,7 @@ fun Analytics(
                                         .fillMaxHeight(),
                                     isMin = true,
                                     spends = spends,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = currency,
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 MinMaxSpentCard(
@@ -144,7 +150,7 @@ fun Analytics(
                                         .fillMaxHeight(),
                                     isMin = false,
                                     spends = spends,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = currency,
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
@@ -158,10 +164,10 @@ fun Analytics(
                                     modifier = Modifier.zIndex(-1f),
                                     budget = wholeBudget,
                                     transactions = transactions,
-                                    startDate = spendsViewModel.startPeriodDate.value!!,
-                                    finishDate = spendsViewModel.finishPeriodDate.value!!,
+                                    startDate = startPeriodDate,
+                                    finishDate = finishPeriodDate!!,
                                     actualFinishDate = finishPeriodActualDate,
-                                    currency = spendsViewModel.currency.value!!,
+                                    currency = currency,
                                     onDayClick = { date ->
                                         editorViewModel.resetEditingSpent()
                                         editorViewModel.currentDate =
@@ -175,7 +181,7 @@ fun Analytics(
                             CategoriesChartCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 spends = spends,
-                                currency = spendsViewModel.currency.value!!,
+                                currency = currency,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }

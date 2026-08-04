@@ -22,8 +22,6 @@ import androidx.core.view.WindowCompat
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.lifecycleScope
 import com.danilkinkin.buckwheat.base.balloon.BalloonProvider
-import com.danilkinkin.buckwheat.data.dao.StorageDao
-import com.danilkinkin.buckwheat.di.migrateToDataStore
 import com.danilkinkin.buckwheat.home.MainScreen
 import dagger.hilt.android.AndroidEntryPoint
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -52,10 +50,6 @@ class MainActivity : ComponentActivity() {
     private val isDone: MutableState<Boolean> = mutableStateOf(false)
     private val isReady: MutableState<Boolean> = mutableStateOf(false)
 
-    //TODO: Remove after 01.01.2024. Need for migration to DataStore
-    @Inject
-    lateinit var storageDao: StorageDao
-
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val context = this.applicationContext
@@ -74,7 +68,6 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 syncTheme(localContext)
                 syncOverrideLocale(localContext)
-                migrateToDataStore(context, storageDao)
 
                 // App ready for work
                 isReady.value = true

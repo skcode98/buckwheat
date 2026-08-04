@@ -37,6 +37,8 @@ class GoalsViewModel @Inject constructor(
         if (amount <= BigDecimal.ZERO) return
         viewModelScope.launch {
             val goal = savingsGoalDao.getById(goalId) ?: return@launch
+            val budgetRest = spendsRepository.howMuchBudgetRest()
+            if (budgetRest < amount) return@launch
             val newAmount = goal.currentAmount + amount
             val completed = newAmount >= goal.targetAmount
             savingsGoalDao.update(

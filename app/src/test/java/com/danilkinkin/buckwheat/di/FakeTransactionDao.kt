@@ -7,7 +7,7 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 
 class FakeTransactionDao : TransactionDao {
-    private val spends = mutableListOf<Transaction>()
+    val spends = mutableListOf<Transaction>()
 
     override fun getAll(): LiveData<List<Transaction>> {
         return MutableLiveData(spends)
@@ -26,7 +26,7 @@ class FakeTransactionDao : TransactionDao {
     }
 
     override suspend fun getById(uid: Int): Transaction? {
-        return null
+        return spends.firstOrNull { it.uid == uid }
     }
 
     override suspend fun insert(vararg transaction: Transaction) {
@@ -34,6 +34,12 @@ class FakeTransactionDao : TransactionDao {
     }
 
     override suspend fun update(vararg transaction: Transaction) {
+        transaction.forEach { incoming ->
+            val index = spends.indexOfFirst { it.uid == incoming.uid }
+            if (index >= 0) {
+                spends[index] = incoming
+            }
+        }
     }
 
     override suspend fun deleteById(uid: Int) {
@@ -41,6 +47,7 @@ class FakeTransactionDao : TransactionDao {
     }
 
     override suspend fun deleteAll() {
+        spends.clear()
     }
 
     override suspend fun deleteAllAndInsert(vararg transaction: Transaction) {

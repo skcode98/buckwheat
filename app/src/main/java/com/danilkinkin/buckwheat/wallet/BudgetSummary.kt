@@ -6,10 +6,12 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.analytics.RestAndSpentBudgetCard
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.SpendsViewModel
+import java.math.BigDecimal
+import java.util.*
 
 @Composable
 fun BudgetSummary(
@@ -17,7 +19,9 @@ fun BudgetSummary(
     onEdit: () -> Unit = {},
 ) {
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val wholeBudget = spendsViewModel.budget.value!!
+    val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
+    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
 
     Column(Modifier.padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 16.dp)) {
         RestAndSpentBudgetCard(
@@ -36,12 +40,12 @@ fun BudgetSummary(
                 bigVariant = false,
                 budget = wholeBudget,
                 currency = currency,
-                startDate = spendsViewModel.startPeriodDate.value!!,
-                finishDate = spendsViewModel.finishPeriodDate.value!!,
+                startDate = startPeriodDate ?: Date(),
+                finishDate = finishPeriodDate,
             )
             DaysLeftCard(
-                startDate = spendsViewModel.startPeriodDate.value!!,
-                finishDate = spendsViewModel.finishPeriodDate.value!!,
+                startDate = startPeriodDate ?: Date(),
+                finishDate = finishPeriodDate,
             )
         }
         EditButton(onClick = { onEdit() })

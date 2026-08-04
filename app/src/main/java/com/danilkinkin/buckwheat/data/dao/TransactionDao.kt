@@ -1,7 +1,12 @@
 package com.danilkinkin.buckwheat.data.dao
 
 import androidx.lifecycle.LiveData
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction as RoomTransaction
+import androidx.room.Update
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 
@@ -33,4 +38,10 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
+
+    @RoomTransaction
+    suspend fun deleteAllAndInsert(vararg transaction: Transaction) {
+        deleteAll()
+        insert(*transaction)
+    }
 }

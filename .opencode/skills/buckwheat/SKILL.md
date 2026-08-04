@@ -60,6 +60,10 @@ metadata:
 ### Past Periods sheet is empty
 **Root cause**: Past periods (`budget_periods` table) are only populated by `archiveCurrentPeriod()`, which is called exclusively inside `setBudget()`. Importing transactions via CSV never creates a past period. The fix for data loss above ensures imports survive budget setup and get properly archived.
 
+### App freezes / crashes on wallet screen (infinite recomposition)
+**Root cause**: `SpendsViewModel.howMuchBudgetRest()` returned a **new** `MutableLiveData` (and launched a coroutine) on every call. `RestAndSpentBudgetCard` called it directly in the composable body, so every recomposition created a new LiveData → emission → recomposition → infinite loop.
+**Fix**: Make the value a stable property. `restBudget` is now a `MediatorLiveData` derived from `budget`, `spent`, and `spentFromDailyBudget` LiveDatas; `howMuchBudgetRest()` just returns it. Rule: never construct a LiveData/Flow inside a composable body — hoist it to the ViewModel and cache it.
+
 ## Key Architecture
 
 ```
@@ -71,10 +75,20 @@ EditorViewModel (state machine: ADD/EDIT, IDLE/CREATING_SPENT/EDIT_SPENT/COMMITT
 ## Build & Test
 ```powershell
 .\gradlew.bat assembleDebug  # Build
-.\gradlew.bat testDebug      # Unit tests
+.\gradlew.bat testDebugUnitTest  # Robolectric JVM tests (no emulator needed)
 .\gradlew.bat lintDebug      # Lint
 .\gradlew.bat spotlessCheck  # Format check
 ```
+
+## JVM Testing with Robolectric
+
+This laptop has **no emulator** (VT-x disabled in BIOS, no system images). Robolectric runs the app's Android code on the desktop JVM — used to verify `SpendsRepository` budget logic locally.
+
+- Deps in `app/build.gradle.kts`: `testImplementation("org.robolectric:robolectric:4.15.1")` + `androidx.test:core`, `kotlinx-coroutines-test`, `junit`.
+- `testOptions.unitTests.isIncludeAndroidResources = true` and `all { it.jvmArgs("-ea") }` (Kotlin `assert()` is a no-op without `-ea`).
+- Robolectric 4.16 needs JDK 21 for SDK 36; this machine has JDK 17 → pin `@Config(sdk = [35])` and use 4.15.1.
+- Test fakes live in `app/src/test/.../di/` (`FakeTransactionDao`, `FakeSavedTagDao`, `FakeBudgetPeriodDao`, `FakeGetCurrentDateUseCase`). The DataStore-backed `SpendsRepository` works under Robolectric because each test gets a fresh Application context → fresh DataStore instance.
+- `androidTest/` instrumented tests require an emulator/device; the `src/test` suite is the portable copy.
 
 ## Session Compaction Recovery
 
