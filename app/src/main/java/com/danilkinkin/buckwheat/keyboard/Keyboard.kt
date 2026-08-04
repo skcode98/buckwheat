@@ -38,23 +38,122 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.TUTORS
+import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
+import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
+import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
 import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
+import java.io.OutputStreamWriter
 import java.math.BigDecimal
+import java.net.HttpURLConnection
+import java.net.URL
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
 val BUTTON_GAP = 6.dp
 
 enum class KeyboardAction { PUT_NUMBER, SET_DOT, REMOVE_LAST }
+
+private fun parseVoiceInputWithAiFallback(context: android.content.Context, transcript: String): VoiceInputResult? {
+    val apiKey = runBlocking {
+        context.settingsDataStore.data.first()[voiceAiApiKeyStoreKey].orEmpty()
+    }
+    val providerUrl = runBlocking {
+        context.settingsDataStore.data.first()[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
+            "https://openrouter.ai/api/v1/chat/completions"
+        }
+    }
+    val model = runBlocking {
+        context.settingsDataStore.data.first()[voiceAiModelStoreKey].orEmpty().ifBlank {
+            "google/gemma-3n-e4b-it:free"
+        }
+    }
+    if (apiKey.isBlank()) return null
+
+    try {
+        val requestBody = """
+            {
+              "model": "$model",
+              "temperature": 0,
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You help extract a spending record from a user voice transcript. Return only JSON with fields amount, comment, date. amount must be a numeric string. comment must be a concise description. date must be ISO-8601 or null."
+                },
+                {
+                  "role": "user",
+                  "content": "Transcript: $transcript"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val url = URL(providerUrl)
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("Authorization", "Bearer $apiKey")
+        connection.doOutput = true
+
+        OutputStreamWriter(connection.outputStream).use { writer ->
+            writer.write(requestBody)
+            writer.flush()
+        }
+
+        if (connection.responseCode !in 200..299) {
+            Log.d("VoiceAI", "AI parse failed with code ${connection.responseCode}")
+            return null
+        }
+
+        val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+        val json = JSONObject(responseText)
+        val choices = json.getJSONArray("choices")
+        val message = choices.getJSONObject(0).getJSONObject("message")
+        val content = message.getString("content")
+        val jsonObject = JSONObject(content.trim().removePrefix("```json").removeSuffix("```").trim())
+
+        val amount = jsonObject.optString("amount", "").trim()
+        val comment = jsonObject.optString("comment", "").trim()
+        val date = tryParseVoiceAiDate(jsonObject.optString("date", "")) ?: Date()
+
+        if (amount.isEmpty()) return null
+        return VoiceInputResult(amount, comment, date)
+    } catch (e: Exception) {
+        Log.d("VoiceAI", "AI parse fallback failed", e)
+        return null
+    }
+}
+
+private fun tryParseVoiceAiDate(dateValue: String): Date? {
+    if (dateValue.isBlank()) return null
+    return try {
+        val formatter = DateTimeFormatter.ISO_DATE_TIME
+        val localDateTime = LocalDateTime.parse(dateValue, formatter)
+        Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant())
+    } catch (_: Exception) {
+        try {
+            val localDate = LocalDate.parse(dateValue)
+            Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant())
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
 
 @Composable
 fun Keyboard(
@@ -110,7 +209,8 @@ fun Keyboard(
                     return
                 }
                 val text = matches[0]
-                val parsed = parseVoiceInput(text)
+                val parsed = parseVoiceInputWithAiFallback(context, text)
+                    ?: parseVoiceInput(text)
                 if (parsed == null || parsed.amount == "0") {
                     voiceStatus = "Couldn't understand"
                     return

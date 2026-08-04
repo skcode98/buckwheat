@@ -12,6 +12,9 @@ import javax.inject.Inject
 
 val debugStoreKey = booleanPreferencesKey("debug")
 val showSpentCardByDefaultStoreKey = booleanPreferencesKey("showSpentCardByDefault")
+val voiceAiApiKeyStoreKey = stringPreferencesKey("voiceAiApiKey")
+val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
+val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -32,6 +35,15 @@ class SettingsRepository @Inject constructor(
     fun isShowSpentCardByDefault() = context.settingsDataStore.data.map {
         it[showSpentCardByDefaultStoreKey] ?: false
     }
+    fun getVoiceAiApiKey() = context.settingsDataStore.data.map {
+        it[voiceAiApiKeyStoreKey] ?: ""
+    }
+    fun getVoiceAiProviderUrl() = context.settingsDataStore.data.map {
+        it[voiceAiProviderUrlStoreKey] ?: "https://openrouter.ai/api/v1/chat/completions"
+    }
+    fun getVoiceAiModel() = context.settingsDataStore.data.map {
+        it[voiceAiModelStoreKey] ?: "google/gemma-3n-e4b-it:free"
+    }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->
             TUTORIAL_STAGE.valueOf(value)
@@ -47,6 +59,31 @@ class SettingsRepository @Inject constructor(
     suspend fun switchShowSpentCardByDefault(isShow: Boolean) {
         context.settingsDataStore.edit {
             it[showSpentCardByDefaultStoreKey] = isShow
+        }
+    }
+
+    suspend fun setVoiceAiApiKey(apiKey: String) {
+        context.settingsDataStore.edit {
+            if (apiKey.isBlank()) {
+                it.remove(voiceAiApiKeyStoreKey)
+            } else {
+                it[voiceAiApiKeyStoreKey] = apiKey.trim()
+            }
+        }
+    }
+
+    suspend fun setVoiceAiProvider(url: String, model: String) {
+        context.settingsDataStore.edit {
+            if (url.isBlank()) {
+                it.remove(voiceAiProviderUrlStoreKey)
+            } else {
+                it[voiceAiProviderUrlStoreKey] = url.trim()
+            }
+            if (model.isBlank()) {
+                it.remove(voiceAiModelStoreKey)
+            } else {
+                it[voiceAiModelStoreKey] = model.trim()
+            }
         }
     }
 
