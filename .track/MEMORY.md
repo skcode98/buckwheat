@@ -9,6 +9,7 @@
 ## Current State
 - `master` is **our fork** (`skcode98/buckwheat`, based on upstream master @ `4b60102`) with the implemented feature set below
 - **2026-08-05 bug-fix wave (uncommitted until verified)**: 15 fixes shipped across voice AI, budget/period arithmetic, goals, tags, recurring payments, CSV import, and startup I/O — details in `CHANGELOG.md`; verified with `compileDebugKotlin` (BUILD SUCCESSFUL) + `SpendsRepositoryTest` (18/18)
+- **Voice input hardening wave (uncommitted)**: AI call moved to `keyboard/VoiceAi.kt` (timeouts, JSON-safe body, markdown extraction, date fallback), `SpeechRecognizer` lifecycle hardened (`isRecognitionAvailable` + null-safe create/destroy), `voiceSession` stale-result guard in `Keyboard.kt`, voice messages i18n'd to `strings.xml` with permission/unavailable feedback, `VoiceInputParser` amount heuristic rewritten (currency-anchored, else last number; time stripped before amount), and 17 new `VoiceInputParserTest` cases — `testDebugUnitTest` fully green
 - Last pushed commit `a309c29`: budget scope guards, voice AI off-main-thread, UI freeze fix, AGP 8.7.3 downgrade (Android Studio Narwhal 2024.2.1 supports max AGP 8.7.3)
 
 ## 2026-08-05 Bug-Fix Wave — Decisions
@@ -29,6 +30,15 @@
 | Finish-day boundary stays 23:59:59.999 (finish stored as `roundToDay(finish) + DAY - 1000`) | Deliberate: period is valid through the last millisecond of the finish day |
 | AI date fallback to `Date()` when `tryParseVoiceAiDate` fails is acceptable | Malformed AI date → "now" is the sane default; no crash path |
 | Voice results-after-dispose is safe (rememberCoroutineScope cancels the launch on dispose) | May drop one in-flight result, never crashes — left as-is |
+| AI parse lives in `keyboard/VoiceAi.kt` as `parseVoiceInputWithAiFallback` | One place owns timeouts (10s connect / 20s read), JSON-safe request building, markdown-fence extraction, and date fallback; every failure → `null` so the offline parser is the safety net |
+| `Keyboard.kt` uses a monotonic `voiceSession` id + `isProcessing` flag to drop stale results | An AI reply arriving after a re-tap must not commit a second transaction or apply to the wrong session |
+| `SpeechRecognizer` is created null-safely after `isRecognitionAvailable()` | `createSpeechRecognizer` can return null / throw on devices without a recognition service; UI shows "not available" instead of crashing |
+| `parseVoiceInput` strips the time expression BEFORE picking the amount, and picks the currency-anchored number, else the LAST number | Fixes "2 coffees 150" → 150, and prevents "5pm"/"at 2pm" from being read as the amount |
+| Time detection scans all candidates (`findAll` + strong-signal filter) instead of `find()` + `takeIf` | `find()` returns the first regex hit, which may be a weak quantity ("2 ") that wrongly suppresses a real time later in the string |
+| Amount removal uses the digit group's range, not the full regex match | The regex's `\s*` between groups would swallow surrounding spaces ("tea 20 now" → "teanow") |
+| `parseVoiceAiDate` must also accept no-offset `ISO_LOCAL_DATE_TIME` and `yyyy-MM-dd HH:mm:ss` | Models commonly return `2026-08-05T10:30:00` (no `Z`); before the fix those silently fell back to "now" |
+| AI call shows "Understanding…" during the (up to 20s) request | The mic tap is blocked while processing, so without feedback the UI looks dead |
+| Settings defaults for provider URL/model live in `SettingsRepository.kt:42,45` AND `VoiceAi.kt:38,41` | Two sources of truth — known duplication, low priority to centralize |
 
 ## Architecture Decisions
 | Single Activity | `MainActivity` with `setContent` |

@@ -36,6 +36,8 @@
 | Storage DAO | `app/.../data/dao/StorageDao.kt` |
 | Keyboard | `app/.../keyboard/Keyboard.kt` |
 | Voice Input Parser | `app/.../keyboard/VoiceInputParser.kt` |
+| Voice AI Parser | `app/.../keyboard/VoiceAi.kt` |
+| Voice Parser Tests | `app/src/test/java/.../keyboard/VoiceInputParserTest.kt` |
 | Budget Constructor | `app/.../wallet/BudgetConstructor.kt` |
 | Wallet | `app/.../wallet/Wallet.kt` |
 | Bottom Sheets | `app/.../home/BottomSheets.kt` |

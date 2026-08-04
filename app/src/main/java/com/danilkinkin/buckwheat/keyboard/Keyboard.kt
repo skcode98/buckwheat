@@ -28,6 +28,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -38,121 +39,23 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.TUTORS
-import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
-import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
 import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.math.BigDecimal
-import java.net.HttpURLConnection
-import java.net.URL
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Date
 import java.util.Locale
 
 val BUTTON_GAP = 6.dp
 
 enum class KeyboardAction { PUT_NUMBER, SET_DOT, REMOVE_LAST }
-
-private suspend fun parseVoiceInputWithAiFallback(context: android.content.Context, transcript: String): VoiceInputResult? =
-    withContext(Dispatchers.IO) {
-        val prefs = context.settingsDataStore.data.first()
-        val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
-            "https://openrouter.ai/api/v1/chat/completions"
-        }
-        val model = prefs[voiceAiModelStoreKey].orEmpty().ifBlank {
-            "google/gemma-3n-e4b-it:free"
-        }
-        if (apiKey.isBlank()) return@withContext null
-
-        try {
-            val requestBody = """
-                {
-                  "model": "$model",
-                  "temperature": 0,
-                  "messages": [
-                    {
-                      "role": "system",
-                      "content": "You help extract a spending record from a user voice transcript. Return only JSON with fields amount, comment, date. amount must be a numeric string. comment must be a concise description. date must be ISO-8601 or null."
-                    },
-                    {
-                      "role": "user",
-                      "content": "Transcript: $transcript"
-                    }
-                  ]
-                }
-            """.trimIndent()
-
-        val url = URL(providerUrl)
-        val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("Authorization", "Bearer $apiKey")
-        connection.doOutput = true
-
-        OutputStreamWriter(connection.outputStream).use { writer ->
-            writer.write(requestBody)
-            writer.flush()
-        }
-
-        if (connection.responseCode !in 200..299) {
-            Log.d("VoiceAI", "AI parse failed with code ${connection.responseCode}")
-            return@withContext null
-        }
-
-        val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-        val json = JSONObject(responseText)
-        val choices = json.getJSONArray("choices")
-        val message = choices.getJSONObject(0).getJSONObject("message")
-        val content = message.getString("content")
-        val jsonObject = JSONObject(content.trim().removePrefix("```json").removeSuffix("```").trim())
-
-        val amount = jsonObject.optString("amount", "").trim()
-        val comment = jsonObject.optString("comment", "").trim()
-        val date = tryParseVoiceAiDate(jsonObject.optString("date", "")) ?: Date()
-
-        if (amount.isEmpty()) return@withContext null
-        return@withContext VoiceInputResult(amount, comment, date)
-    } catch (e: Exception) {
-        Log.d("VoiceAI", "AI parse fallback failed", e)
-        null
-    }
-}
-
-private fun tryParseVoiceAiDate(dateValue: String): Date? {
-    if (dateValue.isBlank()) return null
-    return try {
-        val formatter = DateTimeFormatter.ISO_DATE_TIME
-        val localDateTime = LocalDateTime.parse(dateValue, formatter)
-        Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant())
-    } catch (_: Exception) {
-        try {
-            val localDate = LocalDate.parse(dateValue)
-            Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant())
-        } catch (_: Exception) {
-            null
-        }
-    }
-}
 
 @Composable
 fun Keyboard(
@@ -169,11 +72,27 @@ fun Keyboard(
     var debugProgress by remember { mutableStateOf(0) }
 
     var isListening by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf<String?>(null) }
+    // Monotonic session id: each time a recognition session starts it is bumped, so a
+    // result (or AI response) that arrives after the user started a newer session can be
+    // detected as stale and discarded instead of committing a second transaction.
+    var voiceSession by remember { mutableStateOf(0L) }
 
-    val speechRecognizer = remember {
-        SpeechRecognizer.createSpeechRecognizer(context)
+    val recognitionAvailable = remember {
+        SpeechRecognizer.isRecognitionAvailable(context)
     }
+    val speechRecognizer = remember {
+        if (recognitionAvailable) {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        } else {
+            null
+        }
+    }
+
+    val strVoiceInput = stringResource(R.string.voice_input)
+    val strVoiceListening = stringResource(R.string.voice_listening)
+    val strVoiceProcessing = stringResource(R.string.voice_processing)
 
     val speechIntent = remember {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -192,29 +111,40 @@ fun Keyboard(
         if (granted) {
             voiceStatus = null
             isListening = true
-            speechRecognizer.startListening(speechIntent)
+            voiceSession += 1
+            speechRecognizer?.startListening(speechIntent)
+        } else {
+            voiceStatus = context.getString(R.string.voice_permission_denied)
         }
     }
 
     DisposableEffect(speechRecognizer) {
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+        val recognizer = speechRecognizer
+        recognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
                 isListening = false
+                if (isProcessing) return
                 val matches = results?.getStringArrayList(
                     SpeechRecognizer.RESULTS_RECOGNITION
                 )
                 if (matches.isNullOrEmpty()) {
-                    voiceStatus = "No speech heard"
+                    voiceStatus = context.getString(R.string.voice_no_speech)
                     return
                 }
                 val text = matches[0]
+                val session = voiceSession
+                isProcessing = true
+                voiceStatus = context.getString(R.string.voice_processing)
                 coroutineScope.launch {
                     try {
                         val parsed = parseVoiceInputWithAiFallback(context, text)
                             ?: parseVoiceInput(text)
+                        // Discard the result if the user started a newer recognition session
+                        // while the AI call was still in flight.
+                        if (session != voiceSession) return@launch
                         val amount = parsed?.amount?.let(::parseAmountToBigDecimal)
                         if (parsed == null || amount == null || amount.signum() == 0) {
-                            voiceStatus = "Couldn't understand"
+                            voiceStatus = context.getString(R.string.voice_couldnt_understand)
                             return@launch
                         }
                         val amountString = amount.stripTrailingZeros().toPlainString()
@@ -234,18 +164,17 @@ fun Keyboard(
                                 // Voice input while editing must replace the edited
                                 // transaction (mirroring the Apply button), not append
                                 // a new spend and leave the original behind.
-                                val newVersionOfSpent =
-                                    editorViewModel.editedTransaction!!.copy(
-                                        value = amount,
-                                        date = parsed.date,
-                                        comment = parsed.comment.trim(),
+                                val edited = editorViewModel.editedTransaction
+                                if (edited != null) {
+                                    spendsViewModel.removeSpent(edited, silent = true)
+                                    spendsViewModel.addSpent(
+                                        edited.copy(
+                                            value = amount,
+                                            date = parsed.date,
+                                            comment = parsed.comment.trim(),
+                                        )
                                     )
-
-                                spendsViewModel.removeSpent(
-                                    editorViewModel.editedTransaction!!,
-                                    silent = true
-                                )
-                                spendsViewModel.addSpent(newVersionOfSpent)
+                                }
                             } else {
                                 spendsViewModel.addSpent(
                                     Transaction(
@@ -261,7 +190,13 @@ fun Keyboard(
                         }
                     } catch (e: Exception) {
                         Log.d("VoiceAI", "Failed to commit voice input", e)
-                        voiceStatus = "Couldn't understand"
+                        if (session == voiceSession) {
+                            voiceStatus = context.getString(R.string.voice_couldnt_understand)
+                        }
+                    } finally {
+                        if (session == voiceSession) {
+                            isProcessing = false
+                        }
                     }
                 }
             }
@@ -270,8 +205,13 @@ fun Keyboard(
                 isListening = false
                 voiceStatus = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech heard"
-                    else -> "Recognition failed"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                        context.getString(R.string.voice_no_speech)
+
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                        context.getString(R.string.voice_permission_denied)
+
+                    else -> context.getString(R.string.voice_recognition_failed)
                 }
             }
 
@@ -285,7 +225,7 @@ fun Keyboard(
         })
 
         onDispose {
-            speechRecognizer.destroy()
+            recognizer?.destroy()
         }
     }
 
@@ -350,8 +290,13 @@ fun Keyboard(
                     .clickable {
                         voiceStatus = null
                         // Guard against double-starting the recognizer: a tap while already
-                        // listening would call startListening() again and crash the session.
-                        if (isListening) return@clickable
+                        // listening (or while a result is still being committed) would call
+                        // startListening() again and crash the recognition session.
+                        if (isListening || isProcessing) return@clickable
+                        if (!recognitionAvailable || speechRecognizer == null) {
+                            voiceStatus = context.getString(R.string.voice_unavailable)
+                            return@clickable
+                        }
                         if (
                             ContextCompat.checkSelfPermission(
                                 context,
@@ -359,6 +304,7 @@ fun Keyboard(
                             ) == PackageManager.PERMISSION_GRANTED
                         ) {
                             isListening = true
+                            voiceSession += 1
                             speechRecognizer.startListening(speechIntent)
                         } else {
                             permissionLauncher.launch(
@@ -370,7 +316,7 @@ fun Keyboard(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_mic),
-                    contentDescription = "Voice input",
+                    contentDescription = strVoiceInput,
                     tint = if (isListening) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp),
@@ -378,7 +324,7 @@ fun Keyboard(
             }
             if (isListening) {
                 Text(
-                    text = "Listening...",
+                    text = strVoiceListening,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.padding(start = 8.dp),
@@ -388,7 +334,11 @@ fun Keyboard(
                 Text(
                     text = status,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (status == strVoiceProcessing) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }

@@ -57,6 +57,14 @@
   <string name="voice_ai_model">Model</string>
   <string name="save_api_key">Save API key</string>
   <string name="voice_ai_fallback_hint">If no key is saved, the current offline speech parser stays active.</string>
+  <string name="voice_input">Voice input</string>
+  <string name="voice_listening">Listening…</string>
+  <string name="voice_processing">Understanding…</string>
+  <string name="voice_no_speech">No speech heard</string>
+  <string name="voice_couldnt_understand">Couldn\'t understand</string>
+  <string name="voice_recognition_failed">Recognition failed</string>
+  <string name="voice_permission_denied">Microphone permission denied</string>
+  <string name="voice_unavailable">Speech recognition is not available on this device</string>
   <string name="theme_label">Theme</string>
   <string name="theme_light">Light</string>
   <string name="theme_dark">Dark</string>
