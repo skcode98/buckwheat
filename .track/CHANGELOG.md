@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Crash-log capture** — new `CrashLogger.kt`: an `UncaughtExceptionHandler` installed in `Application.onCreate` writes any uncaught crash stack trace to `Downloads/buckwheat-crash-*.txt` (via MediaStore, no permissions needed) and persists it, so the built-in crash-report snackbar can show a "send crash report" prompt on the next successful launch. Used to diagnose a launch crash on Android 17 / Pixel 7a without USB access
 - **Out-of-period CSV imports are archived into month buckets** (user request: old records grouped by month, listed under Past Periods, searchable, never counted in the budget):
   - `BudgetPeriod.isImported` column (DB version 10, manual migration `ALTER TABLE budget_periods ADD COLUMN is_imported INTEGER NOT NULL DEFAULT 0`; Room 2.7.2 has no `@AddedColumn`)
   - `SpendsRepository.importTransactions` routes in-period rows to `addSpent`, out-of-period rows to new `archiveImported()` — grouped by calendar month into `BudgetPeriod(budget = 0, isImported = true)` buckets or merged into a covering archived period; `totalSpent` stores SPENT sum at scale 2
@@ -56,6 +57,7 @@
 - Added `filterByPeriod()` helper in `SpendsViewModel`
 
 ### Fixed
+- **Launch crash on Android 17 (open-then-close)** — `SpendsViewModel.changeDayMutex` was declared *after* the `init` block that calls `runChangeDayAction()`. The init-launched coroutine (on `Dispatchers.Main.immediate`) could start synchronously and call `changeDayMutex.withLock { ... }` before the field was initialized → `NullPointerException` in `runChangeDayAction` (`SpendsViewModel.kt:409`) during the ViewModel constructor, killing the app at startup before any UI rendered. `changeDayMutex` is now initialized above `init`
 - **Month-bucket `totalSpent` scale mismatch** — `archiveImported` stored scale-0 sums (10) while the app/tests expect 2dp (10.00); now stores `(currentTotal + spentDelta).setScale(2)`
 - **`FakeBudgetPeriodDao.updateTotalSpent` dropped the period id** — `BudgetPeriod.id` is a class-body `var` (not a constructor property), so `copy(totalSpent = ...)` resets it to 0, orphaning the archived rows; the fake now re-applies the id after copy
 - **Main-thread blocking on startup reads** — `syncTheme` (`Theme.kt`) and `syncOverrideLocale` (`Locale.kt`) called `runBlocking { dataStore.data.first() }` on the main thread from `LaunchedEffect`; both are now `suspend` and read directly. `SpendsViewModel.init` also replaced its `runBlocking` pre-read with a `viewModelScope.launch`
