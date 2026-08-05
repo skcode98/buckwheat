@@ -23,6 +23,7 @@ class SpendsRepositoryTest {
     lateinit var spendsRepository: SpendsRepository
 
     val currentDateUseCase: FakeGetCurrentDateUseCase = FakeGetCurrentDateUseCase()
+    val budgetPeriodDao: FakeBudgetPeriodDao = FakeBudgetPeriodDao()
 
     @Before
     fun init() {
@@ -31,7 +32,7 @@ class SpendsRepositoryTest {
             context = context,
             FakeTransactionDao(),
             FakeSavedTagDao(),
-            FakeBudgetPeriodDao(),
+            budgetPeriodDao,
             currentDateUseCase,
         )
     }
@@ -158,7 +159,7 @@ class SpendsRepositoryTest {
         assert(spendsRepository.getDailyBudget().first() == 990.toBigDecimal().setScale(2))
     }
 
-    // Imported entries outside the active budget period should stay in history, but must not consume the current budget
+    // Imported entries outside the active budget period are archived into a month bucket and must not consume the current budget
     @Test
     fun importOlderThanCurrentPeriodSpendShouldNotAffectBudget() = runTest {
         setBudget()
@@ -171,12 +172,19 @@ class SpendsRepositoryTest {
 
         spendsRepository.importTransactions(listOf(olderSpend))
 
-        assert(spendsRepository.getAllSpends().value!!.contains(olderSpend))
+        assert(!spendsRepository.getAllSpends().value!!.contains(olderSpend))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpent().first() == 0.toBigDecimal().setScale(2))
+
+        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        assert(buckets.size == 1)
+        val bucket = buckets.single()
+        assert(bucket.isImported)
+        assert(bucket.totalSpent == 10.toBigDecimal().setScale(2))
+        assert(!olderSpend.date.before(bucket.startDate) && !olderSpend.date.after(bucket.finishDate))
     }
 
-    // Removing an imported spend outside the current period must only delete it, not touch the budget
+    // Removing an imported spend outside the current period must not touch the budget
     @Test
     fun removeOlderThanCurrentPeriodSpendShouldNotAffectBudget() = runTest {
         setBudget()
@@ -193,6 +201,60 @@ class SpendsRepositoryTest {
         assert(!spendsRepository.getAllSpends().value!!.contains(olderSpend))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpent().first() == 0.toBigDecimal().setScale(2))
+    }
+
+    // Out-of-period imports are grouped by calendar month and never count toward the current budget
+    @Test
+    fun importOutOfPeriodSpendsAreGroupedByMonthAndDoNotAffectBudget() = runTest {
+        setBudget()
+
+        val lastMonth = currentDateUseCase.value.toLocalDate().minusMonths(1)
+        val inPeriodSpend = Transaction(TransactionType.SPENT, 5.toBigDecimal(), currentDateUseCase.value)
+        val oldSpendA = Transaction(TransactionType.SPENT, 10.toBigDecimal(), lastMonth.withDayOfMonth(5).toDate())
+        val oldSpendB = Transaction(TransactionType.SPENT, 20.toBigDecimal(), lastMonth.withDayOfMonth(20).toDate())
+
+        spendsRepository.importTransactions(listOf(inPeriodSpend, oldSpendA, oldSpendB))
+
+        assert(spendsRepository.getAllSpends().value!!.contains(inPeriodSpend))
+        assert(!spendsRepository.getAllSpends().value!!.contains(oldSpendA))
+        assert(!spendsRepository.getAllSpends().value!!.contains(oldSpendB))
+
+        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        assert(buckets.size == 1)
+        val bucket = buckets.single()
+        assert(bucket.startDate.toLocalDate() == lastMonth.withDayOfMonth(1))
+        assert(bucket.finishDate.toLocalDate() == lastMonth.withDayOfMonth(lastMonth.lengthOfMonth()))
+        assert(bucket.totalSpent == 30.toBigDecimal().setScale(2))
+
+        val archived = budgetPeriodDao.getTransactionsForPeriod(bucket.id).value.orEmpty()
+        assert(archived.size == 2)
+        assert(archived.all { it.periodId == bucket.id })
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 5.toBigDecimal().setScale(2))
+    }
+
+    // Re-importing a file whose rows were already archived must not duplicate them
+    @Test
+    fun reimportArchivedRowsDoesNotDuplicate() = runTest {
+        setBudget()
+
+        val olderSpend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value.toLocalDateTime().minusDays(1).toDate(),
+        )
+
+        spendsRepository.importTransactions(listOf(olderSpend))
+        spendsRepository.importTransactions(listOf(olderSpend))
+
+        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        val archived = buckets.flatMap {
+            budgetPeriodDao.getTransactionsForPeriod(it.id).value.orEmpty()
+        }
+        assert(archived.size == 1)
+        assert(
+            spendsRepository.getAllSpends().value.orEmpty()
+                .none { it.type == TransactionType.SPENT }
+        )
     }
 
     // Check spent in same day added correctly

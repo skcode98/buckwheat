@@ -8,6 +8,7 @@
 
 ## Current State
 - `master` is **our fork** (`skcode98/buckwheat`, based on upstream master @ `4b60102`) with the implemented feature set below
+- **2026-08-05 out-of-period import month buckets (uncommitted)**: CSV rows outside the active budget period are archived into month buckets (`BudgetPeriod.isImported = true`, `budget = 0`) instead of the active table — grouped by calendar month, merged into covering archived periods, listed under Past Periods with an "Imported" label, searchable in spend search (non-blank query), and never counted against the current budget. DB version 10 (manual `ALTER TABLE` migration, Room 2.7.2 has no `@AddedColumn`). Verified: `testDebugUnitTest` 43/43 (20 SpendsRepositoryTest + 23 VoiceInputParserTest) + `assembleDebug` BUILD SUCCESSFUL
 - **2026-08-05 bug-fix wave (uncommitted until verified)**: 15 fixes shipped across voice AI, budget/period arithmetic, goals, tags, recurring payments, CSV import, and startup I/O — details in `CHANGELOG.md`; verified with `compileDebugKotlin` (BUILD SUCCESSFUL) + `SpendsRepositoryTest` (18/18)
 - **Voice input hardening wave (uncommitted)**: AI call moved to `keyboard/VoiceAi.kt` (timeouts, JSON-safe body, markdown extraction, date fallback), `SpeechRecognizer` lifecycle hardened (`isRecognitionAvailable` + null-safe create/destroy), `voiceSession` stale-result guard in `Keyboard.kt`, voice messages i18n'd to `strings.xml` with permission/unavailable feedback, `VoiceInputParser` amount heuristic rewritten (currency-anchored, else last number; time stripped before amount), and 17 new `VoiceInputParserTest` cases — `testDebugUnitTest` fully green
 - Last pushed commit `a309c29`: budget scope guards, voice AI off-main-thread, UI freeze fix, AGP 8.7.3 downgrade (Android Studio Narwhal 2024.2.1 supports max AGP 8.7.3)
@@ -39,6 +40,12 @@
 | `parseVoiceAiDate` must also accept no-offset `ISO_LOCAL_DATE_TIME` and `yyyy-MM-dd HH:mm:ss` | Models commonly return `2026-08-05T10:30:00` (no `Z`); before the fix those silently fell back to "now" |
 | AI call shows "Understanding…" during the (up to 20s) request | The mic tap is blocked while processing, so without feedback the UI looks dead |
 | Settings defaults for provider URL/model live in `SettingsRepository.kt:42,45` AND `VoiceAi.kt:38,41` | Two sources of truth — known duplication, low priority to centralize |
+| Out-of-period CSV rows are archived into month buckets, never inserted into the active table | User requirement: old-month records grouped & listed under Past Periods, searchable in spend search, and excluded from the current budget |
+| Month buckets use `budget = 0` + `isImported = true`; `totalSpent` stored at scale 2 | They represent archived history, not a live budget; 2dp matches the app-wide money convention |
+| Archived rows appear in History/search only when the search query is non-blank (`composeHistoryRows`) | Keeps the default History view current-period-only while still making old records findable |
+| Import idempotency signature (type, value, date, comment) covers both active and archived rows | Re-importing a file must not duplicate either the active table or the month buckets |
+| DB v10 migration is manual `ALTER TABLE`, not `@AddedColumn` | Room 2.7.2 does not ship `@AddedColumn`; manual `Migration(9, 10)` in `MANUAL_MIGRATIONS` is required |
+| `BudgetPeriod.id` is a class-body `var` (excluded from `copy()`) — never persist an object produced by `copy()` | The fake DAO's `updateTotalSpent` must re-apply the id after `copy(totalSpent = ...)` or the row orphans |
 
 ## Architecture Decisions
 | Single Activity | `MainActivity` with `setContent` |

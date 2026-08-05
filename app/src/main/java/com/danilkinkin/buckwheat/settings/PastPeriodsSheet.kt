@@ -138,11 +138,19 @@ private fun PastPeriodRow(
                     overflow = TextOverflow.Ellipsis,
                     softWrap = false,
                 )
-                Text(
-                    text = numberFormat(context, period.budget, currency = currency),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                )
+                if (period.isImported) {
+                    Text(
+                        text = stringResource(R.string.past_periods_imported),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    Text(
+                        text = numberFormat(context, period.budget, currency = currency),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
             }
         }
     }

@@ -14,6 +14,8 @@ data class BudgetPeriod(
     @ColumnInfo(name = "actual_finish_date") val actualFinishDate: Date?,
     @ColumnInfo(name = "currency_code") val currencyCode: String,
     @ColumnInfo(name = "total_spent") val totalSpent: BigDecimal,
+    // True for month buckets created from out-of-period CSV imports (no budget involved).
+    @ColumnInfo(name = "is_imported", defaultValue = "0") val isImported: Boolean = false,
 ) {
     @PrimaryKey(autoGenerate = true) var id: Int = 0
 }

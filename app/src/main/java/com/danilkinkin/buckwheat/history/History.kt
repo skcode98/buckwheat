@@ -26,6 +26,9 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
+import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.toTransaction
 import com.danilkinkin.buckwheat.di.TUTORIAL_STAGE
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditorViewModel
@@ -34,7 +37,6 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.isSameDay
-import com.danilkinkin.buckwheat.util.observeLiveData
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.launch
@@ -67,82 +69,11 @@ fun History(
     val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).observeAsState(TUTORIAL_STAGE.NONE)
     var isUserTrySwipe by remember { mutableStateOf(false) }
 
-    observeLiveData(spendsViewModel.periodSpends) { transactions ->
-        val composedList = emptyList<RowEntity>().toMutableList()
-        var lastSpentDate: LocalDate? = null
-        var lastDayTotal: BigDecimal = BigDecimal.ZERO
+    val periodSpends by spendsViewModel.periodSpends.observeAsState(emptyList())
+    val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
 
-        val filtered = if (searchQuery.isNotBlank()) {
-            transactions.filter { t ->
-                t.comment.contains(searchQuery, ignoreCase = true)
-            }
-        } else {
-            transactions
-        }
-
-        filtered
-            .forEach { spent ->
-                if (lastSpentDate === null || !isSameDay(
-                        spent.date.time,
-                        lastSpentDate!!.toDate().time
-                    )
-                ) {
-                    if (lastSpentDate !== null) {
-                        composedList.add(
-                            RowEntity(
-                                type = RowEntityType.DayTotal,
-                                key = "total-${lastSpentDate}",
-                                contentHash = "total-${lastSpentDate}",
-                                transaction = null,
-                                day = lastSpentDate!!,
-                                dayTotal = lastDayTotal,
-                            )
-                        )
-                    }
-
-                    lastSpentDate = spent.date.toLocalDate()
-                    lastDayTotal = BigDecimal.ZERO
-
-                    composedList.add(
-                        RowEntity(
-                            type = RowEntityType.DayDivider,
-                            key = "header-${lastSpentDate}",
-                            contentHash = "header-${lastSpentDate}",
-                            transaction = null,
-                            day = lastSpentDate!!,
-                            dayTotal = null,
-                        )
-                    )
-                }
-
-                lastDayTotal += spent.value
-
-                composedList.add(
-                    RowEntity(
-                        type = RowEntityType.Spent,
-                        key = "spent-${spent.uid}",
-                        contentHash = "spent-${spent.uid}",
-                        transaction = spent,
-                        day = lastSpentDate!!,
-                        dayTotal = null,
-                    )
-                )
-            }
-
-        if (transactions.isNotEmpty() && lastSpentDate !== null) {
-            composedList.add(
-                RowEntity(
-                    type = RowEntityType.DayTotal,
-                    key = "total-${lastSpentDate!!}",
-                    contentHash = "total-${lastSpentDate}",
-                    transaction = null,
-                    day = lastSpentDate!!,
-                    dayTotal = lastDayTotal,
-                )
-            )
-        }
-
-        historyList = composedList.toList().reversed().map { it }
+    LaunchedEffect(searchQuery, periodSpends, archivedTransactions) {
+        historyList = composeHistoryRows(periodSpends, archivedTransactions, searchQuery)
     }
 
     DisposableEffect(Unit) {
@@ -364,3 +295,105 @@ private fun PreviewDefault() {
         History()
     }
 }
+
+private fun composeHistoryRows(
+    periodSpends: List<Transaction>,
+    archivedTransactions: List<ArchivedTransaction>,
+    searchQuery: String,
+): List<RowEntity> {
+    val searching = searchQuery.isNotBlank()
+
+    val entries = buildList {
+        periodSpends.forEach { tx ->
+            add(HistoryEntry("spent-${tx.uid}", "spent-${tx.uid}", tx.date, tx.value, tx.comment, tx))
+        }
+        if (searching) {
+            archivedTransactions.forEach { tx ->
+                add(
+                    HistoryEntry(
+                        "spent-archived-${tx.uid}",
+                        "spent-archived-${tx.uid}",
+                        tx.date,
+                        tx.value,
+                        tx.comment,
+                        tx.toTransaction(),
+                    )
+                )
+            }
+        }
+    }.filter { entry ->
+        !searching || entry.comment.contains(searchQuery, ignoreCase = true)
+    }.sortedBy { it.date }
+
+    val composedList = emptyList<RowEntity>().toMutableList()
+    var lastSpentDate: LocalDate? = null
+    var lastDayTotal: BigDecimal = BigDecimal.ZERO
+
+    entries.forEach { spent ->
+        if (lastSpentDate === null || !isSameDay(spent.date.time, lastSpentDate!!.toDate().time)) {
+            if (lastSpentDate !== null) {
+                composedList.add(
+                    RowEntity(
+                        type = RowEntityType.DayTotal,
+                        key = "total-${lastSpentDate}",
+                        contentHash = "total-${lastSpentDate}",
+                        transaction = null,
+                        day = lastSpentDate!!,
+                        dayTotal = lastDayTotal,
+                    )
+                )
+            }
+
+            lastSpentDate = spent.date.toLocalDate()
+            lastDayTotal = BigDecimal.ZERO
+
+            composedList.add(
+                RowEntity(
+                    type = RowEntityType.DayDivider,
+                    key = "header-${lastSpentDate}",
+                    contentHash = "header-${lastSpentDate}",
+                    transaction = null,
+                    day = lastSpentDate!!,
+                    dayTotal = null,
+                )
+            )
+        }
+
+        lastDayTotal += spent.value
+
+        composedList.add(
+            RowEntity(
+                type = RowEntityType.Spent,
+                key = spent.key,
+                contentHash = spent.contentHash,
+                transaction = spent.transaction,
+                day = lastSpentDate!!,
+                dayTotal = null,
+            )
+        )
+    }
+
+    if (entries.isNotEmpty() && lastSpentDate !== null) {
+        composedList.add(
+            RowEntity(
+                type = RowEntityType.DayTotal,
+                key = "total-${lastSpentDate!!}",
+                contentHash = "total-${lastSpentDate}",
+                transaction = null,
+                day = lastSpentDate!!,
+                dayTotal = lastDayTotal,
+            )
+        )
+    }
+
+    return composedList.toList().reversed()
+}
+
+private data class HistoryEntry(
+    val key: String,
+    val contentHash: String,
+    val date: Date,
+    val value: BigDecimal,
+    val comment: String,
+    val transaction: Transaction,
+)

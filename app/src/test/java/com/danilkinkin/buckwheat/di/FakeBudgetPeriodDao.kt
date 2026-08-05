@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import java.math.BigDecimal
 
 class FakeBudgetPeriodDao : BudgetPeriodDao {
     private val periods = mutableListOf<BudgetPeriod>()
@@ -16,6 +17,10 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
 
     override suspend fun getById(id: Int): BudgetPeriod? {
         return periods.firstOrNull { it.id == id }
+    }
+
+    override suspend fun getAllNow(): List<BudgetPeriod> {
+        return periods.toList()
     }
 
     override suspend fun insert(period: BudgetPeriod): Long {
@@ -32,6 +37,21 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return MutableLiveData(
             archivedTransactions.filter { it.periodId == periodId && it.type == com.danilkinkin.buckwheat.data.entities.TransactionType.SPENT }
         )
+    }
+
+    override suspend fun getAllArchivedNow(): List<ArchivedTransaction> {
+        return archivedTransactions.toList()
+    }
+
+    override fun getAllArchived(): LiveData<List<ArchivedTransaction>> {
+        return MutableLiveData(archivedTransactions.toList())
+    }
+
+    override suspend fun updateTotalSpent(periodId: Int, totalSpent: BigDecimal) {
+        val index = periods.indexOfFirst { it.id == periodId }
+        if (index >= 0) {
+            periods[index] = periods[index].copy(totalSpent = totalSpent).also { it.id = periodId }
+        }
     }
 
     override suspend fun insertArchivedTransactions(transactions: List<ArchivedTransaction>) {

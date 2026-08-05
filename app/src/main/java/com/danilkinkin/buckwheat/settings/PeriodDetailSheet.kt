@@ -22,6 +22,7 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.toTransaction
 import java.math.BigDecimal
 import java.util.Date
 
@@ -62,73 +63,88 @@ fun PeriodDetailSheet(
                     val spends = transactions.filter { it.type == TransactionType.SPENT }
                     val currency = ExtendCurrency.getInstance(period!!.currencyCode)
 
-                    item {
-                        WholeBudgetCard(
-                            modifier = Modifier.height(IntrinsicSize.Min),
-                            budget = period!!.budget,
-                            currency = currency,
-                            startDate = period!!.startDate,
-                            finishDate = period!!.finishDate,
-                            actualFinishDate = period!!.actualFinishDate,
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-
-                    if (spends.isNotEmpty()) {
+                    if (!period!!.isImported) {
                         item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(IntrinsicSize.Min),
-                            ) {
-                                SpentAndRestCard(
-                                    modifier = Modifier.weight(1f),
-                                    spent = period!!.totalSpent,
-                                    budget = period!!.budget,
-                                    currency = currency,
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                DaysCountCard(
-                                    startDate = period!!.startDate,
-                                    finishDate = period!!.actualFinishDate ?: period!!.finishDate,
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(IntrinsicSize.Min),
-                            ) {
-                                MinMaxSpentCard(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight(),
-                                    isMin = true,
-                                    spends = spends.map { it.toTransaction() },
-                                    currency = currency,
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                MinMaxSpentCard(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight(),
-                                    isMin = false,
-                                    spends = spends.map { it.toTransaction() },
-                                    currency = currency,
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-
-                        item {
-                            SpendsCountCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                count = spends.size,
+                            WholeBudgetCard(
+                                modifier = Modifier.height(IntrinsicSize.Min),
+                                budget = period!!.budget,
+                                currency = currency,
+                                startDate = period!!.startDate,
+                                finishDate = period!!.finishDate,
+                                actualFinishDate = period!!.actualFinishDate,
                             )
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        if (spends.isNotEmpty()) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min),
+                                ) {
+                                    SpentAndRestCard(
+                                        modifier = Modifier.weight(1f),
+                                        spent = period!!.totalSpent,
+                                        budget = period!!.budget,
+                                        currency = currency,
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    DaysCountCard(
+                                        startDate = period!!.startDate,
+                                        finishDate = period!!.actualFinishDate ?: period!!.finishDate,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min),
+                                ) {
+                                    MinMaxSpentCard(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight(),
+                                        isMin = true,
+                                        spends = spends.map { it.toTransaction() },
+                                        currency = currency,
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    MinMaxSpentCard(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight(),
+                                        isMin = false,
+                                        spends = spends.map { it.toTransaction() },
+                                        currency = currency,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+
+                            item {
+                                SpendsCountCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    count = spends.size,
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = stringResource(
+                                    R.string.past_periods_date_range,
+                                    com.danilkinkin.buckwheat.util.prettyDate(period!!.startDate, pattern = "dd MMM"),
+                                    com.danilkinkin.buckwheat.util.prettyDate(period!!.finishDate, pattern = "dd MMM yyyy"),
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
 
@@ -244,11 +260,3 @@ private fun ArchivedTransactionItem(
         )
     }
 }
-
-private fun ArchivedTransaction.toTransaction() =
-    com.danilkinkin.buckwheat.data.entities.Transaction(
-        type = this.type,
-        value = this.value,
-        date = this.date,
-        comment = this.comment,
-    ).also { it.uid = this.uid }

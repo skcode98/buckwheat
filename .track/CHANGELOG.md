@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Out-of-period CSV imports are archived into month buckets** (user request: old records grouped by month, listed under Past Periods, searchable, never counted in the budget):
+  - `BudgetPeriod.isImported` column (DB version 10, manual migration `ALTER TABLE budget_periods ADD COLUMN is_imported INTEGER NOT NULL DEFAULT 0`; Room 2.7.2 has no `@AddedColumn`)
+  - `SpendsRepository.importTransactions` routes in-period rows to `addSpent`, out-of-period rows to new `archiveImported()` — grouped by calendar month into `BudgetPeriod(budget = 0, isImported = true)` buckets or merged into a covering archived period; `totalSpent` stores SPENT sum at scale 2
+  - Import idempotency now also covers already-archived rows, so re-importing a file never duplicates month-bucket entries
+  - `BudgetPeriodDao`: `getAllNow()`, `getAllArchivedNow()`, `getAllArchived()`, `updateTotalSpent()`; shared `ArchivedTransaction.toTransaction()` extension
+  - `SpendsViewModel.archivedTransactions` exposed; History search merges archived rows when the query is non-blank (`composeHistoryRows`)
+  - `PastPeriodsSheet` shows "Imported" label; `PeriodDetailSheet` hides budget cards for imported buckets (shows date range); new string `past_periods_imported`
 - Date/time pill now visible and editable on fresh entry (ADD mode) — `Editor.kt:50`, `DateTimeEditPill.kt:29`
 - New spends in ADD mode use `editorViewModel.currentDate` instead of `Date()` — `Keyboard.kt:317`
 - **Voice input feature** — microphone button on the keyboard:
@@ -49,6 +56,8 @@
 - Added `filterByPeriod()` helper in `SpendsViewModel`
 
 ### Fixed
+- **Month-bucket `totalSpent` scale mismatch** — `archiveImported` stored scale-0 sums (10) while the app/tests expect 2dp (10.00); now stores `(currentTotal + spentDelta).setScale(2)`
+- **`FakeBudgetPeriodDao.updateTotalSpent` dropped the period id** — `BudgetPeriod.id` is a class-body `var` (not a constructor property), so `copy(totalSpent = ...)` resets it to 0, orphaning the archived rows; the fake now re-applies the id after copy
 - **Main-thread blocking on startup reads** — `syncTheme` (`Theme.kt`) and `syncOverrideLocale` (`Locale.kt`) called `runBlocking { dataStore.data.first() }` on the main thread from `LaunchedEffect`; both are now `suspend` and read directly. `SpendsViewModel.init` also replaced its `runBlocking` pre-read with a `viewModelScope.launch`
 - **`restBudget` flashed intermediate values on startup** — `SpendsViewModel.restBudget` recomputed on every source emission, briefly showing a wrong "rest" while the budget/spent flows streamed in; it now emits nothing until all three sources have produced their first value
 - **Empty (no-spend) periods were never archived** — `SpendsRepository.archiveCurrentPeriod` bailed on `spends.isEmpty()`, dropping income-only periods from the archive history; it now archives whenever the period has any in-period rows (`inPeriod.isEmpty()` guard)

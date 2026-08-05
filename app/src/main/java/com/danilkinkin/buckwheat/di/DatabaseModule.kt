@@ -89,6 +89,15 @@ val AutoMigration8to9: Migration = object : Migration(8, 9) {
     }
 }
 
+// Add is_imported to budget_periods for month buckets created from CSV imports
+val AutoMigration9to10: Migration = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE `budget_periods` ADD COLUMN `is_imported` INTEGER NOT NULL DEFAULT 0"
+        )
+    }
+}
+
 // Rename Spent to Transaction
 val AutoMigration4to5: Migration = object : Migration(4, 5) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -115,7 +124,7 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 
 @Database(
     entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 9,
+    version = 10,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -140,6 +149,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10)
     }
 }

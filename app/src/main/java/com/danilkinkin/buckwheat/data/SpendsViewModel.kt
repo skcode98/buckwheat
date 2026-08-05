@@ -36,6 +36,7 @@ class SpendsViewModel @Inject constructor(
     var tags = spendsRepository.getAllTags()
     var transactions = spendsRepository.getAllTransactions()
     var spends = spendsRepository.getAllSpends()
+    var archivedTransactions = spendsRepository.getAllArchivedTransactions()
     var budget = spendsRepository.getBudget().asLiveData()
     var spent = spendsRepository.getSpent().asLiveData()
     var dailyBudget = spendsRepository.getDailyBudget().asLiveData()

@@ -25,6 +25,8 @@ import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
+import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toLocalDateTime
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.YearMonth
 import java.util.Date
 import javax.inject.Inject
 
@@ -57,6 +60,7 @@ class SpendsRepository @Inject constructor(
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
+    fun getAllArchivedTransactions(): LiveData<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
     fun getTransactionsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
         transactionDao.getAll(startDate.time, endDate.time)
@@ -241,12 +245,7 @@ class SpendsRepository @Inject constructor(
 
         val oldBudget = getBudget().firstOrNull() ?: BigDecimal.ZERO
         val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
-        val currency = getCurrency().firstOrNull()
-        val currencyCode = when (currency?.type) {
-            com.danilkinkin.buckwheat.data.ExtendCurrency.Type.CUSTOM -> currency.value ?: ""
-            com.danilkinkin.buckwheat.data.ExtendCurrency.Type.NONE -> ""
-            else -> currency?.value ?: ""
-        }
+        val currencyCode = currentCurrencyCode()
 
         val totalSpent = spends.map { it.value }.fold(BigDecimal.ZERO) { acc, v -> acc + v }
 
@@ -605,10 +604,16 @@ class SpendsRepository @Inject constructor(
     suspend fun importTransactions(transactions: List<Transaction>) {
         // Idempotency: skip rows that already exist (same type, value, date, comment) and
         // dedupe repeated rows within the file itself, so re-importing the same CSV never
-        // creates duplicate transactions.
-        val existingKeys = transactionDao.getAll().asFlow().first().map { tx ->
-            "${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}"
-        }.toHashSet()
+        // creates duplicate transactions. Already-archived rows (from a previous import)
+        // are part of the existing set too.
+        val existingKeys = buildSet {
+            transactionDao.getAll().asFlow().first().forEach { tx ->
+                add("${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}")
+            }
+            budgetPeriodDao.getAllArchivedNow().forEach { tx ->
+                add("${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}")
+            }
+        }
 
         val unique = LinkedHashMap<String, Transaction>()
         transactions.forEach { tx ->
@@ -630,13 +635,79 @@ class SpendsRepository @Inject constructor(
             return
         }
 
-        filtered.forEach { transaction ->
-            val isInCurrentPeriod = !transaction.date.before(currentPeriodStart) && !transaction.date.after(currentPeriodFinish)
-            if (isInCurrentPeriod) {
-                addSpent(transaction)
-            } else {
-                transactionDao.insert(transaction)
+        val inPeriod = filtered.filter {
+            !it.date.before(currentPeriodStart) && !it.date.after(currentPeriodFinish)
+        }
+        val outOfPeriod = filtered.filter {
+            it.date.before(currentPeriodStart) || it.date.after(currentPeriodFinish)
+        }
+
+        inPeriod.forEach { addSpent(it) }
+        archiveImported(outOfPeriod)
+    }
+
+    // Rows that fall outside the active budget period are archived into month buckets
+    // (grouped by calendar month) or merged into an already-archived period that covers
+    // their date. They must never touch the active table, so they stay out of the budget.
+    private suspend fun archiveImported(outOfPeriod: List<Transaction>) {
+        if (outOfPeriod.isEmpty()) return
+
+        val existingPeriods = budgetPeriodDao.getAllNow().sortedBy { it.isImported }
+        val currencyCode = currentCurrencyCode()
+        val monthBucketIds = mutableMapOf<YearMonth, Int>()
+        val rowsByPeriod = mutableMapOf<Int, MutableList<Transaction>>()
+
+        outOfPeriod.forEach { tx ->
+            val month = YearMonth.from(tx.date.toLocalDateTime())
+            val coveringPeriod = existingPeriods.firstOrNull { period ->
+                !tx.date.before(period.startDate) && !tx.date.after(period.finishDate)
             }
+
+            val periodId = coveringPeriod?.id ?: monthBucketIds.getOrPut(month) {
+                budgetPeriodDao.insert(
+                    BudgetPeriod(
+                        budget = BigDecimal.ZERO,
+                        startDate = month.atDay(1).toDate(),
+                        finishDate = Date(month.atEndOfMonth().atTime(23, 59, 59).toDate().time + 999),
+                        actualFinishDate = null,
+                        currencyCode = currencyCode,
+                        totalSpent = BigDecimal.ZERO,
+                        isImported = true,
+                    )
+                ).toInt()
+            }
+
+            rowsByPeriod.getOrPut(periodId) { mutableListOf() }.add(tx)
+        }
+
+        rowsByPeriod.forEach { (periodId, rows) ->
+            val spentDelta = rows
+                .filter { it.type == TransactionType.SPENT }
+                .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
+            val currentTotal = budgetPeriodDao.getById(periodId)?.totalSpent ?: BigDecimal.ZERO
+            if (spentDelta > BigDecimal.ZERO) {
+                budgetPeriodDao.updateTotalSpent(periodId, (currentTotal + spentDelta).setScale(2))
+            }
+            budgetPeriodDao.insertArchivedTransactions(
+                rows.map { tx ->
+                    ArchivedTransaction(
+                        periodId = periodId,
+                        type = tx.type,
+                        value = tx.value,
+                        date = tx.date,
+                        comment = tx.comment,
+                    )
+                }
+            )
+        }
+    }
+
+    private suspend fun currentCurrencyCode(): String {
+        val currency = getCurrency().firstOrNull()
+        return when (currency?.type) {
+            ExtendCurrency.Type.CUSTOM -> currency.value ?: ""
+            ExtendCurrency.Type.NONE -> ""
+            else -> currency?.value ?: ""
         }
     }
 

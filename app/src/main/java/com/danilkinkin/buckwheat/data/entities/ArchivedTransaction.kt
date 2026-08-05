@@ -29,3 +29,11 @@ data class ArchivedTransaction(
 ) {
     @PrimaryKey(autoGenerate = true) var uid: Int = 0
 }
+
+fun ArchivedTransaction.toTransaction(): Transaction =
+    Transaction(
+        type = this.type,
+        value = this.value,
+        date = this.date,
+        comment = this.comment,
+    ).also { it.uid = this.uid }
