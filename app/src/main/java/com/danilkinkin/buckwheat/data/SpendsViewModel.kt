@@ -143,6 +143,8 @@ class SpendsViewModel @Inject constructor(
     var periodFinished = MutableLiveData(false)
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
 
+    private val changeDayMutex = Mutex()
+
     init {
         viewModelScope.launch {
             requireSetBudget.value =
@@ -248,8 +250,6 @@ class SpendsViewModel @Inject constructor(
     fun howMuchBudgetRest(): LiveData<BigDecimal> = restBudget
 
     // Background tasks
-    private val changeDayMutex = Mutex()
-
     private fun runChangeDayAction() {
         viewModelScope.launch {
             // runChangeDayAction is triggered from init AND from the 5s polling loop, and it
