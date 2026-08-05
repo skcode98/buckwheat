@@ -257,6 +257,31 @@ class SpendsRepositoryTest {
         )
     }
 
+    // Comments of imported out-of-period transactions must surface as tags even though
+    // they are stored in the archived table (the tag picker and Tags Management read them)
+    @Test
+    fun importedArchivedCommentsBecomeTags() = runTest {
+        setBudget()
+
+        val oldSpend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value.toLocalDateTime().minusDays(1).toDate(),
+            comment = "groceries",
+        )
+
+        spendsRepository.importTransactions(listOf(oldSpend))
+
+        var tags: List<String>? = null
+        val liveData = spendsRepository.getAllTags()
+        val observer = androidx.lifecycle.Observer<List<String>> { tags = it }
+        liveData.observeForever(observer)
+        liveData.removeObserver(observer)
+
+        assert(tags != null)
+        assert(tags!!.contains("groceries"))
+    }
+
     // Check spent in same day added correctly
     @Test
     fun addSpentTest() = runTest {

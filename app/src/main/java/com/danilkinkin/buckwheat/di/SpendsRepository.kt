@@ -70,32 +70,46 @@ class SpendsRepository @Inject constructor(
     fun getAllTags(): LiveData<List<String>> {
         val merged = MediatorLiveData<List<String>>()
         val transactionSource = transactionDao.getAll().map { transactions ->
-            transactions
-                .asSequence()
-                .filter { transaction -> transaction.comment.isNotEmpty() }
-                .groupBy { it.comment }
-                .map { it.key to it.value.size }
-                .sortedBy { -it.second }
-                .map { it.first }
-                .distinct()
-                .toList()
+            deriveTags(transactions.map { it.comment })
+        }
+        // Archived transactions (past periods and imported historical data) must
+        // contribute their comments as well, otherwise tags restored via CSV import
+        // never show up in the tag picker or the Tags Management sheet.
+        val archivedSource = budgetPeriodDao.getAllArchived().map { archived ->
+            deriveTags(archived.map { it.comment })
         }
         val savedSource = savedTagDao.getAll().map { tags -> tags.map { it.name } }
 
         var lastTransactionTags: List<String> = emptyList()
+        var lastArchivedTags: List<String> = emptyList()
         var lastSavedTags: List<String> = emptyList()
 
         merged.addSource(transactionSource) { tags ->
             lastTransactionTags = tags
-            merged.value = (lastTransactionTags + lastSavedTags).distinct()
+            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
+        }
+        merged.addSource(archivedSource) { tags ->
+            lastArchivedTags = tags
+            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
         }
         merged.addSource(savedSource) { tags ->
             lastSavedTags = tags
-            merged.value = (lastTransactionTags + lastSavedTags).distinct()
+            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
         }
 
         return merged
     }
+
+    private fun deriveTags(comments: List<String>): List<String> =
+        comments
+            .asSequence()
+            .filter { it.isNotEmpty() }
+            .groupBy { it }
+            .map { it.key to it.value.size }
+            .sortedBy { -it.second }
+            .map { it.first }
+            .distinct()
+            .toList()
 
     fun getBudget() = context.budgetDataStore.data.map {
         (it[budgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
