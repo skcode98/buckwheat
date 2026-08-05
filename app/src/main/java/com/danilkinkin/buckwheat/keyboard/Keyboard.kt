@@ -16,9 +16,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
@@ -47,15 +49,24 @@ import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
 import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
+import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
+import java.util.Date
 import java.util.Locale
 
 val BUTTON_GAP = 6.dp
 
 enum class KeyboardAction { PUT_NUMBER, SET_DOT, REMOVE_LAST }
+
+private data class VoicePending(
+    val amount: BigDecimal,
+    val amountString: String,
+    val comment: String,
+    val date: Date,
+)
 
 @Composable
 fun Keyboard(
@@ -78,6 +89,51 @@ fun Keyboard(
     // result (or AI response) that arrives after the user started a newer session can be
     // detected as stale and discarded instead of committing a second transaction.
     var voiceSession by remember { mutableStateOf(0L) }
+    // Voice records are not committed automatically anymore: the parsed result is
+    // parked here and a preview dialog lets the user confirm, modify, or skip it.
+    var voicePending by remember { mutableStateOf<VoicePending?>(null) }
+
+    val commitVoiceRecord: (BigDecimal, Date, String) -> Unit = { amount, date, comment ->
+        if (mode == EditMode.EDIT) {
+            // Voice input while editing must replace the edited transaction
+            // (mirroring the Apply button), not append a new spend and leave
+            // the original behind.
+            val edited = editorViewModel.editedTransaction
+            if (edited != null) {
+                spendsViewModel.removeSpent(edited, silent = true)
+                spendsViewModel.addSpent(
+                    edited.copy(
+                        value = amount,
+                        date = date,
+                        comment = comment.trim(),
+                    )
+                )
+            }
+        } else {
+            spendsViewModel.addSpent(
+                Transaction(
+                    type = TransactionType.SPENT,
+                    value = amount,
+                    date = date,
+                    comment = comment,
+                )
+            )
+            appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
+        }
+        editorViewModel.resetEditingSpent()
+    }
+
+    val skipVoiceRecord: () -> Unit = {
+        // Discard the voice result without touching the database. When the user was
+        // already editing a transaction, restore its original values instead of
+        // leaving the voice-parsed amount in the editor.
+        val edited = editorViewModel.editedTransaction
+        if (mode == EditMode.EDIT && edited != null) {
+            editorViewModel.startEditingSpent(edited)
+        } else {
+            editorViewModel.resetEditingSpent()
+        }
+    }
 
     val recognitionAvailable = remember {
         SpeechRecognizer.isRecognitionAvailable(context)
@@ -160,33 +216,14 @@ fun Keyboard(
                         editorViewModel.modifyEditingSpent(amount)
 
                         if (editorViewModel.canCommitEditingSpent()) {
-                            if (mode == EditMode.EDIT) {
-                                // Voice input while editing must replace the edited
-                                // transaction (mirroring the Apply button), not append
-                                // a new spend and leave the original behind.
-                                val edited = editorViewModel.editedTransaction
-                                if (edited != null) {
-                                    spendsViewModel.removeSpent(edited, silent = true)
-                                    spendsViewModel.addSpent(
-                                        edited.copy(
-                                            value = amount,
-                                            date = parsed.date,
-                                            comment = parsed.comment.trim(),
-                                        )
-                                    )
-                                }
-                            } else {
-                                spendsViewModel.addSpent(
-                                    Transaction(
-                                        type = TransactionType.SPENT,
-                                        value = amount,
-                                        date = parsed.date,
-                                        comment = parsed.comment,
-                                    )
-                                )
-                                appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
-                            }
-                            editorViewModel.resetEditingSpent()
+                            // Show the preview dialog; the record is committed only
+                            // after the user confirms it.
+                            voicePending = VoicePending(
+                                amount = amount,
+                                amountString = amountString,
+                                comment = parsed.comment,
+                                date = parsed.date,
+                            )
                         }
                     } catch (e: Exception) {
                         Log.d("VoiceAI", "Failed to commit voice input", e)
@@ -584,6 +621,65 @@ fun Keyboard(
                 }
             }
         }
+    }
+
+    voicePending?.let { pending ->
+        AlertDialog(
+            onDismissRequest = {
+                voicePending = null
+                skipVoiceRecord()
+            },
+            title = { Text(stringResource(R.string.voice_confirm_title)) },
+            text = {
+                Column {
+                    Text(
+                        text = pending.amountString,
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    if (pending.comment.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = pending.comment,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.voice_confirm_date_label) +
+                            ": " + prettyDate(pending.date, forceShowDate = true),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        voicePending = null
+                        commitVoiceRecord(pending.amount, pending.date, pending.comment)
+                    }
+                ) {
+                    Text(stringResource(R.string.voice_confirm_confirm))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            voicePending = null
+                            skipVoiceRecord()
+                        }
+                    ) {
+                        Text(stringResource(R.string.voice_confirm_skip))
+                    }
+                    TextButton(
+                        onClick = { voicePending = null }
+                    ) {
+                        Text(stringResource(R.string.voice_confirm_modify))
+                    }
+                }
+            },
+        )
     }
 }
 

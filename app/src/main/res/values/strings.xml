@@ -65,6 +65,11 @@
   <string name="voice_recognition_failed">Recognition failed</string>
   <string name="voice_permission_denied">Microphone permission denied</string>
   <string name="voice_unavailable">Speech recognition is not available on this device</string>
+  <string name="voice_confirm_title">Add record?</string>
+  <string name="voice_confirm_confirm">Confirm</string>
+  <string name="voice_confirm_modify">Modify</string>
+  <string name="voice_confirm_skip">Skip</string>
+  <string name="voice_confirm_date_label">Date</string>
   <string name="theme_label">Theme</string>
   <string name="theme_light">Light</string>
   <string name="theme_dark">Dark</string>

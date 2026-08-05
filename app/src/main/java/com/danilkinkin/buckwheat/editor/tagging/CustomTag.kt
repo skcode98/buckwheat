@@ -128,10 +128,15 @@ fun CustomTag(
     }
 
     observeLiveData(editorViewModel.currentComment) {
-        value = TextFieldValue(
-            it ?: "",
-            TextRange((it ?: "").length),
-        )
+        // Only overwrite the field when the comment came from outside (e.g. a tag
+        // pill tap). The write-through in onChange already keeps the ViewModel in
+        // sync, so rewriting the same text here would reset the cursor while typing.
+        if (value.text != (it ?: "")) {
+            value = TextFieldValue(
+                it ?: "",
+                TextRange((it ?: "").length),
+            )
+        }
     }
 
     DisposableEffect(editorViewModel.currentComment) {
@@ -225,7 +230,13 @@ fun CustomTag(
                     if (targetIsEdit) {
                         CommentEditor(
                             value = value,
-                            onChange = { value = it },
+                            onChange = {
+                                value = it
+                                // Keep the ViewModel in sync so that committing via the
+                                // number pad (without pressing the tag editor's own apply
+                                // button) does not silently drop the typed comment.
+                                editorViewModel.currentComment.value = it.text
+                            },
                             onApply = { close() }
                         )
                     } else if (!onlyIcon || value.text.isNotEmpty()) {
