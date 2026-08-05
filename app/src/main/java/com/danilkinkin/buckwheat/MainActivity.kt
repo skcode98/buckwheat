@@ -61,6 +61,8 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
+        CrashLogger.consumePersisted(context)?.let { errorForReport = it }
+
         setContent {
             val localContext = LocalContext.current
             val activityResultRegistryOwner = LocalActivityResultRegistryOwner.current

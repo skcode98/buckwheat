@@ -10,6 +10,8 @@ import dagger.hilt.android.HiltAndroidApp
 @HiltAndroidApp
 class Application : Application() {
     override fun onCreate() {
+        CrashLogger.install(this)
+
         super.onCreate()
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
