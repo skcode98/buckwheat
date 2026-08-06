@@ -146,8 +146,8 @@ fun SpendsCalendar(
     }
 
     val disabledBefore = startDate.toLocalDate()
-    val disabledAfter = (actualFinishDate ?: finishDate).toLocalDate()
-        .coerceAtMost(LocalDate.now())
+    val periodEnd = (actualFinishDate ?: finishDate).toLocalDate()
+    val disabledAfter = periodEnd.coerceAtMost(LocalDate.now())
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
 
@@ -228,7 +228,7 @@ fun SpendsCalendar(
                         val endOfWeek = startOfWeek.plusDays(6)
                         if (
                             endOfWeek.isAfter(disabledBefore) &&
-                            startOfWeek.isBefore(disabledAfter.plusDays(1))
+                            startOfWeek.isBefore(periodEnd.plusDays(1))
                         ) {
                             WeekRow(
                                 week = week,

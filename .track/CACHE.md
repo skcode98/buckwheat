@@ -64,6 +64,12 @@
 | Gradle (app) | `app/build.gradle.kts` |
 | Gradle (root) | `build.gradle.kts` |
 
+## Emulator UI Automation (API 36, 1280×2856)
+- Editor sheet top edge ~y=1552 when collapsed; swipes crossing it re-expand the sheet (wallet scroll is fragile)
+- **Reliable route to Analytics**: toggle debug via keyboard `"0"`×8, then `"."`, then the apply column (bottom-right vertical button, bounds ~[957,2010][1220,2772]) → snackbar "Debug ON" (persisted in settings DataStore `debug` key); relaunch app, debug icon appears top-left of editor ([33,189][177,333]); tap it → DebugMenu → "Open period summary screen" → Analytics (with the full-month `SpendsCalendar`)
+- Keyboard key bounds (1280×2856): 0=[60,2542][622,2772], .=[658,2542][921,2772], apply/delete column=[957,2010][1220,2772]
+- `uiautomator dump` can transiently fail with "null root node" — retry after 1s; text assertions limited since most Compose elements expose no text
+
 ## Git Workflow
 ```powershell
 # Our fixes are on the 'our-fixes' branch (origin)

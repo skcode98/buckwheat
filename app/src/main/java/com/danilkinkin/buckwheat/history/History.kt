@@ -305,14 +305,23 @@ private fun composeHistoryRows(
 
     val entries = buildList {
         periodSpends.forEach { tx ->
-            add(HistoryEntry("spent-${tx.uid}", "spent-${tx.uid}", tx.date, tx.value, tx.comment, tx))
+            add(
+                HistoryEntry(
+                    "spent-${tx.uid}",
+                    "spent-${tx.uid}-${tx.value}-${tx.comment}-${tx.date.time}",
+                    tx.date,
+                    tx.value,
+                    tx.comment,
+                    tx,
+                )
+            )
         }
         if (searching) {
             archivedTransactions.forEach { tx ->
                 add(
                     HistoryEntry(
                         "spent-archived-${tx.uid}",
-                        "spent-archived-${tx.uid}",
+                        "spent-archived-${tx.uid}-${tx.value}-${tx.comment}-${tx.date.time}",
                         tx.date,
                         tx.value,
                         tx.comment,
@@ -336,7 +345,7 @@ private fun composeHistoryRows(
                     RowEntity(
                         type = RowEntityType.DayTotal,
                         key = "total-${lastSpentDate}",
-                        contentHash = "total-${lastSpentDate}",
+                        contentHash = "total-${lastSpentDate}-${lastDayTotal}",
                         transaction = null,
                         day = lastSpentDate!!,
                         dayTotal = lastDayTotal,
@@ -378,7 +387,7 @@ private fun composeHistoryRows(
             RowEntity(
                 type = RowEntityType.DayTotal,
                 key = "total-${lastSpentDate!!}",
-                contentHash = "total-${lastSpentDate}",
+                contentHash = "total-${lastSpentDate!!}-${lastDayTotal}",
                 transaction = null,
                 day = lastSpentDate!!,
                 dayTotal = lastDayTotal,

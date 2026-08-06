@@ -116,9 +116,9 @@ fun updateAnimatedItemsState(
             }
 
             override fun onChanged(position: Int, count: Int, payload: Any?) {
+                val row = payload as RowEntity
                 for (i in 0 until count) {
-                    compositeList[position + i].item.dayTotal = (payload as RowEntity).dayTotal
-                    compositeList[position + i].item.contentHash = payload.contentHash
+                    compositeList[position + i].item = row
                 }
             }
         })
@@ -137,7 +137,7 @@ fun updateAnimatedItemsState(
 
 data class AnimatedItem<T>(
     val visibility: MutableTransitionState<Boolean>,
-    val item: T,
+    var item: T,
 ) {
 
     override fun hashCode(): Int {
