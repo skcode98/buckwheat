@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.editor.category.CategorySelector
 import com.danilkinkin.buckwheat.editor.dateTimeEdit.DateTimeEditPill
 import com.danilkinkin.buckwheat.editor.tagging.TaggingToolbar
 import com.danilkinkin.buckwheat.editor.toolbar.EditorToolbar
@@ -55,6 +56,7 @@ fun Editor(
                 focusController = focusController,
             )
             TaggingToolbar(editorFocusController = focusController)
+            CategorySelector()
             Spacer(Modifier.height(24.dp))
         }
     }

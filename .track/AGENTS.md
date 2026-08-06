@@ -155,6 +155,7 @@ com.danilkinkin.buckwheat/
 │   ├── calcMaxFontSize.kt
 │   ├── dateTimeEdit/           # Date & time pickers
 │   ├── tagging/                # Comment tags
+│   ├── category/               # Manual category picker (CategorySelector)
 │   └── toolbar/                # Editor toolbar, rest budget pill
 │
 ├── keyboard/

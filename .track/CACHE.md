@@ -66,6 +66,7 @@
 | Boot reschedule receiver | `app/.../notifications/ReminderBootReceiver.kt` |
 | Reminder settings UI | `app/.../settings/DailyBudgetReminderSetting.kt` |
 | Reminder content tests | `app/src/test/java/.../notifications/DailyReminderContentTest.kt` |
+| Category selector (editor) | `app/.../editor/category/CategorySelector.kt` |
 | SpendCategory enum | `app/.../data/categories/SpendCategory.kt` |
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
 | Categories VM | `app/.../data/categories/SpendCategoriesViewModel.kt` |
