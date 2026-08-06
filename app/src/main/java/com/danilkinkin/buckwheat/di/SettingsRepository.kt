@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
+import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.map
@@ -15,6 +18,9 @@ val showSpentCardByDefaultStoreKey = booleanPreferencesKey("showSpentCardByDefau
 val voiceAiApiKeyStoreKey = stringPreferencesKey("voiceAiApiKey")
 val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
 val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
+val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
+val reminderHourStoreKey = intPreferencesKey("reminderHour")
+val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -50,6 +56,18 @@ class SettingsRepository @Inject constructor(
         } ?: TUTORIAL_STAGE.NONE
     }
 
+    fun isReminderEnabled() = context.settingsDataStore.data.map {
+        it[reminderEnabledStoreKey] ?: false
+    }
+
+    fun getReminderHour() = context.settingsDataStore.data.map {
+        it[reminderHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+    }
+
+    fun getReminderMinute() = context.settingsDataStore.data.map {
+        it[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+    }
+
     suspend fun switchDebug(isDebug: Boolean) {
         context.settingsDataStore.edit {
             it[debugStoreKey] = isDebug
@@ -59,6 +77,19 @@ class SettingsRepository @Inject constructor(
     suspend fun switchShowSpentCardByDefault(isShow: Boolean) {
         context.settingsDataStore.edit {
             it[showSpentCardByDefaultStoreKey] = isShow
+        }
+    }
+
+    suspend fun switchReminderEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit {
+            it[reminderEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun setReminderTime(hour: Int, minute: Int) {
+        context.settingsDataStore.edit {
+            it[reminderHourStoreKey] = hour
+            it[reminderMinuteStoreKey] = minute
         }
     }
 

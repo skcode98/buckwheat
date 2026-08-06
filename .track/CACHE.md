@@ -60,6 +60,12 @@
 | SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
 | BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
 | ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
+| Daily reminder scheduler | `app/.../notifications/DailyBudgetReminderScheduler.kt` |
+| Daily reminder receiver | `app/.../notifications/DailyBudgetReminderReceiver.kt` |
+| Reminder message builder | `app/.../notifications/DailyReminderContent.kt` |
+| Boot reschedule receiver | `app/.../notifications/ReminderBootReceiver.kt` |
+| Reminder settings UI | `app/.../settings/DailyBudgetReminderSetting.kt` |
+| Reminder content tests | `app/src/test/java/.../notifications/DailyReminderContentTest.kt` |
 | SpendCategory enum | `app/.../data/categories/SpendCategory.kt` |
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
 | Categories VM | `app/.../data/categories/SpendCategoriesViewModel.kt` |
@@ -136,3 +142,5 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String)
 - `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String)
 - `voiceAiModelStoreKey` — model name (String)
+- `reminderEnabledStoreKey` — daily budget reminder toggle (Boolean)
+- `reminderHourStoreKey` / `reminderMinuteStoreKey` — reminder time (Int)

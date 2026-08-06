@@ -62,6 +62,7 @@ fun Settings(
             ) {
                 ThemeSwitcher()
                 LangSwitcher()
+                DailyBudgetReminderSetting()
                 TextRow(
                     icon = painterResource(R.drawable.ic_mic),
                     text = stringResource(R.string.voice_ai_title),

@@ -58,6 +58,15 @@
   <string name="voice_ai_model">Model</string>
   <string name="save_api_key">Save API key</string>
   <string name="voice_ai_fallback_hint">If no key is saved, the current offline speech parser stays active.</string>
+  <string name="daily_reminder_title">Daily budget reminder</string>
+  <string name="daily_reminder_time">Reminder time</string>
+  <string name="daily_reminder_schedule_format">Every day at %1$s</string>
+  <string name="daily_reminder_channel_name">Daily budget reminder</string>
+  <string name="daily_reminder_channel_description">Daily reminder with the budget left for today</string>
+  <string name="daily_reminder_notification_title">Daily budget</string>
+  <string name="daily_reminder_left_text">You have %1$s left today</string>
+  <string name="daily_reminder_over_text">Daily budget spent — %1$s over</string>
+  <string name="daily_reminder_no_budget_text">Set a budget to see your daily limit</string>
   <string name="voice_ai_error_prefix">Voice AI error: </string>
   <string name="voice_input">Voice input</string>
   <string name="voice_listening">Listening…</string>
