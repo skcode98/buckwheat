@@ -6,6 +6,7 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.util.toDate
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.YearMonth
 import java.util.Date
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -90,6 +91,46 @@ class SpendsTrendTest {
         )
 
         assertEquals(emptyList<BigDecimal>(), totals)
+    }
+
+    @Test
+    fun monthDayCountsSingleMonth() {
+        val result = monthDayCounts(
+            LocalDate.of(2026, 8, 1).toDate(),
+            LocalDate.of(2026, 8, 31).toDate(),
+        )
+
+        assertEquals(listOf(YearMonth.of(2026, 8) to 31), result)
+    }
+
+    @Test
+    fun monthDayCountsPartialMonthsCountOnlyInPeriodDays() {
+        val result = monthDayCounts(
+            LocalDate.of(2026, 1, 20).toDate(),
+            LocalDate.of(2026, 2, 10).toDate(),
+        )
+
+        assertEquals(listOf(YearMonth.of(2026, 1) to 12, YearMonth.of(2026, 2) to 10), result)
+    }
+
+    @Test
+    fun monthDayCountsAcrossYearBoundary() {
+        val result = monthDayCounts(
+            LocalDate.of(2026, 12, 20).toDate(),
+            LocalDate.of(2027, 1, 10).toDate(),
+        )
+
+        assertEquals(listOf(YearMonth.of(2026, 12) to 12, YearMonth.of(2027, 1) to 10), result)
+    }
+
+    @Test
+    fun monthDayCountsReversedPeriodReturnsEmpty() {
+        val result = monthDayCounts(
+            LocalDate.of(2026, 8, 10).toDate(),
+            LocalDate.of(2026, 8, 1).toDate(),
+        )
+
+        assertEquals(emptyList<Pair<YearMonth, Int>>(), result)
     }
 
     @Test
