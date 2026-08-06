@@ -12,6 +12,9 @@ interface SavedCategoryDao {
     @Query("SELECT * FROM saved_categories WHERE id = :id")
     suspend fun getById(id: Int): SavedCategory?
 
+    @Query("SELECT * FROM saved_categories")
+    suspend fun getAllNow(): List<SavedCategory>
+
     @Query("SELECT * FROM saved_categories WHERE name = :name")
     suspend fun getByName(name: String): SavedCategory?
 
@@ -21,9 +24,15 @@ interface SavedCategoryDao {
     @Insert
     suspend fun insert(category: SavedCategory): Long
 
+    @Insert
+    suspend fun insertAll(categories: List<SavedCategory>)
+
     @Update
     suspend fun update(category: SavedCategory)
 
     @Query("DELETE FROM saved_categories WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM saved_categories")
+    suspend fun deleteAll()
 }

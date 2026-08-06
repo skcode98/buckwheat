@@ -20,6 +20,12 @@ interface BudgetPeriodDao {
     @Insert
     suspend fun insert(period: BudgetPeriod): Long
 
+    @Insert
+    suspend fun insertAll(periods: List<BudgetPeriod>)
+
+    @Query("DELETE FROM budget_periods")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM archived_transactions WHERE period_id = :periodId ORDER BY date ASC")
     fun getTransactionsForPeriod(periodId: Int): LiveData<List<ArchivedTransaction>>
 

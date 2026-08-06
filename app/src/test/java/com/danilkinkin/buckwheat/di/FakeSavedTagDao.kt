@@ -16,6 +16,10 @@ class FakeSavedTagDao : SavedTagDao {
         return tags.firstOrNull { it.id == id }
     }
 
+    override suspend fun getAllNow(): List<SavedTag> {
+        return tags.toList()
+    }
+
     override suspend fun getByName(name: String): SavedTag? {
         return tags.firstOrNull { it.name == name }
     }
@@ -29,6 +33,10 @@ class FakeSavedTagDao : SavedTagDao {
         return tag.id.toLong()
     }
 
+    override suspend fun insertAll(tags: List<SavedTag>) {
+        this.tags.addAll(tags)
+    }
+
     override suspend fun update(tag: SavedTag) {
         val index = tags.indexOfFirst { it.id == tag.id }
         if (index >= 0) {
@@ -38,5 +46,9 @@ class FakeSavedTagDao : SavedTagDao {
 
     override suspend fun deleteById(id: Int) {
         tags.removeIf { it.id == id }
+    }
+
+    override suspend fun deleteAll() {
+        tags.clear()
     }
 }

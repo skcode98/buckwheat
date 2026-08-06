@@ -66,6 +66,12 @@
 | Boot reschedule receiver | `app/.../notifications/ReminderBootReceiver.kt` |
 | Reminder settings UI | `app/.../settings/DailyBudgetReminderSetting.kt` |
 | Reminder content tests | `app/src/test/java/.../notifications/DailyReminderContentTest.kt` |
+| Backup codec | `app/.../backup/BackupData.kt` |
+| Backup repository | `app/.../di/BackupRepository.kt` |
+| Backup/restore UI | `app/.../settings/BackupRestoreSetting.kt` |
+| Backup/restore VM | `app/.../settings/BackupRestoreViewModel.kt` |
+| Backup codec tests | `app/src/test/java/.../backup/BackupDataTest.kt` |
+| Backup repo tests | `app/src/test/java/.../di/BackupRepositoryTest.kt` |
 | Category selector (editor) | `app/.../editor/category/CategorySelector.kt` |
 | SpendCategory enum | `app/.../data/categories/SpendCategory.kt` |
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |

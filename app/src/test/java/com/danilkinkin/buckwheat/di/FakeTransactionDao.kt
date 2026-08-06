@@ -29,8 +29,16 @@ class FakeTransactionDao : TransactionDao {
         return spends.firstOrNull { it.uid == uid }
     }
 
+    override suspend fun getAllNow(): List<Transaction> {
+        return spends.toList()
+    }
+
     override suspend fun insert(vararg transaction: Transaction) {
         spends.addAll(transaction)
+    }
+
+    override suspend fun insertAll(transactions: List<Transaction>) {
+        spends.addAll(transactions)
     }
 
     override suspend fun update(vararg transaction: Transaction) {

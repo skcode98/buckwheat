@@ -24,9 +24,20 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
     }
 
     override suspend fun insert(period: BudgetPeriod): Long {
+        if (period.id == 0) {
+            period.id = periods.size
+        }
         periods.add(period)
-        period.id = periods.size
         return period.id.toLong()
+    }
+
+    override suspend fun insertAll(periods: List<BudgetPeriod>) {
+        periods.forEach { insert(it) }
+    }
+
+    override suspend fun deleteAll() {
+        periods.clear()
+        archivedTransactions.clear()
     }
 
     override fun getTransactionsForPeriod(periodId: Int): LiveData<List<ArchivedTransaction>> {

@@ -16,8 +16,14 @@ interface RecurringDao {
     @Query("SELECT * FROM recurring_templates WHERE enabled = 1 AND day_of_month = :day")
     suspend fun getDueOnDay(day: Int): List<RecurringTemplate>
 
+    @Query("SELECT * FROM recurring_templates")
+    suspend fun getAllNow(): List<RecurringTemplate>
+
     @Insert
     suspend fun insert(template: RecurringTemplate): Long
+
+    @Insert
+    suspend fun insertAll(templates: List<RecurringTemplate>)
 
     @Update
     suspend fun update(template: RecurringTemplate)
@@ -27,4 +33,7 @@ interface RecurringDao {
 
     @Query("DELETE FROM recurring_templates WHERE id = :id")
     suspend fun deleteById(id: Int)
+
+    @Query("DELETE FROM recurring_templates")
+    suspend fun deleteAll()
 }

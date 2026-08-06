@@ -16,8 +16,14 @@ interface SavingsGoalDao {
     @Query("SELECT * FROM savings_goals WHERE id = :id")
     suspend fun getById(id: Long): SavingsGoal?
 
+    @Query("SELECT * FROM savings_goals")
+    suspend fun getAllNow(): List<SavingsGoal>
+
     @Insert
     suspend fun insert(goal: SavingsGoal): Long
+
+    @Insert
+    suspend fun insertAll(goals: List<SavingsGoal>)
 
     @Update
     suspend fun update(goal: SavingsGoal)
@@ -27,4 +33,7 @@ interface SavingsGoalDao {
 
     @Query("DELETE FROM savings_goals WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM savings_goals")
+    suspend fun deleteAll()
 }

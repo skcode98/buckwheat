@@ -27,8 +27,14 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE uid = :uid")
     suspend fun getById(uid: Int): Transaction?
 
+    @Query("SELECT * FROM transactions")
+    suspend fun getAllNow(): List<Transaction>
+
     @Insert
     suspend fun insert(vararg transaction: Transaction)
+
+    @Insert
+    suspend fun insertAll(transactions: List<Transaction>)
 
     @Update(entity = Transaction::class, onConflict = OnConflictStrategy.REPLACE)
     suspend fun update(vararg transaction: Transaction)

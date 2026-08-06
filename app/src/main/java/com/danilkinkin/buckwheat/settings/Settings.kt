@@ -143,6 +143,7 @@ fun Settings(
                     modifier = Modifier.clickable { importCSV() },
                     endIcon = painterResource(R.drawable.ic_arrow_right),
                 )
+                BackupRestoreSetting()
                 TextRow(
                     text = stringResource(R.string.version, BuildConfig.VERSION_NAME),
                 )
