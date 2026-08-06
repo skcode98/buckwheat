@@ -126,7 +126,7 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
     }
 
 // Extracts the JSON payload from a model reply that may be wrapped in markdown fences or prose.
-private fun extractJsonContent(raw: String): String? {
+internal fun extractJsonContent(raw: String): String? {
     val start = raw.indexOf('{')
     val end = raw.lastIndexOf('}')
     if (start == -1 || end <= start) return null

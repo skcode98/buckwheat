@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- **AI spend categories in analytics** (user request: predefined categories only, AI-assigned, no manual entry):
+  - New fixed `SpendCategory` enum (FOOD, TRANSPORT, SHOPPING, BILLS, ENTERTAINMENT, HEALTH, TRAVEL, OTHER) with per-category keyword lists and localized labels (`category_*` strings)
+  - New `SpendCategorizer.kt` — `offlineClassify(comment)` deterministic whole-word keyword fallback, `categoryFor(tx)` = persisted AI category else offline guess, and `categorizeSpendsWithAi(context, spends)` batch classifier that reuses the Voice AI OpenAI-compatible endpoint (same API key / provider URL / model settings), chunked 60 records per call, and falls back silently to keywords on any failure
+  - `transactions.category` column (DB version 11, manual migration `ALTER TABLE transactions ADD COLUMN category TEXT`) + `TransactionDao.updateCategory(uid, category)`
+  - New `SpendCategoriesViewModel` persists AI assignments only (never offline guesses) so a configured model keeps refining uncategorized rows on later opens
+  - New `SpendCategoriesCard` in Analytics replaces the comment/tag `CategoriesChartCard`: donut + chip breakdown across all predefined categories with a "Refining with AI…" progress bar while the batch runs
+  - `extractJsonContent` promoted to `internal` in `VoiceAi.kt` for reuse
+  - 12 new `SpendCategorizerTest` cases (keyword mapping, substring safety, persisted-category precedence, `fromStored` parsing, response envelope parsing)
 - **Crash-log capture** — new `CrashLogger.kt`: an `UncaughtExceptionHandler` installed in `Application.onCreate` writes any uncaught crash stack trace to `Downloads/buckwheat-crash-*.txt` (via MediaStore, no permissions needed) and persists it, so the built-in crash-report snackbar can show a "send crash report" prompt on the next successful launch. Used to diagnose a launch crash on Android 17 / Pixel 7a without USB access
 - **Out-of-period CSV imports are archived into month buckets** (user request: old records grouped by month, listed under Past Periods, searchable, never counted in the budget):
   - `BudgetPeriod.isImported` column (DB version 10, manual migration `ALTER TABLE budget_periods ADD COLUMN is_imported INTEGER NOT NULL DEFAULT 0`; Room 2.7.2 has no `@AddedColumn`)

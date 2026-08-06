@@ -152,6 +152,16 @@
   <string name="rest_tags">Rest</string>
   <string name="not_enough_data_for_tags_chart">Can\'t split your spends by categories</string>
   <string name="not_enough_data_for_tags_chart_use_tags_hint">Use tags to see chart by categories</string>
+  <string name="categories_title">Categories</string>
+  <string name="category_food">Food</string>
+  <string name="category_transport">Transport</string>
+  <string name="category_shopping">Shopping</string>
+  <string name="category_bills">Bills</string>
+  <string name="category_entertainment">Entertainment</string>
+  <string name="category_health">Health</string>
+  <string name="category_travel">Travel</string>
+  <string name="category_other">Other</string>
+  <string name="categories_refining">Refining with AI…</string>
   <string name="spends_calendar_hint">Chart show how much you spent every day relative to your daily budget</string>
   <string name="export_to_csv_file_name">Spends (from %1$s to %2$s)</string>
   <string name="crash_report_ready">An error occurred</string>

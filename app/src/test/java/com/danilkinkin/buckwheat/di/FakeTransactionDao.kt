@@ -46,6 +46,13 @@ class FakeTransactionDao : TransactionDao {
         spends.removeIf { it.uid == uid }
     }
 
+    override suspend fun updateCategory(uid: Int, category: String?) {
+        val index = spends.indexOfFirst { it.uid == uid }
+        if (index >= 0) {
+            spends[index] = spends[index].copy(category = category)
+        }
+    }
+
     override suspend fun deleteAll() {
         spends.clear()
     }

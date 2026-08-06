@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -43,7 +44,8 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
 import java.util.*
-import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
+import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
+import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
@@ -71,6 +73,13 @@ fun Analytics(
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
     val scrollState = rememberScrollState()
+
+    val spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel()
+    val isCategorizing by spendCategoriesViewModel.isCategorizing.observeAsState(false)
+
+    LaunchedEffect(spends) {
+        spendCategoriesViewModel.categorizeUncategorized(spends)
+    }
 
     val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)
 
@@ -178,10 +187,11 @@ fun Analytics(
                                 )
                             }
                             Spacer(modifier = Modifier.height(36.dp))
-                            CategoriesChartCard(
+                            SpendCategoriesCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 spends = spends,
                                 currency = currency,
+                                isCategorizing = isCategorizing,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }

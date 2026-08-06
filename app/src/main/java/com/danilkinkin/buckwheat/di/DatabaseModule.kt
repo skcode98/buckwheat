@@ -98,6 +98,15 @@ val AutoMigration9to10: Migration = object : Migration(9, 10) {
     }
 }
 
+// Add category to transactions for the AI-assigned spend categories shown in analytics
+val AutoMigration10to11: Migration = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE `transactions` ADD COLUMN `category` TEXT"
+        )
+    }
+}
+
 // Rename Spent to Transaction
 val AutoMigration4to5: Migration = object : Migration(4, 5) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -124,7 +133,7 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 
 @Database(
     entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 10,
+    version = 11,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -149,6 +158,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11)
     }
 }

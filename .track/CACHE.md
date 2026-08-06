@@ -60,6 +60,10 @@
 | SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
 | BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
 | ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
+| SpendCategory enum | `app/.../data/categories/SpendCategory.kt` |
+| Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
+| Categories VM | `app/.../data/categories/SpendCategoriesViewModel.kt` |
+| Categories Card (analytics) | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |
 | Gradle (root) | `build.gradle.kts` |

@@ -25,6 +25,12 @@ data class Transaction(
 
     @ColumnInfo(name = "comment", defaultValue = "")
     val comment: String = "",
+
+    // Predefined spend category (SpendCategory.name) assigned by the AI classifier and shown
+    // in analytics only. Null until the classifier runs; display falls back to offline
+    // keyword matching (SpendCategorizer.categoryFor).
+    @ColumnInfo(name = "category")
+    val category: String? = null,
 ) {
     @PrimaryKey(autoGenerate = true) var uid: Int = 0
 }
