@@ -6,11 +6,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.*
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListUpdateCallback
 import com.danilkinkin.buckwheat.data.entities.Transaction
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -34,17 +30,16 @@ inline fun LazyListScope.animatedItemsIndexed(
     state: List<AnimatedItem<RowEntity>>,
     enterTransition: EnterTransition = expandVertically(),
     exitTransition: ExitTransition = shrinkVertically(),
-    noinline key: ((item: RowEntity) -> Any)? = null,
     crossinline itemContent: @Composable LazyItemScope.(index: Int, item: RowEntity) -> Unit
 ) {
     items(
         state.size,
-        if (key != null) { keyIndex: Int -> key(state[keyIndex].item) } else null
+        { keyIndex: Int -> state[keyIndex].id }
     ) { index ->
 
         val item = state[index]
 
-        key(key?.invoke(item.item)) {
+        key(item.id) {
             AnimatedVisibility(
                 visibleState = item.visibility,
                 enter = enterTransition,
@@ -76,52 +71,52 @@ fun updateAnimatedItemsState(
         }
         val oldList = state.value.toList()
 
-        val diffCb = object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = newList.size
-            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                oldList[oldItemPosition].item.key == newList[newItemPosition].key
+        val oldKeyToIndex = HashMap<String, Int>()
+        oldList.forEachIndexed { index, item -> oldKeyToIndex[item.item.key] = index }
 
-            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
-                (oldList[oldItemPosition].item.contentHash
-                    ?: oldList[oldItemPosition].item.key) == (newList[newItemPosition].contentHash
-                    ?: newList[newItemPosition].key)
+        // Build the composite directly by key instead of consuming DiffUtil's event stream.
+        // DiffUtil reports insert positions in the coordinate space of the previous composite,
+        // which can still contain rows animating out (a keystroke cancels the previous exit
+        // animation). Those lingering rows inflate the positions beyond newList.size and made
+        // the old dispatch read newList[position + i] out of bounds (IndexOutOfBoundsException
+        // when searching or editing a record's date).
+        val consumedOld = BooleanArray(oldList.size)
+        val compositeList = ArrayList<AnimatedItem<RowEntity>>(newList.size)
+        val oldIndexOfComposite = ArrayList<Int>(newList.size)
 
-            override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): RowEntity =
-                newList[newItemPosition]
+        newList.forEach { row ->
+            val oldIndex = oldKeyToIndex[row.key]
+            if (oldIndex != null && !consumedOld[oldIndex]) {
+                consumedOld[oldIndex] = true
+                val animated = oldList[oldIndex]
+                if (animated.item.contentHash != row.contentHash) {
+                    animated.item = row
+                }
+                animated.visibility.targetState = true
+                compositeList.add(animated)
+                oldIndexOfComposite.add(oldIndex)
+            } else {
+                val animated = AnimatedItem(
+                    visibility = MutableTransitionState(firstInject.value),
+                    row
+                )
+                animated.visibility.targetState = true
+                compositeList.add(animated)
+                oldIndexOfComposite.add(-1)
+            }
         }
-        val diffResult = calculateDiff(false, diffCb)
-        val compositeList = oldList.toMutableList()
 
-        diffResult.dispatchUpdatesTo(object : ListUpdateCallback {
-            override fun onInserted(position: Int, count: Int) {
-                for (i in 0 until count) {
-                    val newItem = AnimatedItem(
-                        visibility = MutableTransitionState(firstInject.value),
-                        newList[position + i]
-                    )
-                    newItem.visibility.targetState = true
-                    compositeList.add(position + i, newItem)
-                }
+        // Rows that disappeared keep their spot as long as the exit animation runs.
+        for (oldIndex in oldList.indices) {
+            if (!consumedOld[oldIndex]) {
+                val animated = oldList[oldIndex]
+                animated.visibility.targetState = false
+                val nextKept = oldIndexOfComposite.indexOfFirst { it > oldIndex }
+                val insertAt = if (nextKept < 0) compositeList.size else nextKept
+                compositeList.add(insertAt, animated)
+                oldIndexOfComposite.add(insertAt, -1)
             }
-
-            override fun onRemoved(position: Int, count: Int) {
-                for (i in 0 until count) {
-                    compositeList[position + i].visibility.targetState = false
-                }
-            }
-
-            override fun onMoved(fromPosition: Int, toPosition: Int) {
-                // not detecting moves.
-            }
-
-            override fun onChanged(position: Int, count: Int, payload: Any?) {
-                val row = payload as RowEntity
-                for (i in 0 until count) {
-                    compositeList[position + i].item = row
-                }
-            }
-        })
+        }
 
         if (state.value != compositeList) {
             state.value = compositeList
@@ -135,9 +130,12 @@ fun updateAnimatedItemsState(
     return state
 }
 
+private var animatedItemIdCounter = 0L
+
 data class AnimatedItem<T>(
     val visibility: MutableTransitionState<Boolean>,
     var item: T,
+    val id: Long = animatedItemIdCounter++,
 ) {
 
     override fun hashCode(): Int {
@@ -151,15 +149,5 @@ data class AnimatedItem<T>(
         other as AnimatedItem<*>
 
         return item == other.item
-    }
-}
-
-
-suspend fun calculateDiff(
-    detectMoves: Boolean = true,
-    diffCb: DiffUtil.Callback
-): DiffUtil.DiffResult {
-    return withContext(Dispatchers.Unconfined) {
-        DiffUtil.calculateDiff(diffCb, detectMoves)
     }
 }

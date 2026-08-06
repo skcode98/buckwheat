@@ -125,7 +125,6 @@ fun History(
 
                 animatedItemsIndexed(
                     state = animatedList.value,
-                    key = { rowItem -> rowItem.key },
                 ) { index, row ->
                     when (row.type) {
                         RowEntityType.DayDivider -> HistoryDateDivider(row.day)
