@@ -68,7 +68,9 @@
   <string name="voice_permission_denied">Microphone permission denied</string>
   <string name="voice_unavailable">Speech recognition is not available on this device</string>
   <string name="voice_confirm_title">Add record?</string>
+  <string name="voice_confirm_batch_title">Add records?</string>
   <string name="voice_confirm_confirm">Confirm</string>
+  <string name="voice_confirm_add_all">Add all</string>
   <string name="voice_confirm_modify">Modify</string>
   <string name="voice_confirm_skip">Skip</string>
   <string name="voice_confirm_date_label">Date</string>

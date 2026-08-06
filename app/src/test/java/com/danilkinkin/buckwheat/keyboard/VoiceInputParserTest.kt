@@ -154,6 +154,108 @@ class VoiceInputParserTest {
     }
 
     @Test
+    fun `parseVoiceInputs splits comma separated records`() {
+        val results = parseVoiceInputs("tea 20, lunch 150, dinner 300")
+
+        assertEquals(3, results.size)
+        assertEquals("20", results[0].amount)
+        assertEquals("tea", results[0].comment)
+        assertEquals("150", results[1].amount)
+        assertEquals("lunch", results[1].comment)
+        assertEquals("300", results[2].amount)
+        assertEquals("dinner", results[2].comment)
+    }
+
+    @Test
+    fun `parseVoiceInputs splits on and between numbered chunks`() {
+        val results = parseVoiceInputs("coffee 5 dollars and a sandwich 3")
+
+        assertEquals(2, results.size)
+        assertEquals("5", results[0].amount)
+        assertEquals("coffee", results[0].comment)
+        assertEquals("3", results[1].amount)
+        assertEquals("a sandwich", results[1].comment)
+    }
+
+    @Test
+    fun `parseVoiceInputs keeps comment with and when one side has no number`() {
+        val results = parseVoiceInputs("bread and butter 50")
+
+        assertEquals(1, results.size)
+        assertEquals("50", results[0].amount)
+        assertEquals("bread and butter", results[0].comment)
+    }
+
+    @Test
+    fun `parseVoiceInputs keeps decimal comma as one record`() {
+        val results = parseVoiceInputs("12,50")
+
+        assertEquals(1, results.size)
+        assertEquals("12,50", results[0].amount)
+    }
+
+    @Test
+    fun `parseVoiceInputs keeps thousands separator as one record`() {
+        val results = parseVoiceInputs("1,234 rupees and 5 tea")
+
+        assertEquals(2, results.size)
+        assertEquals("1,234", results[0].amount)
+        assertEquals("5", results[1].amount)
+    }
+
+    @Test
+    fun `parseVoiceInputs empty or numberless returns empty`() {
+        assertEquals(0, parseVoiceInputs("").size)
+        assertEquals(0, parseVoiceInputs("   ").size)
+        assertEquals(0, parseVoiceInputs("nothing here").size)
+    }
+
+    @Test
+    fun `parseVoiceAiContents parses array of records`() {
+        val results = parseVoiceAiContents(
+            """[{"amount":"150","comment":"tea","date":"today"},""" +
+                """{"amount":"45","comment":"bus","date":"yesterday"}]"""
+        )
+
+        assertEquals(2, results.size)
+        assertEquals("150", results[0].amount)
+        assertEquals("tea", results[0].comment)
+        assertEquals("45", results[1].amount)
+        assertEquals("bus", results[1].comment)
+
+        val expectedYesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        assertEquals(
+            expectedYesterday.get(Calendar.DAY_OF_MONTH),
+            results[1].date.toCalendar().get(Calendar.DAY_OF_MONTH),
+        )
+    }
+
+    @Test
+    fun `parseVoiceAiContents parses array wrapped in markdown fences`() {
+        val raw = "```json\n[{\"amount\":\"150\",\"comment\":\"tea\",\"date\":null}]\n```"
+        val results = parseVoiceAiContents(raw)
+
+        assertEquals(1, results.size)
+        assertEquals("150", results[0].amount)
+        assertEquals("tea", results[0].comment)
+    }
+
+    @Test
+    fun `parseVoiceAiContents falls back to offline splitting on prose`() {
+        val results = parseVoiceAiContents("tea 20 and lunch 150")
+
+        assertEquals(2, results.size)
+        assertEquals("20", results[0].amount)
+        assertEquals("150", results[1].amount)
+    }
+
+    @Test
+    fun `parseVoiceAiContents returns empty for empty or numberless reply`() {
+        assertEquals(0, parseVoiceAiContents("").size)
+        assertEquals(0, parseVoiceAiContents("no numbers here").size)
+    }
+
+    @Test
     fun `ai date parses iso offset date time`() {
         val now = Calendar.getInstance().time
         val parsed = parseVoiceAiDate("2026-08-05T10:30:00Z", now)

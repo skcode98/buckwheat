@@ -29,6 +29,12 @@ private val FILLER_WORDS_REGEX = Regex(
     RegexOption.IGNORE_CASE,
 )
 
+// Strong record separators: commas/semicolons must touch whitespace on at least one side so a
+// thousands separator ("1,234") or decimal comma ("12,50") is never mistaken for a boundary.
+private val STRONG_SEPARATOR_REGEX = Regex("""\s+[,;]\s*|[,;]\s+|\n+""")
+
+private val WORD_SEPARATOR_REGEX = Regex("""\s+(?:and|then)\s+""", RegexOption.IGNORE_CASE)
+
 private fun MatchResult.hasCurrencyMarker(): Boolean =
     groupValues[1].isNotEmpty() || groupValues[3].isNotEmpty()
 
@@ -117,3 +123,44 @@ fun parseVoiceInput(input: String): VoiceInputResult? {
         date = targetDate.time,
     )
 }
+
+// Splits a transcript into candidate record chunks. Strong separators (commas, semicolons,
+// newlines) always split; the words "and"/"then" split only when both adjacent chunks carry a
+// digit, so a comment like "bread and butter 50" stays one record while
+// "tea 20 and lunch 150" becomes two.
+private fun splitVoiceInput(input: String): List<String> {
+    val chunks = STRONG_SEPARATOR_REGEX
+        .split(input)
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+
+    val records = mutableListOf<String>()
+    for (chunk in chunks) {
+        var last = 0
+        var split = false
+        for (match in WORD_SEPARATOR_REGEX.findAll(chunk)) {
+            val left = chunk.substring(last, match.range.first).trim()
+            val right = chunk.substring(match.range.last + 1).trim()
+            if (left.any(Char::isDigit) && right.any(Char::isDigit)) {
+                records.add(left)
+                last = match.range.last + 1
+                split = true
+            }
+        }
+        if (split) {
+            records.add(chunk.substring(last).trim())
+        } else {
+            records.add(chunk)
+        }
+    }
+    return records
+}
+
+// Parses a transcript into zero or more spending records. Each chunk is parsed by the
+// single-record parser; chunks without a usable number are dropped.
+fun parseVoiceInputs(input: String): List<VoiceInputResult> =
+    splitVoiceInput(input)
+        .mapNotNull { parseVoiceInput(it) }
+        .take(MAX_VOICE_RECORDS)
+
+private const val MAX_VOICE_RECORDS = 12

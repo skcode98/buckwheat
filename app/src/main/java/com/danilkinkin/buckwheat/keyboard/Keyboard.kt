@@ -92,35 +92,40 @@ fun Keyboard(
     // result (or AI response) that arrives after the user started a newer session can be
     // detected as stale and discarded instead of committing a second transaction.
     var voiceSession by remember { mutableStateOf(0L) }
-    // Voice records are not committed automatically anymore: the parsed result is
-    // parked here and a preview dialog lets the user confirm, modify, or skip it.
-    var voicePending by remember { mutableStateOf<VoicePending?>(null) }
+    // Voice records are not committed automatically anymore: the parsed records are
+    // parked here and a preview dialog lets the user confirm, modify, or skip them.
+    // The list normally has one element; batch transcripts ("tea 20, lunch 150") may
+    // yield several.
+    var voicePending by remember { mutableStateOf<List<VoicePending>?>(null) }
 
-    val commitVoiceRecord: (BigDecimal, Date, String) -> Unit = { amount, date, comment ->
+    val commitVoiceRecords: (List<VoicePending>) -> Unit = { records ->
         if (mode == EditMode.EDIT) {
             // Voice input while editing must replace the edited transaction
             // (mirroring the Apply button), not append a new spend and leave
-            // the original behind.
+            // the original behind. Only the first parsed record is applied.
             val edited = editorViewModel.editedTransaction
             if (edited != null) {
+                val first = records.first()
                 spendsViewModel.removeSpent(edited, silent = true)
                 spendsViewModel.addSpent(
                     edited.copy(
-                        value = amount,
-                        date = date,
-                        comment = comment.trim(),
+                        value = first.amount,
+                        date = first.date,
+                        comment = first.comment.trim(),
                     )
                 )
             }
         } else {
-            spendsViewModel.addSpent(
-                Transaction(
-                    type = TransactionType.SPENT,
-                    value = amount,
-                    date = date,
-                    comment = comment,
+            records.forEach { record ->
+                spendsViewModel.addSpent(
+                    Transaction(
+                        type = TransactionType.SPENT,
+                        value = record.amount,
+                        date = record.date,
+                        comment = record.comment,
+                    )
                 )
-            )
+            }
             appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)
         }
         editorViewModel.resetEditingSpent()
@@ -196,51 +201,55 @@ fun Keyboard(
                 voiceStatus = context.getString(R.string.voice_processing)
                 coroutineScope.launch {
                     try {
-                        var parsed: VoiceInputResult? = null
+                        var parsed: List<VoiceInputResult> = emptyList()
                         var aiError: String? = null
                         when (val ai = parseVoiceInputWithAi(context, text)) {
-                            is VoiceAiResult.Success -> parsed = ai.result
+                            is VoiceAiResult.Success -> parsed = ai.results
                             is VoiceAiResult.Failure -> {
                                 aiError = context.getString(R.string.voice_ai_error_prefix) +
                                     ai.message
-                                parsed = parseVoiceInput(text)
+                                parsed = parseVoiceInputs(text)
                             }
-                            VoiceAiResult.NotConfigured -> parsed = parseVoiceInput(text)
+                            VoiceAiResult.NotConfigured -> parsed = parseVoiceInputs(text)
                         }
                         // Discard the result if the user started a newer recognition session
                         // while the AI call was still in flight.
                         if (session != voiceSession) return@launch
-                        val amount = parsed?.amount?.let(::parseAmountToBigDecimal)
-                        if (parsed == null || amount == null || amount.signum() == 0) {
+
+                        val records = parsed.mapNotNull { result ->
+                            val amount = result.amount.let(::parseAmountToBigDecimal)
+                            if (amount == null || amount.signum() == 0) null
+                            else VoicePending(
+                                amount = amount,
+                                amountString = amount.stripTrailingZeros().toPlainString(),
+                                comment = result.comment,
+                                date = result.date,
+                            )
+                        }
+                        if (records.isEmpty()) {
                             // Prefer surfacing the AI failure over a generic "couldn't
                             // understand" so the user can diagnose the AI path.
                             voiceStatus = aiError
                                 ?: context.getString(R.string.voice_couldnt_understand)
                             return@launch
                         }
-                        val amountString = amount.stripTrailingZeros().toPlainString()
+
+                        // Pre-fill the editor with the first record so the "Modify" action
+                        // (and a single-record commit) has something to work with.
+                        val first = records.first()
 
                         voiceStatus = null
                         voiceAiError = aiError
-                        editorViewModel.rawSpentValue.value = amountString
-                        editorViewModel.currentComment.value = parsed.comment
-                        editorViewModel.currentDate = parsed.date
+                        editorViewModel.rawSpentValue.value = first.amountString
+                        editorViewModel.currentComment.value = first.comment
+                        editorViewModel.currentDate = first.date
 
                         if (editorViewModel.stage.value === EditStage.IDLE) {
                             editorViewModel.startCreatingSpent()
                         }
-                        editorViewModel.modifyEditingSpent(amount)
+                        editorViewModel.modifyEditingSpent(first.amount)
 
-                        if (editorViewModel.canCommitEditingSpent()) {
-                            // Show the preview dialog; the record is committed only
-                            // after the user confirms it.
-                            voicePending = VoicePending(
-                                amount = amount,
-                                amountString = amountString,
-                                comment = parsed.comment,
-                                date = parsed.date,
-                            )
-                        }
+                        voicePending = records
                     } catch (e: Exception) {
                         Log.d("VoiceAI", "Failed to commit voice input", e)
                         if (session == voiceSession) {
@@ -640,33 +649,76 @@ fun Keyboard(
         }
     }
 
-    voicePending?.let { pending ->
+    voicePending?.let { records ->
+        val isBatch = records.size > 1
         AlertDialog(
             onDismissRequest = {
                 voicePending = null
                 skipVoiceRecord()
             },
-            title = { Text(stringResource(R.string.voice_confirm_title)) },
+            title = {
+                Text(
+                    stringResource(
+                        if (isBatch) R.string.voice_confirm_batch_title
+                        else R.string.voice_confirm_title
+                    )
+                )
+            },
             text = {
                 Column {
-                    Text(
-                        text = pending.amountString,
-                        style = MaterialTheme.typography.headlineLarge,
-                    )
-                    if (pending.comment.isNotEmpty()) {
+                    if (isBatch) {
+                        records.forEach { record ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = record.amountString,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = buildString {
+                                        if (record.comment.isNotEmpty()) {
+                                            append(record.comment)
+                                            append(" · ")
+                                        }
+                                        append(
+                                            prettyDate(
+                                                record.date,
+                                                forceShowDate = true,
+                                                forceHideDate = false,
+                                            )
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                )
+                            }
+                        }
+                    } else {
+                        val pending = records.first()
+                        Text(
+                            text = pending.amountString,
+                            style = MaterialTheme.typography.headlineLarge,
+                        )
+                        if (pending.comment.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = pending.comment,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = pending.comment,
-                            style = MaterialTheme.typography.bodyLarge,
+                            text = stringResource(R.string.voice_confirm_date_label) +
+                                ": " + prettyDate(pending.date, forceShowDate = true),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.voice_confirm_date_label) +
-                            ": " + prettyDate(pending.date, forceShowDate = true),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    )
                     voiceAiError?.let { error ->
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -681,10 +733,15 @@ fun Keyboard(
                 TextButton(
                     onClick = {
                         voicePending = null
-                        commitVoiceRecord(pending.amount, pending.date, pending.comment)
+                        commitVoiceRecords(records)
                     }
                 ) {
-                    Text(stringResource(R.string.voice_confirm_confirm))
+                    Text(
+                        stringResource(
+                            if (isBatch) R.string.voice_confirm_add_all
+                            else R.string.voice_confirm_confirm
+                        )
+                    )
                 }
             },
             dismissButton = {

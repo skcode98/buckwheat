@@ -9,6 +9,7 @@ import com.danilkinkin.buckwheat.settingsDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -29,7 +30,7 @@ private const val READ_TIMEOUT_MS = 20_000
 // silently uses the offline parser. Failure carries a human-readable reason so the user can
 // diagnose why the AI path did not power the record (wrong key, rate limit, bad model, etc.).
 sealed class VoiceAiResult {
-    data class Success(val result: VoiceInputResult) : VoiceAiResult()
+    data class Success(val results: List<VoiceInputResult>) : VoiceAiResult()
     data class Failure(val message: String) : VoiceAiResult()
     object NotConfigured : VoiceAiResult()
 }
@@ -63,12 +64,14 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
                             .put("role", "system")
                             .put(
                                 "content",
-                                "You extract a spending record from a user voice transcript. " +
-                                    "Reply with ONLY one JSON object and nothing else: " +
-                                    "{\"amount\":\"150\",\"comment\":\"tea\",\"date\":\"today\"}. " +
-                                    "amount must be a plain numeric string. comment must be a concise " +
-                                    "description. date must be ISO-8601, 'today', 'yesterday', " +
-                                    "'tomorrow', or null."
+                                "You extract spending records from a user voice transcript. " +
+                                    "Reply with ONLY a JSON array and nothing else, e.g. " +
+                                    "[{\"amount\":\"150\",\"comment\":\"tea\",\"date\":\"today\"}," +
+                                    "{\"amount\":\"45\",\"comment\":\"bus\",\"date\":\"yesterday\"}]. " +
+                                    "If the transcript contains one record, return an array with " +
+                                    "one object. amount must be a plain numeric string. comment must " +
+                                    "be a concise description. date must be ISO-8601, 'today', " +
+                                    "'yesterday', 'tomorrow', or null."
                             )
                     )
                     .put(
@@ -114,9 +117,11 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
             // Text-only models may also reply with a plain sentence instead of strict JSON, so
             // fall back to the offline parser on the reply when no JSON amount is found.
             val modelContent = extractModelContent(responseText)
-            val result = parseVoiceAiContent(modelContent)
-                ?: return@withContext VoiceAiResult.Failure("response contained no amount")
-            VoiceAiResult.Success(result)
+            val results = parseVoiceAiContents(modelContent)
+            if (results.isEmpty()) {
+                return@withContext VoiceAiResult.Failure("response contained no amount")
+            }
+            VoiceAiResult.Success(results)
         } catch (e: Exception) {
             Log.d("VoiceAI", "AI parse failed", e)
             VoiceAiResult.Failure(e.message ?: e.javaClass.simpleName)
@@ -130,6 +135,17 @@ internal fun extractJsonContent(raw: String): String? {
     val start = raw.indexOf('{')
     val end = raw.lastIndexOf('}')
     if (start == -1 || end <= start) return null
+    return raw.substring(start, end + 1)
+}
+
+// Extracts the first JSON object or array from a reply that may be wrapped in markdown fences
+// or prose. Unlike extractJsonContent it tolerates array replies (leading '[' / trailing ']').
+internal fun extractJsonArrayOrObject(raw: String): String? {
+    val start = raw.indexOfFirst { it == '[' || it == '{' }
+    if (start == -1) return null
+    val endChar = if (raw[start] == '[') ']' else '}'
+    val end = raw.lastIndexOf(endChar)
+    if (end <= start) return null
     return raw.substring(start, end + 1)
 }
 
@@ -159,27 +175,53 @@ private fun JSONObject.optStringIgnoreCase(key: String, defaultValue: String = "
     return defaultValue
 }
 
-// Parses the model's reply into a spending record. Tries strict JSON first (amount is
-// mandatory; missing/invalid amount falls through), then the offline parser so plain
-// sentences like "user spent 150 rupees on tea" still produce a record.
-internal fun parseVoiceAiContent(raw: String): VoiceInputResult? {
-    val jsonContent = extractJsonContent(raw)
-    if (jsonContent != null) {
-        val jsonObject = runCatching { JSONObject(jsonContent) }.getOrNull()
-        if (jsonObject != null) {
+// Parses the model's reply into zero or more spending records. Tries a JSON array first
+// (the batch format), then a single JSON object, then the offline splitter so plain sentences
+// like "user spent 150 rupees on tea and 45 on a bus" still produce records.
+internal fun parseVoiceAiContents(raw: String): List<VoiceInputResult> {
+    val jsonContent = extractJsonArrayOrObject(raw) ?: return parseVoiceInputs(raw)
+    try {
+        val trimmed = jsonContent.trim()
+        if (trimmed.startsWith("[")) {
+            val array = JSONArray(trimmed)
+            val records = buildList {
+                for (i in 0 until array.length()) {
+                    val element = array.optJSONObject(i) ?: continue
+                    val amount = element.optStringIgnoreCase("amount")
+                    if (amount.isNotEmpty()) {
+                        add(
+                            VoiceInputResult(
+                                amount = amount,
+                                comment = element.optStringIgnoreCase("comment"),
+                                date = parseVoiceAiDate(element.optStringIgnoreCase("date")),
+                            )
+                        )
+                    }
+                }
+            }
+            if (records.isNotEmpty()) return records
+        } else {
+            val jsonObject = JSONObject(trimmed)
             val amount = jsonObject.optStringIgnoreCase("amount")
-            val result = runCatching {
-                VoiceInputResult(
-                    amount = amount,
-                    comment = jsonObject.optStringIgnoreCase("comment"),
-                    date = parseVoiceAiDate(jsonObject.optStringIgnoreCase("date")),
+            if (amount.isNotEmpty()) {
+                return listOf(
+                    VoiceInputResult(
+                        amount = amount,
+                        comment = jsonObject.optStringIgnoreCase("comment"),
+                        date = parseVoiceAiDate(jsonObject.optStringIgnoreCase("date")),
+                    )
                 )
-            }.getOrNull()
-            if (result != null && result.amount.isNotEmpty()) return result
+            }
         }
+    } catch (_: Exception) {
     }
-    return parseVoiceInput(raw)
+    return parseVoiceInputs(raw)
 }
+
+// Parses a single record from the model's reply (backward-compatible entry point that
+// delegates to the batch parser and returns the first record, if any).
+internal fun parseVoiceAiContent(raw: String): VoiceInputResult? =
+    parseVoiceAiContents(raw).firstOrNull()
 
 private val VOICE_AI_DATE_TIME_FORMATS = listOf(
     DateTimeFormatter.ISO_LOCAL_DATE_TIME,
