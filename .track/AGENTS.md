@@ -25,6 +25,8 @@
 - **Current branch**: `master` (clean fork of upstream @ `4b60102`)
 - **Our saved work**: `our-fixes` branch on origin
 - **Workflow**: Build APK via GitHub Actions (`.github/workflows/build.yml`)
+- **Pushed so far**: `f6e3649` (search day-total + analytics calendar fix), `2c90b8d` (voice AI envelope unwrap), `72db09f` (AI spend categories), `3a83f7c` (carry-forward fix + voice AI settings + recurring currency), `fc16848` (archived CSV imports), `328dd94` (Android 17 launch crash), `212f7cf` (CrashLogger), `a309c29` (budget guards, AGP 8.7.3)
+- **Test baseline**: `.\gradlew.bat :app:testDebugUnitTest` green (53 tests incl. 12 `SpendCategorizerTest`, 23 `VoiceInputParserTest`, 18 `SpendsRepositoryTest`)
 
 ---
 
@@ -107,17 +109,31 @@ val localState = remember { mutableStateOf(viewModel.someLiveData.value) }
 
 ```
 com.danilkinkin.buckwheat/
-├── Application.kt              # @HiltAndroidApp, NotificationChannels
+├── Application.kt              # @HiltAndroidApp, NotificationChannels, installs CrashLogger
 ├── MainActivity.kt             # Single Activity, LaunchedEffect setup
+├── CrashLogger.kt              # Uncaught handler → Downloads/buckwheat-crash-*.txt
 ├── CatchAndSendCrashReport.kt  # Crash reporting
 │
 ├── data/
 │   ├── dao/
-│   │   ├── TransactionDao.kt   # CRUD for transactions
-│   │   └── StorageDao.kt       # Key-value storage (legacy)
+│   │   ├── TransactionDao.kt  # CRUD for transactions (+ updateCategory)
+│   │   ├── StorageDao.kt      # Key-value storage (legacy)
+│   │   ├── SavedTagDao.kt     # Persistent tags
+│   │   ├── BudgetPeriodDao.kt # Periods + archived periods
+│   │   ├── RecurringDao.kt    # Recurring templates
+│   │   └── SavingsGoalDao.kt  # Savings goals
 │   ├── entities/
-│   │   ├── Transaction.kt      # Room entity: type, value, date, comment
-│   │   └── Storage.kt          # Legacy key-value entity
+│   │   ├── Transaction.kt     # Room entity: type, value, date, comment, category
+│   │   ├── Storage.kt         # Legacy key-value entity
+│   │   ├── SavedTag.kt        # Persistent tag (unique name index)
+│   │   ├── BudgetPeriod.kt    # Period record (isImported, totalSpent; id is class-body var)
+│   │   ├── ArchivedTransaction.kt
+│   │   ├── RecurringTemplate.kt
+│   │   └── SavingsGoal.kt
+│   ├── categories/
+│   │   ├── SpendCategory.kt   # Fixed enum (FOOD…OTHER), keywords, labelRes
+│   │   ├── SpendCategorizer.kt# offlineClassify + categorizeSpendsWithAi (batches of 60)
+│   │   └── SpendCategoriesViewModel.kt  # Persists AI results only
 │   ├── AppViewModel.kt         # Sheet stack, snackbars, tutorials
 │   ├── ExtendCurrency.kt       # Currency model
 │   └── SpendsViewModel.kt      # Budget/spend state, streak compute
@@ -142,9 +158,11 @@ com.danilkinkin.buckwheat/
 │   └── toolbar/                # Editor toolbar, rest budget pill
 │
 ├── keyboard/
-│   ├── Keyboard.kt             # Number pad composable
+│   ├── Keyboard.kt             # Number pad composable (+ voice session guard)
 │   ├── KeyboardButton.kt
 │   ├── KeyboardViewModel.kt
+│   ├── VoiceInputParser.kt     # Offline NL → (amount, comment, date)
+│   ├── VoiceAi.kt              # OpenAI-compatible AI fallback (timeouts, JSON extraction)
 │   └── rememberAppKeyboard.kt  # Keyboard action dispatcher
 │
 ├── home/
@@ -177,8 +195,9 @@ com.danilkinkin.buckwheat/
 │   └── ListAnimation.kt
 │
 ├── analytics/
+│   ├── Analytics.kt            # Analytics sheet (LaunchedEffect → categories)
 │   ├── SpendsChart.kt          # Spending chart
-│   ├── SpendsCalendar.kt       # Calendar heatmap
+│   ├── SpendsCalendar.kt       # Calendar heatmap (full-month period view)
 │   ├── SpendsBudgetCard.kt
 │   ├── RestAndSpentBudgetCard.kt
 │   ├── SpendsCountCard.kt
@@ -188,7 +207,9 @@ com.danilkinkin.buckwheat/
 │   ├── ViewerHistory.kt
 │   ├── MiddlePeriodAnalyticsHeader.kt
 │   ├── FinishedPeriodHeader.kt
-│   └── FillCircleStub.kt
+│   ├── FillCircleStub.kt
+│   └── categoriesChart/
+│       └── SpendCategoriesCard.kt  # Donut + chips category breakdown ("Refining with AI…")
 │
 ├── recalcBudget/               # Budget recalculation methods
 │   ├── RecalcBudget.kt
@@ -203,7 +224,11 @@ com.danilkinkin.buckwheat/
 │   ├── LangSwitcher.kt
 │   ├── About.kt
 │   ├── BugReporter.kt
-│   └── TryWidget.kt
+│   ├── TryWidget.kt
+│   ├── GoalsSheet.kt + GoalsViewModel.kt
+│   ├── RecurringPaymentsSheet.kt + RecurringPaymentsViewModel.kt
+│   ├── TagsManagementSheet.kt + TagsManagementViewModel.kt
+│   └── VoiceAiSettingsSheet.kt # API key / provider URL / model (shared with categories)
 │
 ├── onboarding/
 │   ├── Onboarding.kt           # First-launch walkthrough
@@ -280,6 +305,7 @@ com.danilkinkin.buckwheat/
 | `showAllocateDialog!!` after null check | Use local val capture: `val id = showAllocateDialog; if (id != null) { ... }` |
 | Manual `Room.databaseBuilder()` in receivers | Use `@AndroidEntryPoint` + injected DAOs |
 | Split `goAsync()`/`finish()` in receivers | Already correct — keep this pattern |
+| JVM unit tests using `org.json` (e.g. `JSONObject(String)`) | Add `testImplementation("org.json:json:20231013")` to `app/build.gradle.kts` — Android's bundled `org.json` is stubbed in unit tests |
 
 ---
 

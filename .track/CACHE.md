@@ -64,6 +64,7 @@
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
 | Categories VM | `app/.../data/categories/SpendCategoriesViewModel.kt` |
 | Categories Card (analytics) | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
+| Categorizer Tests | `app/src/test/java/.../data/categories/SpendCategorizerTest.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |
 | Gradle (root) | `build.gradle.kts` |
@@ -131,3 +132,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `locale` — locale code (String)
 - `TUTOR_*` — tutorial stage booleans
 - `autoBackupInterval` — backup interval (Int)
+- `debug` — debug-mode flag (String; toggled via keyboard "0"×8 + "." + apply)
+- `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String)
+- `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String)
+- `voiceAiModelStoreKey` — model name (String)

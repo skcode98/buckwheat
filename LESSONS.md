@@ -93,3 +93,63 @@ Applied the same fix to `periodTransactions`.
 - Room automatically runs `suspend` DAO methods on `Dispatchers.IO`, and LiveData-returning methods are already asynchronous.
 
 **Lesson:** Never use `.allowMainThreadQueries()` in production. It's a debug helper that masks the need for proper `suspend` DAO methods. Room's `suspend` support automatically uses background dispatchers.
+
+---
+
+## Issue 8: JVM unit tests can't use Android's `org.json` (it's stubbed)
+
+**Files:** `data/categories/SpendCategorizer.kt`, `test/.../SpendCategorizerTest.kt`, `app/build.gradle.kts`
+
+**Problem:** `JSONObject(String)` / `JSONArray` calls in parser code work on a device, but local JVM unit tests fail with `org.json.JSONException: End of input at character 0` (or `Method not mocked`) because Android's `org.json` is a stub that throws in unit tests.
+
+**Fix:** Added `testImplementation("org.json:json:20231013")` to `app/build.gradle.kts` so the real `org.json` implementation is on the unit-test classpath.
+
+**Lesson:** Any code that parses `org.json` needs the real library for JVM tests — add the `testImplementation` dependency up front. Also note: the non-Android `org.json` does **not** preserve `LinkedHashMap` insertion order, so tests must assert against explicit-key JSON strings, not rely on map ordering.
+
+---
+
+## Issue 9: Test assertions must match the parser's actual contract
+
+**File:** `test/.../SpendCategorizerTest.kt`
+
+**Problem:** A prose-fallback test expected the parsed comment to equal `"tea"`, but the parser returns a normalized sentence (e.g. `"user spent on tea"`). The test failed even though the production behavior was correct.
+
+**Fix:** Corrected the assertion to the parser's real output contract.
+
+**Lesson:** When a test fails after a parser change, first check whether the *parser* or the *test* is wrong — a normalized/sanitized output is often intentional. Verify the actual contract before "fixing" production code.
+
+---
+
+## Issue 10: `emptyMap()` needs an explicit type parameter in generic contexts
+
+**File:** `data/categories/SpendCategorizer.kt`
+
+**Problem:** `categorizeSpendsWithAi` returned `emptyMap()` from a branch, and Kotlin inferred `Nothing` for the value type where a `Map<Int, SpendCategory>` return was expected → compile error.
+
+**Fix:** `emptyMap<Int, SpendCategory>()`.
+
+**Lesson:** `emptyMap()` / `emptyList()` rely on type inference; when the expected type isn't obvious from the context (e.g. returned from a function with a covariant/generic signature), give the explicit type parameter.
+
+---
+
+## Issue 11: `LaunchedEffect` keyed on the data the effect itself writes needs a no-op guard
+
+**File:** `analytics/Analytics.kt`
+
+**Problem:** AI categorization is triggered with `LaunchedEffect(spends)`. After an AI persist, Room re-emits `spends`, re-firing the effect — potentially looping.
+
+**Fix:** `categorizeUncategorized` processes only rows whose `category` is null, so once persisted the row is skipped and the loop terminates.
+
+**Lesson:** A side-effect that writes to its own data source must be idempotent (skip already-handled rows) or you get an emit → write → emit loop. Guard on the state that makes work "already done".
+
+---
+
+## Issue 12: Keyword matching must be whole-word to avoid false positives
+
+**File:** `data/categories/SpendCategorizer.kt`
+
+**Problem:** Naive `contains()` keyword matching would classify "great" as food ("eat") or "tea tree" as food ("tea").
+
+**Fix:** Offline classification builds a regex map once with `Pattern.quote(keyword)` wrapped in `\b` word boundaries; the map is immutable for thread safety.
+
+**Lesson:** For category/classification keyword matching, use whole-word regex (`\b` + `Pattern.quote`) and build the pattern map once rather than per-call.
