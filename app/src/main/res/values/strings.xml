@@ -193,6 +193,12 @@
   <string name="tags_management_add_hint">Add new tag</string>
   <string name="tags_management_edit">Edit tag</string>
   <string name="tags_management_delete">Delete tag</string>
+  <string name="categories_management_title">Categories</string>
+  <string name="categories_management_add_hint">Add new category</string>
+  <string name="categories_management_edit">Edit category</string>
+  <string name="categories_management_delete">Delete category</string>
+  <string name="categories_management_builtin">Built-in</string>
+  <string name="category_selector_title">Select category</string>
   <string name="past_periods_title">Past Periods</string>
   <string name="past_periods_empty">No past periods yet</string>
   <string name="past_periods_date_range">%1$s — %2$s</string>

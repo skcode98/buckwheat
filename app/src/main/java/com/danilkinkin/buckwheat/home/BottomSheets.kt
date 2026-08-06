@@ -13,6 +13,8 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.di.TUTORS
+import com.danilkinkin.buckwheat.editor.category.CATEGORY_SELECTOR_SHEET
+import com.danilkinkin.buckwheat.editor.category.CategorySelectorSheet
 import com.danilkinkin.buckwheat.editor.toolbar.DEBUG_MENU_SHEET
 import com.danilkinkin.buckwheat.editor.toolbar.DebugMenu
 import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.BUDGET_IS_OVER_DESCRIPTION_SHEET
@@ -243,6 +245,24 @@ fun BottomSheets(
         name = TAGS_MANAGEMENT_SHEET,
     ) { state ->
         TagsManagementSheet()
+    }
+
+    BottomSheetWrapper(
+        name = CATEGORIES_MANAGEMENT_SHEET,
+    ) { state ->
+        CategoriesManagementSheet()
+    }
+
+    BottomSheetWrapper(
+        name = CATEGORY_SELECTOR_SHEET,
+    ) { state ->
+        CategorySelectorSheet(
+            onClose = {
+                coroutineScope.launch {
+                    state.hide()
+                }
+            },
+        )
     }
 
     BottomSheetWrapper(

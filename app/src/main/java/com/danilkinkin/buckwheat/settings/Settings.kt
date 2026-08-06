@@ -87,6 +87,16 @@ fun Settings(
                     },
                 )
                 TextRow(
+                    icon = painterResource(R.drawable.ic_label),
+                    text = stringResource(R.string.categories_management_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(CATEGORIES_MANAGEMENT_SHEET)
+                        )
+                    },
+                )
+                TextRow(
                     icon = painterResource(R.drawable.ic_autorenew),
                     text = stringResource(R.string.recurring_payments_title),
                     endIcon = painterResource(R.drawable.ic_arrow_right),

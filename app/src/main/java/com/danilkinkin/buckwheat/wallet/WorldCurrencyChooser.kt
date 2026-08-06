@@ -60,10 +60,16 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import java.util.Currency
 
-fun getCurrencies(): MutableList<Currency> {
-    val currencies = Currency.getAvailableCurrencies().toMutableList()
+// Curated shortlist of important currencies (INR first, the app's default).
+// Anything the user has already picked is still shown even if it isn't here.
+private val importantCurrencyCodes = listOf(
+    "INR", "USD", "EUR", "GBP", "JPY", "CNY", "AED", "AUD", "CAD", "CHF", "SAR", "NZD",
+)
 
-    currencies.sortBy { it.displayName.uppercase() }
+fun getCurrencies(): MutableList<Currency> {
+    val currencies = importantCurrencyCodes
+        .mapNotNull { code -> runCatching { Currency.getInstance(code) }.getOrNull() }
+        .toMutableList()
 
     return currencies
 }
@@ -76,7 +82,17 @@ fun WorldCurrencyChooserContent(
 ) {
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
-    val list = remember { getCurrencies() }
+    val list = remember(defaultCurrency) {
+        val curated = getCurrencies()
+        if (
+            defaultCurrency !== null &&
+            curated.none { it.currencyCode == defaultCurrency.currencyCode }
+        ) {
+            curated.toMutableList().apply { add(0, defaultCurrency) }
+        } else {
+            curated
+        }
+    }
     val selectCurrency = remember { mutableStateOf(defaultCurrency) }
     var searchValue by remember { mutableStateOf("") }
     val scrollState = rememberLazyListState()

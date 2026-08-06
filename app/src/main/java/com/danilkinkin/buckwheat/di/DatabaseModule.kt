@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
+import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.StorageDao
@@ -13,6 +14,7 @@ import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
+import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Storage
@@ -107,6 +109,21 @@ val AutoMigration10to11: Migration = object : Migration(10, 11) {
     }
 }
 
+// Create saved_categories table for user-managed custom categories
+val AutoMigration11to12: Migration = object : Migration(11, 12) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `saved_categories` " +
+                    "(`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`name` TEXT NOT NULL)"
+        )
+        database.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_saved_categories_name` " +
+                    "ON `saved_categories`(`name`)"
+        )
+    }
+}
+
 // Rename Spent to Transaction
 val AutoMigration4to5: Migration = object : Migration(4, 5) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -132,8 +149,8 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 }
 
 @Database(
-    entities = [Transaction::class, Storage::class, SavedTag::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 11,
+    entities = [Transaction::class, Storage::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
+    version = 12,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -151,6 +168,8 @@ abstract class DatabaseModule : RoomDatabase() {
 
     abstract fun savedTagDao(): SavedTagDao
 
+    abstract fun savedCategoryDao(): SavedCategoryDao
+
     abstract fun budgetPeriodDao(): BudgetPeriodDao
 
     abstract fun recurringDao(): RecurringDao
@@ -158,6 +177,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12)
     }
 }

@@ -112,7 +112,7 @@ fun Keyboard(
                         value = first.amount,
                         date = first.date,
                         comment = first.comment.trim(),
-                        category = editorViewModel.currentCategory.value?.name,
+                        category = editorViewModel.currentCategory.value,
                     )
                 )
             }
@@ -124,7 +124,7 @@ fun Keyboard(
                         value = record.amount,
                         date = record.date,
                         comment = record.comment,
-                        category = editorViewModel.currentCategory.value?.name,
+                        category = editorViewModel.currentCategory.value,
                     )
                 )
             }
@@ -619,7 +619,7 @@ fun Keyboard(
                                                     date = editorViewModel.currentDate,
                                                     comment = (editorViewModel.currentComment.value
                                                         ?: "").trim(),
-                                                    category = editorViewModel.currentCategory.value?.name
+                                                    category = editorViewModel.currentCategory.value
                                                 )
 
                                             spendsViewModel.removeSpent(
@@ -635,7 +635,7 @@ fun Keyboard(
                                                     date = editorViewModel.currentDate,
                                                     comment = (editorViewModel.currentComment.value
                                                         ?: "").trim(),
-                                                    category = editorViewModel.currentCategory.value?.name
+                                                    category = editorViewModel.currentCategory.value
                                                 )
                                             )
                                             appViewModel.activateTutorial(TUTORS.OPEN_HISTORY)

@@ -16,6 +16,7 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
@@ -56,6 +57,7 @@ class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,
     private val savedTagDao: SavedTagDao,
+    private val savedCategoryDao: SavedCategoryDao,
     private val budgetPeriodDao: BudgetPeriodDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) {
@@ -96,6 +98,32 @@ class SpendsRepository @Inject constructor(
         merged.addSource(savedSource) { tags ->
             lastSavedTags = tags
             merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
+        }
+
+        return merged
+    }
+
+    // Distinct non-null category values referenced by transactions (current period only —
+    // archived records don't carry a category column) merged with the user's saved custom
+    // categories. Categories that exist only on transactions (e.g. a saved category that was
+    // later deleted) surface here so the management sheet can offer to re-save them.
+    fun getAllCategories(): LiveData<List<String>> {
+        val merged = MediatorLiveData<List<String>>()
+        val transactionSource = transactionDao.getAll().map { transactions ->
+            transactions.mapNotNull { it.category }.distinct()
+        }
+        val savedSource = savedCategoryDao.getAll().map { categories -> categories.map { it.name } }
+
+        var lastTransactionCategories: List<String> = emptyList()
+        var lastSavedCategories: List<String> = emptyList()
+
+        merged.addSource(transactionSource) { categories ->
+            lastTransactionCategories = categories
+            merged.value = (lastTransactionCategories + lastSavedCategories).distinct()
+        }
+        merged.addSource(savedSource) { categories ->
+            lastSavedCategories = categories
+            merged.value = (lastTransactionCategories + lastSavedCategories).distinct()
         }
 
         return merged
@@ -165,7 +193,7 @@ class SpendsRepository @Inject constructor(
     fun getCurrency() = context.budgetDataStore.data.map {
         it[currencyStoreKey]?.let { value ->
             ExtendCurrency.getInstance(value)
-        } ?: ExtendCurrency(value = null, type = ExtendCurrency.Type.NONE)
+        } ?: ExtendCurrency.getInstance("INR")
     }
 
     fun getRestedBudgetDistributionMethod() = context.budgetDataStore.data.map { it ->

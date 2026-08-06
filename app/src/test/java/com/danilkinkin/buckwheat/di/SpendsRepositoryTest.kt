@@ -33,6 +33,7 @@ class SpendsRepositoryTest {
             context = context,
             FakeTransactionDao(),
             FakeSavedTagDao(),
+            FakeSavedCategoryDao(),
             budgetPeriodDao,
             currentDateUseCase,
         )
@@ -281,6 +282,52 @@ class SpendsRepositoryTest {
 
         assert(tags != null)
         assert(tags!!.contains("groceries"))
+    }
+
+    // Distinct category values assigned to transactions surface via getAllCategories so the
+    // Categories Management sheet can show (and offer to re-save) them even before the user
+    // has added any custom categories.
+    @Test
+    fun getAllCategoriesMergesTransactionCategories() = runTest {
+        setBudget()
+
+        spendsRepository.addSpent(
+            Transaction(
+                type = TransactionType.SPENT,
+                value = 10.toBigDecimal(),
+                date = currentDateUseCase.value,
+                comment = "groceries",
+                category = "FOOD",
+            )
+        )
+        spendsRepository.addSpent(
+            Transaction(
+                type = TransactionType.SPENT,
+                value = 20.toBigDecimal(),
+                date = currentDateUseCase.value,
+                comment = "gifts",
+                category = "MyCategory",
+            )
+        )
+        spendsRepository.addSpent(
+            Transaction(
+                type = TransactionType.SPENT,
+                value = 30.toBigDecimal(),
+                date = currentDateUseCase.value,
+                comment = "no category",
+            )
+        )
+
+        var categories: List<String>? = null
+        val liveData = spendsRepository.getAllCategories()
+        val observer = androidx.lifecycle.Observer<List<String>> { categories = it }
+        liveData.observeForever(observer)
+        liveData.removeObserver(observer)
+
+        assert(categories != null)
+        assert(categories!!.contains("FOOD"))
+        assert(categories!!.contains("MyCategory"))
+        assert(categories!!.size == 2)
     }
 
     // Check spent in same day added correctly

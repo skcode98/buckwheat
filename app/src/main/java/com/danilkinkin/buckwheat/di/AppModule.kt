@@ -39,6 +39,10 @@ object AppModule {
 
     @Singleton
     @Provides
+    fun provideSavedCategoryDao(db: DatabaseModule) = db.savedCategoryDao()
+
+    @Singleton
+    @Provides
     fun provideBudgetPeriodDao(db: DatabaseModule) = db.budgetPeriodDao()
 
     @Singleton
