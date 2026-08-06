@@ -29,8 +29,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
-import com.danilkinkin.buckwheat.data.categories.categoryFor
+import com.danilkinkin.buckwheat.data.categories.categoryTotals
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -78,23 +79,26 @@ fun SpendCategoriesCard(
 
     val categories by remember(spends) {
         mutableStateOf(
-            SpendCategory.entries
-                .mapNotNull { category ->
-                    val total = spends
-                        .filter { categoryFor(it) == category }
-                        .map { it.value }
-                        .fold(BigDecimal.ZERO) { acc, next -> acc + next }
-                    if (total <= BigDecimal.ZERO) return@mapNotNull null
-                    TagUsage(
-                        name = context.getString(category.labelRes),
-                        amount = total,
-                        color = if (category == SpendCategory.OTHER) {
-                            restColor
-                        } else {
-                            colors[category.ordinal % colors.size]
-                        },
-                        isSpecial = category == SpendCategory.OTHER,
-                    )
+            categoryTotals(spends)
+                .map { (key, total) ->
+                    when (key) {
+                        is CategoryKey.BuiltIn -> TagUsage(
+                            name = context.getString(key.category.labelRes),
+                            amount = total,
+                            color = if (key.category == SpendCategory.OTHER) {
+                                restColor
+                            } else {
+                                colors[key.category.ordinal % colors.size]
+                            },
+                            isSpecial = key.category == SpendCategory.OTHER,
+                        )
+                        is CategoryKey.Custom -> TagUsage(
+                            name = key.name,
+                            amount = total,
+                            color = colors[Math.floorMod(key.name.hashCode(), colors.size)],
+                            isSpecial = false,
+                        )
+                    }
                 }
                 .sortedBy { it.amount }
                 .reversed(),

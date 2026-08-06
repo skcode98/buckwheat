@@ -65,6 +65,85 @@ class SpendCategorizerTest {
     }
 
     @Test
+    fun `categoryKey uses persisted built-in category`() {
+        val transaction = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(150),
+            date = Date(),
+            comment = "lunch",
+            category = "FOOD",
+        )
+
+        assertEquals(CategoryKey.BuiltIn(SpendCategory.FOOD), categoryKey(transaction))
+    }
+
+    @Test
+    fun `categoryKey keeps custom category name`() {
+        val transaction = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(150),
+            date = Date(),
+            comment = "lunch",
+            category = "Gifts",
+        )
+
+        assertEquals(CategoryKey.Custom("Gifts"), categoryKey(transaction))
+    }
+
+    @Test
+    fun `categoryKey classifies by keyword when category is missing`() {
+        val transaction = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(150),
+            date = Date(),
+            comment = "bus",
+        )
+
+        assertEquals(CategoryKey.BuiltIn(SpendCategory.TRANSPORT), categoryKey(transaction))
+    }
+
+    @Test
+    fun `categoryKey ignores blank category values`() {
+        val transaction = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(150),
+            date = Date(),
+            comment = "medicine",
+            category = "   ",
+        )
+
+        assertEquals(CategoryKey.BuiltIn(SpendCategory.HEALTH), categoryKey(transaction))
+    }
+
+    @Test
+    fun `categoryTotals aggregates custom and built-in spends separately`() {
+        val spends = listOf(
+            Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts"),
+            Transaction(TransactionType.SPENT, BigDecimal(5), Date(), "bus", category = "Gifts"),
+            Transaction(TransactionType.SPENT, BigDecimal(20), Date(), "movie"),
+        )
+
+        val totals = categoryTotals(spends)
+
+        val custom = totals.first { it.first == CategoryKey.Custom("Gifts") }
+        val entertainment = totals.first {
+            it.first == CategoryKey.BuiltIn(SpendCategory.ENTERTAINMENT)
+        }
+        assertEquals(BigDecimal(15), custom.second)
+        assertEquals(BigDecimal(20), entertainment.second)
+        assertEquals(2, totals.size)
+    }
+
+    @Test
+    fun `categoryTotals drops non-positive totals`() {
+        val spends = listOf(
+            Transaction(TransactionType.SPENT, BigDecimal.ZERO, Date(), "lunch", category = "Gifts"),
+        )
+
+        assertEquals(emptyList<Pair<CategoryKey, BigDecimal>>(), categoryTotals(spends))
+    }
+
+    @Test
     fun `fromStored parses enum names case-insensitively`() {
         assertEquals(SpendCategory.FOOD, SpendCategory.fromStored("FOOD"))
         assertEquals(SpendCategory.FOOD, SpendCategory.fromStored("food"))

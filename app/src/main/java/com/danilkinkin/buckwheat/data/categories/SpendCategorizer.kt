@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.OutputStreamWriter
+import java.math.BigDecimal
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -47,6 +48,37 @@ fun offlineClassify(comment: String): SpendCategory {
 // present, otherwise the offline keyword guess. Pure so it is trivially unit-testable.
 fun categoryFor(transaction: Transaction): SpendCategory =
     SpendCategory.fromStored(transaction.category) ?: offlineClassify(transaction.comment)
+
+// Display key for the analytics category breakdown. Persisted built-in categories and offline
+// keyword guesses resolve to the enum; any other non-blank persisted value is a user-created
+// custom category and keeps its raw name so it gets its own slice instead of falling back to
+// the keyword/OTHER bucket. Pure so it is trivially unit-testable.
+sealed interface CategoryKey {
+    data class BuiltIn(val category: SpendCategory) : CategoryKey
+    data class Custom(val name: String) : CategoryKey
+}
+
+fun categoryKey(transaction: Transaction): CategoryKey {
+    val stored = transaction.category?.takeIf { it.isNotBlank() }
+    return if (stored != null) {
+        SpendCategory.fromStored(stored)
+            ?.let { CategoryKey.BuiltIn(it) }
+            ?: CategoryKey.Custom(stored)
+    } else {
+        CategoryKey.BuiltIn(offlineClassify(transaction.comment))
+    }
+}
+
+// Aggregates a period's spends into (categoryKey, total) pairs, dropping non-positive totals.
+// Pure so it is unit-testable; the composable maps keys to localized labels and colors.
+fun categoryTotals(spends: List<Transaction>): List<Pair<CategoryKey, BigDecimal>> {
+    val totals = linkedMapOf<CategoryKey, BigDecimal>()
+    spends.forEach { transaction ->
+        val key = categoryKey(transaction)
+        totals[key] = (totals[key] ?: BigDecimal.ZERO) + transaction.value
+    }
+    return totals.filterValues { it > BigDecimal.ZERO }.toList()
+}
 
 // Batch-assigns categories to uncategorized spends via the configured OpenAI-compatible
 // provider (the same settings as Voice AI). Returns an empty map when no API key is saved,
