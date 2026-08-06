@@ -64,7 +64,8 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
                             .put(
                                 "content",
                                 "You extract a spending record from a user voice transcript. " +
-                                    "Return ONLY one JSON object with fields amount, comment, date. " +
+                                    "Reply with ONLY one JSON object and nothing else: " +
+                                    "{\"amount\":\"150\",\"comment\":\"tea\",\"date\":\"today\"}. " +
                                     "amount must be a plain numeric string. comment must be a concise " +
                                     "description. date must be ISO-8601, 'today', 'yesterday', " +
                                     "'tomorrow', or null."
@@ -107,18 +108,15 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
             }
 
             val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-            val content = extractJsonContent(responseText)
-                ?: return@withContext VoiceAiResult.Failure("response contained no JSON")
-            val jsonObject = runCatching { JSONObject(content) }.getOrNull()
-                ?: return@withContext VoiceAiResult.Failure("response was not valid JSON")
-            val amount = jsonObject.optString("amount", "").trim()
-            val comment = jsonObject.optString("comment", "").trim()
-            val date = parseVoiceAiDate(jsonObject.optString("date", ""))
 
-            if (amount.isEmpty()) {
-                return@withContext VoiceAiResult.Failure("response was missing the amount")
-            }
-            VoiceAiResult.Success(VoiceInputResult(amount, comment, date))
+            // The provider (OpenAI / OpenRouter) wraps the model reply in a chat-completions
+            // envelope, so the JSON the model produced lives at choices[0].message.content.
+            // Text-only models may also reply with a plain sentence instead of strict JSON, so
+            // fall back to the offline parser on the reply when no JSON amount is found.
+            val modelContent = extractModelContent(responseText)
+            val result = parseVoiceAiContent(modelContent)
+                ?: return@withContext VoiceAiResult.Failure("response contained no amount")
+            VoiceAiResult.Success(result)
         } catch (e: Exception) {
             Log.d("VoiceAI", "AI parse failed", e)
             VoiceAiResult.Failure(e.message ?: e.javaClass.simpleName)
@@ -133,6 +131,54 @@ private fun extractJsonContent(raw: String): String? {
     val end = raw.lastIndexOf('}')
     if (start == -1 || end <= start) return null
     return raw.substring(start, end + 1)
+}
+
+// Returns the actual model reply from a chat-completions envelope
+// (choices[0].message.content). If the response is not an envelope, returns it unchanged so
+// the offline parser / JSON extractor can still work on the raw text.
+internal fun extractModelContent(responseText: String): String {
+    return runCatching {
+        JSONObject(responseText)
+            .optJSONArray("choices")
+            ?.optJSONObject(0)
+            ?.optJSONObject("message")
+            ?.optString("content", "")
+            ?.trim()
+    }.getOrNull().orEmpty().ifEmpty { responseText }
+}
+
+// Reads a field from a JSON object regardless of key casing, since text-only models often
+// return "Amount" / "amount" / "AMOUNT" inconsistently.
+private fun JSONObject.optStringIgnoreCase(key: String, defaultValue: String = ""): String {
+    if (has(key)) return optString(key, defaultValue).trim()
+    val it = keys()
+    while (it.hasNext()) {
+        val k = it.next().toString()
+        if (k.equals(key, ignoreCase = true)) return optString(k, defaultValue).trim()
+    }
+    return defaultValue
+}
+
+// Parses the model's reply into a spending record. Tries strict JSON first (amount is
+// mandatory; missing/invalid amount falls through), then the offline parser so plain
+// sentences like "user spent 150 rupees on tea" still produce a record.
+internal fun parseVoiceAiContent(raw: String): VoiceInputResult? {
+    val jsonContent = extractJsonContent(raw)
+    if (jsonContent != null) {
+        val jsonObject = runCatching { JSONObject(jsonContent) }.getOrNull()
+        if (jsonObject != null) {
+            val amount = jsonObject.optStringIgnoreCase("amount")
+            val result = runCatching {
+                VoiceInputResult(
+                    amount = amount,
+                    comment = jsonObject.optStringIgnoreCase("comment"),
+                    date = parseVoiceAiDate(jsonObject.optStringIgnoreCase("date")),
+                )
+            }.getOrNull()
+            if (result != null && result.amount.isNotEmpty()) return result
+        }
+    }
+    return parseVoiceInput(raw)
 }
 
 private val VOICE_AI_DATE_TIME_FORMATS = listOf(

@@ -223,6 +223,68 @@ class VoiceInputParserTest {
         assertEquals(now, parseVoiceAiDate("   ", now))
         assertEquals(now, parseVoiceAiDate("not a date", now))
     }
+
+    @Test
+    fun `extractModelContent unwraps chat completions envelope`() {
+        val envelope = """
+            {
+              "choices": [
+                {
+                  "message": {
+                    "content": "{\"amount\":\"150\",\"comment\":\"tea\",\"date\":\"today\"}"
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+
+        assertEquals(
+            "{\"amount\":\"150\",\"comment\":\"tea\",\"date\":\"today\"}",
+            extractModelContent(envelope),
+        )
+    }
+
+    @Test
+    fun `extractModelContent returns raw text when not an envelope`() {
+        assertEquals("150 tea", extractModelContent("150 tea"))
+    }
+
+    @Test
+    fun `extractModelContent handles missing content gracefully`() {
+        val envelope = """{"choices":[{"message":{}}]}"""
+        assertEquals(envelope, extractModelContent(envelope))
+    }
+
+    @Test
+    fun `parseVoiceAiContent parses amount from envelope content json`() {
+        val result = parseVoiceAiContent("""{"amount":"150","comment":"tea","date":"today"}""")
+
+        assertEquals("150", result?.amount)
+        assertEquals("tea", result?.comment)
+    }
+
+    @Test
+    fun `parseVoiceAiContent reads amount with different casing`() {
+        val result = parseVoiceAiContent("""{"Amount":"150","Comment":"lunch","Date":"today"}""")
+
+        assertEquals("150", result?.amount)
+        assertEquals("lunch", result?.comment)
+    }
+
+    @Test
+    fun `parseVoiceAiContent falls back to prose when amount missing`() {
+        val result = parseVoiceAiContent("user spent 150 rupees on tea")
+
+        assertEquals("150", result?.amount)
+        assertEquals("user spent on tea", result?.comment)
+    }
+
+    @Test
+    fun `parseVoiceAiContent returns null for empty or numberless reply`() {
+        assertNull(parseVoiceAiContent(""))
+        assertNull(parseVoiceAiContent("no numbers here"))
+        assertNull(parseVoiceAiContent("""{"comment":"tea","date":"today"}"""))
+    }
 }
 
 private fun Date.toCalendar(): Calendar =
