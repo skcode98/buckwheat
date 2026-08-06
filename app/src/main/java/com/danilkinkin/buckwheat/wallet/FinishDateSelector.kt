@@ -32,8 +32,9 @@ const val FINISH_DATE_SELECTOR_SHEET = "finishDateSelector"
 @Composable
 fun FinishDateSelector(
     selectDate: Date? = null,
+    selectStartDate: Date? = null,
     onBackPressed: () -> Unit,
-    onApply: (finishDate: Date) -> Unit,
+    onApply: (startDate: Date, finishDate: Date) -> Unit,
 ) {
     val context = LocalContext.current
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -44,19 +45,33 @@ fun FinishDateSelector(
                 context,
                 selectionMode = CalendarSelectionMode.RANGE,
                 selectDate = selectDate,
-                disableBeforeDate = Date(),
+                // Allow the period to start in the past (up to one month back); the
+                // calendar still opens near the current month so it's easy to scroll to.
+                disableBeforeDate = LocalDate.now().minusMonths(1).toDate(),
             )
         }
 
         LaunchedEffect(Unit) {
-            if (selectDate !== null) calendarState.setSelectedDay(selectDate.toLocalDate())
+            if (selectStartDate !== null && selectDate !== null) {
+                calendarState.setSelectedRange(
+                    selectStartDate.toLocalDate(),
+                    selectDate.toLocalDate(),
+                )
+            } else if (selectDate !== null) {
+                calendarState.setSelectedDay(selectDate.toLocalDate())
+            }
         }
 
         FinishDateSelectorContent(
             calendarState = calendarState,
             onDayClicked = { calendarState.setSelectedDay(it) },
             onBackPressed = onBackPressed,
-            onApply = { onApply(calendarState.calendarUiState.value.selectedEndDate!!.toDate()) }
+            onApply = {
+                onApply(
+                    calendarState.calendarUiState.value.selectedStartDate!!.toDate(),
+                    calendarState.calendarUiState.value.selectedEndDate!!.toDate(),
+                )
+            }
         )
     }
 }
@@ -168,6 +183,6 @@ private fun FinishDateSelectorTopAppBar(
 @Composable
 private fun PreviewDefault(){
     BuckwheatTheme {
-        FinishDateSelector(onBackPressed = {}, onApply = {})
+        FinishDateSelector(onBackPressed = {}, onApply = { _, _ -> })
     }
 }

@@ -26,7 +26,8 @@ class CalendarState(
     )
     val listMonths: List<Month>
 
-    private val calendarStartDate: LocalDate = LocalDate.now().withDayOfMonth(1)
+    private val calendarStartDate: LocalDate = LocalDate.now()
+        .minusYears(1).withDayOfMonth(1)
     private val calendarEndDate: LocalDate = LocalDate.now().plusYears(2)
         .withMonth(12).withDayOfMonth(31)
 
@@ -61,10 +62,30 @@ class CalendarState(
 
     fun setSelectedDay(newDate: LocalDate) {
         if (calendarUiState.value.selectionMode == CalendarSelectionMode.RANGE) {
-            calendarUiState.value = calendarUiState.value.setDates(LocalDate.now(), newDate)
+            val state = calendarUiState.value
+            val start = state.selectedStartDate
+            val end = state.selectedEndDate
+            calendarUiState.value = when {
+                // No range yet — this tap starts the range
+                start == null -> state.setDates(newDate, null)
+                // Start picked, finish pending — this tap completes the range (swap if needed)
+                end == null -> state.setDates(
+                    minOf(start, newDate),
+                    maxOf(start, newDate),
+                )
+                // Full range already set — restart a new range from this tap
+                else -> state.setDates(newDate, null)
+            }
         } else {
             calendarUiState.value = calendarUiState.value.setDate(newDate)
         }
+    }
+
+    fun setSelectedRange(startDate: LocalDate, endDate: LocalDate) {
+        calendarUiState.value = calendarUiState.value.setDates(
+            minOf(startDate, endDate),
+            maxOf(startDate, endDate),
+        )
     }
 
     companion object {

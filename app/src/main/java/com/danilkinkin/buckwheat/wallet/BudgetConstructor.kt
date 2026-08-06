@@ -50,7 +50,7 @@ fun BudgetConstructor(
     forceChange: Boolean = false,
     appViewModel: AppViewModel = hiltViewModel(),
     spendsViewModel: SpendsViewModel = hiltViewModel(),
-    onChange: (budget: BigDecimal, finishDate: Date?) -> Unit = { _, _ -> },
+    onChange: (budget: BigDecimal, startDate: Date?, finishDate: Date?) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -92,6 +92,7 @@ fun BudgetConstructor(
         mutableStateOf(BigDecimal(restBudget))
     }
     val dateToValue = remember { mutableStateOf(finishPeriodDate) }
+    val startDateToValue = remember { mutableStateOf<Date?>(startPeriodDate) }
     val showUseSuggestion by remember {
         derivedStateOf {
             val useBudget = budget != budgetCache && !budget.isZero()
@@ -145,6 +146,7 @@ fun BudgetConstructor(
 
                 onChange(
                     budgetCache,
+                    startDateToValue.value,
                     finishDate,
                 )
 
@@ -161,7 +163,7 @@ fun BudgetConstructor(
                 if (it.isEmpty()) {
                     rawBudget = ""
                     budgetCache = BigDecimal.ZERO
-                    onChange(BigDecimal.ZERO, dateToValue.value)
+                    onChange(BigDecimal.ZERO, startDateToValue.value, dateToValue.value)
                     return@BasicTextField
                 }
 
@@ -170,7 +172,7 @@ fun BudgetConstructor(
                 rawBudget = converted.join(third = false)
                 budgetCache = converted.join().toBigDecimal()
 
-                onChange(budgetCache, dateToValue.value)
+                onChange(budgetCache, startDateToValue.value, dateToValue.value)
             },
             textStyle = MaterialTheme.typography.headlineLarge.copy(
                 color = MaterialTheme.colorScheme.onSurface,
@@ -232,17 +234,20 @@ fun BudgetConstructor(
             onClick = {
                 appViewModel.openSheet(PathState(
                     name = FINISH_DATE_SELECTOR_SHEET,
-                    args = if (days > 0) {
-                        mapOf("initialDate" to dateToValue.value)
-                    } else {
-                        mapOf("initialDate" to null)
-                    },
+                    args = mapOf(
+                        "initialDate" to dateToValue.value?.takeIf { it.time > 0L },
+                        "initialStartDate" to startDateToValue.value?.takeIf { it.time > 0L },
+                    ),
                     callback = { result ->
                         if (!result.containsKey("finishDate")) return@PathState
 
-                        dateToValue.value = result["finishDate"] as Date
+                        val finishDate = result["finishDate"] as Date
+                        val startDate = result["startDate"] as? Date ?: startDateToValue.value
 
-                        onChange(budgetCache, dateToValue.value)
+                        startDateToValue.value = startDate
+                        dateToValue.value = finishDate
+
+                        onChange(budgetCache, startDateToValue.value, dateToValue.value)
                     }
                 ))
             },

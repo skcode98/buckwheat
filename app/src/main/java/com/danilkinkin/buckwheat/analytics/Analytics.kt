@@ -44,6 +44,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
 import java.util.*
+import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
 import com.danilkinkin.buckwheat.editor.EditorViewModel
@@ -192,6 +193,12 @@ fun Analytics(
                                 spends = spends,
                                 currency = currency,
                                 isCategorizing = isCategorizing,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            CategoriesChartCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends,
+                                currency = currency,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }

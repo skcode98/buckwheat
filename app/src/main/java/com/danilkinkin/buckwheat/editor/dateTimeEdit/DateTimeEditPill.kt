@@ -11,7 +11,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.data.AppViewModel
-import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.toDate
@@ -23,7 +22,6 @@ import java.util.Calendar
 @Composable
 fun DateTimeEditPill(
     appViewModel: AppViewModel = hiltViewModel(),
-    spendsViewModel: SpendsViewModel = hiltViewModel(),
     editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
     var cachedDate by remember { mutableStateOf(editorViewModel.currentDate) }
@@ -84,7 +82,6 @@ fun DateTimeEditPill(
     if (isPickDate) {
         DatePickerDialog(
             initDate = cachedDate.toLocalDate(),
-            disableBeforeDate = spendsViewModel.startPeriodDate.value!!.toLocalDate(),
             disableAfterDate = LocalDate.now(),
             onSelect = { newDate ->
                 val calendarNew = Calendar.getInstance()

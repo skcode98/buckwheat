@@ -156,10 +156,10 @@ class SpendsViewModel @Inject constructor(
 
     // Budget handling
 
-    fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
+    fun setBudget(newBudget: BigDecimal, newFinishDate: Date, newStartDate: Date? = null) {
         viewModelScope.launch {
             try {
-                spendsRepository.setBudget(newBudget, newFinishDate)
+                spendsRepository.setBudget(newBudget, newFinishDate, newStartDate)
             } catch (e: Exception) {
                 return@launch
             }
@@ -169,9 +169,9 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
-    fun changeBudget(newBudget: BigDecimal, newFinishDate: Date) {
+    fun changeBudget(newBudget: BigDecimal, newFinishDate: Date, newStartDate: Date? = null) {
         viewModelScope.launch {
-            spendsRepository.changeBudget(newBudget, newFinishDate)
+            spendsRepository.changeBudget(newBudget, newFinishDate, newStartDate)
 
             requireSetBudget.value = false
             periodFinished.value = false

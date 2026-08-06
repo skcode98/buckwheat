@@ -57,6 +57,7 @@ fun Wallet(
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
     val dateToValue = remember { mutableStateOf(finishPeriodDate) }
+    val startDateToValue = remember { mutableStateOf<Date?>(startPeriodDate) }
     val currency by spendsViewModel.currency.observeAsState()
     val spends by spendsViewModel.periodSpends.observeAsState()
     val restedBudgetDistributionMethod by spendsViewModel.restedBudgetDistributionMethod.observeAsState()
@@ -73,6 +74,7 @@ fun Wallet(
 
     val isChange = (
             budgetCache != budget
+                    || startDateToValue.value != startPeriodDate
                     || dateToValue.value != finishPeriodDate
             )
 
@@ -179,8 +181,9 @@ fun Wallet(
                     if (targetIsEdit) {
                         BudgetConstructor(
                             forceChange = forceChange,
-                            onChange = { newBudget, finishDate ->
+                            onChange = { newBudget, startDate, finishDate ->
                                 budgetCache = newBudget
+                                startDateToValue.value = startDate
                                 dateToValue.value = finishDate
                             }
                         )
@@ -314,10 +317,21 @@ fun Wallet(
                                         spendsViewModel.changeDisplayCurrency(currency!!)
                                     }
 
+                                    val newStartDate = startDateToValue.value
+                                        ?.takeIf { it.time > 0L }
+
                                     if (currentSpends?.isNotEmpty() == true && !forceChange) {
-                                        spendsViewModel.changeBudget(budgetCache, dateToValue.value!!)
+                                        spendsViewModel.changeBudget(
+                                            budgetCache,
+                                            dateToValue.value!!,
+                                            newStartDate,
+                                        )
                                     } else {
-                                        spendsViewModel.setBudget(budgetCache, dateToValue.value!!)
+                                        spendsViewModel.setBudget(
+                                            budgetCache,
+                                            dateToValue.value!!,
+                                            newStartDate,
+                                        )
                                         appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
                                     }
                                 }

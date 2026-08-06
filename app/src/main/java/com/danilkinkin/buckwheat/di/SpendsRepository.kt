@@ -196,7 +196,11 @@ class SpendsRepository @Inject constructor(
         }
     }
 
-    suspend fun setBudget(newBudget: BigDecimal, newFinishDate: Date) {
+    suspend fun setBudget(
+        newBudget: BigDecimal,
+        newFinishDate: Date,
+        newStartDate: Date? = null,
+    ) {
         val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
         val hasStoredTransactions = transactionDao.getAll().asFlow().first()
             .any { it.type == TransactionType.SPENT }
@@ -204,13 +208,15 @@ class SpendsRepository @Inject constructor(
             archiveCurrentPeriod()
         }
 
+        val startDate = roundToDay(newStartDate ?: getCurrentDateUseCase())
+
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[spentStoreKey] = BigDecimal.ZERO.toString()
             it[dailyBudgetStoreKey] = BigDecimal.ZERO.toString()
             it[spentFromDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
-            it[startPeriodDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+            it[startPeriodDateStoreKey] = startDate.time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
             it.remove(finishPeriodActualDateStoreKey)
 
@@ -228,7 +234,7 @@ class SpendsRepository @Inject constructor(
             Transaction(
                 TransactionType.INCOME,
                 newBudget,
-                getCurrentDateUseCase(),
+                startDate,
             )
         )
 
@@ -293,11 +299,18 @@ class SpendsRepository @Inject constructor(
         )
     }
 
-    suspend fun changeBudget(newBudget: BigDecimal, newFinishDate: Date) {
+    suspend fun changeBudget(
+        newBudget: BigDecimal,
+        newFinishDate: Date,
+        newStartDate: Date? = null,
+    ) {
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
+            if (newStartDate !== null) {
+                it[startPeriodDateStoreKey] = roundToDay(newStartDate).time
+            }
             it.remove(finishPeriodActualDateStoreKey)
 
             Log.d(
