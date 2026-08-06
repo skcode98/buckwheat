@@ -14,10 +14,12 @@ import javax.inject.Inject
 
 // A category as shown in the Categories Management sheet and the editor picker.
 // `id == null` means it is a built-in predefined category (read-only) or a category
-// that only exists on transactions and can be saved as a custom one.
+// that only exists on transactions and can be saved as a custom one. `emoji` is the
+// user-picked emoji for saved custom categories; built-ins resolve their own emoji.
 data class CategoryItem(
     val name: String,
     val id: Int? = null,
+    val emoji: String = "",
 )
 
 @HiltViewModel
@@ -44,24 +46,26 @@ class CategoriesManagementViewModel @Inject constructor(
         }
     }
 
-    fun addCategory(name: String) {
+    fun addCategory(name: String, emoji: String = "") {
         val trimmed = name.trim()
         if (trimmed.isBlank() || SpendCategory.fromStored(trimmed) != null) return
         viewModelScope.launch {
             if (!savedCategoryDao.existsByName(trimmed)) {
-                savedCategoryDao.insert(SavedCategory(name = trimmed))
+                savedCategoryDao.insert(SavedCategory(name = trimmed, emoji = emoji))
             }
         }
     }
 
-    fun updateCategory(id: Int, name: String) {
+    fun updateCategory(id: Int, name: String, emoji: String = "") {
         val trimmed = name.trim()
         if (trimmed.isBlank() || SpendCategory.fromStored(trimmed) != null) return
         viewModelScope.launch {
             val other = savedCategoryDao.getByName(trimmed)
             // Don't rename onto an existing category's name
             if (other == null || other.id == id) {
-                savedCategoryDao.update(SavedCategory(name = trimmed).also { it.id = id })
+                savedCategoryDao.update(
+                    SavedCategory(name = trimmed, emoji = emoji).also { it.id = id }
+                )
             }
         }
     }
@@ -78,7 +82,9 @@ class CategoriesManagementViewModel @Inject constructor(
     ): List<CategoryItem> {
         val predefined = SpendCategory.entries.map { CategoryItem(name = it.name) }
         val savedNames = savedCategories.map { it.name }.toSet()
-        val fromSaved = savedCategories.map { CategoryItem(name = it.name, id = it.id) }
+        val fromSaved = savedCategories.map {
+            CategoryItem(name = it.name, id = it.id, emoji = it.emoji)
+        }
         val fromTransactions = transactionCategories
             .filter { SpendCategory.fromStored(it) == null && it !in savedNames }
             .map { CategoryItem(name = it) }

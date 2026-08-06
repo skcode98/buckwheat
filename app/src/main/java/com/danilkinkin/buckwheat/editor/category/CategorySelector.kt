@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.editor.EditorViewModel
+import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 
 // Manual spend-category picker shown in the editor. Renders as a single collapsed pill
 // ("Auto" by default) so the editor stays clean — tapping it opens a bottom-sheet list
@@ -40,8 +42,14 @@ import com.danilkinkin.buckwheat.editor.EditorViewModel
 fun CategorySelector(
     editorViewModel: EditorViewModel = hiltViewModel(),
     appViewModel: AppViewModel = hiltViewModel(),
+    categoriesViewModel: CategoriesManagementViewModel = hiltViewModel(),
 ) {
     val selected by editorViewModel.currentCategory.observeAsState(null)
+    val categories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val emojiByCategory = remember(categories) {
+        categories.associate { it.name to it.emoji }
+    }
+    val selectedEmoji = selected?.let { SpendCategory.emojiFor(it, emojiByCategory[it]) }
 
     Box(
         modifier = Modifier
@@ -63,10 +71,17 @@ fun CategorySelector(
                 modifier = Modifier.padding(start = 12.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_label),
-                    contentDescription = null,
-                )
+                if (selectedEmoji == null) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_label),
+                        contentDescription = null,
+                    )
+                } else {
+                    Text(
+                        text = selectedEmoji,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = selected?.let { categoryDisplayName(it) }

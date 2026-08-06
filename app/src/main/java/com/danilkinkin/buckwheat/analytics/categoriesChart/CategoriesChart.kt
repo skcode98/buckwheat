@@ -47,6 +47,7 @@ data class TagUsage(
     val amount: BigDecimal,
     var color: HarmonizedColorPalette? = null,
     var isSpecial: Boolean = false,
+    var emoji: String = "",
 )
 
 var baseColors = listOf(

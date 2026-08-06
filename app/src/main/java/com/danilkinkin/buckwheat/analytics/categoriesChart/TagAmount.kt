@@ -24,6 +24,7 @@ import java.math.BigDecimal
 fun TagAmount(
     modifier: Modifier = Modifier,
     value: String,
+    emoji: String = "",
     amount: BigDecimal = BigDecimal.ZERO,
     isSpecial: Boolean = false,
     palette: HarmonizedColorPalette? = null,
@@ -41,6 +42,13 @@ fun TagAmount(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (emoji.isNotBlank()) {
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
             Text(
                 text = value,
                 softWrap = false,

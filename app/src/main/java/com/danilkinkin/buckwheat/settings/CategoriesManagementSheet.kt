@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.base.CATEGORY_EMOJI_OPTIONS
+import com.danilkinkin.buckwheat.base.EmojiPicker
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
@@ -42,7 +44,9 @@ fun CategoriesManagementSheet(
 
     var editingId by remember { mutableStateOf<Int?>(null) }
     var editingText by remember { mutableStateOf("") }
+    var editingEmoji by remember { mutableStateOf("") }
     var newCategoryText by remember { mutableStateOf("") }
+    var newCategoryEmoji by remember { mutableStateOf(CATEGORY_EMOJI_OPTIONS.first()) }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
@@ -58,41 +62,51 @@ fun CategoriesManagementSheet(
                 )
             }
 
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = newCategoryText,
-                    onValueChange = { newCategoryText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.categories_management_add_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
+                EmojiPicker(
+                    selected = newCategoryEmoji,
+                    onSelect = { newCategoryEmoji = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = newCategoryText,
+                        onValueChange = { newCategoryText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(stringResource(R.string.categories_management_add_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (newCategoryText.isNotBlank()) {
+                                    viewModel.addCategory(newCategoryText, newCategoryEmoji)
+                                    newCategoryText = ""
+                                }
+                            }
+                        ),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledIconButton(
+                        onClick = {
                             if (newCategoryText.isNotBlank()) {
-                                viewModel.addCategory(newCategoryText)
+                                viewModel.addCategory(newCategoryText, newCategoryEmoji)
                                 newCategoryText = ""
                             }
-                        }
-                    ),
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledIconButton(
-                    onClick = {
-                        if (newCategoryText.isNotBlank()) {
-                            viewModel.addCategory(newCategoryText)
-                            newCategoryText = ""
-                        }
-                    },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_add),
-                        contentDescription = null,
-                    )
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_add),
+                            contentDescription = null,
+                        )
+                    }
                 }
             }
 
@@ -107,15 +121,19 @@ fun CategoriesManagementSheet(
                     if (item.id != null && editingId == item.id) {
                         EditingCategoryRow(
                             currentName = editingText,
+                            currentEmoji = editingEmoji,
                             onNameChange = { editingText = it },
+                            onEmojiChange = { editingEmoji = it },
                             onSave = {
-                                viewModel.updateCategory(item.id, editingText)
+                                viewModel.updateCategory(item.id, editingText, editingEmoji)
                                 editingId = null
                                 editingText = ""
+                                editingEmoji = ""
                             },
                             onCancel = {
                                 editingId = null
                                 editingText = ""
+                                editingEmoji = ""
                             },
                         )
                     } else {
@@ -126,6 +144,7 @@ fun CategoriesManagementSheet(
                                 {
                                     editingId = item.id
                                     editingText = item.name
+                                    editingEmoji = item.emoji
                                 }
                             } else null,
                             onSave = if (item.id == null && !isBuiltIn) {
@@ -166,7 +185,8 @@ private fun CategoryItemRow(
         ) {
             Box(Modifier.padding(horizontal = 16.dp)) {
                 Text(
-                    text = categoryDisplayName(item.name),
+                    text = "${SpendCategory.emojiFor(item.name, item.emoji)}  " +
+                        categoryDisplayName(item.name),
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyLarge,
@@ -214,36 +234,49 @@ private fun CategoryItemRow(
 @Composable
 private fun EditingCategoryRow(
     currentName: String,
+    currentEmoji: String,
     onNameChange: (String) -> Unit,
+    onEmojiChange: (String) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(56.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.Center,
     ) {
-        OutlinedTextField(
-            value = currentName,
-            onValueChange = onNameChange,
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onSave() }),
+        EmojiPicker(
+            selected = currentEmoji.ifBlank { CATEGORY_EMOJI_OPTIONS.first() },
+            onSelect = onEmojiChange,
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.width(8.dp))
-        FilledIconButton(onClick = onSave) {
-            Icon(
-                painter = painterResource(R.drawable.ic_apply),
-                contentDescription = stringResource(R.string.apply),
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = currentName,
+                onValueChange = onNameChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onSave() }),
             )
-        }
-        IconButton(onClick = onCancel) {
-            Icon(
-                painter = painterResource(R.drawable.ic_close),
-                contentDescription = stringResource(R.string.cancel),
-            )
+            Spacer(Modifier.width(8.dp))
+            FilledIconButton(onClick = onSave) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_apply),
+                    contentDescription = stringResource(R.string.apply),
+                )
+            }
+            IconButton(onClick = onCancel) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.cancel),
+                )
+            }
         }
     }
 }

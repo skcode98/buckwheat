@@ -53,6 +53,7 @@ fun SpendCategoriesCard(
     spends: List<Transaction>,
     currency: ExtendCurrency,
     isCategorizing: Boolean = false,
+    categoryEmojis: Map<String, String> = emptyMap(),
 ) {
     val context = LocalContext.current
     val isNightMode = isNightMode()
@@ -77,7 +78,7 @@ fun SpendCategoriesCard(
         onSurface = if (isNightMode) Color(0xFF1A1A1A) else Color(0xFFF4F4F4),
     )
 
-    val categories by remember(spends) {
+    val categories by remember(spends, categoryEmojis) {
         mutableStateOf(
             categoryTotals(spends)
                 .map { (key, total) ->
@@ -91,12 +92,14 @@ fun SpendCategoriesCard(
                                 colors[key.category.ordinal % colors.size]
                             },
                             isSpecial = key.category == SpendCategory.OTHER,
+                            emoji = key.category.emoji,
                         )
                         is CategoryKey.Custom -> TagUsage(
                             name = key.name,
                             amount = total,
                             color = colors[Math.floorMod(key.name.hashCode(), colors.size)],
                             isSpecial = false,
+                            emoji = SpendCategory.emojiFor(key.name, categoryEmojis[key.name]),
                         )
                     }
                 }
@@ -159,6 +162,7 @@ fun SpendCategoriesCard(
                         TagAmount(
                             modifier = Modifier.padding(4.dp, 4.dp),
                             value = category.name,
+                            emoji = category.emoji,
                             amount = category.amount,
                             palette = category.color,
                             isSpecial = category.isSpecial,

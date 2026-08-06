@@ -48,6 +48,7 @@ import java.util.*
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
+import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
@@ -76,6 +77,12 @@ fun Analytics(
 
     val spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel()
     val isCategorizing by spendCategoriesViewModel.isCategorizing.observeAsState(false)
+
+    val categoriesViewModel: CategoriesManagementViewModel = hiltViewModel()
+    val allCategories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val categoryEmojis = remember(allCategories) {
+        allCategories.associate { it.name to it.emoji }
+    }
 
     LaunchedEffect(spends) {
         spendCategoriesViewModel.categorizeUncategorized(spends)
@@ -193,6 +200,7 @@ fun Analytics(
                                 spends = spends,
                                 currency = currency,
                                 isCategorizing = isCategorizing,
+                                categoryEmojis = categoryEmojis,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             CategoriesChartCard(

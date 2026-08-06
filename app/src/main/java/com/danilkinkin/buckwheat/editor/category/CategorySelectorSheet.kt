@@ -23,6 +23,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.CheckedRow
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.editor.EditorViewModel
+import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.settings.CategoryItem
 
@@ -92,7 +93,8 @@ fun CategorySelectorSheet(
                             editorViewModel.currentCategory.value = item.name
                             onClose()
                         },
-                        text = categoryDisplayName(item.name),
+                        text = "${SpendCategory.emojiFor(item.name, item.emoji)}  " +
+                            categoryDisplayName(item.name),
                     )
                 }
             }
