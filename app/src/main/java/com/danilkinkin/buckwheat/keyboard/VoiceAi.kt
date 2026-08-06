@@ -25,14 +25,23 @@ import java.util.Locale
 private const val CONNECT_TIMEOUT_MS = 10_000
 private const val READ_TIMEOUT_MS = 20_000
 
+// Outcome of the AI parse attempt. NotConfigured means no API key is saved, so the caller
+// silently uses the offline parser. Failure carries a human-readable reason so the user can
+// diagnose why the AI path did not power the record (wrong key, rate limit, bad model, etc.).
+sealed class VoiceAiResult {
+    data class Success(val result: VoiceInputResult) : VoiceAiResult()
+    data class Failure(val message: String) : VoiceAiResult()
+    object NotConfigured : VoiceAiResult()
+}
+
 // Structured voice-AI parsing. Network access is bounded (10s connect / 20s read), the socket
-// is always disconnected, and every failure returns null so the caller can fall back to the
-// offline VoiceInputParser.
-suspend fun parseVoiceInputWithAiFallback(context: Context, transcript: String): VoiceInputResult? =
+// is always disconnected, and every failure is reported through VoiceAiResult.Failure so the
+// caller can fall back to the offline VoiceInputParser and tell the user why AI did not run.
+suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAiResult =
     withContext(Dispatchers.IO) {
         val prefs = context.settingsDataStore.data.first()
         val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        if (apiKey.isBlank()) return@withContext null
+        if (apiKey.isBlank()) return@withContext VoiceAiResult.NotConfigured
 
         val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
             "https://openrouter.ai/api/v1/chat/completions"
@@ -87,24 +96,32 @@ suspend fun parseVoiceInputWithAiFallback(context: Context, transcript: String):
             }
 
             if (conn.responseCode !in 200..299) {
+                // Include a truncated response body when available: providers report useful
+                // reasons (invalid key, insufficient credits, unknown model) in it.
+                val errorBody = runCatching {
+                    conn.errorStream?.bufferedReader()?.use { it.readText() }
+                }.getOrNull().orEmpty().trim().take(200)
+                val suffix = if (errorBody.isNotEmpty()) " — $errorBody" else ""
                 Log.d("VoiceAI", "AI parse failed with code ${conn.responseCode}")
-                return@withContext null
+                return@withContext VoiceAiResult.Failure("HTTP ${conn.responseCode}$suffix")
             }
 
             val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-            val content = extractJsonContent(responseText) ?: return@withContext null
+            val content = extractJsonContent(responseText)
+                ?: return@withContext VoiceAiResult.Failure("response contained no JSON")
             val jsonObject = runCatching { JSONObject(content) }.getOrNull()
-                ?: return@withContext null
-
+                ?: return@withContext VoiceAiResult.Failure("response was not valid JSON")
             val amount = jsonObject.optString("amount", "").trim()
             val comment = jsonObject.optString("comment", "").trim()
             val date = parseVoiceAiDate(jsonObject.optString("date", ""))
 
-            if (amount.isEmpty()) return@withContext null
-            VoiceInputResult(amount, comment, date)
+            if (amount.isEmpty()) {
+                return@withContext VoiceAiResult.Failure("response was missing the amount")
+            }
+            VoiceAiResult.Success(VoiceInputResult(amount, comment, date))
         } catch (e: Exception) {
             Log.d("VoiceAI", "AI parse failed", e)
-            null
+            VoiceAiResult.Failure(e.message ?: e.javaClass.simpleName)
         } finally {
             connection?.disconnect()
         }

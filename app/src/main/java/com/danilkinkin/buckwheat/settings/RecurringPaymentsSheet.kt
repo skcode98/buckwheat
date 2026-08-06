@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -20,8 +21,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
+import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.util.numberFormat
 
 const val RECURRING_PAYMENTS_SHEET = "recurringPayments"
 
@@ -29,8 +33,10 @@ const val RECURRING_PAYMENTS_SHEET = "recurringPayments"
 @Composable
 fun RecurringPaymentsSheet(
     viewModel: RecurringPaymentsViewModel = hiltViewModel(),
+    spendsViewModel: SpendsViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
+    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val templates by viewModel.templates.observeAsState(emptyList())
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
@@ -144,6 +150,7 @@ fun RecurringPaymentsSheet(
                 items(templates) { template ->
                     RecurringTemplateRow(
                         template = template,
+                        currency = currency,
                         onToggle = { viewModel.toggleEnabled(template) },
                         onDelete = { viewModel.deleteTemplate(template.id) },
                     )
@@ -156,9 +163,11 @@ fun RecurringPaymentsSheet(
 @Composable
 private fun RecurringTemplateRow(
     template: RecurringTemplate,
+    currency: ExtendCurrency,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,7 +187,7 @@ private fun RecurringTemplateRow(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "$" + template.amount.toString(),
+                    text = numberFormat(context, template.amount, currency),
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Spacer(Modifier.width(8.dp))

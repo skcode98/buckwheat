@@ -40,12 +40,11 @@ class RecalcBudgetViewModel @Inject constructor(
     }
 
     private fun calculateAddToToday() = viewModelScope.launch {
-        val notSpent = spendsRepository.howMuchNotSpent()
         val budgetPerDayAdd = spendsRepository.howMuchNotSpent(
             excludeSkippedPart = true,
         )
 
-        howMuchNotSpent.value = notSpent - spendsRepository.nextDayBudget()
+        howMuchNotSpent.value = spendsRepository.howMuchSaved()
         nextDayBudget.value = spendsRepository.nextDayBudget()
         newDailyBudgetIfAddToday.value = budgetPerDayAdd.setScale(0, RoundingMode.HALF_EVEN)
     }

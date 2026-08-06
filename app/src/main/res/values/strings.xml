@@ -52,11 +52,13 @@
   <string name="days_left">Days left</string>
   <string name="settings_title">Settings</string>
   <string name="voice_ai_optional">Voice AI (optional)</string>
+  <string name="voice_ai_title">Voice AI</string>
   <string name="voice_ai_api_key">API key</string>
   <string name="voice_ai_provider_url">Provider URL</string>
   <string name="voice_ai_model">Model</string>
   <string name="save_api_key">Save API key</string>
   <string name="voice_ai_fallback_hint">If no key is saved, the current offline speech parser stays active.</string>
+  <string name="voice_ai_error_prefix">Voice AI error: </string>
   <string name="voice_input">Voice input</string>
   <string name="voice_listening">Listening…</string>
   <string name="voice_processing">Understanding…</string>

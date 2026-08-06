@@ -114,6 +114,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = VOICE_AI_SETTINGS_SHEET,
+    ) {
+        VoiceAiSettingsSheet()
+    }
+
+    BottomSheetWrapper(
         name = RECALCULATE_DAILY_BUDGET_SHEET,
         cancelable = false,
     ) { state ->

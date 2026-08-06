@@ -85,6 +85,9 @@ fun Keyboard(
     var isListening by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf<String?>(null) }
+    // Last AI failure reason (null when the AI parser succeeded or no key is configured).
+    // Shown in the confirmation dialog and as the status when the offline parser also fails.
+    var voiceAiError by remember { mutableStateOf<String?>(null) }
     // Monotonic session id: each time a recognition session starts it is bumped, so a
     // result (or AI response) that arrives after the user started a newer session can be
     // detected as stale and discarded instead of committing a second transaction.
@@ -193,19 +196,32 @@ fun Keyboard(
                 voiceStatus = context.getString(R.string.voice_processing)
                 coroutineScope.launch {
                     try {
-                        val parsed = parseVoiceInputWithAiFallback(context, text)
-                            ?: parseVoiceInput(text)
+                        var parsed: VoiceInputResult? = null
+                        var aiError: String? = null
+                        when (val ai = parseVoiceInputWithAi(context, text)) {
+                            is VoiceAiResult.Success -> parsed = ai.result
+                            is VoiceAiResult.Failure -> {
+                                aiError = context.getString(R.string.voice_ai_error_prefix) +
+                                    ai.message
+                                parsed = parseVoiceInput(text)
+                            }
+                            VoiceAiResult.NotConfigured -> parsed = parseVoiceInput(text)
+                        }
                         // Discard the result if the user started a newer recognition session
                         // while the AI call was still in flight.
                         if (session != voiceSession) return@launch
                         val amount = parsed?.amount?.let(::parseAmountToBigDecimal)
                         if (parsed == null || amount == null || amount.signum() == 0) {
-                            voiceStatus = context.getString(R.string.voice_couldnt_understand)
+                            // Prefer surfacing the AI failure over a generic "couldn't
+                            // understand" so the user can diagnose the AI path.
+                            voiceStatus = aiError
+                                ?: context.getString(R.string.voice_couldnt_understand)
                             return@launch
                         }
                         val amountString = amount.stripTrailingZeros().toPlainString()
 
                         voiceStatus = null
+                        voiceAiError = aiError
                         editorViewModel.rawSpentValue.value = amountString
                         editorViewModel.currentComment.value = parsed.comment
                         editorViewModel.currentDate = parsed.date
@@ -326,6 +342,7 @@ fun Keyboard(
                     )
                     .clickable {
                         voiceStatus = null
+                        voiceAiError = null
                         // Guard against double-starting the recognizer: a tap while already
                         // listening (or while a result is still being committed) would call
                         // startListening() again and crash the recognition session.
@@ -650,6 +667,14 @@ fun Keyboard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     )
+                    voiceAiError?.let { error ->
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             },
             confirmButton = {

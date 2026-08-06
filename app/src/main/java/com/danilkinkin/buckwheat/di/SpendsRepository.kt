@@ -563,6 +563,60 @@ class SpendsRepository @Inject constructor(
         return nextDailyBudget
     }
 
+    // The amount the user actually saved over the elapsed days, i.e. the leftover that
+    // carries forward to today. Equal to `howMuchNotSpent() - nextDayBudget()` for
+    // skippedDays >= 1, but correct also for skippedDays == 0 (the daily-budget
+    // redistribution was already marked handled for today), where that subtraction
+    // spuriously turns a positive leftover negative.
+    suspend fun howMuchSaved(): BigDecimal {
+        val budget = getBudget().first()
+        val spent = getSpent().first()
+        val dailyBudget = getDailyBudget().first()
+        val spentFromDailyBudget = getSpentFromDailyBudget().first()
+        val finishPeriodDate =
+            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
+        val lastChangeDailyBudgetDate =
+            getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
+
+        val restDays = countDays(finishPeriodDate, getCurrentDateUseCase()).coerceAtLeast(0)
+        val skippedDays = countDays(
+            Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
+            lastChangeDailyBudgetDate
+        ) - 1
+
+        val restBudget = budget - spent
+
+        val howMuchSaved = if (restDays == 0) {
+            restBudget - spentFromDailyBudget
+        } else {
+            restBudget
+                .minus(dailyBudget)
+                .divide(
+                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
+                    2,
+                    RoundingMode.HALF_EVEN,
+                )
+                .multiply((skippedDays - 1).coerceAtLeast(0).toBigDecimal())
+                .plus(dailyBudget - spentFromDailyBudget)
+        }
+
+        Log.d(
+            "SpendsRepository",
+            "How much saved check ["
+                    + "how much saved: $howMuchSaved "
+                    + "rest budget: $restBudget "
+                    + "restDays: $restDays "
+                    + "skippedDays: $skippedDays "
+                    + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
+                    + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
+                    + "dailyBudget: $dailyBudget "
+                    + "spentFromDailyBudget: $spentFromDailyBudget "
+                    + "]"
+        )
+
+        return howMuchSaved
+    }
+
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
 
