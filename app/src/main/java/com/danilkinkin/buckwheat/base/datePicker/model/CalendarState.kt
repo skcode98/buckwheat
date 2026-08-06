@@ -26,8 +26,7 @@ class CalendarState(
     )
     val listMonths: List<Month>
 
-    private val calendarStartDate: LocalDate = LocalDate.now()
-        .minusYears(1).withDayOfMonth(1)
+    private val calendarStartDate: LocalDate = LocalDate.now().withDayOfMonth(1)
     private val calendarEndDate: LocalDate = LocalDate.now().plusYears(2)
         .withMonth(12).withDayOfMonth(31)
 
