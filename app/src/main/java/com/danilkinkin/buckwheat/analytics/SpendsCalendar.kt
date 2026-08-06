@@ -149,7 +149,15 @@ fun SpendsCalendar(
     val periodEnd = (actualFinishDate ?: finishDate).toLocalDate()
     val disabledAfter = periodEnd.coerceAtMost(LocalDate.now())
 
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    // The heatmap only covers the spend period's months: navigation is clamped to
+    // [period start month, period end month] so it never scrolls into other months.
+    val firstPeriodMonth = YearMonth.from(disabledBefore)
+    val lastPeriodMonth = YearMonth.from(periodEnd)
+    var currentMonth by remember(disabledBefore, periodEnd) {
+        mutableStateOf(
+            YearMonth.now().coerceIn(firstPeriodMonth, lastPeriodMonth)
+        )
+    }
 
     Card(
         modifier = modifier,
@@ -168,7 +176,8 @@ fun SpendsCalendar(
                 modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
             ) {
                 IconButton(
-                    onClick = { currentMonth = currentMonth.minusMonths(1) }
+                    onClick = { currentMonth = currentMonth.minusMonths(1) },
+                    enabled = currentMonth > firstPeriodMonth,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_back),
@@ -181,7 +190,8 @@ fun SpendsCalendar(
                     yearMonth = currentMonth,
                 )
                 IconButton(
-                    onClick = { currentMonth = currentMonth.plusMonths(1) }
+                    onClick = { currentMonth = currentMonth.plusMonths(1) },
+                    enabled = currentMonth < lastPeriodMonth,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_forward),

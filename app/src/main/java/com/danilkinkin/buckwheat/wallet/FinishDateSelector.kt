@@ -45,9 +45,12 @@ fun FinishDateSelector(
                 context,
                 selectionMode = CalendarSelectionMode.RANGE,
                 selectDate = selectDate,
-                // Allow the period to start in the past (up to one month back); the
-                // calendar still opens near the current month so it's easy to scroll to.
-                disableBeforeDate = LocalDate.now().minusMonths(1).toDate(),
+                // Keep the picker to just the current and next month: the start is
+                // floored at the 1st of the current month and the finish is capped at
+                // the last day of next month, so the calendar renders exactly two months
+                // (without an upper bound it spanned up to Dec 31 of year + 2).
+                disableBeforeDate = LocalDate.now().withDayOfMonth(1).toDate(),
+                disableAfterDate = LocalDate.now().plusMonths(1).withDayOfMonth(1).minusDays(1).toDate(),
             )
         }
 

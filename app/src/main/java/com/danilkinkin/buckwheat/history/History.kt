@@ -56,6 +56,7 @@ fun History(
     readOnly: Boolean = false,
     onClose: () -> Unit = {},
     searchQuery: String = "",
+    onlyDay: LocalDate? = null,
 ) {
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -72,8 +73,8 @@ fun History(
     val periodSpends by spendsViewModel.periodSpends.observeAsState(emptyList())
     val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
 
-    LaunchedEffect(searchQuery, periodSpends, archivedTransactions) {
-        historyList = composeHistoryRows(periodSpends, archivedTransactions, searchQuery)
+    LaunchedEffect(searchQuery, onlyDay, periodSpends, archivedTransactions) {
+        historyList = composeHistoryRows(periodSpends, archivedTransactions, searchQuery, onlyDay)
     }
 
     DisposableEffect(Unit) {
@@ -299,6 +300,7 @@ private fun composeHistoryRows(
     periodSpends: List<Transaction>,
     archivedTransactions: List<ArchivedTransaction>,
     searchQuery: String,
+    onlyDay: LocalDate? = null,
 ): List<RowEntity> {
     val searching = searchQuery.isNotBlank()
 
@@ -330,7 +332,8 @@ private fun composeHistoryRows(
             }
         }
     }.filter { entry ->
-        !searching || entry.comment.contains(searchQuery, ignoreCase = true)
+        (!searching || entry.comment.contains(searchQuery, ignoreCase = true)) &&
+            (onlyDay == null || entry.date.toLocalDate().isEqual(onlyDay))
     }.sortedBy { it.date }
 
     val composedList = emptyList<RowEntity>().toMutableList()

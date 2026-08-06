@@ -25,6 +25,9 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.history.History
+import com.danilkinkin.buckwheat.util.prettyDate
+import com.danilkinkin.buckwheat.util.toDate
+import java.time.LocalDate
 
 const val VIEWER_HISTORY_SHEET = "viewerHistory"
 
@@ -32,6 +35,7 @@ const val VIEWER_HISTORY_SHEET = "viewerHistory"
 fun ViewerHistory(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     appViewModel: AppViewModel = hiltViewModel(),
+    onlyDay: LocalDate? = null,
     onClose: () -> Unit = {},
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -56,7 +60,15 @@ fun ViewerHistory(
                 }
                 Spacer(Modifier.weight(1F))
                 Text(
-                    text = stringResource(R.string.history_title),
+                    text = if (onlyDay != null) {
+                        prettyDate(
+                            onlyDay.toDate(),
+                            showTime = false,
+                            forceShowDate = true,
+                        )
+                    } else {
+                        stringResource(R.string.history_title)
+                    },
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Spacer(Modifier.weight(1F))
@@ -64,6 +76,7 @@ fun ViewerHistory(
             }
             History(
                 readOnly = true,
+                onlyDay = onlyDay,
             )
         }
     }

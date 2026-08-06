@@ -40,6 +40,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
@@ -47,10 +48,8 @@ import java.util.*
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
-import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
-import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
 
 const val ANALYTICS_SHEET = "finishPeriod"
@@ -64,7 +63,6 @@ fun Analytics(
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
     onCreateNewPeriod: () -> Unit = {},
     onClose: () -> Unit = {},
-    editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
     val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
     val transactions by spendsViewModel.periodTransactions.observeAsState(emptyList())
@@ -180,11 +178,12 @@ fun Analytics(
                                     actualFinishDate = finishPeriodActualDate,
                                     currency = currency,
                                     onDayClick = { date ->
-                                        editorViewModel.resetEditingSpent()
-                                        editorViewModel.currentDate =
-                                            date.toDate()
-                                        editorViewModel.startCreatingSpent()
-                                        onClose()
+                                        appViewModel.openSheet(
+                                            PathState(
+                                                name = VIEWER_HISTORY_SHEET,
+                                                args = mapOf("onlyDay" to date),
+                                            )
+                                        )
                                     },
                                 )
                             }

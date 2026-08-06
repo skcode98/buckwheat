@@ -31,6 +31,7 @@ import com.danilkinkin.buckwheat.recalcBudget.RecalcBudget
 import com.danilkinkin.buckwheat.settings.*
 import com.danilkinkin.buckwheat.wallet.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.util.*
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -146,10 +147,11 @@ fun BottomSheets(
         )
     }
 
-    BottomSheetWrapper(name = VIEWER_HISTORY_SHEET) {
+    BottomSheetWrapper(name = VIEWER_HISTORY_SHEET) { state ->
         ViewerHistory(
+            onlyDay = state.args["onlyDay"] as LocalDate?,
             onClose = {
-                coroutineScope.launch { it.hide() }
+                coroutineScope.launch { state.hide() }
             }
         )
     }
