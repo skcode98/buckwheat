@@ -48,7 +48,7 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
             "https://openrouter.ai/api/v1/chat/completions"
         }
         val model = prefs[voiceAiModelStoreKey].orEmpty().ifBlank {
-            "google/gemma-3n-e4b-it:free"
+            "nvidia/nemotron-3-ultra-550b-a55b:free"
         }
 
         // Built via JSONObject so the transcript (which may contain quotes/newlines) is

@@ -66,7 +66,7 @@ suspend fun categorizeSpendsWithAi(
             "https://openrouter.ai/api/v1/chat/completions"
         }
         val model = prefs[voiceAiModelStoreKey].orEmpty().ifBlank {
-            "google/gemma-3n-e4b-it:free"
+            "nvidia/nemotron-3-ultra-550b-a55b:free"
         }
 
         val categoryKeys = SpendCategory.entries.joinToString(", ") { it.name }

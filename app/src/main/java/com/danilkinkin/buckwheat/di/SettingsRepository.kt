@@ -42,7 +42,7 @@ class SettingsRepository @Inject constructor(
         it[voiceAiProviderUrlStoreKey] ?: "https://openrouter.ai/api/v1/chat/completions"
     }
     fun getVoiceAiModel() = context.settingsDataStore.data.map {
-        it[voiceAiModelStoreKey] ?: "google/gemma-3n-e4b-it:free"
+        it[voiceAiModelStoreKey] ?: "nvidia/nemotron-3-ultra-550b-a55b:free"
     }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->

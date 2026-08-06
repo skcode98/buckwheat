@@ -45,7 +45,7 @@ fun VoiceAiSettingsSheet() {
     val coroutineScope = rememberCoroutineScope()
     var voiceAiApiKey by remember { mutableStateOf("") }
     var voiceAiProviderUrl by remember { mutableStateOf("https://openrouter.ai/api/v1/chat/completions") }
-    var voiceAiModel by remember { mutableStateOf("google/gemma-3n-e4b-it:free") }
+    var voiceAiModel by remember { mutableStateOf("nvidia/nemotron-3-ultra-550b-a55b:free") }
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -59,7 +59,7 @@ fun VoiceAiSettingsSheet() {
             .ifBlank { "https://openrouter.ai/api/v1/chat/completions" }
         voiceAiModel = context.settingsDataStore.data.first()[voiceAiModelStoreKey]
             .orEmpty()
-            .ifBlank { "google/gemma-3n-e4b-it:free" }
+            .ifBlank { "nvidia/nemotron-3-ultra-550b-a55b:free" }
     }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
