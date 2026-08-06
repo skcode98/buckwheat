@@ -61,6 +61,7 @@ class SpendsRepository @Inject constructor(
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
     fun getAllArchivedTransactions(): LiveData<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
+    fun getAllBudgetPeriods(): LiveData<List<BudgetPeriod>> = budgetPeriodDao.getAll()
     fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
     fun getTransactionsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
         transactionDao.getAll(startDate.time, endDate.time)

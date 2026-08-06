@@ -26,7 +26,7 @@
 - **Our saved work**: `our-fixes` branch on origin
 - **Workflow**: Build APK via GitHub Actions (`.github/workflows/build.yml`)
 - **Pushed so far**: `f6e3649` (search day-total + analytics calendar fix), `2c90b8d` (voice AI envelope unwrap), `72db09f` (AI spend categories), `3a83f7c` (carry-forward fix + voice AI settings + recurring currency), `fc16848` (archived CSV imports), `328dd94` (Android 17 launch crash), `212f7cf` (CrashLogger), `a309c29` (budget guards, AGP 8.7.3)
-- **Test baseline**: `.\gradlew.bat :app:testDebugUnitTest` green (53 tests incl. 12 `SpendCategorizerTest`, 23 `VoiceInputParserTest`, 18 `SpendsRepositoryTest`)
+- **Test baseline**: `.\gradlew.bat :app:testDebugUnitTest` green (89 tests incl. 12 `SpendCategorizerTest`, 23 `VoiceInputParserTest`, 18 `SpendsRepositoryTest`, 4 `DailyReminderContentTest`, 4 `ListAnimationTest`, 6 `SpendsTrendTest`)
 
 ---
 
@@ -203,6 +203,7 @@ com.danilkinkin.buckwheat/
 │   ├── RestAndSpentBudgetCard.kt
 │   ├── SpendsCountCard.kt
 │   ├── MinMaxSpentCard.kt
+│   ├── SpendsTrendCard.kt   # Per-day bars + vs-previous-period delta
 │   ├── WholeBudgetCard.kt
 │   ├── StatCard.kt
 │   ├── ViewerHistory.kt

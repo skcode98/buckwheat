@@ -73,6 +73,7 @@ fun Analytics(
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
+    val budgetPeriods by spendsViewModel.budgetPeriods.observeAsState(emptyList())
     val scrollState = rememberScrollState()
 
     val spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel()
@@ -199,6 +200,15 @@ fun Analytics(
                                 modifier = Modifier.fillMaxWidth(),
                                 spends = spends,
                                 currency = currency,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            SpendsTrendCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends,
+                                startDate = startPeriodDate,
+                                finishDate = finishPeriodDate!!,
+                                currency = currency,
+                                periods = budgetPeriods,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }

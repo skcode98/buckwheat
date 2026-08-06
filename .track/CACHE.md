@@ -71,6 +71,8 @@
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
 | Categories VM | `app/.../data/categories/SpendCategoriesViewModel.kt` |
 | Categories Card (analytics) | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
+| Monthly trend card (analytics) | `app/.../analytics/SpendsTrendCard.kt` |
+| Monthly trend tests | `app/src/test/java/.../analytics/SpendsTrendTest.kt` |
 | Categorizer Tests | `app/src/test/java/.../data/categories/SpendCategorizerTest.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |
