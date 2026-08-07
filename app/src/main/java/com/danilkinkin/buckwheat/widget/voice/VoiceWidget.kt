@@ -247,17 +247,43 @@ fun VoiceWidgetContent() {
                         Spacer(modifier = GlanceModifier.height(2.dp))
                         val todaySpent = series.lastOrNull() ?: BigDecimal.ZERO
                         val dailyRemaining = (dailyBudget - todaySpent).coerceAtLeast(BigDecimal.ZERO)
-                        val formatted = runCatching {
-                            numberFormat(context, dailyRemaining, currency)
-                        }.getOrDefault(dailyRemaining.toPlainString())
+                        val remainingFraction = if (dailyBudget.signum() > 0) {
+                            dailyRemaining
+                                .divide(dailyBudget, 4, RoundingMode.HALF_UP)
+                                .toFloat()
+                                .coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                        val remainingPercent = (remainingFraction * 100f).roundToInt()
                         CanvasText(
                             modifier = GlanceModifier.fillMaxWidth(),
-                            text = formatted,
+                            text = "$remainingPercent%",
                             style = TextStyle(
                                 color = GlanceTheme.colors.primary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
                             ),
+                        )
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        CanvasText(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            text = context.getString(
+                                R.string.voice_widget_of_daily,
+                                runCatching { numberFormat(context, dailyBudget, currency) }
+                                    .getOrDefault(dailyBudget.toPlainString()),
+                            ),
+                            style = TextStyle(
+                                color = GlanceTheme.colors.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 9.sp,
+                            ),
+                        )
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        VoiceWidgetProgressBar(
+                            fraction = remainingFraction,
+                            fillColor = primaryColor,
+                            trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
                         )
                         Spacer(modifier = GlanceModifier.height(2.dp))
                         VoiceWidgetChart(
@@ -476,6 +502,69 @@ private fun VoiceWidgetChart(
         contentScale = ContentScale.FillBounds,
         contentDescription = null,
     )
+}
+
+// Thin rounded progress bar showing how much of today's daily budget is still left. Drawn
+// into a bitmap (Glance 1.1.1 `defaultWeight` takes no weight argument) and stretched with
+// ContentScale.FillBounds, like the chart.
+@Composable
+@GlanceComposable
+private fun VoiceWidgetProgressBar(
+    fraction: Float,
+    fillColor: Color,
+    trackColor: Color,
+) {
+    val context = LocalContext.current
+    Image(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(3.dp),
+        provider = ImageProvider(
+            drawProgressBarBitmap(
+                context = context,
+                widthDp = 280f,
+                heightDp = 3f,
+                fraction = fraction,
+                fillColor = fillColor,
+                trackColor = trackColor,
+            )
+        ),
+        contentScale = ContentScale.FillBounds,
+        contentDescription = null,
+    )
+}
+
+private fun drawProgressBarBitmap(
+    context: Context,
+    widthDp: Float,
+    heightDp: Float,
+    fraction: Float,
+    fillColor: Color,
+    trackColor: Color,
+): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val width = (widthDp * density).roundToInt().coerceAtLeast(1)
+    val height = (heightDp * density).roundToInt().coerceAtLeast(1)
+    val bitmap = createBitmap(width, height)
+    val canvas = Canvas(bitmap)
+    val radius = height / 2f
+
+    val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = trackColor.toArgb()
+    }
+    canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, trackPaint)
+
+    val fillWidth = width.toFloat() * fraction.coerceIn(0f, 1f)
+    if (fillWidth > 0f) {
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = fillColor.toArgb()
+        }
+        canvas.drawRoundRect(0f, 0f, fillWidth, height.toFloat(), radius, radius, fillPaint)
+    }
+
+    return bitmap
 }
 
 private fun drawChartBitmap(
