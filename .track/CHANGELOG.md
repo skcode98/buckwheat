@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-07 — Voice widget: notification permission (POST_NOTIFICATIONS) fix on the widget tap path (committed, pushed)
+
+The voice widget's notifications ("permission needed", "Spend added", error result) were silently dropped on API 33+ because `POST_NOTIFICATIONS` was never requested on the widget path (only the in-app settings toggles request it). Worse, the "permission needed" notice for the missing mic was *itself* a notification — so with notifications denied the user tapped the mic and nothing happened at all.
+
+- **Fix 1 (callback)**: `VoiceWidgetMicCallback.onAction` (VoiceWidgetMicCallback.kt) now checks `RECORD_AUDIO` itself; when it's missing it launches `MainActivity` directly (with `EXTRA_REQUEST_MIC_PERMISSION`) instead of starting the service and hoping the "permission needed" notification is visible. An in-app permission prompt is always visible; a notification may be invisible.
+- **Fix 2 (MainActivity)**: `micPermissionLauncher` switched from `ActivityResultContracts.RequestPermission()` (single) to `RequestMultiplePermissions()`, and the `EXTRA_REQUEST_MIC_PERMISSION` handler now requests `RECORD_AUDIO` + (on API 33+, if not yet granted) `POST_NOTIFICATIONS` together. Android's permission controller shows them sequentially. Now that `POST_NOTIFICATIONS` is granted on the first tap, the widget's result notifications actually display.
+- **Verify (on-device, API 36 emulator, authoritative)**: revoked BOTH `RECORD_AUDIO` and `POST_NOTIFICATIONS` via `pm revoke` → tapped the widget mic (button center found by pixel-scanning the primary color `73,93,146`; widget band `x[370..1205] y[575..900]`, button center ≈ `(1087,738)`) → logcat shows `START ...cmp=com.danilkinkin.buckwheat/.MainActivity (has extras)` followed by `android.content.pm.action.REQUEST_PERMISSIONS ... GrantPermissionsActivity` (both prompts appear in order: "record audio?" → "send you notifications?"). Granted both → tapped mic again → `Background started FGS: Allowed ... allowWiu:52` → recognizer listening → result notification `id=301, channel=voice_widget, importance=3` now present in `dumpsys notification`. No `GlanceAppWidget`/composition errors.
+- Green: `assembleDebug`, `spotlessCheck`, `testDebugUnitTest`.
+
 ## 2026-08-07 — Voice widget: second root cause found & fixed on emulator (committed `abe131c`, pushed)
 
 The WorkManager init fix (`7d32713`) made Glance's `provideGlance` actually run on a real device, which **unmasked a second, deeper composition bug**: the widget still painted "Can't show content". Full on-device E2E reproduced it on the Pixel_9_Pro_API_36 emulator:

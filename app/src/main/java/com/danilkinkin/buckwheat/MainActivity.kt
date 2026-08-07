@@ -4,6 +4,8 @@ import OverrideLocalize
 import android.Manifest
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -19,6 +21,7 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.datastore.preferences.preferencesDataStore
@@ -54,7 +57,7 @@ class MainActivity : ComponentActivity() {
     private val isReady: MutableState<Boolean> = mutableStateOf(false)
 
     private val micPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,11 +70,25 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
-        // Opened from the voice widget's "permission needed" notification: prompt for the
-        // microphone once so the widget can work without ever opening the app again.
+        // Opened from the voice widget's mic button (or its "permission needed" notification):
+        // prompt for the microphone so the widget can work without ever opening the app again.
+        // On API 33+, POST_NOTIFICATIONS is requested alongside it, otherwise the widget's
+        // result and "permission needed" notifications are silently dropped.
         if (intent?.getBooleanExtra(VoiceWidgetNotifications.EXTRA_REQUEST_MIC_PERMISSION, false) == true) {
             intent.removeExtra(VoiceWidgetNotifications.EXTRA_REQUEST_MIC_PERMISSION)
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            val permissions = buildList {
+                add(Manifest.permission.RECORD_AUDIO)
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            micPermissionLauncher.launch(permissions.toTypedArray())
         }
 
         CrashLogger.consumePersisted(context)?.let { errorForReport = it }
