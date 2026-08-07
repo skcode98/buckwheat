@@ -81,6 +81,8 @@
 | Categories Card (analytics) | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Monthly trend card (analytics) | `app/.../analytics/SpendsTrendCard.kt` |
 | Monthly trend tests | `app/src/test/java/.../analytics/SpendsTrendTest.kt` |
+| Weekday breakdown card (analytics) | `app/.../analytics/SpendsWeekdayCard.kt` |
+| Weekday breakdown tests | `app/src/test/java/.../analytics/SpendsWeekdayTest.kt` |
 | Categorizer Tests | `app/src/test/java/.../data/categories/SpendCategorizerTest.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |

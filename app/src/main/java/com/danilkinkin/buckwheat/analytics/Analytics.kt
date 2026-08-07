@@ -230,6 +230,14 @@ fun Analytics(
                                 periods = budgetPeriods,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
+                            SpendsWeekdayCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends,
+                                startDate = startPeriodDate,
+                                finishDate = finishPeriodDate!!,
+                                currency = currency,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                             CompareToLastPeriodCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 currentSpent = currentSpent,

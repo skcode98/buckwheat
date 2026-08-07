@@ -184,6 +184,7 @@
   <string name="categories_refining">Refining with AI…</string>
   <string name="spends_calendar_hint">Chart show how much you spent every day relative to your daily budget</string>
   <string name="monthly_trend_title">Monthly trend</string>
+  <string name="weekday_breakdown_title">Spend by day of week</string>
   <string name="avg_per_day">avg/day %1$s</string>
   <string name="vs_previous_period">vs previous period</string>
   <string name="export_to_csv_file_name">Spends (from %1$s to %2$s)</string>
