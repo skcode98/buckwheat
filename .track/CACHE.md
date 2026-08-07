@@ -38,6 +38,7 @@
 | Voice Input Parser | `app/.../keyboard/VoiceInputParser.kt` |
 | Voice AI Parser | `app/.../keyboard/VoiceAi.kt` |
 | Voice AI Settings Sheet | `app/.../settings/VoiceAiSettingsSheet.kt` |
+| Voice Widget Design Setting | `app/.../settings/VoiceWidgetDesignSetting.kt` |
 | Recalc Budget VM | `app/.../recalcBudget/RecalcBudgetViewModel.kt` |
 | Voice Parser Tests | `app/src/test/java/.../keyboard/VoiceInputParserTest.kt` |
 | Budget Constructor | `app/.../wallet/BudgetConstructor.kt` |
