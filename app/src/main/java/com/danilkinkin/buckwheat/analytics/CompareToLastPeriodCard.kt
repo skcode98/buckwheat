@@ -53,8 +53,12 @@ data class PeriodComparison(
 
 // The most recent finished period that started before the current one, so the comparison is
 // always "same offset from the period start" rather than against the full previous period.
+// CSV-imported month buckets are excluded (mirrors SpendsTrendCard.previousPeriodBefore),
+// so the card never compares against archive artifacts.
 fun findPreviousPeriod(periods: List<BudgetPeriod>, currentStart: Date): BudgetPeriod? =
-    periods.filter { it.finishDate.before(currentStart) }.maxByOrNull { it.finishDate }
+    periods
+        .filter { !it.isImported && it.finishDate.before(currentStart) }
+        .maxByOrNull { it.finishDate }
 
 // Sum of the previous period's spends that happened within the same number of elapsed days as
 // the current period has progressed, so early in a period the card doesn't look like a huge

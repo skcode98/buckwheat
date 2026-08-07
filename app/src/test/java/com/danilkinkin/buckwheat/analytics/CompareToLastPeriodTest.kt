@@ -53,6 +53,25 @@ class CompareToLastPeriodTest {
     }
 
     @Test
+    fun findPreviousPeriodSkipsImportedPeriods() {
+        val currentStart = daysAgo(5)
+
+        val imported = period(6, id = 2).copy(isImported = true)
+        val real = period(9, id = 1)
+
+        assertSame(real, findPreviousPeriod(listOf(imported, real), currentStart))
+    }
+
+    @Test
+    fun findPreviousPeriodReturnsNullWhenOnlyImportedPeriodsPrecede() {
+        val currentStart = daysAgo(5)
+
+        val imported = period(6, id = 2).copy(isImported = true)
+
+        assertNull(findPreviousPeriod(listOf(imported), currentStart))
+    }
+
+    @Test
     fun findPreviousPeriodIgnoresCurrentAndFuturePeriods() {
         val currentStart = daysAgo(5)
 

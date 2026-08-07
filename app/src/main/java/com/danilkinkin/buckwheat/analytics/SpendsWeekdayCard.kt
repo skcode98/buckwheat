@@ -109,7 +109,11 @@ fun SpendsWeekdayCard(
         week.map { averages[it.value - 1] }
     }
     val maxValue = values.maxOrNull() ?: BigDecimal.ZERO
-    var selectedWeekday by remember { mutableStateOf<DayOfWeek?>(null) }
+    // Reset the highlighted day when the period data changes so a selection from a
+    // previous period never lingers on the new breakdown.
+    var selectedWeekday by remember(spends, startDate, finishDate) {
+        mutableStateOf<DayOfWeek?>(null)
+    }
 
     Card(
         modifier = modifier,
