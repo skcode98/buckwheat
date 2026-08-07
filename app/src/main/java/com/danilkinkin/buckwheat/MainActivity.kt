@@ -1,12 +1,14 @@
 package com.danilkinkin.buckwheat
 
 import OverrideLocalize
+import android.Manifest
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -28,6 +30,7 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.ThemeMode
 import com.danilkinkin.buckwheat.ui.syncTheme
 import com.danilkinkin.buckwheat.util.locScreenOrientation
+import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import syncOverrideLocale
@@ -50,6 +53,9 @@ class MainActivity : ComponentActivity() {
     private val isDone: MutableState<Boolean> = mutableStateOf(false)
     private val isReady: MutableState<Boolean> = mutableStateOf(false)
 
+    private val micPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val context = this.applicationContext
@@ -60,6 +66,13 @@ class MainActivity : ComponentActivity() {
         }
 
         super.onCreate(savedInstanceState)
+
+        // Opened from the voice widget's "permission needed" notification: prompt for the
+        // microphone once so the widget can work without ever opening the app again.
+        if (intent?.getBooleanExtra(VoiceWidgetNotifications.EXTRA_REQUEST_MIC_PERMISSION, false) == true) {
+            intent.removeExtra(VoiceWidgetNotifications.EXTRA_REQUEST_MIC_PERMISSION)
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
 
         CrashLogger.consumePersisted(context)?.let { errorForReport = it }
 

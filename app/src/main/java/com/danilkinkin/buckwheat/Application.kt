@@ -10,6 +10,7 @@ import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
+import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -74,6 +75,15 @@ class Application : Application() {
                 description = getString(R.string.overspend_notify_channel_description)
             }
             notificationManager.createNotificationChannel(overspendChannel)
+
+            val voiceWidgetChannel = NotificationChannel(
+                VoiceWidgetNotifications.CHANNEL_ID,
+                getString(R.string.voice_widget_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.voice_widget_channel_description)
+            }
+            notificationManager.createNotificationChannel(voiceWidgetChannel)
         }
     }
 }
