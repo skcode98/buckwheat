@@ -61,6 +61,11 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class VoiceFeedbackState { IDLE, LISTENING, PROCESSING, ADDED }
 
@@ -93,6 +98,40 @@ internal suspend fun setVoiceFeedbackState(
             }
         }
         VoiceWidget().update(context, id)
+    }
+}
+
+private val feedbackResetScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+// A few seconds after a successful commit the widget returns to the idle mic so the user can
+// immediately add another spend. The reset only fires while the state is still ADDED, so it
+// never clobbers a session the user already started.
+internal fun scheduleFeedbackReset(context: Context, delayMs: Long = 4_000L) {
+    feedbackResetScope.launch {
+        delay(delayMs)
+        GlanceAppWidgetManager(context).getGlanceIds(VoiceWidget::class.java).forEach { id ->
+            updateAppWidgetState(
+                context = context,
+                definition = PreferencesGlanceStateDefinition,
+                glanceId = id,
+            ) { preferences ->
+                val current = runCatching {
+                    VoiceFeedbackState.valueOf(
+                        preferences[WidgetReceiver.voiceFeedbackStatePreferenceKey]
+                            ?: VoiceFeedbackState.IDLE.name
+                    )
+                }.getOrDefault(VoiceFeedbackState.IDLE)
+                if (current === VoiceFeedbackState.ADDED) {
+                    preferences.toMutablePreferences().apply {
+                        this[WidgetReceiver.voiceFeedbackStatePreferenceKey] =
+                            VoiceFeedbackState.IDLE.name
+                    }
+                } else {
+                    preferences
+                }
+            }
+            VoiceWidget().update(context, id)
+        }
     }
 }
 
@@ -380,7 +419,8 @@ private fun ListeningButton(context: Context) {
 }
 
 // Successful commit: green circle with a white check. The amount shown in the caption comes
-// from the commit service, so it reflects exactly what was just added.
+// from the commit service, so it reflects exactly what was just added. Tapping it starts a
+// fresh voice input so the user can add another spend immediately.
 @Composable
 @GlanceComposable
 private fun AddedButton(context: Context) {
@@ -389,7 +429,8 @@ private fun AddedButton(context: Context) {
             .padding(start = 8.dp)
             .size(44.dp)
             .background(ColorProvider(colorGood))
-            .cornerRadius(22.dp),
+            .cornerRadius(22.dp)
+            .clickable(actionRunCallback<VoiceWidgetMicCallback>()),
         contentAlignment = Alignment.Center,
     ) {
         val provider = drawableProvider(context, R.drawable.ic_apply)

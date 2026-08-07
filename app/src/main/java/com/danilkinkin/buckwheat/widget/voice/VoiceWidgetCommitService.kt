@@ -222,6 +222,7 @@ class VoiceWidgetCommitService : Service() {
             text,
         )
         setVoiceFeedbackState(context, VoiceFeedbackState.ADDED, text)
+        scheduleFeedbackReset(context)
     }
 
     private fun stopSelfAndExit() {
