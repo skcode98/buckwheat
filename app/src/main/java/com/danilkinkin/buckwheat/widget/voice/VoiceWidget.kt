@@ -9,7 +9,9 @@ import android.graphics.DashPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
@@ -77,6 +79,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class VoiceFeedbackState { IDLE, LISTENING, PROCESSING, ADDED }
+
+enum class VoiceWidgetDesign { PERCENT, AMOUNT, RING }
 
 // Writes the transient input-feedback state to every voice widget and re-renders it. Called
 // from the mic tap (with the exact glanceId for an instant response) and from the commit
@@ -193,6 +197,12 @@ fun VoiceWidgetContent() {
         )
     }.getOrDefault(VoiceFeedbackState.IDLE)
 
+    val widgetDesign = runCatching {
+        VoiceWidgetDesign.valueOf(
+            prefs[WidgetReceiver.voiceDesignPreferenceKey] ?: VoiceWidgetDesign.PERCENT.name
+        )
+    }.getOrDefault(VoiceWidgetDesign.PERCENT)
+
     val primaryColor = GlanceTheme.colors.primary.getColor(context)
     val onSurfaceVariantColor = GlanceTheme.colors.onSurfaceVariant.getColor(context)
 
@@ -256,35 +266,62 @@ fun VoiceWidgetContent() {
                             0f
                         }
                         val remainingPercent = (remainingFraction * 100f).roundToInt()
-                        CanvasText(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            text = "$remainingPercent%",
-                            style = TextStyle(
-                                color = GlanceTheme.colors.primary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
-                            ),
-                        )
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-                        CanvasText(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            text = context.getString(
-                                R.string.voice_widget_of_daily,
-                                runCatching { numberFormat(context, dailyBudget, currency) }
-                                    .getOrDefault(dailyBudget.toPlainString()),
-                            ),
-                            style = TextStyle(
-                                color = GlanceTheme.colors.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 9.sp,
-                            ),
-                        )
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-                        VoiceWidgetProgressBar(
-                            fraction = remainingFraction,
-                            fillColor = primaryColor,
-                            trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
-                        )
+                        when (widgetDesign) {
+                            VoiceWidgetDesign.PERCENT -> {
+                                CanvasText(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    text = "$remainingPercent%",
+                                    style = TextStyle(
+                                        color = GlanceTheme.colors.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
+                                    ),
+                                )
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                CanvasText(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    text = context.getString(
+                                        R.string.voice_widget_of_daily,
+                                        runCatching { numberFormat(context, dailyBudget, currency) }
+                                            .getOrDefault(dailyBudget.toPlainString()),
+                                    ),
+                                    style = TextStyle(
+                                        color = GlanceTheme.colors.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 9.sp,
+                                    ),
+                                )
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                VoiceWidgetProgressBar(
+                                    fraction = remainingFraction,
+                                    fillColor = primaryColor,
+                                    trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
+                                )
+                            }
+                            VoiceWidgetDesign.AMOUNT -> {
+                                val formatted = runCatching {
+                                    numberFormat(context, dailyRemaining, currency)
+                                }.getOrDefault(dailyRemaining.toPlainString())
+                                CanvasText(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    text = formatted,
+                                    style = TextStyle(
+                                        color = GlanceTheme.colors.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
+                                    ),
+                                )
+                            }
+                            VoiceWidgetDesign.RING -> {
+                                VoiceWidgetRing(
+                                    fraction = remainingFraction,
+                                    percentText = "$remainingPercent%",
+                                    ringColor = primaryColor,
+                                    trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
+                                    textColor = primaryColor,
+                                )
+                            }
+                        }
                         Spacer(modifier = GlanceModifier.height(2.dp))
                         VoiceWidgetChart(
                             series = series,
@@ -563,6 +600,88 @@ private fun drawProgressBarBitmap(
         }
         canvas.drawRoundRect(0f, 0f, fillWidth, height.toFloat(), radius, radius, fillPaint)
     }
+
+    return bitmap
+}
+
+// Circular gauge of today's daily budget still left: a ring (track + primary arc) with the
+// remaining percent drawn in the center. Glance 1.1.1 has no canvas composables, so it is
+// drawn into a bitmap at composition time like the chart and progress bar.
+@Composable
+@GlanceComposable
+private fun VoiceWidgetRing(
+    fraction: Float,
+    percentText: String,
+    ringColor: Color,
+    trackColor: Color,
+    textColor: Color,
+) {
+    val context = LocalContext.current
+    Image(
+        modifier = GlanceModifier.size(48.dp),
+        provider = ImageProvider(
+            drawRingBitmap(
+                context = context,
+                sizeDp = 48f,
+                fraction = fraction,
+                percentText = percentText,
+                ringColor = ringColor,
+                trackColor = trackColor,
+                textColor = textColor,
+            )
+        ),
+        contentScale = ContentScale.FillBounds,
+        contentDescription = null,
+    )
+}
+
+private fun drawRingBitmap(
+    context: Context,
+    sizeDp: Float,
+    fraction: Float,
+    percentText: String,
+    ringColor: Color,
+    trackColor: Color,
+    textColor: Color,
+): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val size = (sizeDp * density).roundToInt().coerceAtLeast(1)
+    val bitmap = createBitmap(size, size)
+    val canvas = Canvas(bitmap)
+    val stroke = (4.5f * density).coerceAtLeast(1f)
+    val inset = stroke / 2f + 1f * density
+    val ringRect = RectF(inset, inset, size - inset, size - inset)
+
+    val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = stroke
+        color = trackColor.toArgb()
+    }
+    canvas.drawArc(ringRect, 0f, 360f, false, trackPaint)
+
+    val sweep = 360f * fraction.coerceIn(0f, 1f)
+    if (sweep > 0f) {
+        val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = stroke
+            strokeCap = Paint.Cap.ROUND
+            color = ringColor.toArgb()
+        }
+        canvas.drawArc(ringRect, -90f, sweep, false, arcPaint)
+    }
+
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isSubpixelText = true
+        textSize = 11f * density
+        typeface = Typeface.Builder(context.assets, "font/manrope_variable.ttf")
+            .setFontVariationSettings("'wght' 900")
+            .build()
+        color = textColor.toArgb()
+        textAlign = Paint.Align.CENTER
+    }
+    val fontMetrics = textPaint.fontMetrics
+    val baseline = size / 2f - (fontMetrics.ascent + fontMetrics.descent) / 2f
+    canvas.drawText(percentText, size / 2f, baseline, textPaint)
 
     return bitmap
 }

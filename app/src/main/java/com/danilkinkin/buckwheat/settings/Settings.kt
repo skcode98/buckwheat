@@ -75,6 +75,7 @@ fun Settings(
                         )
                     },
                 )
+                VoiceWidgetDesignSetting(appViewModel = appViewModel)
                 TryWidget(onTried = {
                     onTriedWidget()
                 })

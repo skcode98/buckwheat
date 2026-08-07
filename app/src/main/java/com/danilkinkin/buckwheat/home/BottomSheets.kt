@@ -242,6 +242,16 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = SETTINGS_CHANGE_WIDGET_DESIGN_SHEET,
+    ) { state ->
+        VoiceWidgetDesignSettingDialog(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(
         name = TAGS_MANAGEMENT_SHEET,
     ) { state ->
         TagsManagementSheet()

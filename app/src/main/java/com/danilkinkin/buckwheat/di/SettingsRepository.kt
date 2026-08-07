@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -18,6 +19,7 @@ val showSpentCardByDefaultStoreKey = booleanPreferencesKey("showSpentCardByDefau
 val voiceAiApiKeyStoreKey = stringPreferencesKey("voiceAiApiKey")
 val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
 val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
+val voiceWidgetDesignStoreKey = stringPreferencesKey("voiceWidgetDesign")
 val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
 val reminderHourStoreKey = intPreferencesKey("reminderHour")
 val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
@@ -53,6 +55,11 @@ class SettingsRepository @Inject constructor(
     }
     fun getVoiceAiModel() = context.settingsDataStore.data.map {
         it[voiceAiModelStoreKey] ?: "nvidia/nemotron-3-ultra-550b-a55b:free"
+    }
+    fun getVoiceWidgetDesign() = context.settingsDataStore.data.map {
+        runCatching {
+            VoiceWidgetDesign.valueOf(it[voiceWidgetDesignStoreKey] ?: "")
+        }.getOrDefault(VoiceWidgetDesign.PERCENT)
     }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->

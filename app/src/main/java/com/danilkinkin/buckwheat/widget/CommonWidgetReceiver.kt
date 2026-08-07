@@ -14,6 +14,7 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.unit.ColorProvider
 import androidx.lifecycle.asFlow
 import com.danilkinkin.buckwheat.analytics.dailySpendTotals
+import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.*
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         val voiceDailyBudgetPreferenceKey = stringPreferencesKey("voice-daily-budget-key")
         val voiceFeedbackStatePreferenceKey = stringPreferencesKey("voice-feedback-state-key")
         val voiceFeedbackTextPreferenceKey = stringPreferencesKey("voice-feedback-text-key")
+        val voiceDesignPreferenceKey = stringPreferencesKey("voice-design-key")
 
         fun requestUpdateData(context: Context, receiverClass: Class<*>) {
             val intent = Intent(context, receiverClass)
@@ -78,6 +80,9 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
 
     @Inject
     lateinit var databaseRepository: SpendsRepository
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     override fun onUpdate(
         context: Context,
@@ -128,6 +133,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             val budget = databaseRepository.getBudget().first()
             val currency = databaseRepository.getCurrency().first()
             val startPeriodDate = databaseRepository.getStartPeriodDate().first()
+            val widgetDesign = settingsRepository.getVoiceWidgetDesign().first()
 
             val finishDateReached = finishDate !== null && finishDate.time <= Date().time
             val earlyFinishDateReached =
@@ -218,6 +224,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                                 this[voiceChartSeriesPreferenceKey] =
                                     chartSeries.joinToString(",") { it.toPlainString() }
                                 this[voiceDailyBudgetPreferenceKey] = dailyBudget.toPlainString()
+                                this[voiceDesignPreferenceKey] = widgetDesign.name
                             }
                     }
 

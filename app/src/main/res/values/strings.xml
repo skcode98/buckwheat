@@ -107,6 +107,13 @@
   <string name="voice_widget_left_today">Left today</string>
   <string name="voice_widget_of_daily">of %1$s daily</string>
   <string name="voice_widget_today_summary">Budget %1$s · Spent %2$s · Left %3$s</string>
+  <string name="voice_widget_design_title">Voice widget design</string>
+  <string name="voice_widget_design_percent">Percent left</string>
+  <string name="voice_widget_design_percent_desc">Percentage of today\'s budget still left</string>
+  <string name="voice_widget_design_amount">Amount left</string>
+  <string name="voice_widget_design_amount_desc">How much is left of today\'s budget</string>
+  <string name="voice_widget_design_ring">Ring</string>
+  <string name="voice_widget_design_ring_desc">Ring gauge with the remaining percent</string>
   <string name="voice_widget_result_title">Spend added</string>
   <string name="voice_widget_added">Added %1$s</string>
   <string name="voice_widget_added_comment">Added %1$s — %2$s</string>
