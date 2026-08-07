@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-07 — Voice widget: min/max-style spend chart (committed `8c4ead0`, pushed)
+
+User asked to make the widget graph look like the app's min/max spend chart (`SpendsChart`, the `MinMaxSpentCard` backdrop). The widget chart swapped flat bars for the same smooth filled-area curve: cubic-bezier line through the 7 daily points filled with a vertical `colorMax→colorMin` gradient (night-mode aware: alphas 0.55/0.38/0.20 dark, 0.35/0.20/0.08 light), a dashed goal-guard line (`DashPathEffect`) at the daily-budget level, and a "today" marker on the last point (8dp primary halo at 0.2 + 4.5dp ring stroke + 3dp white dot). Glance 1.1.1 has **no** canvas/path composables (verified: `androidx.glance.canvas` absent from the 1.1.1 jars; only `ContentScale { Fit, Crop, FillBounds }`), so the chart is drawn into an `android.graphics.Bitmap` at composition time — the same `CanvasText` technique — and rendered as `Image(provider, contentScale = FillBounds)`. `drawChartBitmap(...)` is pure pixel drawing (280×26dp design, density-scaled, 2dp side pads); min/max captions unchanged. **Verify**: compile/spotless/146 tests/assembleDebug green; on-device (API 36) pixel scans confirmed dashed goal line at top (y744), smooth gradient peak (x402-555, y758-818) and the white-dot+blue-ring today marker at ≈(1040,812). NOTE: earlier `jar xf` for API inspection leaked `AndroidManifest.xml`/`META-INF/`/`res/`/`R.txt`/`public.txt` into the repo root — deleted, never committed (build artifacts).
+
 ## 2026-08-07 — Voice widget: allow adding another spend after a commit (committed `e8162a2`, pushed)
 
 After a successful voice commit the widget stayed stuck on the ADDED green check — the button had no action and the state never reset, so the user couldn't add a second spend without opening the app (reported on a real device).
