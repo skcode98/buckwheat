@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.di
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.backup.parseBackupData
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,6 +34,7 @@ import java.util.Date
 class BackupRepositoryTest {
 
     lateinit var backupRepository: BackupRepository
+    lateinit var database: DatabaseModule
     lateinit var transactionDao: FakeTransactionDao
     lateinit var savedTagDao: FakeSavedTagDao
     lateinit var savedCategoryDao: FakeSavedCategoryDao
@@ -48,8 +51,12 @@ class BackupRepositoryTest {
         budgetPeriodDao = FakeBudgetPeriodDao()
         recurringDao = FakeRecurringDao()
         savingsGoalDao = FakeSavingsGoalDao()
+        database = Room.inMemoryDatabaseBuilder(context, DatabaseModule::class.java)
+            .allowMainThreadQueries()
+            .build()
         backupRepository = BackupRepository(
             context = context,
+            database = database,
             transactionDao = transactionDao,
             savedTagDao = savedTagDao,
             savedCategoryDao = savedCategoryDao,
@@ -57,6 +64,11 @@ class BackupRepositoryTest {
             recurringDao = recurringDao,
             savingsGoalDao = savingsGoalDao,
         )
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -160,5 +172,16 @@ class BackupRepositoryTest {
         parsed!!
         assertTrue(parsed.transactions.isEmpty())
         assertTrue(parsed.budgetPeriods.isEmpty())
+    }
+
+    @Test
+    fun exportOmitsSensitiveVoiceAiApiKey() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.settingsDataStore.edit { it[voiceAiApiKeyStoreKey] = "sk-secret-123" }
+
+        val json = backupRepository.exportBackup()
+
+        assertFalse(json.contains("sk-secret-123"))
+        assertFalse(json.contains("voiceAiApiKey"))
     }
 }

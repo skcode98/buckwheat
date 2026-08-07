@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.di
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -10,6 +11,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.room.withTransaction
 import com.danilkinkin.buckwheat.backup.BACKUP_VERSION
 import com.danilkinkin.buckwheat.backup.BackupData
 import com.danilkinkin.buckwheat.backup.BackupValue
@@ -22,6 +24,9 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
+import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderScheduler
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -31,6 +36,7 @@ import javax.inject.Singleton
 @Singleton
 class BackupRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val database: DatabaseModule,
     private val transactionDao: TransactionDao,
     private val savedTagDao: SavedTagDao,
     private val savedCategoryDao: SavedCategoryDao,
@@ -59,24 +65,33 @@ class BackupRepository @Inject constructor(
         val backup = parseBackupData(json) ?: return false
 
         // Wipe current data first. Deleting budget_periods cascades to archived_transactions
-        // via the FK, so no explicit archived delete is needed.
-        transactionDao.deleteAll()
-        savedTagDao.deleteAll()
-        savedCategoryDao.deleteAll()
-        recurringDao.deleteAll()
-        savingsGoalDao.deleteAll()
-        budgetPeriodDao.deleteAll()
+        // via the FK, so no explicit archived delete is needed. The whole wipe + reinsert
+        // runs in a single Room transaction so a mid-restore failure rolls back cleanly
+        // instead of leaving a partially-destroyed database.
+        try {
+            database.withTransaction {
+                transactionDao.deleteAll()
+                savedTagDao.deleteAll()
+                savedCategoryDao.deleteAll()
+                recurringDao.deleteAll()
+                savingsGoalDao.deleteAll()
+                budgetPeriodDao.deleteAll()
 
-        // Insert in FK-safe order, preserving ids so archived_transactions keep their period link.
-        budgetPeriodDao.insertAll(backup.budgetPeriods)
-        backup.archivedTransactions.forEach {
-            budgetPeriodDao.insertArchivedTransactions(listOf(it))
+                // Insert in FK-safe order, preserving ids so archived_transactions keep their period link.
+                budgetPeriodDao.insertAll(backup.budgetPeriods)
+                backup.archivedTransactions.forEach {
+                    budgetPeriodDao.insertArchivedTransactions(listOf(it))
+                }
+                transactionDao.insertAll(backup.transactions)
+                savedTagDao.insertAll(backup.savedTags)
+                savedCategoryDao.insertAll(backup.savedCategories)
+                recurringDao.insertAll(backup.recurringTemplates)
+                savingsGoalDao.insertAll(backup.savingsGoals)
+            }
+        } catch (e: Exception) {
+            Log.e("BackupRepository", "Database restore failed, keeping previous data", e)
+            return false
         }
-        transactionDao.insertAll(backup.transactions)
-        savedTagDao.insertAll(backup.savedTags)
-        savedCategoryDao.insertAll(backup.savedCategories)
-        recurringDao.insertAll(backup.recurringTemplates)
-        savingsGoalDao.insertAll(backup.savingsGoals)
 
         context.budgetDataStore.edit { prefs ->
             prefs.clear()
@@ -87,6 +102,19 @@ class BackupRepository @Inject constructor(
             prefs.applyBackupMap(backup.settingsPreferences)
         }
 
+        // The reminder alarm survives neither DataStore changes nor the DB wipe, so re-arm it
+        // from the restored settings (the alarm manager is not covered by the backup itself).
+        val restoredSettings = context.settingsDataStore.data.first()
+        val reminderEnabled = restoredSettings[reminderEnabledStoreKey] ?: false
+        val reminderHour = restoredSettings[reminderHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+        val reminderMinute =
+            restoredSettings[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+        if (reminderEnabled) {
+            DailyBudgetReminderScheduler.schedule(context, reminderHour, reminderMinute)
+        } else {
+            DailyBudgetReminderScheduler.cancel(context)
+        }
+
         return true
     }
 }
@@ -94,6 +122,8 @@ class BackupRepository @Inject constructor(
 private fun Preferences.asBackupMap(): Map<String, BackupValue> {
     val result = LinkedHashMap<String, BackupValue>()
     asMap().forEach { (key, value) ->
+        // Never persist the Voice-AI API key into a backup file (plaintext secret).
+        if (key.name == voiceAiApiKeyStoreKey.name) return@forEach
         when (value) {
             is Boolean -> result[key.name] = BackupValue.Bool(value)
             is Int -> result[key.name] = BackupValue.IntValue(value)

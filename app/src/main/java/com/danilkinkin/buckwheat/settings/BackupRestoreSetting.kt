@@ -51,9 +51,12 @@ fun BackupRestoreSetting(
         coroutineScope.launch {
             try {
                 val json = backupRestoreViewModel.exportBackup()
-                context.contentResolver.openOutputStream(uri)?.use { output ->
-                    output.write(json.toByteArray(Charsets.UTF_8))
+                val output = context.contentResolver.openOutputStream(uri)
+                if (output == null) {
+                    appViewModel.showSnackbar(snackBarBackupFailed)
+                    return@launch
                 }
+                output.use { it.write(json.toByteArray(Charsets.UTF_8)) }
                 appViewModel.showSnackbar(snackBarBackupSuccess)
             } catch (e: Exception) {
                 context.errorForReport = e.stackTraceToString()
