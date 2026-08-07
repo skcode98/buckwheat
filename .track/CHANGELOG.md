@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-07 — Voice widget: allow adding another spend after a commit (committed `e8162a2`, pushed)
+
+After a successful voice commit the widget stayed stuck on the ADDED green check — the button had no action and the state never reset, so the user couldn't add a second spend without opening the app (reported on a real device).
+
+- **Tappable green check**: `AddedButton` now carries `actionRunCallback<VoiceWidgetMicCallback>()`, so tapping it starts a fresh voice input immediately (same as the idle mic).
+- **Auto-return to idle**: new `scheduleFeedbackReset(context)` (VoiceWidget.kt) runs on a process-lifetime `CoroutineScope(SupervisorJob() + Dispatchers.Main)` ~4s after a successful commit and resets `voice-feedback-state-key` ADDED → IDLE — but only while the state is still ADDED, so it never clobbers a session the user already started. It is deliberately NOT scheduled on the commit service's own scope: the service stops right after committing (and an in-flight `handling` flag would drop a quick re-tap within the window). The process-level one-shot is best-effort; the tappable check covers the worst case where the process dies first.
+- Called from `VoiceWidgetCommitService.commit()` right after `setVoiceFeedbackState(context, VoiceFeedbackState.ADDED, text)`.
+- **Verify**: `compileDebugKotlin`, `spotlessCheck`, `testDebugUnitTest` (**146 tests**), `assembleDebug` all green. Emulator regression (ADDED can't be reached there — no speech service): reinstalled, widget renders IDLE (mic + "For today" + chart + goal line), mic tap still flips to LISTENING (ring + equalizer + changed caption, pixel-verified). The ADDED visuals + reset need the user's real-device confirm.
+
 ## 2026-08-07 — Voice widget: spend chart + live input feedback (committed `8c2ba4f`, pushed)
 
 The voice widget now shows a real spend chart instead of the static placeholder, and its mic button gives instant state feedback while committing.
