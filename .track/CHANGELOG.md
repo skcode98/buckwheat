@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-07 — Voice widget: second root cause found & fixed on emulator (uncommitted, on top of `7d32713`)
+
+The WorkManager init fix (`7d32713`) made Glance's `provideGlance` actually run on a real device, which **unmasked a second, deeper composition bug**: the widget still painted "Can't show content". Full on-device E2E reproduced it on the Pixel_9_Pro_API_36 emulator:
+
+- **Repro**: added the voice widget to the home screen via the launcher widget picker (uiautomator long-press-drag), then forced updates with `adb shell am broadcast -a updateAction -n com.danilkinkin.buckwheat/.widget.voice.VoiceWidgetReceiver`.
+- **Root cause**: `CanvasText` (widget/CanvasText.kt:124) calls `Color.toColorProvider()` (widget/CommonWidgetReceiver.kt:29). That helper tries to reflectively build a Glance `ColorProvider` from a Compose `Color` — but `ColorProvider` is a Glance **interface** (only `getColor-vNxB06k(Context)`; verified via javap), so `getDeclaredConstructor` always throws `NoSuchMethodException` → the `catch` falls back to `LocalContentColor.current`, which is `compositionLocalOf<ColorProvider> { throw Error("No set") }`. Minimal/Extend widgets wrap content in `CompositionLocalProvider(LocalContentColor provides GlanceTheme.colors.onSurface, LocalAccentColor provides ...)`, so the fallback resolves; the VoiceWidget never provided those locals → `java.lang.Error: No set` → Glance's error layout. On-device logcat: `E GlanceAppWidget: java.lang.Error: No set` at `CommonWidgetReceiver.kt:39`.
+- **Fix**: `VoiceWidgetContent` now wraps in the same `CompositionLocalProvider(LocalContentColor / LocalAccentColor)` as the sibling widgets (VoiceWidget.kt). Also kept the `onCompositionError` override that logs the real throwable (`Log.e("VoiceWidget", ...)`) — that logging is what surfaced this second error.
+- **Verify**: reinstalled, re-broadcast → no composition error, widget renders (pixel-sample of the widget band shows background `238,240,255`, mic button `73,93,146`, text `15,15,25`; home-screen uiautomator dump no longer contains "Can't show content").
+- **Test correction**: `VoiceWidgetRenderTest.rendersWithoutCompositionException` was a **false-green** — Robolectric's `widget.update()` never invokes `provideGlance` (proven: added a `composed` flag, `AssertionError: provideGlance never ran`). A Robolectric render test can't exercise Glance composition; the on-device E2E is authoritative. Removed the misleading test, kept `foregroundServicePendingIntentBuilds`.
+
 ## 2026-08-07 — Review-wave fixes (uncommitted, on top of `a147c2d`)
 
 Audit of the recently shipped features found 7 issues; all fixed with regression tests. **136 tests green** (was 131); `compileDebugKotlin`, `testDebugUnitTest`, `spotlessCheck`, `assembleDebug` all pass.
