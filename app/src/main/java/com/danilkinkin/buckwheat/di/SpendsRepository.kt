@@ -394,6 +394,10 @@ class SpendsRepository @Inject constructor(
         context.budgetDataStore.edit {
             it[dailyBudgetStoreKey] = newDailyBudget.toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
+            // Sync the overspend flag with the new budget: raising it clears a stale
+            // notification, and after a day-change fold the fresh crossing can notify again.
+            val spentFromDailyBudget = it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+            it[overspendNotifiedStoreKey] = spentFromDailyBudget > newDailyBudget
 
             Log.d(
                 "SpendsRepository",
@@ -884,11 +888,18 @@ class SpendsRepository @Inject constructor(
 
             if (transactionIsToday || !foldRanToday) {
                 val spentFromDailyBudget = it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: return@edit
+                val dailyBudget = it[dailyBudgetStoreKey]?.toBigDecimal() ?: return@edit
 
                 it[spentFromDailyBudgetStoreKey] =
                     (spentFromDailyBudget - transactionForRemove.value)
                         .coerceAtLeast(BigDecimal.ZERO)
                         .toString()
+
+                // Resync the overspend flag: if the removal drops us back under the daily
+                // budget, a later crossing must notify again (e.g. after undo or edit).
+                val newSpentFromDailyBudget =
+                    it[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+                it[overspendNotifiedStoreKey] = newSpentFromDailyBudget > dailyBudget
             } else {
                 val finishPeriodDate = it[finishPeriodDateStoreKey]
                     ?.let { value -> Date(value) } ?: return@edit
