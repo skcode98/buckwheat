@@ -104,7 +104,8 @@
   <string name="voice_confirm_date_label">Date</string>
   <string name="voice_widget_channel_name">Voice widget</string>
   <string name="voice_widget_channel_description">Feedback when a spend is added from the voice widget</string>
-  <string name="voice_widget_today_caption">For today</string>
+  <string name="voice_widget_left_today">Left today</string>
+  <string name="voice_widget_today_summary">Budget %1$s · Spent %2$s · Left %3$s</string>
   <string name="voice_widget_result_title">Spend added</string>
   <string name="voice_widget_added">Added %1$s</string>
   <string name="voice_widget_added_comment">Added %1$s — %2$s</string>
@@ -114,8 +115,6 @@
   <string name="voice_widget_no_budget">No budget set yet</string>
   <string name="voice_widget_no_budget_text">Open Buckwheat and set a budget to start adding spends</string>
   <string name="voice_widget_failed">Voice input failed</string>
-  <string name="voice_widget_chart_min">min %1$s</string>
-  <string name="voice_widget_chart_max">max %1$s</string>
   <string name="theme_label">Theme</string>
   <string name="theme_light">Light</string>
   <string name="theme_dark">Dark</string>

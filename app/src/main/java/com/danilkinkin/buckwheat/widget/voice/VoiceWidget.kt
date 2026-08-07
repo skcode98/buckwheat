@@ -69,8 +69,6 @@ import com.danilkinkin.buckwheat.widget.LocalContentColor
 import com.danilkinkin.buckwheat.widget.WidgetReceiver
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.text.NumberFormat
-import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -205,6 +203,9 @@ fun VoiceWidgetContent() {
     val dailyBudget = prefs[WidgetReceiver.voiceDailyBudgetPreferenceKey]
         ?.toBigDecimalOrNull()
         ?: BigDecimal.ZERO
+    val currency = ExtendCurrency.getInstance(
+        prefs[WidgetReceiver.currencyPreferenceKey] ?: "RUB"
+    )
 
     CompositionLocalProvider(
         LocalContentColor provides GlanceTheme.colors.onSurface,
@@ -244,28 +245,20 @@ fun VoiceWidgetContent() {
                             ),
                         )
                         Spacer(modifier = GlanceModifier.height(2.dp))
-                        val todayBudget = prefs[WidgetReceiver.todayBudgetPreferenceKey]
-                            ?.toBigDecimalOrNull()
-                        if (todayBudget != null) {
-                            val formatted = runCatching {
-                                numberFormat(
-                                    context,
-                                    todayBudget,
-                                    ExtendCurrency.getInstance(
-                                        prefs[WidgetReceiver.currencyPreferenceKey] ?: "RUB"
-                                    ),
-                                )
-                            }.getOrDefault(todayBudget.toPlainString())
-                            CanvasText(
-                                modifier = GlanceModifier.fillMaxWidth(),
-                                text = formatted,
-                                style = TextStyle(
-                                    color = GlanceTheme.colors.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                ),
-                            )
-                        }
+                        val todaySpent = series.lastOrNull() ?: BigDecimal.ZERO
+                        val dailyRemaining = (dailyBudget - todaySpent).coerceAtLeast(BigDecimal.ZERO)
+                        val formatted = runCatching {
+                            numberFormat(context, dailyRemaining, currency)
+                        }.getOrDefault(dailyRemaining.toPlainString())
+                        CanvasText(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            text = formatted,
+                            style = TextStyle(
+                                color = GlanceTheme.colors.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                            ),
+                        )
                         Spacer(modifier = GlanceModifier.height(2.dp))
                         VoiceWidgetChart(
                             series = series,
@@ -277,31 +270,23 @@ fun VoiceWidgetContent() {
                             markerColor = Color.White,
                         )
                         Spacer(modifier = GlanceModifier.height(2.dp))
-                        Row(modifier = GlanceModifier.fillMaxWidth()) {
-                            CanvasText(
-                                text = context.getString(
-                                    R.string.voice_widget_chart_min,
-                                    compactAmount(minNonZero(series)),
-                                ),
-                                style = TextStyle(
-                                    color = GlanceTheme.colors.onSurfaceVariant,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 9.sp,
-                                ),
-                            )
-                            Spacer(modifier = GlanceModifier.defaultWeight())
-                            CanvasText(
-                                text = context.getString(
-                                    R.string.voice_widget_chart_max,
-                                    compactAmount(maxNonZero(series)),
-                                ),
-                                style = TextStyle(
-                                    color = GlanceTheme.colors.onSurfaceVariant,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 9.sp,
-                                ),
-                            )
-                        }
+                        CanvasText(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            text = context.getString(
+                                R.string.voice_widget_today_summary,
+                                runCatching { numberFormat(context, dailyBudget, currency) }
+                                    .getOrDefault(dailyBudget.toPlainString()),
+                                runCatching { numberFormat(context, todaySpent, currency) }
+                                    .getOrDefault(todaySpent.toPlainString()),
+                                runCatching { numberFormat(context, dailyRemaining, currency) }
+                                    .getOrDefault(dailyRemaining.toPlainString()),
+                            ),
+                            style = TextStyle(
+                                color = GlanceTheme.colors.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 9.sp,
+                            ),
+                        )
                     }
                 } else {
                     Column(
@@ -350,7 +335,7 @@ private fun captionFor(
     VoiceFeedbackState.PROCESSING -> context.getString(R.string.voice_processing)
     VoiceFeedbackState.ADDED -> prefs[WidgetReceiver.voiceFeedbackTextPreferenceKey]
         ?: context.getString(R.string.voice_widget_result_title)
-    VoiceFeedbackState.IDLE -> context.getString(R.string.voice_widget_today_caption)
+    VoiceFeedbackState.IDLE -> context.getString(R.string.voice_widget_left_today)
 }
 
 private fun minNonZero(series: List<BigDecimal>): BigDecimal =
@@ -358,12 +343,6 @@ private fun minNonZero(series: List<BigDecimal>): BigDecimal =
 
 private fun maxNonZero(series: List<BigDecimal>): BigDecimal =
     series.filter { it.signum() > 0 }.maxOrNull() ?: BigDecimal.ZERO
-
-private fun compactAmount(value: BigDecimal): String {
-    val formatter = NumberFormat.getNumberInstance(Locale.getDefault())
-    formatter.maximumFractionDigits = if (value.abs() < BigDecimal.ONE) 1 else 0
-    return formatter.format(value)
-}
 
 private fun drawableProvider(context: Context, resId: Int): ImageProvider? =
     ResourcesCompat.getDrawable(context.resources, resId, null)?.let { drawable ->
@@ -588,6 +567,31 @@ private fun drawChartBitmap(
         pathEffect = DashPathEffect(floatArrayOf(6f * density, 4f * density), 0f)
     }
     canvas.drawLine(padLeft, goalY, width - padRight, goalY, goalPaint)
+
+    // Min/max range markers (past days only — today has its own marker below), drawn as a
+    // colored ring with a white center: max in the top color, min in the bottom color.
+    fun drawRangeMarker(index: Int, rangeColor: Color) {
+        val x = xAt(index)
+        val y = yAt(fractions[index])
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * density
+            color = rangeColor.toArgb()
+        }
+        canvas.drawCircle(x, y, 3.5f * density, ring)
+        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = markerColor.toArgb()
+        }
+        canvas.drawCircle(x, y, 2f * density, dot)
+    }
+
+    val pastIndices = series.dropLast(1)
+        .mapIndexedNotNull { index, value -> index.takeIf { value.signum() > 0 } }
+    if (pastIndices.isNotEmpty()) {
+        drawRangeMarker(pastIndices.maxBy { series[it] }, topColor)
+        drawRangeMarker(pastIndices.minBy { series[it] }, bottomColor)
+    }
 
     val markerX = xAt(lastIndex)
     val markerY = yAt(fractions.last())
