@@ -56,6 +56,7 @@ fun Editor(
                 focusController = focusController,
             )
             TaggingToolbar(editorFocusController = focusController)
+            Spacer(Modifier.height(8.dp))
             CategorySelector()
             Spacer(Modifier.height(24.dp))
         }
