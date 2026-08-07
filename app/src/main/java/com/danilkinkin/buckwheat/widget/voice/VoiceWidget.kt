@@ -2,11 +2,21 @@ package com.danilkinkin.buckwheat.widget.voice
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.createBitmap
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.Preferences
@@ -31,6 +41,7 @@ import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxHeight
@@ -39,7 +50,6 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import androidx.glance.layout.width
 import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
@@ -61,6 +71,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -185,7 +196,6 @@ fun VoiceWidgetContent() {
     }.getOrDefault(VoiceFeedbackState.IDLE)
 
     val primaryColor = GlanceTheme.colors.primary.getColor(context)
-    val onSurfaceColor = GlanceTheme.colors.onSurface.getColor(context)
     val onSurfaceVariantColor = GlanceTheme.colors.onSurfaceVariant.getColor(context)
 
     val series = prefs[WidgetReceiver.voiceChartSeriesPreferenceKey]
@@ -260,10 +270,9 @@ fun VoiceWidgetContent() {
                         VoiceWidgetChart(
                             series = series,
                             dailyBudget = dailyBudget,
-                            barColorStart = colorMin,
-                            barColorEnd = colorMax,
-                            todayBarColor = primaryColor,
-                            zeroBarColor = onSurfaceColor.copy(alpha = 0.18f),
+                            topColor = colorMax,
+                            bottomColor = colorMin,
+                            todayColor = primaryColor,
                             goalLineColor = onSurfaceVariantColor.copy(alpha = 0.55f),
                             markerColor = Color.White,
                         )
@@ -445,98 +454,162 @@ private fun AddedButton(context: Context) {
     }
 }
 
-// Mini bar chart of the last 7 days. Heights are fixed dp values computed at composition
-// time (Glance 1.1.1 weights are equal-only), so every bar, the goal-guard line and today's
-// commit marker can be positioned precisely.
+// Smooth filled-area curve in the style of the app's analytics SpendsChart (the min/max spend
+// chart backdrop): cubic-bezier area with a vertical colorMax→colorMin gradient, a dashed
+// goal-guard line at the daily-budget level and a "today" marker on the last point. Glance
+// 1.1.1 has no path/canvas composables, so the chart is drawn into a bitmap at composition
+// time (same technique as CanvasText) and stretched with ContentScale.FillBounds.
 @Composable
 @GlanceComposable
 private fun VoiceWidgetChart(
     series: List<BigDecimal>,
     dailyBudget: BigDecimal,
-    barColorStart: Color,
-    barColorEnd: Color,
-    todayBarColor: Color,
-    zeroBarColor: Color,
+    topColor: Color,
+    bottomColor: Color,
+    todayColor: Color,
     goalLineColor: Color,
     markerColor: Color,
 ) {
     if (series.isEmpty()) return
 
-    val chartHeight = 20f
-    val maxScale = maxOf(dailyBudget, maxNonZero(series)).coerceAtLeast(BigDecimal.ONE)
-    val goalFraction = dailyBudget
-        .divide(maxScale, 4, RoundingMode.HALF_EVEN)
-        .toFloat()
+    val context = LocalContext.current
+    val chartHeight = 26f
+    val designWidth = 280f
 
-    Box(
+    Image(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(chartHeight.dp),
-    ) {
-        Row(modifier = GlanceModifier.fillMaxSize()) {
-            series.forEachIndexed { index, value ->
-                val fraction = value
-                    .divide(maxScale, 4, RoundingMode.HALF_EVEN)
-                    .toFloat()
-                val isToday = index == series.lastIndex
-                val barHeight = if (fraction > 0f) {
-                    (chartHeight * fraction).coerceAtLeast(2f)
-                } else {
-                    0f
-                }
+        provider = ImageProvider(
+            drawChartBitmap(
+                context = context,
+                designWidthDp = designWidth,
+                chartHeightDp = chartHeight,
+                series = series,
+                dailyBudget = dailyBudget,
+                topColor = topColor,
+                bottomColor = bottomColor,
+                todayColor = todayColor,
+                goalLineColor = goalLineColor,
+                markerColor = markerColor,
+            )
+        ),
+        contentScale = ContentScale.FillBounds,
+        contentDescription = null,
+    )
+}
 
-                Box(
-                    modifier = GlanceModifier
-                        .defaultWeight()
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    if (barHeight > 0f) {
-                        Box(
-                            modifier = GlanceModifier
-                                .width(4.dp)
-                                .height(barHeight.dp)
-                                .background(ColorProvider(if (isToday) todayBarColor else combineColors(barColorStart, barColorEnd, fraction)))
-                                .cornerRadius(2.dp),
-                            contentAlignment = Alignment.TopCenter,
-                        ) {
-                            if (isToday) {
-                                Box(
-                                    modifier = GlanceModifier
-                                        .size(5.dp)
-                                        .background(ColorProvider(markerColor))
-                                        .cornerRadius(2.5.dp),
-                                ) {}
-                            }
-                        }
-                    } else {
-                        Box(
-                            modifier = GlanceModifier
-                                .width(4.dp)
-                                .height(2.dp)
-                                .background(ColorProvider(zeroBarColor))
-                                .cornerRadius(1.dp),
-                        ) {}
-                    }
-                }
-            }
-        }
+private fun drawChartBitmap(
+    context: Context,
+    designWidthDp: Float,
+    chartHeightDp: Float,
+    series: List<BigDecimal>,
+    dailyBudget: BigDecimal,
+    topColor: Color,
+    bottomColor: Color,
+    todayColor: Color,
+    goalLineColor: Color,
+    markerColor: Color,
+): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val width = (designWidthDp * density).roundToInt().coerceAtLeast(1)
+    val height = (chartHeightDp * density).roundToInt().coerceAtLeast(1)
+    val bitmap = createBitmap(width, height)
+    val canvas = Canvas(bitmap)
 
-        // Goal-guard line at the daily-budget level, drawn over the bars.
-        Column(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .height(chartHeight.dp),
-        ) {
-            val goalTop = (chartHeight * (1f - goalFraction)).coerceIn(0f, chartHeight - 1f)
-            Spacer(modifier = GlanceModifier.height(goalTop.dp))
-            Box(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(ColorProvider(goalLineColor)),
-            ) {}
-            Spacer(modifier = GlanceModifier.height((chartHeight - goalTop - 1f).coerceAtLeast(0f).dp))
-        }
+    val isNight = (context.resources.configuration.uiMode and
+        Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+    val maxScale = maxOf(dailyBudget, maxNonZero(series)).coerceAtLeast(BigDecimal.ONE)
+    val fractions = series.map { fraction ->
+        fraction.divide(maxScale, 4, RoundingMode.HALF_EVEN).toFloat().coerceIn(0f, 1f)
     }
+    val lastIndex = fractions.size - 1
+
+    val padLeft = 2f * density
+    val padRight = 2f * density
+    val padTop = 1f * density
+    val innerWidth = (width - padLeft - padRight).coerceAtLeast(1f)
+    val innerHeight = (height - padTop).coerceAtLeast(1f)
+
+    fun xAt(index: Int): Float =
+        if (lastIndex <= 0) padLeft + innerWidth / 2f
+        else padLeft + innerWidth * index / lastIndex
+
+    fun yAt(fraction: Float): Float = padTop + innerHeight * (1f - fraction)
+
+    val area = Path()
+    var lastY = 0f
+    fractions.forEachIndexed { index, fraction ->
+        val x = xAt(index)
+        val y = yAt(fraction)
+        if (index == 0) {
+            area.moveTo(x, y)
+        } else {
+            val controlX = padLeft + innerWidth * (index - 0.5f) / lastIndex
+            area.cubicTo(controlX, lastY, controlX, y, x, y)
+        }
+        lastY = y
+    }
+
+    val baselineY = yAt(0f)
+    area.lineTo(xAt(lastIndex), baselineY)
+    area.lineTo(xAt(0), baselineY)
+    area.close()
+
+    val midColor = combineColors(topColor, bottomColor, 0.5f)
+    val areaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(
+            0f,
+            0f,
+            0f,
+            height.toFloat(),
+            intArrayOf(
+                topColor.copy(alpha = if (isNight) 0.55f else 0.35f).toArgb(),
+                midColor.copy(alpha = if (isNight) 0.38f else 0.20f).toArgb(),
+                bottomColor.copy(alpha = if (isNight) 0.20f else 0.08f).toArgb(),
+            ),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        style = Paint.Style.FILL
+    }
+    canvas.drawPath(area, areaPaint)
+
+    val goalFraction = dailyBudget
+        .divide(maxScale, 4, RoundingMode.HALF_EVEN)
+        .toFloat()
+        .coerceIn(0f, 1f)
+    val goalY = yAt(goalFraction).coerceIn(padTop, height - 1f)
+    val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = goalLineColor.toArgb()
+        style = Paint.Style.STROKE
+        strokeWidth = (1f * density).coerceAtLeast(1f)
+        pathEffect = DashPathEffect(floatArrayOf(6f * density, 4f * density), 0f)
+    }
+    canvas.drawLine(padLeft, goalY, width - padRight, goalY, goalPaint)
+
+    val markerX = xAt(lastIndex)
+    val markerY = yAt(fractions.last())
+
+    val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = todayColor.copy(alpha = 0.2f).toArgb()
+    }
+    canvas.drawCircle(markerX, markerY, 8f * density, haloPaint)
+
+    val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+        color = todayColor.toArgb()
+    }
+    canvas.drawCircle(markerX, markerY, 4.5f * density, ringPaint)
+
+    val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = markerColor.toArgb()
+    }
+    canvas.drawCircle(markerX, markerY, 3f * density, dotPaint)
+
+    return bitmap
 }
