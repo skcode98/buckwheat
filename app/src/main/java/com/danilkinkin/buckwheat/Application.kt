@@ -11,11 +11,13 @@ import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
+import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
-class Application : Application() {
+class Application : Application(), Configuration.Provider {
+    override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
     override fun onCreate() {
         CrashLogger.install(this)
 
