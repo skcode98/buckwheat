@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
+import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import dagger.hilt.android.HiltAndroidApp
@@ -64,6 +65,15 @@ class Application : Application() {
                 description = getString(R.string.daily_reminder_channel_description)
             }
             notificationManager.createNotificationChannel(channel)
+
+            val overspendChannel = NotificationChannel(
+                OverspendingNotifier.CHANNEL_ID,
+                getString(R.string.overspend_notify_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.overspend_notify_channel_description)
+            }
+            notificationManager.createNotificationChannel(overspendChannel)
         }
     }
 }

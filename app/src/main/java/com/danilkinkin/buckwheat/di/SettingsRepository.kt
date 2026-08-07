@@ -21,6 +21,7 @@ val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
 val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
 val reminderHourStoreKey = intPreferencesKey("reminderHour")
 val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
+val overspendNotifyEnabledStoreKey = booleanPreferencesKey("overspendNotifyEnabled")
 
 enum class TUTORIAL_STAGE {
     NONE,

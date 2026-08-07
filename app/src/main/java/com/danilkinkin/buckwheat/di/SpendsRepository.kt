@@ -23,6 +23,8 @@ import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
@@ -52,6 +54,18 @@ val lastRecurringAppliedDateStoreKey = longPreferencesKey("lastRecurringAppliedD
 val startPeriodDateStoreKey = longPreferencesKey("startPeriodDate")
 val finishPeriodDateStoreKey = longPreferencesKey("finishPeriodDate")
 val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate")
+// Transient flag: true once the daily overspend notification has been posted for the
+// current day's crossing, reset when spending returns at or under the daily budget.
+val overspendNotifiedStoreKey = booleanPreferencesKey("overspendNotified")
+
+// Fire the instant overspend notification only once per crossing: when spending was at or
+// under the daily budget before this transaction and went over with it, and we haven't
+// already notified for this crossing.
+fun shouldNotifyOverspend(
+    wasOver: Boolean,
+    nowOver: Boolean,
+    alreadyNotified: Boolean,
+): Boolean = nowOver && !wasOver && !alreadyNotified
 
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
@@ -407,6 +421,7 @@ class SpendsRepository @Inject constructor(
             it[spentStoreKey] = (spent + spentFromDailyBudget).toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[spentFromDailyBudgetStoreKey] = BigDecimal.ZERO.toString()
+            it[overspendNotifiedStoreKey] = false
 
             Log.d(
                 "SpendsRepository",
@@ -662,6 +677,7 @@ class SpendsRepository @Inject constructor(
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
 
+        var notifyOverspend = false
         context.budgetDataStore.edit {
             val startPeriodDate = it[startPeriodDateStoreKey]
                 ?.let { value -> Date(value) } ?: return@edit
@@ -678,8 +694,17 @@ class SpendsRepository @Inject constructor(
 
             try {
                 if (isSameDay(newTransaction.date, getCurrentDateUseCase())) {
-                    it[spentFromDailyBudgetStoreKey] =
-                        (spentFromDailyBudget + newTransaction.value).toString()
+                    val newSpentFromDailyBudget = spentFromDailyBudget + newTransaction.value
+                    it[spentFromDailyBudgetStoreKey] = newSpentFromDailyBudget.toString()
+
+                    // Post the instant overspend notification exactly once per crossing.
+                    val alreadyNotified = it[overspendNotifiedStoreKey] ?: false
+                    notifyOverspend = shouldNotifyOverspend(
+                        wasOver = spentFromDailyBudget > dailyBudget,
+                        nowOver = newSpentFromDailyBudget > dailyBudget,
+                        alreadyNotified = alreadyNotified,
+                    )
+                    it[overspendNotifiedStoreKey] = newSpentFromDailyBudget > dailyBudget
                 } else {
                     val restDays = countDays(finishPeriodDate, getCurrentDateUseCase())
                         .coerceAtLeast(1)
@@ -704,10 +729,21 @@ class SpendsRepository @Inject constructor(
 
                     it[dailyBudgetStoreKey] = (dailyBudget - spreadDeltaSpentPerRestDays).toString()
                     it[spentStoreKey] = (spent + newTransaction.value).toString()
+                    it[overspendNotifiedStoreKey] = false
                 }
             } catch (e: Exception) {
                 context.errorForReport = e.stackTraceToString()
             }
+        }
+
+        if (notifyOverspend && (context.settingsDataStore.data.first()[overspendNotifyEnabledStoreKey] ?: false)) {
+            val prefs = context.budgetDataStore.data.first()
+            val dailyBudget = prefs[dailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+            val spentFromDailyBudget =
+                prefs[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO
+            val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
+                ?: ExtendCurrency.none()
+            OverspendingNotifier.notify(context, dailyBudget, spentFromDailyBudget, currency)
         }
     }
 
