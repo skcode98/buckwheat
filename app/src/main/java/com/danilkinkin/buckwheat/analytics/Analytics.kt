@@ -50,6 +50,7 @@ import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.wallet.DaysLeftCard
 import com.danilkinkin.buckwheat.wallet.rememberExportCSV
 
@@ -73,7 +74,18 @@ fun Analytics(
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
     val budgetPeriods by spendsViewModel.budgetPeriods.observeAsState(emptyList())
+    val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
     val scrollState = rememberScrollState()
+
+    val previousPeriod = remember(budgetPeriods, startPeriodDate) {
+        findPreviousPeriod(budgetPeriods, startPeriodDate)
+    }
+    val elapsedDays = remember(startPeriodDate) {
+        countDaysToToday(startPeriodDate).coerceAtLeast(1)
+    }
+    val currentSpent = remember(spends) {
+        spends.fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
+    }
 
     val spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel()
     val isCategorizing by spendCategoriesViewModel.isCategorizing.observeAsState(false)
@@ -218,6 +230,15 @@ fun Analytics(
                                 periods = budgetPeriods,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
+                            CompareToLastPeriodCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                currentSpent = currentSpent,
+                                archivedTransactions = archivedTransactions,
+                                previousPeriod = previousPeriod,
+                                elapsedDays = elapsedDays,
+                                currency = currency,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 }
@@ -227,10 +248,24 @@ fun Analytics(
                         activityResultRegistryOwner = activityResultRegistryOwner
                     )
 
+                    val shareSummaryLaunch = rememberShareSummary(
+                        appViewModel = appViewModel,
+                        spendsViewModel = spendsViewModel,
+                        categoryEmojis = categoryEmojis,
+                    )
+
                     ButtonRow(
                         icon = painterResource(R.drawable.ic_file_download),
                         text = stringResource(R.string.export_to_csv),
                         onClick = { exportCSVLaunch() },
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    ButtonRow(
+                        icon = painterResource(R.drawable.ic_share),
+                        text = stringResource(R.string.share_summary),
+                        onClick = { shareSummaryLaunch() },
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

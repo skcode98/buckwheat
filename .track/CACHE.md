@@ -72,6 +72,8 @@
 | Backup/restore VM | `app/.../settings/BackupRestoreViewModel.kt` |
 | Backup codec tests | `app/src/test/java/.../backup/BackupDataTest.kt` |
 | Backup repo tests | `app/src/test/java/.../di/BackupRepositoryTest.kt` |
+| Share summary | `app/.../analytics/ShareSummary.kt` |
+| Share summary tests | `app/src/test/java/.../analytics/ShareSummaryTest.kt` |
 | Category selector (editor) | `app/.../editor/category/CategorySelector.kt` |
 | SpendCategory enum | `app/.../data/categories/SpendCategory.kt` |
 | Spend Categorizer (offline + AI) | `app/.../data/categories/SpendCategorizer.kt` |
