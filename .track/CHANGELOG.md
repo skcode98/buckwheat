@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-08-07 — Voice widget: second root cause found & fixed on emulator (uncommitted, on top of `7d32713`)
+## 2026-08-07 — Voice widget: second root cause found & fixed on emulator (committed `abe131c`, pushed)
 
 The WorkManager init fix (`7d32713`) made Glance's `provideGlance` actually run on a real device, which **unmasked a second, deeper composition bug**: the widget still painted "Can't show content". Full on-device E2E reproduced it on the Pixel_9_Pro_API_36 emulator:
 
