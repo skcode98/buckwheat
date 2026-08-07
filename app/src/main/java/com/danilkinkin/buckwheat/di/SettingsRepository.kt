@@ -22,6 +22,9 @@ val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
 val reminderHourStoreKey = intPreferencesKey("reminderHour")
 val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
 val overspendNotifyEnabledStoreKey = booleanPreferencesKey("overspendNotifyEnabled")
+val onTrackAlertEnabledStoreKey = booleanPreferencesKey("onTrackAlertEnabled")
+val onTrackAlertHourStoreKey = intPreferencesKey("onTrackAlertHour")
+val onTrackAlertMinuteStoreKey = intPreferencesKey("onTrackAlertMinute")
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -69,6 +72,18 @@ class SettingsRepository @Inject constructor(
         it[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
     }
 
+    fun isOnTrackAlertEnabled() = context.settingsDataStore.data.map {
+        it[onTrackAlertEnabledStoreKey] ?: false
+    }
+
+    fun getOnTrackAlertHour() = context.settingsDataStore.data.map {
+        it[onTrackAlertHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+    }
+
+    fun getOnTrackAlertMinute() = context.settingsDataStore.data.map {
+        it[onTrackAlertMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+    }
+
     suspend fun switchDebug(isDebug: Boolean) {
         context.settingsDataStore.edit {
             it[debugStoreKey] = isDebug
@@ -91,6 +106,19 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.edit {
             it[reminderHourStoreKey] = hour
             it[reminderMinuteStoreKey] = minute
+        }
+    }
+
+    suspend fun switchOnTrackAlertEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit {
+            it[onTrackAlertEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun setOnTrackAlertTime(hour: Int, minute: Int) {
+        context.settingsDataStore.edit {
+            it[onTrackAlertHourStoreKey] = hour
+            it[onTrackAlertMinuteStoreKey] = minute
         }
     }
 

@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
+import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
@@ -75,6 +76,15 @@ class Application : Application() {
                 description = getString(R.string.overspend_notify_channel_description)
             }
             notificationManager.createNotificationChannel(overspendChannel)
+
+            val onTrackChannel = NotificationChannel(
+                OnTrackAlertReceiver.CHANNEL_ID,
+                getString(R.string.on_track_alert_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.on_track_alert_channel_description)
+            }
+            notificationManager.createNotificationChannel(onTrackChannel)
 
             val voiceWidgetChannel = NotificationChannel(
                 VoiceWidgetNotifications.CHANNEL_ID,

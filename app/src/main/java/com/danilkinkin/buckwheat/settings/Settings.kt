@@ -64,6 +64,7 @@ fun Settings(
                 LangSwitcher()
                 DailyBudgetReminderSetting()
                 OverspendNotificationSetting()
+                OnTrackAlertSetting()
                 TextRow(
                     icon = painterResource(R.drawable.ic_mic),
                     text = stringResource(R.string.voice_ai_title),

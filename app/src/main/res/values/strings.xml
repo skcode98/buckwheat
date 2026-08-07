@@ -76,6 +76,13 @@
   <string name="overspend_notify_title">Budget exceeded</string>
   <string name="overspend_notify_text">You have spent %1$s more than your daily budget of %2$s</string>
   <string name="overspend_notify_setting_title">Notify when overspending</string>
+  <string name="on_track_alert_setting_title">Warn before the daily budget is exceeded</string>
+  <string name="on_track_alert_time">Alert time</string>
+  <string name="on_track_alert_schedule_format">Every day at %1$s</string>
+  <string name="on_track_alert_channel_name">Daily budget alert</string>
+  <string name="on_track_alert_channel_description">Warning when today\'s spending pace is on track to exceed your daily budget</string>
+  <string name="on_track_alert_notification_title">On track to overspend</string>
+  <string name="on_track_alert_notification_text">You\'re likely to spend %1$s by today\'s end, over your %2$s daily budget</string>
   <string name="compare_title">vs previous period</string>
   <string name="compare_this_period">This period</string>
   <string name="compare_previous_period">Previous period</string>
