@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 5.0.0 (no v prefix)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Validate version
+        run: |
+          if [[ ! "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must look like 5.0.0 (got: ${{ github.event.inputs.version }})" >&2
+            exit 1
+          fi
+
+      - name: Bump version in build.gradle.kts
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          GRADLE_FILE="app/build.gradle.kts"
+
+          OLD_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' "$GRADLE_FILE")
+          NEW_CODE=$((OLD_CODE + 1))
+
+          sed -i "s/versionCode\s*=.*/versionCode = $NEW_CODE/" "$GRADLE_FILE"
+          sed -i "s/versionName\s*=.*/versionName = \"$VERSION\"/" "$GRADLE_FILE"
+
+          echo "Bumped versionCode $OLD_CODE -> $NEW_CODE, versionName -> $VERSION"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add app/build.gradle.kts
+          git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+          git tag "v${{ github.event.inputs.version }}"
+
+          git push origin master
+          git push origin "v${{ github.event.inputs.version }}"
+
+      - name: Summary
+        run: echo "Released v${{ github.event.inputs.version }} — the Build APK workflow will build and publish the release automatically."
