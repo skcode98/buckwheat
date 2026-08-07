@@ -57,7 +57,10 @@
   <string name="voice_ai_api_key">API key</string>
   <string name="voice_ai_provider_url">Provider URL</string>
   <string name="voice_ai_model">Model</string>
+  <string name="voice_ai_fetch_models">Fetch models</string>
+  <string name="voice_ai_model_hint">Tap ▼ to pick a free model, or type any model id</string>
   <string name="save_api_key">Save API key</string>
+  <string name="voice_ai_saved">Saved</string>
   <string name="voice_ai_fallback_hint">If no key is saved, the current offline speech parser stays active.</string>
   <string name="daily_reminder_title">Daily budget reminder</string>
   <string name="daily_reminder_time">Reminder time</string>
