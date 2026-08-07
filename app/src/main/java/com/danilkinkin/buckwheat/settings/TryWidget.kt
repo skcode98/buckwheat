@@ -37,6 +37,7 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
+import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
 
 const val SETTINGS_TRY_WIDGET_SHEET = "settings.tryWidget"
 
@@ -105,6 +106,18 @@ fun TryWidgetDialog() {
                         onClick = {
                             appWidgetManager.requestPinAppWidget(
                                 ComponentName(context, ExtendWidgetReceiver::class.java),
+                                null,
+                                null
+                            )
+                        },
+                    )
+
+                    WidgetRow(
+                        preview = painterResource(R.drawable.voice_app_widget_preview),
+                        description = stringResource(R.string.app_widget_voice_name),
+                        onClick = {
+                            appWidgetManager.requestPinAppWidget(
+                                ComponentName(context, VoiceWidgetReceiver::class.java),
                                 null,
                                 null
                             )

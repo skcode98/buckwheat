@@ -81,6 +81,7 @@ class VoiceWidgetCommitService : Service() {
         scope.launch {
             val finishDate = runCatching { databaseRepository.getFinishPeriodDate().first() }.getOrNull()
             if (finishDate == null) {
+                setVoiceFeedbackState(context, VoiceFeedbackState.IDLE)
                 VoiceWidgetNotifications.post(
                     context,
                     context.getString(R.string.voice_widget_no_budget),
@@ -97,8 +98,10 @@ class VoiceWidgetCommitService : Service() {
                     context,
                     context.getString(R.string.voice_processing),
                 )
+                setVoiceFeedbackState(context, VoiceFeedbackState.PROCESSING)
                 commit(context, transcript)
             } else {
+                setVoiceFeedbackState(context, VoiceFeedbackState.IDLE)
                 VoiceWidgetNotifications.post(
                     context,
                     context.getString(R.string.voice_widget_failed),
@@ -188,6 +191,7 @@ class VoiceWidgetCommitService : Service() {
         val transactions = voiceResultsToTransactions(results)
 
         if (transactions.isEmpty()) {
+            setVoiceFeedbackState(context, VoiceFeedbackState.IDLE)
             VoiceWidgetNotifications.post(
                 context,
                 context.getString(R.string.voice_widget_failed),
@@ -217,6 +221,7 @@ class VoiceWidgetCommitService : Service() {
             context.getString(R.string.voice_widget_result_title),
             text,
         )
+        setVoiceFeedbackState(context, VoiceFeedbackState.ADDED, text)
     }
 
     private fun stopSelfAndExit() {

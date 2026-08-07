@@ -114,6 +114,8 @@
   <string name="voice_widget_no_budget">No budget set yet</string>
   <string name="voice_widget_no_budget_text">Open Buckwheat and set a budget to start adding spends</string>
   <string name="voice_widget_failed">Voice input failed</string>
+  <string name="voice_widget_chart_min">min %1$s</string>
+  <string name="voice_widget_chart_max">max %1$s</string>
   <string name="theme_label">Theme</string>
   <string name="theme_light">Light</string>
   <string name="theme_dark">Dark</string>

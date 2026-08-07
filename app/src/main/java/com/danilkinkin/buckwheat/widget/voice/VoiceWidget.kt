@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
@@ -19,33 +20,81 @@ import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.ui.colorGood
+import com.danilkinkin.buckwheat.ui.colorMax
+import com.danilkinkin.buckwheat.ui.colorMin
+import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.widget.CanvasText
 import com.danilkinkin.buckwheat.widget.LocalAccentColor
 import com.danilkinkin.buckwheat.widget.LocalContentColor
 import com.danilkinkin.buckwheat.widget.WidgetReceiver
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.NumberFormat
+import java.util.Locale
+
+enum class VoiceFeedbackState { IDLE, LISTENING, PROCESSING, ADDED }
+
+// Writes the transient input-feedback state to every voice widget and re-renders it. Called
+// from the mic tap (with the exact glanceId for an instant response) and from the commit
+// service (with glanceId = null, updating all placed voice widgets).
+internal suspend fun setVoiceFeedbackState(
+    context: Context,
+    state: VoiceFeedbackState,
+    text: String? = null,
+    glanceId: GlanceId? = null,
+) {
+    val ids = if (glanceId != null) {
+        listOf(glanceId)
+    } else {
+        GlanceAppWidgetManager(context).getGlanceIds(VoiceWidget::class.java)
+    }
+
+    ids.forEach { id ->
+        updateAppWidgetState(
+            context = context,
+            definition = PreferencesGlanceStateDefinition,
+            glanceId = id,
+        ) { preferences ->
+            preferences.toMutablePreferences().apply {
+                this[WidgetReceiver.voiceFeedbackStatePreferenceKey] = state.name
+                if (text != null) {
+                    this[WidgetReceiver.voiceFeedbackTextPreferenceKey] = text
+                }
+            }
+        }
+        VoiceWidget().update(context, id)
+    }
+}
 
 class VoiceWidget : GlanceAppWidget() {
 
@@ -89,6 +138,25 @@ fun VoiceWidgetContent() {
         stateBudget !== WidgetReceiver.StateBudget.NOT_SET &&
             stateBudget !== WidgetReceiver.StateBudget.END_PERIOD
 
+    val feedbackState = runCatching {
+        VoiceFeedbackState.valueOf(
+            prefs[WidgetReceiver.voiceFeedbackStatePreferenceKey]
+                ?: VoiceFeedbackState.IDLE.name
+        )
+    }.getOrDefault(VoiceFeedbackState.IDLE)
+
+    val primaryColor = GlanceTheme.colors.primary.getColor(context)
+    val onSurfaceColor = GlanceTheme.colors.onSurface.getColor(context)
+    val onSurfaceVariantColor = GlanceTheme.colors.onSurfaceVariant.getColor(context)
+
+    val series = prefs[WidgetReceiver.voiceChartSeriesPreferenceKey]
+        ?.split(",")
+        ?.mapNotNull { it.toBigDecimalOrNull() }
+        ?: emptyList()
+    val dailyBudget = prefs[WidgetReceiver.voiceDailyBudgetPreferenceKey]
+        ?.toBigDecimalOrNull()
+        ?: BigDecimal.ZERO
+
     CompositionLocalProvider(
         LocalContentColor provides GlanceTheme.colors.onSurface,
         LocalAccentColor provides GlanceTheme.colors.primary,
@@ -100,17 +168,33 @@ fun VoiceWidgetContent() {
                 .cornerRadius(48.dp),
         ) {
             Row(
-                modifier = GlanceModifier.fillMaxSize().padding(16.dp),
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically,
             ) {
-                Column(
-                    modifier = GlanceModifier
-                        .defaultWeight()
-                        .fillMaxHeight()
-                        .clickable(actionStartActivity(intent)),
-                    verticalAlignment = Alignment.Vertical.CenterVertically,
-                ) {
-                    if (stateSet) {
+                if (stateSet) {
+                    Column(
+                        modifier = GlanceModifier
+                            .defaultWeight()
+                            .fillMaxHeight()
+                            .clickable(actionStartActivity(intent)),
+                        verticalAlignment = Alignment.Vertical.CenterVertically,
+                    ) {
+                        CanvasText(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            text = captionFor(context, prefs, feedbackState),
+                            style = TextStyle(
+                                color = if (feedbackState === VoiceFeedbackState.ADDED) {
+                                    ColorProvider(colorGood)
+                                } else {
+                                    GlanceTheme.colors.onSurfaceVariant
+                                },
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 10.sp,
+                            ),
+                        )
+                        Spacer(modifier = GlanceModifier.height(2.dp))
                         val todayBudget = prefs[WidgetReceiver.todayBudgetPreferenceKey]
                             ?.toBigDecimalOrNull()
                         if (todayBudget != null) {
@@ -129,11 +213,56 @@ fun VoiceWidgetContent() {
                                 style = TextStyle(
                                     color = GlanceTheme.colors.primary,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 22.sp,
+                                    fontSize = 18.sp,
                                 ),
                             )
                         }
-                    } else {
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        VoiceWidgetChart(
+                            series = series,
+                            dailyBudget = dailyBudget,
+                            barColorStart = colorMin,
+                            barColorEnd = colorMax,
+                            todayBarColor = primaryColor,
+                            zeroBarColor = onSurfaceColor.copy(alpha = 0.18f),
+                            goalLineColor = onSurfaceVariantColor.copy(alpha = 0.55f),
+                            markerColor = Color.White,
+                        )
+                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        Row(modifier = GlanceModifier.fillMaxWidth()) {
+                            CanvasText(
+                                text = context.getString(
+                                    R.string.voice_widget_chart_min,
+                                    compactAmount(minNonZero(series)),
+                                ),
+                                style = TextStyle(
+                                    color = GlanceTheme.colors.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 9.sp,
+                                ),
+                            )
+                            Spacer(modifier = GlanceModifier.defaultWeight())
+                            CanvasText(
+                                text = context.getString(
+                                    R.string.voice_widget_chart_max,
+                                    compactAmount(maxNonZero(series)),
+                                ),
+                                style = TextStyle(
+                                    color = GlanceTheme.colors.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 9.sp,
+                                ),
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = GlanceModifier
+                            .defaultWeight()
+                            .fillMaxHeight()
+                            .clickable(actionStartActivity(intent)),
+                        verticalAlignment = Alignment.Vertical.CenterVertically,
+                    ) {
                         CanvasText(
                             modifier = GlanceModifier.fillMaxWidth(),
                             text = context.resources.getString(
@@ -152,30 +281,221 @@ fun VoiceWidgetContent() {
                     }
                 }
 
+                when (feedbackState) {
+                    VoiceFeedbackState.LISTENING,
+                    VoiceFeedbackState.PROCESSING,
+                    -> ListeningButton(context)
+                    VoiceFeedbackState.ADDED -> AddedButton(context)
+                    VoiceFeedbackState.IDLE -> MicButton(context)
+                }
+            }
+        }
+    }
+}
+
+private fun captionFor(
+    context: Context,
+    prefs: Preferences,
+    feedbackState: VoiceFeedbackState,
+): String = when (feedbackState) {
+    VoiceFeedbackState.LISTENING -> context.getString(R.string.voice_listening)
+    VoiceFeedbackState.PROCESSING -> context.getString(R.string.voice_processing)
+    VoiceFeedbackState.ADDED -> prefs[WidgetReceiver.voiceFeedbackTextPreferenceKey]
+        ?: context.getString(R.string.voice_widget_result_title)
+    VoiceFeedbackState.IDLE -> context.getString(R.string.voice_widget_today_caption)
+}
+
+private fun minNonZero(series: List<BigDecimal>): BigDecimal =
+    series.filter { it.signum() > 0 }.minOrNull() ?: BigDecimal.ZERO
+
+private fun maxNonZero(series: List<BigDecimal>): BigDecimal =
+    series.filter { it.signum() > 0 }.maxOrNull() ?: BigDecimal.ZERO
+
+private fun compactAmount(value: BigDecimal): String {
+    val formatter = NumberFormat.getNumberInstance(Locale.getDefault())
+    formatter.maximumFractionDigits = if (value.abs() < BigDecimal.ONE) 1 else 0
+    return formatter.format(value)
+}
+
+private fun drawableProvider(context: Context, resId: Int): ImageProvider? =
+    ResourcesCompat.getDrawable(context.resources, resId, null)?.let { drawable ->
+        ImageProvider(drawable.toBitmap())
+    }
+
+@Composable
+@GlanceComposable
+private fun MicButton(context: Context) {
+    Box(
+        modifier = GlanceModifier
+            .padding(start = 8.dp)
+            .size(44.dp)
+            .background(GlanceTheme.colors.primary)
+            .cornerRadius(22.dp)
+            .clickable(actionRunCallback<VoiceWidgetMicCallback>()),
+        contentAlignment = Alignment.Center,
+    ) {
+        val provider = drawableProvider(context, R.drawable.ic_mic)
+        if (provider != null) {
+            Image(
+                modifier = GlanceModifier.size(24.dp),
+                provider = provider,
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
+                contentDescription = null,
+            )
+        }
+    }
+}
+
+// Listening/processing: a soft glow ring around the primary circle with an equalizer glyph.
+// Glance 1.1.1 has no animations, so the "pulse" is a static ring.
+@Composable
+@GlanceComposable
+private fun ListeningButton(context: Context) {
+    Box(
+        modifier = GlanceModifier
+            .padding(start = 8.dp)
+            .size(44.dp)
+            .background(ColorProvider(GlanceTheme.colors.primary.getColor(context).copy(alpha = 0.25f)))
+            .cornerRadius(22.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = GlanceModifier
+                .size(32.dp)
+                .background(GlanceTheme.colors.primary)
+                .cornerRadius(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val provider = drawableProvider(context, R.drawable.ic_equalizer)
+            if (provider != null) {
+                Image(
+                    modifier = GlanceModifier.size(18.dp),
+                    provider = provider,
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
+                    contentDescription = null,
+                )
+            }
+        }
+    }
+}
+
+// Successful commit: green circle with a white check. The amount shown in the caption comes
+// from the commit service, so it reflects exactly what was just added.
+@Composable
+@GlanceComposable
+private fun AddedButton(context: Context) {
+    Box(
+        modifier = GlanceModifier
+            .padding(start = 8.dp)
+            .size(44.dp)
+            .background(ColorProvider(colorGood))
+            .cornerRadius(22.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val provider = drawableProvider(context, R.drawable.ic_apply)
+        if (provider != null) {
+            Image(
+                modifier = GlanceModifier.size(26.dp),
+                provider = provider,
+                colorFilter = ColorFilter.tint(ColorProvider(Color.White)),
+                contentDescription = null,
+            )
+        }
+    }
+}
+
+// Mini bar chart of the last 7 days. Heights are fixed dp values computed at composition
+// time (Glance 1.1.1 weights are equal-only), so every bar, the goal-guard line and today's
+// commit marker can be positioned precisely.
+@Composable
+@GlanceComposable
+private fun VoiceWidgetChart(
+    series: List<BigDecimal>,
+    dailyBudget: BigDecimal,
+    barColorStart: Color,
+    barColorEnd: Color,
+    todayBarColor: Color,
+    zeroBarColor: Color,
+    goalLineColor: Color,
+    markerColor: Color,
+) {
+    if (series.isEmpty()) return
+
+    val chartHeight = 20f
+    val maxScale = maxOf(dailyBudget, maxNonZero(series)).coerceAtLeast(BigDecimal.ONE)
+    val goalFraction = dailyBudget
+        .divide(maxScale, 4, RoundingMode.HALF_EVEN)
+        .toFloat()
+
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(chartHeight.dp),
+    ) {
+        Row(modifier = GlanceModifier.fillMaxSize()) {
+            series.forEachIndexed { index, value ->
+                val fraction = value
+                    .divide(maxScale, 4, RoundingMode.HALF_EVEN)
+                    .toFloat()
+                val isToday = index == series.lastIndex
+                val barHeight = if (fraction > 0f) {
+                    (chartHeight * fraction).coerceAtLeast(2f)
+                } else {
+                    0f
+                }
+
                 Box(
                     modifier = GlanceModifier
-                        .padding(start = 12.dp)
-                        .size(48.dp)
-                        .background(GlanceTheme.colors.primary)
-                        .cornerRadius(24.dp)
-                        .clickable(actionRunCallback<VoiceWidgetMicCallback>()),
+                        .defaultWeight()
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.BottomCenter,
                 ) {
-                    val micProvider = ResourcesCompat.getDrawable(
-                        context.resources,
-                        R.drawable.ic_mic,
-                        null,
-                    )?.let { drawable -> ImageProvider(drawable.toBitmap()) }
-
-                    if (micProvider != null) {
-                        Image(
-                            modifier = GlanceModifier.fillMaxSize().padding(10.dp),
-                            provider = micProvider,
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
-                            contentDescription = null,
-                        )
+                    if (barHeight > 0f) {
+                        Box(
+                            modifier = GlanceModifier
+                                .width(4.dp)
+                                .height(barHeight.dp)
+                                .background(ColorProvider(if (isToday) todayBarColor else combineColors(barColorStart, barColorEnd, fraction)))
+                                .cornerRadius(2.dp),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            if (isToday) {
+                                Box(
+                                    modifier = GlanceModifier
+                                        .size(5.dp)
+                                        .background(ColorProvider(markerColor))
+                                        .cornerRadius(2.5.dp),
+                                ) {}
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = GlanceModifier
+                                .width(4.dp)
+                                .height(2.dp)
+                                .background(ColorProvider(zeroBarColor))
+                                .cornerRadius(1.dp),
+                        ) {}
                     }
                 }
             }
+        }
+
+        // Goal-guard line at the daily-budget level, drawn over the bars.
+        Column(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .height(chartHeight.dp),
+        ) {
+            val goalTop = (chartHeight * (1f - goalFraction)).coerceIn(0f, chartHeight - 1f)
+            Spacer(modifier = GlanceModifier.height(goalTop.dp))
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(ColorProvider(goalLineColor)),
+            ) {}
+            Spacer(modifier = GlanceModifier.height((chartHeight - goalTop - 1f).coerceAtLeast(0f).dp))
         }
     }
 }

@@ -12,6 +12,8 @@ import androidx.glance.appwidget.*
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.unit.ColorProvider
+import androidx.lifecycle.asFlow
+import com.danilkinkin.buckwheat.analytics.dailySpendTotals
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.*
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +58,13 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         val currencyPreferenceKey = stringPreferencesKey("currency-key")
         val stateBudgetPreferenceKey = stringPreferencesKey("state-budget-key")
         val spentPercentPreferenceKey = floatPreferencesKey("spent-percent-key")
+
+        // Voice widget: comma-separated daily spends for the last 7 days (oldest first),
+        // the daily budget used as the chart's goal-guard line, and transient input feedback.
+        val voiceChartSeriesPreferenceKey = stringPreferencesKey("voice-chart-series-key")
+        val voiceDailyBudgetPreferenceKey = stringPreferencesKey("voice-daily-budget-key")
+        val voiceFeedbackStatePreferenceKey = stringPreferencesKey("voice-feedback-state-key")
+        val voiceFeedbackTextPreferenceKey = stringPreferencesKey("voice-feedback-text-key")
 
         fun requestUpdateData(context: Context, receiverClass: Class<*>) {
             val intent = Intent(context, receiverClass)
@@ -118,6 +127,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             val spent = databaseRepository.getSpent().first()
             val budget = databaseRepository.getBudget().first()
             val currency = databaseRepository.getCurrency().first()
+            val startPeriodDate = databaseRepository.getStartPeriodDate().first()
 
             val finishDateReached = finishDate !== null && finishDate.time <= Date().time
             val earlyFinishDateReached =
@@ -173,6 +183,19 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                     newPerDayBudget.coerceAtLeast(BigDecimal.ZERO)
                 }
 
+                // Last-7-days spend window for the voice widget chart, clamped so a short
+                // period never pulls in spends from before the period started.
+                val today = Date()
+                val windowStart = maxOf(
+                    roundToDay(Date(today.time - 6 * DAY)),
+                    roundToDay(startPeriodDate),
+                )
+                val chartSeries = dailySpendTotals(
+                    spends = databaseRepository.getSpendsInRange(windowStart, today).asFlow().first(),
+                    startDate = windowStart,
+                    finishDate = today,
+                )
+
                 glanceIds.forEach { glanceId ->
                     updateAppWidgetState(
                         context = context,
@@ -192,6 +215,9 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                                         StateBudget.NEW_DAILY.name
                                     }
                                 this[spentPercentPreferenceKey] = percent.toFloat()
+                                this[voiceChartSeriesPreferenceKey] =
+                                    chartSeries.joinToString(",") { it.toPlainString() }
+                                this[voiceDailyBudgetPreferenceKey] = dailyBudget.toPlainString()
                             }
                     }
 

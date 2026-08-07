@@ -38,6 +38,8 @@ class VoiceWidgetMicCallback : ActionCallback {
             return
         }
 
+        setVoiceFeedbackState(context, VoiceFeedbackState.LISTENING, glanceId = glanceId)
+
         ContextCompat.startForegroundService(
             context,
             Intent(context, VoiceWidgetCommitService::class.java),
