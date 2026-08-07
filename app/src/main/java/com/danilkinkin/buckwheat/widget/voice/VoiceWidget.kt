@@ -18,6 +18,7 @@ import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
@@ -63,10 +64,12 @@ fun VoiceWidgetContent() {
     val intent = Intent(context, MainActivity::class.java)
 
     val prefs = currentState<Preferences>()
-    val stateBudget = WidgetReceiver.StateBudget.valueOf(
-        prefs[WidgetReceiver.stateBudgetPreferenceKey]
-            ?: WidgetReceiver.StateBudget.NOT_SET.name
-    )
+    val stateBudget = runCatching {
+        WidgetReceiver.StateBudget.valueOf(
+            prefs[WidgetReceiver.stateBudgetPreferenceKey]
+                ?: WidgetReceiver.StateBudget.NOT_SET.name
+        )
+    }.getOrDefault(WidgetReceiver.StateBudget.NOT_SET)
     val stateSet =
         stateBudget !== WidgetReceiver.StateBudget.NOT_SET &&
             stateBudget !== WidgetReceiver.StateBudget.END_PERIOD
@@ -85,22 +88,25 @@ fun VoiceWidgetContent() {
                 modifier = GlanceModifier
                     .defaultWeight()
                     .fillMaxHeight()
-                    .clickable(actionStartService(Intent(context, VoiceWidgetCommitService::class.java), true)),
+                    .clickable(actionStartActivity(intent)),
                 verticalAlignment = Alignment.Vertical.CenterVertically,
             ) {
                 if (stateSet) {
                     val todayBudget = prefs[WidgetReceiver.todayBudgetPreferenceKey]
                         ?.toBigDecimalOrNull()
                     if (todayBudget != null) {
-                        CanvasText(
-                            modifier = GlanceModifier.fillMaxWidth(),
-                            text = numberFormat(
+                        val formatted = runCatching {
+                            numberFormat(
                                 context,
                                 todayBudget,
                                 ExtendCurrency.getInstance(
                                     prefs[WidgetReceiver.currencyPreferenceKey] ?: "RUB"
                                 ),
-                            ),
+                            )
+                        }.getOrDefault(todayBudget.toPlainString())
+                        CanvasText(
+                            modifier = GlanceModifier.fillMaxWidth(),
+                            text = formatted,
                             style = TextStyle(
                                 color = GlanceTheme.colors.primary,
                                 fontWeight = FontWeight.Bold,
@@ -135,18 +141,20 @@ fun VoiceWidgetContent() {
                     .cornerRadius(24.dp)
                     .clickable(actionStartService(Intent(context, VoiceWidgetCommitService::class.java), true)),
             ) {
-                val drawable = ResourcesCompat.getDrawable(
+                val micProvider = ResourcesCompat.getDrawable(
                     context.resources,
                     R.drawable.ic_mic,
                     null,
-                )!!
+                )?.let { drawable -> ImageProvider(drawable.toBitmap()) }
 
-                Image(
-                    modifier = GlanceModifier.fillMaxSize().padding(10.dp),
-                    provider = ImageProvider(drawable.toBitmap()),
-                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
-                    contentDescription = null,
-                )
+                if (micProvider != null) {
+                    Image(
+                        modifier = GlanceModifier.fillMaxSize().padding(10.dp),
+                        provider = micProvider,
+                        colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
+                        contentDescription = null,
+                    )
+                }
             }
         }
     }
