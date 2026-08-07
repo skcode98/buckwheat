@@ -83,6 +83,14 @@
 | Monthly trend tests | `app/src/test/java/.../analytics/SpendsTrendTest.kt` |
 | Weekday breakdown card (analytics) | `app/.../analytics/SpendsWeekdayCard.kt` |
 | Weekday breakdown tests | `app/src/test/java/.../analytics/SpendsWeekdayTest.kt` |
+| Compare-to-last-period card | `app/.../analytics/CompareToLastPeriodCard.kt` |
+| Compare-to-last-period tests | `app/src/test/java/.../analytics/CompareToLastPeriodTest.kt` |
+| Overspending notifier | `app/.../notifications/OverspendingNotifier.kt` |
+| Overspend notification setting | `app/.../settings/OverspendNotificationSetting.kt` |
+| Emoji picker | `app/.../base/EmojiPicker.kt` |
+| SavedCategory entity | `app/.../data/entities/SavedCategory.kt` |
+| SavedCategory DAO | `app/.../data/dao/SavedCategoryDao.kt` |
+| Categories management sheet/VM | `app/.../settings/CategoriesManagementSheet.kt` / `.../CategoriesManagementViewModel.kt` |
 | Categorizer Tests | `app/src/test/java/.../data/categories/SpendCategorizerTest.kt` |
 | Manifest | `app/.../AndroidManifest.xml` |
 | Gradle (app) | `app/build.gradle.kts` |
@@ -144,6 +152,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `currency` — currency code (String)
 - `restedBudgetDistributionMethod` — overspend handling (String)
 - `hideOverspendingWarn` — overspend warning flag (Boolean)
+- `overspendNotifiedStoreKey` — last overspend-crossing flag (Boolean; true while over; resynced to `spentFromDailyBudget > dailyBudget` inside every `edit {}` that mutates today's counter/budget — `addSpent`, `removeSpent` today-branch, `updateDailyBudget`, `setDailyBudget`; never cross it with `edit {}` blocks)
 - `knownTags` — pipe-separated known tags (String)
 
 ## Key DataStore Keys (settingsDataStore)
@@ -152,8 +161,9 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `TUTOR_*` — tutorial stage booleans
 - `autoBackupInterval` — backup interval (Int)
 - `debug` — debug-mode flag (String; toggled via keyboard "0"×8 + "." + apply)
-- `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String)
+- `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String; **deliberately excluded from backup exports** — `asBackupMap()` skips it, so restore never restores or clobbers the key)
 - `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String)
 - `voiceAiModelStoreKey` — model name (String)
 - `reminderEnabledStoreKey` — daily budget reminder toggle (Boolean)
 - `reminderHourStoreKey` / `reminderMinuteStoreKey` — reminder time (Int)
+- `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)

@@ -153,3 +153,99 @@ Applied the same fix to `periodTransactions`.
 **Fix:** Offline classification builds a regex map once with `Pattern.quote(keyword)` wrapped in `\b` word boundaries; the map is immutable for thread safety.
 
 **Lesson:** For category/classification keyword matching, use whole-word regex (`\b` + `Pattern.quote`) and build the pattern map once rather than per-call.
+
+---
+
+## Issue 13: Referenced `R.drawable.ic_*` resource doesn't exist
+
+**File:** `notifications/OverspendingNotifier.kt`
+
+**Problem:** The overspend notification referenced `R.drawable.ic_warning`, which does not exist in the project. The build fails with an unresolved-reference error only when that line is reached — Compose resource resolution is compile-time here, but the icon name was simply wrong.
+
+**Fix:** Swapped to the existing `ic_priority_high` drawable.
+
+**Lesson:** Before writing any `R.drawable.ic_*`, verify it exists: `glob app/src/main/res/drawable/ic_*.xml`. Pick an existing icon instead of inventing a name. (Recorded in AGENTS.md pitfalls table.)
+
+---
+
+## Issue 14: `getString` format args silently ignored when placeholders don't match
+
+**File:** `strings.xml` / `OverspendingNotifier.kt`
+
+**Problem:** The overspend notification called `getString(R.string.overspend_notify_message, amountOver, dailyBudget)` but the string resource had no `%1$s`/`%2$s` placeholders at the time. Android does not crash on this — the extra args are silently dropped and the notification shows literal `$` markers or missing values, which is easy to ship.
+
+**Fix:** Kept the `%1$s` / `%2$s` placeholders in the string resource in sync with the two format args.
+
+**Lesson:** Keep the number of format args equal to the number of `%n$s`/`%n$d` placeholders in the resource. A mismatch is silent (no crash, no lint failure), so verify the string content, not just the call site.
+
+---
+
+## Issue 15: Import for a top-level function silently missing after an edit
+
+**File:** `analytics/Analytics.kt`
+
+**Problem:** After wiring the weekday card, `countDaysToToday` was referenced but its import was missing → "unresolved reference" compile error. The edit that should have added the import had silently targeted the wrong spot, so it looked like the import existed.
+
+**Fix:** Added the import explicitly; verified with a grep on the call site.
+
+**Lesson:** After any multi-file edit, grep the call sites to confirm imports actually landed — an `edit` can match in the wrong place without error. Kotlin requires the import even for top-level functions that share the caller's package prefix.
+
+---
+
+## Issue 16: Transient `.kotlin/sessions/*.salive` files staged with real work
+
+**File:** `.gitignore` / git index
+
+**Problem:** The compiler writes session files under `.kotlin/sessions/`; a commit prepared from `git add -A` staged dozens of them alongside the feature code. They pollute the diff and can't be committed meaningfully.
+
+**Fix:** `git restore --staged .kotlin/` before committing; never stage the directory.
+
+**Lesson:** Never stage `.kotlin/sessions/`, `build/`, or other generated artifacts. Check `git status --short` for these before committing and use `git restore --staged` on them.
+
+---
+
+## Issue 17: `spotlessCheck` reports UP-TO-DATE and misses formatting on new files
+
+**File:** build tooling
+
+**Problem:** After adding new Kotlin files, `spotlessCheck` returned "UP-TO-DATE" without actually checking them, so formatting issues would have passed silently. The check's up-to-date cache can lag the new files.
+
+**Fix:** Run `.\gradlew.bat spotlessApply` after adding/changing files, then `spotlessCheck`.
+
+**Lesson:** `spotlessCheck`'s UP-TO-DATE result is not proof of formatting. Force a pass with `spotlessApply` on new files before relying on the check. (AGENTS.md Build & Test section now includes `spotlessApply`.)
+
+---
+
+## Issue 18: Tracking-doc status markers must be flipped after a push
+
+**Files:** `.track/MEMORY.md`, `.track/CHANGELOG.md`
+
+**Problem:** Feature entries recorded as `(uncommitted)` (or listing only one of several commits) stayed stale after the work was committed and pushed, so the next session's context was wrong about what existed where.
+
+**Fix:** After each push, flip `(uncommitted)` → `(committed <hash>, pushed)` and add the pushed commit to the top-line summary (`ALL … features committed AND pushed on master @ <hash>`).
+
+**Lesson:** The tracking docs' `(uncommitted)`/`(committed <hash>, pushed)` markers are the source of truth for the next session. Flip them immediately after a push, and verify with `git status -sb` that `master...origin/master` are in sync. (AGENTS.md Session Protocol rule 7.)
+
+---
+
+## Issue 19: Overspend flag went stale when a removal or budget update bypassed it
+
+**Files:** `di/SpendsRepository.kt` (`removeSpent`, `updateDailyBudget`)
+
+**Problem:** The review found `overspendNotifiedStoreKey` was only maintained by `addSpent` (and reset by `setDailyBudget`). `removeSpent` dropped today's counter without touching the flag, and `updateDailyBudget` (used by the day-change fold) didn't clear it — so undo/delete or a new day's first crossing never re-notified. The bug lived in a code path that looked "locally correct" because every other path synced the flag.
+
+**Fix:** Resync the flag to `spentFromDailyBudget > dailyBudget` inside the *same* `edit {}` block that mutates the counter/budget, for `removeSpent` (today branch) and `updateDailyBudget`.
+
+**Lesson:** A persisted "boundary crossed" flag is a mirror of a comparison over other persisted values. Audit **every** mutation site of those values, not just the one that writes the flag — a flag that drifts from its source comparison silently disables or double-fires the side effect.
+
+---
+
+## Issue 20: Multi-DAO wipe+reinsert and secrets in backups need explicit design
+
+**Files:** `di/BackupRepository.kt`
+
+**Problem:** Two review findings: (1) `restoreBackup` wiped and reinserted across several DAOs outside any Room transaction — a mid-restore failure left a partially-destroyed DB against stale DataStore values (the earlier "intentionally not transactional, re-restore fixes it" decision underweighted how much data a crash destroys); (2) `asBackupMap()` exported the plaintext Voice-AI API key into a user-shareable JSON file.
+
+**Fix:** (1) Inject `DatabaseModule` into `BackupRepository` and run the whole wipe + FK-safe reinsert inside `database.withTransaction {}`; on exception, log, return `false`, and skip the DataStore swaps so old data survives. (2) Skip `voiceAiApiKeyStoreKey` in `asBackupMap()` (restore of old files just leaves the current key untouched).
+
+**Lesson:** Destructive multi-table operations deserve a transaction even when the DAO layer is per-repository; and any feature that serializes all user state must explicitly enumerate what must *never* be serialized (secrets). Encode those as regression tests (the API-key exclusion now has one).

@@ -150,3 +150,52 @@ Relaunch → debug icon (top-left) → DebugMenu → "Open period summary screen
   → SpendsCalendar renders the FULL month grid (periodEnd drives week filter, uncapped)
   → SpendCategoriesCard auto-runs AI categorization on open
 ```
+
+## 16. Overspend Notification (instant)
+```
+Editor CONFIRM → SpendsViewModel.addSpent → SpendsRepository.addSpent
+  → single budgetDataStore.edit { }
+      wasOver = spentFromDailyBudget > dailyBudget (before)
+      apply new spend (spent += value; spentFromDailyBudget += value in today's branch)
+      nowOver = spentFromDailyBudget > dailyBudget (after)
+      overspendNotifiedStoreKey = shouldNotifyOverspend(wasOver, nowOver, alreadyNotified)
+                                 = nowOver && !wasOver && !alreadyNotified  (fires once per crossing)
+  → after the edit block:
+      if overspendNotifiedStoreKey && settings.overspendNotifyEnabledStoreKey
+        → OverspendingNotifier.notifyOverspending(ctx, dailyBudget, spent, currency, numberFormat)
+            → channel "overspending" (created in Application.kt), id 200, ic_stat_notification
+  → flag resets in the today branch when spending returns ≤ dailyBudget, and in setDailyBudget
+```
+Settings row: `OverspendNotificationSetting.kt` — switch writes `overspendNotifyEnabledStoreKey`
+(settingsDataStore); enabling on API 33+ requests `POST_NOTIFICATIONS` and activates only if granted.
+
+## 17. Full JSON Backup / Restore
+```
+Settings → "Back up data" (TextRow) → rememberLauncherForActivityResult(CreateDocument)
+  → BackupRestoreViewModel.exportBackup() → BackupRepository.exportBackup()
+      → DAO getAllNow() ×7 + both DataStore map snapshots
+      → BackupData → toJsonString() (v1, app-tagged) → write to picked file
+Settings → "Restore backup" (TextRow) → OpenDocument → BackupRestoreViewModel.preview(json)
+  → AlertDialog confirmation (destructive warning) → BackupRepository.restoreBackup(json)
+      → parseBackupData() → null on foreign/malformed/older-version file
+      → deleteAll() every DAO → insertAll() in FK-safe order
+        (budget_periods → archived_transactions → transactions → saved_tags → saved_categories → recurring_templates → savings_goals)
+      → clear() budgetDataStore + settingsDataStore → applyBackupMap() re-applies both
+  → snackbar success/failure
+```
+
+## 18. Analytics Cards + Share Summary (this period)
+```
+Analytics opens (periodSpends, archivedTransactions, budgetPeriods from spendsViewModel)
+  → SpendsTrendCard — per-day bars + vs-previous-period delta (totalByDay + SpendsTrend)
+  → SpendsWeekdayCard — weekdayAverageSpend(spends, start) over elapsed part of period
+      (tap selects/deselects a weekday highlight; hidden when no elapsed days)
+  → CompareToLastPeriodCard — findPreviousPeriod(budgetPeriods, finish) → previous period
+      → previousSpentAtSameElapsedDays(previousArchived, prevStart, elapsedDays)
+        = sum of SPENT archived rows with date <= prevStart + (elapsedDays - 1)
+      → delta = spent - previous; formatPercent always ±, colored colorBad/colorGood
+      → early-return (hidden) when no previous finished period exists
+  → "Share summary" ButtonRow → rememberShareSummary(period, budget, spent, ...)
+      → buildShareSummary(...) pure string (period dates, budget, spent, remaining ≥ 0,
+        daily average, transaction count, category breakdown) → ACTION_SEND chooser
+```

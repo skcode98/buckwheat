@@ -12,14 +12,15 @@ metadata:
 
 - **App**: Buckwheat — daily budget tracker
 - **Language**: Kotlin 2.2.0 | **UI**: Jetpack Compose + Material3 | **DI**: Dagger Hilt 2.57 (KSP)
-- **Database**: Room 2.7.2 | **State**: Preferences DataStore + Room
-- **Min SDK**: 29 | **Target/Compile SDK**: 36 | **AGP**: 8.11.1
+- **Database**: Room 2.7.2 (version 13) | **State**: Preferences DataStore + Room
+- **Min SDK**: 29 | **Target/Compile SDK**: 36 | **AGP**: 8.7.3
 
 ## Repository State
 
 - **Current branch**: `master` — clean fork of upstream @ `4b60102`
 - **Saved work**: `our-fixes` branch on origin
 - **Upstream**: `https://github.com/danilkinkin/buckwheat.git`
+- **Pushed (2026-08-07)**: `a147c2d` weekday breakdown, `3bbdd9c` overspend notification, `e7249c9` share summary + compare card, `9a75b05` full JSON backup/restore, `d389a0e` emoji picker. **131 unit tests green** (`testDebugUnitTest`)
 
 ## Core Conventions
 
@@ -40,9 +41,10 @@ metadata:
 - Custom keyboard replaces system keyboard for number input
 
 ### Data Layer
-- Room entities: `Transaction` (type, value, date, comment, uid), `Storage` (legacy key-value)
-- DataStore keys: budget, finishDate, actualFinishDate, dailyBudget, spent, currency, etc.
-- Settings DataStore: theme mode, locale, debug mode, tutorial stages, hideOverspendingWarn
+- Room entities: `Transaction` (type, value, date, comment, uid), `Storage` (legacy key-value), `SavedTag`, `SavedCategory` (custom categories, unique name + `emoji` column), `BudgetPeriod`, `ArchivedTransaction`, `RecurringTemplate`, `SavingsGoal`
+- DataStore keys: budget, spent, dailyBudget, startPeriodDate, finishPeriodDate, spentFromDailyBudget, currency, overspendNotifiedStoreKey, etc.
+- Settings DataStore: theme, locale, debug, tutorial stages, hideOverspendingWarn, reminderEnabled/hour/minute, overspendNotifyEnabledStoreKey, voice AI keys
+- Packages: `backup/` (BackupData JSON codec + BackupRepository), `notifications/` (daily budget reminder + instant overspend), `analytics/` (trend, weekday, compare-to-last-period cards + ShareSummary)
 
 ## Common Mistakes & Fixes
 

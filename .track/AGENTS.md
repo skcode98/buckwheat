@@ -22,11 +22,11 @@
 
 - **origin**: `https://github.com/skcode98/buckwheat` (our fork)
 - **upstream**: `https://github.com/danilkinkin/buckwheat.git` (original)
-- **Current branch**: `master` (clean fork of upstream @ `4b60102`)
+- **Current branch**: `master` (clean fork of upstream @ `4b60102`; all our feature work is committed here and pushed)
 - **Our saved work**: `our-fixes` branch on origin
 - **Workflow**: Build APK via GitHub Actions (`.github/workflows/build.yml`)
-- **Pushed so far**: `f6e3649` (search day-total + analytics calendar fix), `2c90b8d` (voice AI envelope unwrap), `72db09f` (AI spend categories), `3a83f7c` (carry-forward fix + voice AI settings + recurring currency), `fc16848` (archived CSV imports), `328dd94` (Android 17 launch crash), `212f7cf` (CrashLogger), `a309c29` (budget guards, AGP 8.7.3)
-- **Test baseline**: `.\gradlew.bat :app:testDebugUnitTest` green (89 tests incl. 12 `SpendCategorizerTest`, 23 `VoiceInputParserTest`, 18 `SpendsRepositoryTest`, 4 `DailyReminderContentTest`, 4 `ListAnimationTest`, 6 `SpendsTrendTest`)
+- **Pushed so far (2026-08-07)**: `a147c2d` (weekday spend breakdown card), `3bbdd9c` (instant overspend notification + opt-in setting), `e7249c9` (share spending summary + compare-to-last-period card), `9a75b05` (full JSON backup & restore), `d389a0e` (emoji picker for custom categories). Earlier: `f6e3649`, `2c90b8d`, `72db09f`, `3a83f7c`, `fc16848`, `328dd94`, `212f7cf`, `a309c29` (see CHANGELOG)
+- **Test baseline**: `.\gradlew.bat :app:testDebugUnitTest` green (**136 tests**): 40 `VoiceInputParserTest`, 26 `SpendsRepositoryTest`, 18 `SpendCategorizerTest`, 10 `SpendsTrendTest`, 11 `CompareToLastPeriodTest`, 8 `BackupDataTest`, 7 `SpendsWeekdayTest`, 4 `DailyReminderContentTest`, 4 `ListAnimationTest`, 4 `ShareSummaryTest`, 4 `BackupRepositoryTest`. NOTE: the 136-test count is **uncommitted** (review-fix wave in the working tree; see CHANGELOG head)
 
 ---
 
@@ -119,30 +119,42 @@ com.danilkinkin.buckwheat/
 │   │   ├── TransactionDao.kt  # CRUD for transactions (+ updateCategory)
 │   │   ├── StorageDao.kt      # Key-value storage (legacy)
 │   │   ├── SavedTagDao.kt     # Persistent tags
-│   │   ├── BudgetPeriodDao.kt # Periods + archived periods
+│   │   ├── SavedCategoryDao.kt# Persistent custom categories (unique name index)
+│   │   ├── BudgetPeriodDao.kt # Periods + archived periods + archived transactions
 │   │   ├── RecurringDao.kt    # Recurring templates
 │   │   └── SavingsGoalDao.kt  # Savings goals
 │   ├── entities/
 │   │   ├── Transaction.kt     # Room entity: type, value, date, comment, category
 │   │   ├── Storage.kt         # Legacy key-value entity
 │   │   ├── SavedTag.kt        # Persistent tag (unique name index)
+│   │   ├── SavedCategory.kt   # Persistent custom category (unique name, emoji column)
 │   │   ├── BudgetPeriod.kt    # Period record (isImported, totalSpent; id is class-body var)
 │   │   ├── ArchivedTransaction.kt
 │   │   ├── RecurringTemplate.kt
 │   │   └── SavingsGoal.kt
 │   ├── categories/
-│   │   ├── SpendCategory.kt   # Fixed enum (FOOD…OTHER), keywords, labelRes
+│   │   ├── SpendCategory.kt   # Fixed enum (FOOD…OTHER), keywords, labelRes, emoji
 │   │   ├── SpendCategorizer.kt# offlineClassify + categorizeSpendsWithAi (batches of 60)
 │   │   └── SpendCategoriesViewModel.kt  # Persists AI results only
 │   ├── AppViewModel.kt         # Sheet stack, snackbars, tutorials
 │   ├── ExtendCurrency.kt       # Currency model
 │   └── SpendsViewModel.kt      # Budget/spend state, streak compute
 │
+├── backup/
+│   ├── BackupData.kt           # Pure JSON codec (all entities + DataStore prefs, v1)
+│   └── BackupRestoreViewModel.kt
+│
+├── notifications/
+│   ├── DailyBudgetReminderScheduler.kt / Receiver.kt / DailyReminderContent.kt / ReminderBootReceiver.kt
+│   ├── OverspendingNotifier.kt # Instant overspend notification (channel "overspending", id 200)
+│   └── ...
+│
 ├── di/
 │   ├── AppModule.kt            # Hilt module: Room DB, DAOs
-│   ├── DatabaseModule.kt       # Room DB class with migrations
+│   ├── DatabaseModule.kt       # Room DB class with migrations (version 13)
 │   ├── SettingsRepository.kt   # DataStore for settings (theme, locale, etc.)
-│   ├── SpendsRepository.kt     # Budget + DataStore + Room operations
+│   ├── SpendsRepository.kt     # Budget + DataStore + Room operations (+ overspend flag logic)
+│   ├── BackupRepository.kt     # exportBackup() / restoreBackup() (FK-safe reinsert order)
 │   ├── GetCurrentDateUseCase.kt
 │   ├── RoomConverters.kt       # TypeConverters for Room
 │   └── migrateToDataStore.kt   # Legacy migration
@@ -203,7 +215,10 @@ com.danilkinkin.buckwheat/
 │   ├── RestAndSpentBudgetCard.kt
 │   ├── SpendsCountCard.kt
 │   ├── MinMaxSpentCard.kt
-│   ├── SpendsTrendCard.kt   # Per-day bars + vs-previous-period delta
+│   ├── SpendsTrendCard.kt      # Per-day bars + vs-previous-period delta
+│   ├── SpendsWeekdayCard.kt    # Avg spend per weekday (elapsed part of period)
+│   ├── CompareToLastPeriodCard.kt  # This period vs previous at same elapsed days
+│   ├── ShareSummary.kt         # buildShareSummary + rememberShareSummary (ACTION_SEND)
 │   ├── WholeBudgetCard.kt
 │   ├── StatCard.kt
 │   ├── ViewerHistory.kt
@@ -211,7 +226,7 @@ com.danilkinkin.buckwheat/
 │   ├── FinishedPeriodHeader.kt
 │   ├── FillCircleStub.kt
 │   └── categoriesChart/
-│       └── SpendCategoriesCard.kt  # Donut + chips category breakdown ("Refining with AI…")
+│       └── SpendCategoriesCard.kt  # Donut + chips category breakdown (AI, with emojis)
 │
 ├── recalcBudget/               # Budget recalculation methods
 │   ├── RecalcBudget.kt
@@ -230,6 +245,10 @@ com.danilkinkin.buckwheat/
 │   ├── GoalsSheet.kt + GoalsViewModel.kt
 │   ├── RecurringPaymentsSheet.kt + RecurringPaymentsViewModel.kt
 │   ├── TagsManagementSheet.kt + TagsManagementViewModel.kt
+│   ├── CategoriesManagementSheet.kt + CategoriesManagementViewModel.kt
+│   ├── BackupRestoreSetting.kt + BackupRestoreViewModel.kt
+│   ├── DailyBudgetReminderSetting.kt
+│   ├── OverspendNotificationSetting.kt
 │   └── VoiceAiSettingsSheet.kt # API key / provider URL / model (shared with categories)
 │
 ├── onboarding/
@@ -241,6 +260,7 @@ com.danilkinkin.buckwheat/
 │   ├── ModalBottomSheet.kt     # Custom modal sheet
 │   ├── TopSheet.kt
 │   ├── datePicker/             # Date picker component
+│   ├── EmojiPicker.kt          # CATEGORY_EMOJI_OPTIONS chip row for custom categories
 │   ├── BigIconButton.kt
 │   ├── ButtonRow.kt
 │   ├── CheckedRow.kt
@@ -308,6 +328,11 @@ com.danilkinkin.buckwheat/
 | Manual `Room.databaseBuilder()` in receivers | Use `@AndroidEntryPoint` + injected DAOs |
 | Split `goAsync()`/`finish()` in receivers | Already correct — keep this pattern |
 | JVM unit tests using `org.json` (e.g. `JSONObject(String)`) | Add `testImplementation("org.json:json:20231013")` to `app/build.gradle.kts` — Android's bundled `org.json` is stubbed in unit tests |
+| Referenced `R.drawable.ic_*` doesn't exist | `glob app/src/main/res/drawable/ic_*.xml` before building; swap to an existing icon (e.g. `ic_warning` → `ic_priority_high`) |
+| `getString(R.string.x, a, b)` but the string has no `%1$s`/`%2$s` placeholders | Args are silently ignored (no crash) but the amounts/values are lost — keep placeholders in sync with the number of args |
+| New top-level function referenced from another file but import missing | Kotlin requires the import even inside the same top package prefix — after edits, `grep` the call site to confirm the import landed (an edit can silently target the wrong spot) |
+| Compiler session files under `.kotlin/sessions/*.salive` | Never stage/commit them — `git restore --staged` before committing; they're transient build artifacts |
+| `spotlessCheck` reports UP-TO-DATE right after adding new files | Force a format pass with `spotlessApply` on new/changed files, then `spotlessCheck` |
 
 ---
 
@@ -364,6 +389,7 @@ AppViewModel.activateTutorial(TUTORS.X) / dismissTutorial()
 ### Spotless (format check)
 ```powershell
 .\gradlew.bat spotlessCheck
+.\gradlew.bat spotlessApply   # auto-format (run on new/changed files)
 ```
 
 ---
@@ -376,6 +402,9 @@ AppViewModel.activateTutorial(TUTORS.X) / dismissTutorial()
 4. **BUILD**: Always run `.\gradlew.bat assembleDebug` after changes to verify compilation.
 5. **COMMIT**: Only when asked. Use concise messages matching repo style.
 6. **TRACKING FILES** are in `.track/` directory — always maintain them.
+7. **AFTER COMMIT/PUSH**: flip `(uncommitted)` → `(committed <hash>, pushed)` markers in `.track/MEMORY.md` / `.track/CHANGELOG.md` so the next session's context isn't stale.
+8. **NEVER stage** `.kotlin/sessions/`, `build/`, or other generated artifacts.
+9. **Verify referenced drawables** (`R.drawable.ic_*`) exist before building.
 
 ### Compaction Recovery
 
