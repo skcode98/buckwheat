@@ -39,6 +39,8 @@
 | Voice AI Parser | `app/.../keyboard/VoiceAi.kt` |
 | Voice AI Settings Sheet | `app/.../settings/VoiceAiSettingsSheet.kt` |
 | Voice Widget Design Setting | `app/.../settings/VoiceWidgetDesignSetting.kt` |
+| Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
+| Midnight Widget Refresh Receiver | `app/.../widget/WidgetRefreshReceiver.kt` |
 | Recalc Budget VM | `app/.../recalcBudget/RecalcBudgetViewModel.kt` |
 | Voice Parser Tests | `app/src/test/java/.../keyboard/VoiceInputParserTest.kt` |
 | Budget Constructor | `app/.../wallet/BudgetConstructor.kt` |
