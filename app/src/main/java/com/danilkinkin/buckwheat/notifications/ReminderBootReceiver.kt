@@ -7,6 +7,7 @@ import com.danilkinkin.buckwheat.di.reminderEnabledStoreKey
 import com.danilkinkin.buckwheat.di.reminderHourStoreKey
 import com.danilkinkin.buckwheat.di.reminderMinuteStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -26,6 +27,7 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     val minute = prefs[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
                     DailyBudgetReminderScheduler.schedule(context, hour, minute)
                 }
+                WidgetRefreshScheduler.schedule(context)
             } finally {
                 pendingResult.finish()
             }

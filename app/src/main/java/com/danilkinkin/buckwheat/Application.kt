@@ -12,6 +12,7 @@ import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
+import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import dagger.hilt.android.HiltAndroidApp
@@ -25,6 +26,8 @@ class Application : Application(), Configuration.Provider {
         super.onCreate()
 
         createNotificationChannel()
+
+        WidgetRefreshScheduler.schedule(this)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {

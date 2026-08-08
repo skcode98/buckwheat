@@ -74,6 +74,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".widget.WidgetRefreshReceiver"
+            android:exported="false" />
+
         <service
             android:name=".widget.voice.VoiceWidgetCommitService"
             android:exported="false"
