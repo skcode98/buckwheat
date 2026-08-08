@@ -11,6 +11,7 @@ import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
+import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
 import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import dagger.hilt.android.HiltAndroidApp
@@ -41,6 +42,7 @@ class Application : Application(), Configuration.Provider {
             override fun onActivityPaused(activity: Activity) {
                 ExtendWidgetReceiver.requestUpdateData(activity.applicationContext)
                 MinimalWidgetReceiver.requestUpdateData(activity.applicationContext)
+                VoiceWidgetReceiver.requestUpdateData(activity.applicationContext)
             }
 
             override fun onActivityStopped(activity: Activity) {

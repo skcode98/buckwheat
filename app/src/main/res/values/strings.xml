@@ -105,6 +105,7 @@
   <string name="voice_widget_channel_name">Voice widget</string>
   <string name="voice_widget_channel_description">Feedback when a spend is added from the voice widget</string>
   <string name="voice_widget_left_today">Left today</string>
+  <string name="voice_widget_left_percent">%1$d%% left</string>
   <string name="voice_widget_of_daily">of %1$s daily</string>
   <string name="voice_widget_today_summary">Budget %1$s · Spent %2$s · Left %3$s</string>
   <string name="voice_widget_design_title">Voice widget design</string>

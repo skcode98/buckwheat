@@ -35,6 +35,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -52,6 +53,7 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
@@ -224,9 +226,15 @@ fun VoiceWidgetContent() {
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.minimal_widget_preview_background))
-                .cornerRadius(48.dp),
+                .appWidgetBackground()
+                .cornerRadius(16.dp),
         ) {
+            Image(
+                modifier = GlanceModifier.fillMaxSize(),
+                provider = ImageProvider(R.drawable.voice_widget_preview_background),
+                contentScale = ContentScale.FillBounds,
+                contentDescription = null,
+            )
             Row(
                 modifier = GlanceModifier
                     .fillMaxSize()
@@ -240,6 +248,7 @@ fun VoiceWidgetContent() {
                             .fillMaxHeight()
                             .clickable(actionStartActivity(intent)),
                         verticalAlignment = Alignment.Vertical.CenterVertically,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         CanvasText(
                             modifier = GlanceModifier.fillMaxWidth(),
@@ -274,53 +283,88 @@ fun VoiceWidgetContent() {
                                     style = TextStyle(
                                         color = GlanceTheme.colors.primary,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
+                                        fontSize = 20.sp,
                                     ),
-                                )
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                CanvasText(
-                                    modifier = GlanceModifier.fillMaxWidth(),
-                                    text = context.getString(
-                                        R.string.voice_widget_of_daily,
-                                        runCatching { numberFormat(context, dailyBudget, currency) }
-                                            .getOrDefault(dailyBudget.toPlainString()),
-                                    ),
-                                    style = TextStyle(
-                                        color = GlanceTheme.colors.onSurfaceVariant,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 9.sp,
-                                    ),
-                                )
-                                Spacer(modifier = GlanceModifier.height(2.dp))
-                                VoiceWidgetProgressBar(
-                                    fraction = remainingFraction,
-                                    fillColor = primaryColor,
-                                    trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
                                 )
                             }
                             VoiceWidgetDesign.AMOUNT -> {
-                                val formatted = runCatching {
-                                    numberFormat(context, dailyRemaining, currency)
-                                }.getOrDefault(dailyRemaining.toPlainString())
                                 CanvasText(
                                     modifier = GlanceModifier.fillMaxWidth(),
-                                    text = formatted,
+                                    text = runCatching {
+                                        numberFormat(context, dailyRemaining, currency)
+                                    }.getOrDefault(dailyRemaining.toPlainString()),
                                     style = TextStyle(
                                         color = GlanceTheme.colors.primary,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
+                                        fontSize = 20.sp,
                                     ),
                                 )
                             }
                             VoiceWidgetDesign.RING -> {
-                                VoiceWidgetRing(
-                                    fraction = remainingFraction,
-                                    percentText = "$remainingPercent%",
-                                    ringColor = primaryColor,
-                                    trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
-                                    textColor = primaryColor,
-                                )
+                                Row(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
+                                    verticalAlignment = Alignment.Vertical.CenterVertically,
+                                ) {
+                                    VoiceWidgetRing(
+                                        fraction = remainingFraction,
+                                        percentText = "$remainingPercent%",
+                                        ringColor = primaryColor,
+                                        trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
+                                        textColor = primaryColor,
+                                    )
+                                    Spacer(modifier = GlanceModifier.width(10.dp))
+                                    Column(verticalAlignment = Alignment.Vertical.CenterVertically) {
+                                        CanvasText(
+                                            modifier = GlanceModifier.fillMaxWidth(),
+                                            text = runCatching {
+                                                numberFormat(context, dailyRemaining, currency)
+                                            }.getOrDefault(dailyRemaining.toPlainString()),
+                                            style = TextStyle(
+                                                color = GlanceTheme.colors.primary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 18.sp,
+                                            ),
+                                        )
+                                        CanvasText(
+                                            modifier = GlanceModifier.fillMaxWidth(),
+                                            text = context.getString(
+                                                R.string.voice_widget_left_percent,
+                                                remainingPercent,
+                                            ),
+                                            style = TextStyle(
+                                                color = GlanceTheme.colors.onSurfaceVariant,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 9.sp,
+                                            ),
+                                        )
+                                    }
+                                }
                             }
+                        }
+                        if (widgetDesign != VoiceWidgetDesign.RING) {
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            CanvasText(
+                                modifier = GlanceModifier.fillMaxWidth(),
+                                text = context.getString(
+                                    R.string.voice_widget_of_daily,
+                                    runCatching { numberFormat(context, dailyBudget, currency) }
+                                        .getOrDefault(dailyBudget.toPlainString()),
+                                ),
+                                style = TextStyle(
+                                    color = GlanceTheme.colors.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 9.sp,
+                                ),
+                            )
+                        }
+                        if (widgetDesign == VoiceWidgetDesign.PERCENT) {
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            VoiceWidgetProgressBar(
+                                fraction = remainingFraction,
+                                fillColor = primaryColor,
+                                trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
+                            )
                         }
                         Spacer(modifier = GlanceModifier.height(2.dp))
                         VoiceWidgetChart(
@@ -358,6 +402,7 @@ fun VoiceWidgetContent() {
                             .fillMaxHeight()
                             .clickable(actionStartActivity(intent)),
                         verticalAlignment = Alignment.Vertical.CenterVertically,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         CanvasText(
                             modifier = GlanceModifier.fillMaxWidth(),
@@ -515,7 +560,7 @@ private fun VoiceWidgetChart(
     if (series.isEmpty()) return
 
     val context = LocalContext.current
-    val chartHeight = 26f
+    val chartHeight = 18f
     val designWidth = 280f
 
     Image(
@@ -622,7 +667,7 @@ private fun VoiceWidgetRing(
         provider = ImageProvider(
             drawRingBitmap(
                 context = context,
-                sizeDp = 48f,
+                sizeDp = 44f,
                 fraction = fraction,
                 percentText = percentText,
                 ringColor = ringColor,
