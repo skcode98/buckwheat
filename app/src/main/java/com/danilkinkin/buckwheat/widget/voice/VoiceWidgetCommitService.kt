@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -17,6 +18,7 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.keyboard.VoiceAiResult
+import com.danilkinkin.buckwheat.keyboard.VoiceInputResult
 import com.danilkinkin.buckwheat.keyboard.parseVoiceInputWithAi
 import com.danilkinkin.buckwheat.keyboard.parseVoiceInputs
 import com.danilkinkin.buckwheat.util.numberFormat
@@ -45,6 +47,7 @@ class VoiceWidgetCommitService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var handling = false
+    private val WHITESPACE = Regex("\\s+")
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -121,6 +124,11 @@ class VoiceWidgetCommitService : Service() {
 
     private class RecognitionOutcome(val transcript: String?, val errorCode: Int)
 
+    private class ParsedTranscript(
+        val results: List<VoiceInputResult>,
+        val aiFailure: String?,
+    )
+
     // Holds the recognition session open until the recognizer delivers a result or an error.
     // The callback runs on the main thread, so this is only ever invoked from Dispatchers.Main.
     private suspend fun recognize(context: Context): RecognitionOutcome =
@@ -178,24 +186,45 @@ class VoiceWidgetCommitService : Service() {
         )
 
     // AI-first parsing with silent fallback to the offline parser (mirrors the in-app flow).
-    private suspend fun parseTranscript(context: Context, transcript: String): List<com.danilkinkin.buckwheat.keyboard.VoiceInputResult> {
+    // The AI failure reason is carried back so the caller can surface why AI didn't power the
+    // parse instead of hiding it (the widget previously committed offline-parsed results with
+    // no indication the AI path failed).
+    private suspend fun parseTranscript(
+        context: Context,
+        transcript: String,
+    ): ParsedTranscript {
         val aiResult = parseVoiceInputWithAi(context, transcript)
         return when (aiResult) {
-            is VoiceAiResult.Success -> aiResult.results
-            else -> parseVoiceInputs(transcript)
+            is VoiceAiResult.Success -> ParsedTranscript(aiResult.results, null)
+            is VoiceAiResult.Failure -> {
+                Log.w(
+                    "VoiceAI",
+                    "Widget AI parse failed for \"$transcript\": ${aiResult.message}",
+                )
+                ParsedTranscript(parseVoiceInputs(transcript), aiResult.message)
+            }
+            VoiceAiResult.NotConfigured -> ParsedTranscript(parseVoiceInputs(transcript), null)
         }
     }
 
+    // Provider error bodies are often multi-line JSON; collapse whitespace and cap the length
+    // so the reason fits the widget caption and notification without wrapping out of bounds.
+    private fun aiReasonForDisplay(reason: String): String {
+        val collapsed = reason.replace(WHITESPACE, " ").trim()
+        return if (collapsed.length <= 90) collapsed else collapsed.take(87) + "…"
+    }
+
     private suspend fun commit(context: Context, transcript: String) {
-        val results = parseTranscript(context, transcript)
-        val transactions = voiceResultsToTransactions(results)
+        val parsed = parseTranscript(context, transcript)
+        val transactions = voiceResultsToTransactions(parsed.results)
+        val aiNote = parsed.aiFailure?.let(::aiReasonForDisplay)
 
         if (transactions.isEmpty()) {
             setVoiceFeedbackState(context, VoiceFeedbackState.IDLE)
             VoiceWidgetNotifications.post(
                 context,
                 context.getString(R.string.voice_widget_failed),
-                context.getString(R.string.voice_couldnt_understand),
+                aiNote ?: context.getString(R.string.voice_couldnt_understand),
             )
             return
         }
@@ -216,12 +245,14 @@ class VoiceWidgetCommitService : Service() {
         } else {
             context.getString(R.string.voice_widget_added_many, transactions.size)
         }
+        val note = aiNote?.let { context.getString(R.string.voice_widget_ai_off, it) }
+        val feedback = note?.let { "$text · $it" } ?: text
         VoiceWidgetNotifications.post(
             context,
             context.getString(R.string.voice_widget_result_title),
-            text,
+            feedback,
         )
-        setVoiceFeedbackState(context, VoiceFeedbackState.ADDED, text)
+        setVoiceFeedbackState(context, VoiceFeedbackState.ADDED, feedback)
         scheduleFeedbackReset(context)
     }
 

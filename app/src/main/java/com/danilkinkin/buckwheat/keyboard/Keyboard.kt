@@ -208,6 +208,10 @@ fun Keyboard(
                         when (val ai = parseVoiceInputWithAi(context, text)) {
                             is VoiceAiResult.Success -> parsed = ai.results
                             is VoiceAiResult.Failure -> {
+                                Log.w(
+                                    "VoiceAI",
+                                    "In-app AI parse failed for \"$text\": ${ai.message}",
+                                )
                                 aiError = context.getString(R.string.voice_ai_error_prefix) +
                                     ai.message
                                 parsed = parseVoiceInputs(text)
