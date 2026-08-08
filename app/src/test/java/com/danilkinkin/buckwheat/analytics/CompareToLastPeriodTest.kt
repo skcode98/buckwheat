@@ -89,6 +89,57 @@ class CompareToLastPeriodTest {
     }
 
     @Test
+    fun findPreviousPeriodIncludesPeriodEndingSameDayAsCurrentStart() {
+        val currentStart = daysAgo(5)
+
+        val contiguous = period(5, id = 2)
+
+        assertSame(contiguous, findPreviousPeriod(listOf(contiguous), currentStart))
+    }
+
+    @Test
+    fun findPreviousPeriodUsesActualFinishDateForEarlyFinishedPeriod() {
+        val currentStart = daysAgo(5)
+
+        val earlyFinished = period(30, id = 1).copy(
+            actualFinishDate = daysAgo(6),
+        )
+
+        assertSame(earlyFinished, findPreviousPeriod(listOf(earlyFinished), currentStart))
+    }
+
+    @Test
+    fun findPreviousPeriodIgnoresEarlyFinishedAfterCurrentStart() {
+        val currentStart = daysAgo(5)
+
+        val endedLater = period(30, id = 1).copy(
+            actualFinishDate = daysAgo(4),
+        )
+
+        assertNull(findPreviousPeriod(listOf(endedLater), currentStart))
+    }
+
+    @Test
+    fun findPreviousPeriodIgnoresResetPeriodWhoseScheduledFinishIsLater() {
+        val currentStart = daysAgo(5)
+
+        val reset = period(1, id = 1)
+
+        assertNull(findPreviousPeriod(listOf(reset), currentStart))
+    }
+
+    @Test
+    fun effectiveFinishDateFallsBackToScheduledFinish() {
+        val scheduled = daysAgo(6)
+        val period = period(6, id = 1)
+
+        assertEquals(scheduled, effectiveFinishDate(period))
+
+        val early = period.copy(actualFinishDate = daysAgo(4))
+        assertEquals(daysAgo(4), effectiveFinishDate(early))
+    }
+
+    @Test
     fun previousSpentAtSameElapsedDaysSumsOnlySpentOfGivenPeriod() {
         val previousStart = daysAgo(15)
 

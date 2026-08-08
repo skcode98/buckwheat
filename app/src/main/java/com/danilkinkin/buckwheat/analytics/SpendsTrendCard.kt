@@ -386,8 +386,11 @@ fun previousPeriodBefore(
 ): BudgetPeriod? =
     periods
         .asSequence()
-        .filter { !it.isImported && it.finishDate.before(roundToDay(currentStartDate)) }
-        .maxByOrNull { it.finishDate }
+        .filter {
+            !it.isImported &&
+                !effectiveFinishDate(it).toLocalDate().isAfter(roundToDay(currentStartDate).toLocalDate())
+        }
+        .maxByOrNull { effectiveFinishDate(it) }
 
 @Preview
 @Composable

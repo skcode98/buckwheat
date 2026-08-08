@@ -30,6 +30,7 @@ import com.danilkinkin.buckwheat.ui.colorBad
 import com.danilkinkin.buckwheat.ui.colorGood
 import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.numberFormat
+import com.danilkinkin.buckwheat.util.roundToDay
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import java.math.BigDecimal
@@ -51,14 +52,26 @@ data class PeriodComparison(
         }
 }
 
-// The most recent finished period that started before the current one, so the comparison is
-// always "same offset from the period start" rather than against the full previous period.
-// CSV-imported month buckets are excluded (mirrors SpendsTrendCard.previousPeriodBefore),
-// so the card never compares against archive artifacts.
-fun findPreviousPeriod(periods: List<BudgetPeriod>, currentStart: Date): BudgetPeriod? =
-    periods
-        .filter { !it.isImported && it.finishDate.before(currentStart) }
-        .maxByOrNull { it.finishDate }
+// The day a period actually ended: its early-finish date when the user finished it ahead of
+// schedule, otherwise the scheduled finish. The scheduled finish is stored at end-of-day, so
+// comparing raw timestamps would drop a period finished early the same day the next one starts
+// (its scheduled finish can even lie after the new start). Day-granularity on the effective end
+// keeps such contiguous/restarted periods comparable.
+fun effectiveFinishDate(period: BudgetPeriod): Date = period.actualFinishDate ?: period.finishDate
+
+// The most recent finished period that ended at or before the current one started, so the
+// comparison is always "same offset from the period start" rather than against the full
+// previous period. CSV-imported month buckets are excluded (mirrors
+// SpendsTrendCard.previousPeriodBefore), so the card never compares against archive artifacts.
+fun findPreviousPeriod(periods: List<BudgetPeriod>, currentStart: Date): BudgetPeriod? {
+    val startDay = roundToDay(currentStart).toLocalDate()
+    return periods
+        .filter {
+            !it.isImported &&
+                !effectiveFinishDate(it).toLocalDate().isAfter(startDay)
+        }
+        .maxByOrNull { effectiveFinishDate(it) }
+}
 
 // Sum of the previous period's spends that happened within the same number of elapsed days as
 // the current period has progressed, so early in a period the card doesn't look like a huge

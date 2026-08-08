@@ -155,4 +155,24 @@ class SpendsTrendTest {
         assertNull(previousPeriodBefore(listOf(period(2, "900", imported = true)), start))
         assertNull(previousPeriodBefore(listOf(period(1, "50")), start))
     }
+
+    @Test
+    fun previousPeriodIncludesPeriodEndingSameDayAsCurrentStart() {
+        val start = daysAgo(5)
+
+        val contiguous = period(5, "200")
+
+        assertSame(contiguous, previousPeriodBefore(listOf(contiguous), start))
+    }
+
+    @Test
+    fun previousPeriodUsesActualFinishDateForEarlyFinishedPeriod() {
+        val start = daysAgo(5)
+
+        val earlyFinished = period(30, "200").copy(
+            actualFinishDate = daysAgo(6),
+        )
+
+        assertSame(earlyFinished, previousPeriodBefore(listOf(earlyFinished), start))
+    }
 }
