@@ -8,6 +8,12 @@
 # Full debug build (always run this after changes)
 .\gradlew.bat assembleDebug
 
+# TrackInvest module golden pipeline (per phase)
+.\gradlew.bat :trackinvest:spotlessApply :trackinvest:testDebugUnitTest :trackinvest:assembleDebug
+
+# TrackInvest module quick compile
+.\gradlew.bat :trackinvest:compileDebugKotlin
+
 # Clean build
 .\gradlew.bat clean assembleDebug
 
@@ -20,6 +26,23 @@
 # Spotless format check
 .\gradlew.bat spotlessCheck
 ```
+
+## TrackInvest module (new — `trackinvest/`)
+| Purpose | Path |
+|---------|------|
+| Module build file | `trackinvest/build.gradle.kts` (versions inline; no catalog) |
+| Main Activity | `trackinvest/src/main/java/com/danilkinkin/trackinvest/MainActivity.kt` |
+| Main tabs | `trackinvest/.../home/MainScreen.kt` (NavigationBar Dashboard/Ledger) |
+| Theme | `trackinvest/.../ui/Theme.kt` + `res/values(-v31)/themes.xml` |
+| Room DB | `trackinvest/.../di/TrackInvestDatabase.kt` (v1, `fallbackToDestructiveMigration`) |
+| Hilt module | `trackinvest/.../di/AppModule.kt` |
+| DataStore | `trackinvest/.../di/SettingsRepository.kt` (`Context.trackinvestDataStore`, name `trackinvest_preferences`) |
+| Room schema | `trackinvest/schemas/com.danilkinkin.trackinvest.di.TrackInvestDatabase/1.json` |
+| Entities | `trackinvest/.../data/entities/` (Investment, Goal, RecurringSip, Template, Category, CategoryDetail, AllocTarget, MarketValue, Milestone) |
+| DAOs | `trackinvest/.../data/dao/` (each has LiveData `getAll()`, suspend CRUD, `@Transaction deleteAllAndInsert`) |
+| Converters | `trackinvest/.../di/TrackInvestConverters.kt` (BigDecimal↔String, List<String>↔comma) |
+| Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
+| Migration reference | `.track/trackinvest.md` |
 
 ## Key File Paths (Upstream Master)
 | Purpose | Path |
