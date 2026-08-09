@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration closed & archived; back to Buckwheat enhancements
+
+The TrackInvest web → Android migration was **archived** to refocus on Buckwheat's own improvements. Full record in **`.track/trackinvest-migration.md`**.
+
+- **Archived**: `feature/trackinvest-migration` branch tagged `archive/trackinvest-migration` (HEAD `bbe77bc`, all 16 commits preserved) and the remote branch deleted. The tag + this repo's mainline both carry the complete record (plan, commits, architecture, data model, decisions, gotchas, test/build status, remaining work, resume guide).
+- **Migration reference preserved**: `.track/trackinvest.md` (web source anchors) restored onto `master` so the archive is self-contained.
+- **Backup kept**: `backup/pre-trackinvest-2026-08-09` (pre-migration `master` @ `bc5e922`) — do NOT delete.
+- **Back to Buckwheat**: `master` is at the pre-migration Buckwheat state; resume enhancement work here.
+
 ## 2026-08-09 — Project pivot: TrackInvest web → Android migration (backup + docs)
 
 New initiative: convert the **TrackInvest** web app (`D:\Just-try\TrackInvest\TrackInvest` — vanilla HTML/JS/PWA: `index.html`, `account_overview.html`, `money_flow.html`, `monthly_plan.html`, `spend_tracker.html`, `shared_ai.js`, `app_part1-3.js`, `style.css`, `sw.js`) into an Android app in **Buckwheat's** Compose/M3/Room/Hilt/DataStore style.
