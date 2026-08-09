@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration Phase 2: dashboard portfolio math + charts (committed `cf59c17`, `d71e5ea`, pushed)
+
+The DASHBOARD tab now shows live portfolio math and charts, replacing the placeholder. Live NAV for SIP/Stocks is still deferred — both fall back to invested-amount (user-approved). Sankey/heatmap/advisor/AI/mini-cards/backtester deferred.
+
+- **`data/Portfolio.kt`** — pure-Kotlin port of the web calculators (`app_part1.js:2305 calculateStrictValuation`, `app_part3.js:173 updatePortfolioCalculations`): `strictValuation` (FD = quarterly/monthly/simple payout compounding; PF/PPF = monthly compounding at government rates PPF 7.1 / PF 8.15; SIP/Stocks = invested-amount fallback; custom-rate types = monthly compounding; else invested), `computePortfolioSummary` (per-type valuations, net worth, total invested, this/last month invested, year invested, avg monthly, 80C from `isCurrentFY`, 90-day maturity window `MATURITY_WINDOW_DAYS`, 24-month `NET_WORTH_HISTORY_MONTHS` history), `monthlyInvestedPoints`, `netWorthPoints` (web `renderNWChart` walk-back reconstruction), `projectionPoints` (web `renderHeroProjectionChart`: currentNW + avgMonthly×i), `isCurrentFY` (DataStore `fyStartMonth`), `calculateStrictTax` (new/old regime slabs, 87A rebate + "Tax Free (Rebate Limit)"/"Tax Free (Rebate 87A)", 4% cess, "Setup Income in Settings" when salary 0). `initialBal` category detail becomes a virtual investment dated day-before-earliest so it accrues interest. `today = LocalDate.now(zoneId)`, `zoneId` param throughout.
+- **`di/PortfolioRepository.kt`** — `combine(investmentDao, categoryDao, categoryDetailDao, fyStartMonth)` → `computePortfolioSummary` with `.flowOn(Dispatchers.Default)`.
+- **`di/SettingsRepository.kt`** — added `salaryKey`/`regimeKey` DataStore keys + `getSalary()`/`setSalary()`/`getRegime()`/`setRegime()`.
+- **`data/DashboardViewModel.kt`** — `DashboardUiState(summary, currencySymbol, monthlyTarget, salary, regime)` (summary null until loaded → spinner) + `setSalary`/`setRegime`/`setMonthlyTarget`.
+- **`home/dashboard/Dashboard.kt`** — full dashboard: HeroCard (net worth, invested, P&L, this/last month, range chips 3/6/12/MAX default 6 + line chart), ProjectionCard (slider 1–60 + bar chart), MonthlyCard (ProgressRing vs monthly target), TrendCard (12-month bars), AllocationCard (donut + first 10 allocation rows), Tax80cCard (tap → IncomeSheet), MaturityCard (90-day window), RecentActivityCard. Empty ledger → empty state; `uiState == null` → spinner.
+- **`home/dashboard/DashboardCharts.kt`** — custom `LineChart`/`BarChart`/`DonutChart`/`ProgressRing`/`ChartLabelsRow` on Compose `Canvas` (no third-party chart lib).
+- **`home/dashboard/IncomeSheet.kt`** — M3 `ModalBottomSheet` salary/regime editor with New/Old regime `FilterChip`s.
+- **`home/MainScreen.kt`** — Dashboard tab renders `Dashboard()` (placeholder removed).
+- **`res/values/strings.xml`** — `dashboard_*` strings incl. `dashboard_range_3m/6m/1y/max`, `dashboard_80c_*`, `dashboard_days_left/ago`, `dashboard_today`, `dashboard_edit_income`.
+- **Copyright**: new `spotless/copyright-trackinvest.kt` — trackinvest module now uses `Copyright 2026, skcode98` (not Danil's header); applied to all existing module files; `About.kt`/`strings.xml` credit updated accordingly.
+- **Tests**: `data/PortfolioCalculatorTest.kt` — 21 JUnit-4 cases (FD quarterly/monthly/simple payout compounding, PPF gov rate 7.1%, PF gov rate 8.15% → 13839, custom-rate monthly compounding, SIP/Stocks invested fallback, initialBal virtual investment accruing interest, type totals + maturity window + net worth history, monthlyInvestedPoints, netWorthPoints, projectionPoints, isCurrentFY windows, strict tax slabs/rebates/cess/zero-salary, 80C aggregation). **47 tests green total**, `assembleDebug` BUILD SUCCESSFUL.
+- **`d71e5ea`** (test-expectation fixes after first run): added scale-proof `assertBig(expected, actual)` helper (compareTo-based — plain `assertEquals(BigDecimal, BigDecimal)` is scale-sensitive, e.g. `0` vs `0.00`), corrected PF 4-year valuation to 13839.0 (not 13840), `lastMonthInvested` = 24000 (PPF 20000 on 2025-12-10 also falls in "last month"), `initialBalance` test moved its PPF investment to 2025-10-01 so the virtual initialBal strictly predates it.
+- **Next**: Phase 1.3 — goal linkage (Goal entities exist), or Phase 2.3 — Portfolio tab (donut + allocation legend, asset grid) / Phase 2.4 goals + FIRE sheet. Deferred: live NAV, sankey/heatmap, advisor/AI, backtester.
+
 ## 2026-08-09 — TrackInvest migration Phase 1.2: templates + recurring SIPs (committed `09ba576`, pushed)
 
 The LEDGER tab now manages recurring SIPs and quick-log templates, and due SIPs auto-process on app launch.

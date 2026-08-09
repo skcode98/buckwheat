@@ -57,6 +57,14 @@
 | Template editor sheet | `trackinvest/.../ledger/TemplateEditorSheet.kt` (type chips + amount/account/note/tags) |
 | Templates sheet | `trackinvest/.../ledger/TemplatesSheet.kt` (tap row = quick log, inline delete) |
 | Recurring SIP tests | `trackinvest/src/test/java/.../data/RecurringSipsTest.kt` (12 tests; module uses JUnit 4, NOT `kotlin.test`) |
+| Portfolio math | `trackinvest/.../data/Portfolio.kt` (pure: `strictValuation`, `computePortfolioSummary`, `monthlyInvestedPoints`, `netWorthPoints`, `projectionPoints`, `isCurrentFY`, `calculateStrictTax`; PPF 7.1 / PF 8.15; SIP/Stocks = invested fallback; 90-day maturity window; 24-mo history) |
+| Portfolio repo | `trackinvest/.../di/PortfolioRepository.kt` (`combine(investmentDao, categoryDao, categoryDetailDao, fyStartMonth)` → summary, `.flowOn(Dispatchers.Default)`) |
+| Dashboard VM | `trackinvest/.../data/DashboardViewModel.kt` (`DashboardUiState(summary, currencySymbol, monthlyTarget, salary, regime)`) |
+| Dashboard screen | `trackinvest/.../home/dashboard/Dashboard.kt` (HeroCard + ProjectionCard + MonthlyCard + TrendCard + AllocationCard + Tax80cCard + MaturityCard + RecentActivityCard) |
+| Dashboard charts | `trackinvest/.../home/dashboard/DashboardCharts.kt` (custom Canvas `LineChart`/`BarChart`/`DonutChart`/`ProgressRing`/`ChartLabelsRow` — no chart lib) |
+| Income sheet | `trackinvest/.../home/dashboard/IncomeSheet.kt` (salary + New/Old regime FilterChips) |
+| Portfolio tests | `trackinvest/src/test/java/.../data/PortfolioCalculatorTest.kt` (21 tests; **use `assertBig(expected, actual)` compareTo helper — `assertEquals(BigDecimal, BigDecimal)` is scale-sensitive, `0` vs `0.00` fails**) |
+| Copyright | `spotless/copyright-trackinvest.kt` — module files use `/* Copyright 2026, skcode98, All rights reserved. */` (trackinvest subproject header; app keeps `spotless/copyright.kt`) |
 | Amount format | `trackinvest/.../util/numberFormat.kt` (`formatAmount(amount, symbol)`, US grouping) + test `util/NumberFormatTest.kt` |
 | Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` / `ic_add.xml` / `ic_delete.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
 | Migration reference | `.track/trackinvest.md` |

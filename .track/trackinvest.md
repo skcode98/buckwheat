@@ -206,8 +206,8 @@ db.spendTracker = {
 - [ ] 1.4 Templates + recurring SIPs engine (monthly advance, nextRun) + recurring sheet.
 
 ### Phase 2 — Dashboard & portfolio math
-- [ ] 2.1 Portfolio calculations (type totals, net worth over time, monthly invested, P&L, strict valuation, usable money, milestones, 80C tax).
-- [ ] 2.2 Dashboard: summary cards, net-worth + projection charts (Compose Canvas), progress ring, sankey, heatmap, 12-month trend.
+- [x] 2.1 Portfolio calculations (type totals, net worth over time, monthly invested, P&L, strict valuation, 80C tax) — **DONE `cf59c17`** (per-type valuation not per-type-aggregate like web — noted deviation; SIP/Stocks invested-amount fallback, live NAV deferred; gov rates PPF 7.1 / PF 8.15; `calculateStrictTax` new/old slabs + 87A + cess).
+- [x] 2.2 Dashboard: summary cards, net-worth + projection charts (Compose Canvas), progress ring, 12-month trend, allocation donut, maturity list — **DONE `cf59c17`** (custom Canvas charts, no lib). Sankey / heatmap / mini-cards / advisor / AI / backtester **deferred**.
 - [ ] 2.3 Portfolio tab: donut + allocation legend, asset grid, maturity list.
 - [ ] 2.4 Goals + FIRE sheet + portfolio health score.
 
