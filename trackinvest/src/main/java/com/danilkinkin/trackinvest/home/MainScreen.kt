@@ -23,11 +23,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.danilkinkin.trackinvest.R
 import com.danilkinkin.trackinvest.home.dashboard.Dashboard
+import com.danilkinkin.trackinvest.home.portfolio.Portfolio
 import com.danilkinkin.trackinvest.ledger.Ledger
 
 enum class MainTab(val titleRes: Int) {
     DASHBOARD(R.string.tab_dashboard),
     LEDGER(R.string.tab_ledger),
+    PORTFOLIO(R.string.tab_portfolio),
 }
 
 @Composable
@@ -45,10 +47,10 @@ fun MainScreen() {
                         icon = {
                             Icon(
                                 painter = painterResource(
-                                    if (tab == MainTab.DASHBOARD) {
-                                        R.drawable.ic_tab_dashboard
-                                    } else {
-                                        R.drawable.ic_tab_ledger
+                                    when (tab) {
+                                        MainTab.DASHBOARD -> R.drawable.ic_tab_dashboard
+                                        MainTab.LEDGER -> R.drawable.ic_tab_ledger
+                                        MainTab.PORTFOLIO -> R.drawable.ic_tab_portfolio
                                     },
                                 ),
                                 contentDescription = stringResource(tab.titleRes),
@@ -68,6 +70,7 @@ fun MainScreen() {
             when (selectedTab) {
                 MainTab.DASHBOARD -> Dashboard()
                 MainTab.LEDGER -> Ledger(activityResultRegistryOwner)
+                MainTab.PORTFOLIO -> Portfolio()
             }
         }
     }

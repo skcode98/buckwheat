@@ -225,9 +225,14 @@ class PortfolioCalculatorTest {
         val fd = summary.typeTotals.single { it.type == "FD" }
         assertBig("10000", fd.total)
         assertBig("0", fd.interest)
+        assertEquals(date(2022, 1, 1), fd.lastDate)
 
         val ppf = summary.typeTotals.single { it.type == "PPF" }
         assertTrue(ppf.total > ppf.invested)
+        assertEquals(date(2025, 12, 10), ppf.lastDate)
+
+        val sip = summary.typeTotals.single { it.type == "SIP" }
+        assertEquals(date(2026, 1, 5), sip.lastDate)
 
         assertEquals(1, summary.maturities.size)
         assertEquals(45L, summary.maturities.single().daysLeft)

@@ -30,6 +30,7 @@ data class TypeValuation(
     val total: BigDecimal,
     val interest: BigDecimal,
     val count: Int,
+    val lastDate: Long? = null,
 )
 
 data class MaturityEntry(
@@ -208,6 +209,7 @@ fun strictValuation(
         total = valuation.first,
         interest = valuation.second,
         count = rawInvs.size,
+        lastDate = rawInvs.maxOfOrNull { it.date },
     )
 }
 
@@ -245,6 +247,7 @@ fun computePortfolioSummary(
             total = valuation.total.coerceAtLeastZero(),
             interest = valuation.interest.coerceAtLeastZero(),
             count = valid.size,
+            lastDate = valid.maxOfOrNull { it.date },
         )
         netWorth += valuation.total.coerceAtLeastZero()
         interestEarned += valuation.interest.coerceAtLeastZero()

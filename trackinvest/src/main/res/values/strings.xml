@@ -3,6 +3,12 @@
     <string name="app_name">TrackInvest</string>
     <string name="tab_dashboard">Dashboard</string>
     <string name="tab_ledger">Ledger</string>
+    <string name="tab_portfolio">Portfolio</string>
+    <string name="portfolio_assets">Assets</string>
+    <string name="portfolio_last">Last: %1$s</string>
+    <string name="portfolio_no_entries">No entries</string>
+    <string name="portfolio_empty">Portfolio is empty</string>
+    <string name="portfolio_empty_hint">Add investments across different categories to build a diversified portfolio</string>
     <string name="export_csv">Export CSV</string>
     <string name="import_csv">Import CSV</string>
     <string name="export_csv_file_name">InvestPro_%1$s.csv</string>
