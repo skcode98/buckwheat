@@ -48,8 +48,17 @@
 | CSV tests | `trackinvest/src/test/java/.../data/CsvCodecTest.kt` (11 tests) |
 | Ledger screen | `trackinvest/.../ledger/Ledger.kt` (Room list + export/import + FAB + empty state) |
 | Editor sheet | `trackinvest/.../ledger/InvestmentEditorSheet.kt` (type chips, amount, M3 DatePickerDialog, account/note/tags, monthly switch) |
+| Shared type chips | `trackinvest/.../ledger/InvestmentTypeChips.kt` (`INVESTMENT_TYPES` FD/PPF/PF/SIP/Liquid/Home/Cash/Stocks + FlowRow composable) |
+| Recurring SIP logic | `trackinvest/.../data/RecurringSips.kt` (pure: `nextMonthlyRun`, `advanceMonth(current, intendedDay)`, `processDueSip` → `SipRunResult`, `MAX_SIP_RUNS = 24`) |
+| Recurring repo | `trackinvest/.../di/RecurringRepository.kt` (sips/templates LiveData, CRUD, `quickLog`, `processDueSips(): Int`) |
+| Recurring VM | `trackinvest/.../data/RecurringViewModel.kt` (@HiltViewModel) |
+| SIP editor sheet | `trackinvest/.../ledger/RecurringSipEditorSheet.kt` (start date → `nextRun = nextMonthlyRun(startDate)`) |
+| SIPs sheet | `trackinvest/.../ledger/RecurringSipsSheet.kt` (tap row = edit, active Switch, inline delete, "Process now") |
+| Template editor sheet | `trackinvest/.../ledger/TemplateEditorSheet.kt` (type chips + amount/account/note/tags) |
+| Templates sheet | `trackinvest/.../ledger/TemplatesSheet.kt` (tap row = quick log, inline delete) |
+| Recurring SIP tests | `trackinvest/src/test/java/.../data/RecurringSipsTest.kt` (12 tests; module uses JUnit 4, NOT `kotlin.test`) |
 | Amount format | `trackinvest/.../util/numberFormat.kt` (`formatAmount(amount, symbol)`, US grouping) + test `util/NumberFormatTest.kt` |
-| Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` / `ic_add.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
+| Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` / `ic_add.xml` / `ic_delete.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
 | Migration reference | `.track/trackinvest.md` |
 
 ## Key File Paths (Upstream Master)

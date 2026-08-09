@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration Phase 1.2: templates + recurring SIPs (committed `09ba576`, pushed)
+
+The LEDGER tab now manages recurring SIPs and quick-log templates, and due SIPs auto-process on app launch.
+
+- **`data/RecurringSips.kt`** — pure date logic ported from web `app_part1.js:3560-3593` (clampDayToMonth/advanceMonth/nextMonthlyRun): `nextMonthlyRun(start, zoneId)`, `advanceMonth(current, intendedDay, zoneId)` (next month with the day clamped to `min(intendedDay, lengthOfMonth)` — avoids Java `plusMonths`' day drift, so a 31st SIP is Jan 31 → Feb 28 → **Mar 31**, not Mar 28), `processDueSip(sip, today, zoneId)` → `SipRunResult(investments, nextRun)` mirroring web `app_part3.js:39-60` semantics: generate an `Investment` (date = nextRun, `isMonthlyContrib = true`, note = `"<note> (Auto)"` when non-blank) for every occurrence while `nextRun <= today`, capped at `MAX_SIP_RUNS = 24`, advancing via `advanceMonth` on the SIP's intended day, and returning the advanced `nextRun`.
+- **`di/RecurringRepository.kt`** — `sips()`/`templates()` LiveData, `saveSip`/`deleteSip`/`saveTemplate`/`deleteTemplate` (uid == 0 → insert, else update), `quickLog(template)` (inserts an `Investment` dated now from the template), `processDueSips(): Int` (filters active sips, `processDueSip` each, `insertAll` generated investments, updates the sip's `nextRun` — re-assigns `uid` via `.also` after `copy()` since `RecurringSip.uid` is a class-body var).
+- **`data/RecurringViewModel.kt`** — `@HiltViewModel` wrapping the above.
+- **`ledger/InvestmentTypeChips.kt`** — shared `INVESTMENT_TYPES` (FD/PPF/PF/SIP/Liquid/Home/Cash/Stocks) + `InvestmentTypeChips` `FlowRow` composable; `InvestmentEditorSheet` refactored to use it (removed its private copy + dead `FlowRow`/`FilterChip` imports).
+- **`ledger/RecurringSipEditorSheet.kt`** — add/edit M3 `ModalBottomSheet` (type chips + editable type, amount w/ error, start-date `OutlinedButton` → M3 `DatePickerDialog` like the investment editor, account/note/tags). Save computes `nextRun = nextMonthlyRun(startDate)`; Delete on edit only.
+- **`ledger/RecurringSipsSheet.kt`** — list of SIP rows (`Surface`, tap = edit): name (`note.ifBlank { type }`), `type · Next: <ISO date> · account` meta, right-aligned amount, active `Switch` (toggles `isActive`), inline delete `IconButton` (new `ic_delete.xml` vector). Header has a **"Process now"** `TextButton`; footer "Add SIP" `Button`; empty state (`recurring_empty`/`_hint`).
+- **`ledger/TemplateEditorSheet.kt`** + **`ledger/TemplatesSheet.kt`** — templates add-form (type chips + amount/account/note/tags) and list where **tapping a row quick-logs** it (`quickLog`, web's `executeQuickLog`), inline delete, "Add template" button, empty state.
+- **`ledger/Ledger.kt`** — toolbar now two rows: title + "SIPs"/"Templates" `TextButton`s, then end-aligned Export/Import row. `LaunchedEffect(Unit)` auto-processes due SIPs on launch (`recurring_processed` feedback when > 0). Renders `RecurringSipsSheet`/`TemplatesSheet` on the new `showSips`/`showTemplates` state.
+- **Strings** (`recurring_*`, `template*`, `templates_*`) in `strings.xml`; `ic_delete.xml` drawable.
+- **Tests**: `data/RecurringSipsTest.kt` — 12 cases (nextMonthlyRun clamp Jan 31→Feb 28, regular-day preserve, advanceMonth intended-day drift fix across short months, all-due-occurrence generation, "(Auto)" append, blank-note keep, isMonthlyContrib, tags/account preserve, no-due-in-future, occurrence-on-today, MAX_SIP_RUNS cap, Jan 31 → Feb 28 → Mar 31 → Apr 30 intended-day series). First compile failure: `kotlin.test` is not on the module's test classpath — module uses JUnit 4 (`org.junit.Assert`/`org.junit.Test`), fixed. **26 tests green total**, `assembleDebug` BUILD SUCCESSFUL.
+- **Next**: Phase 1.3 — goal linkage, or Phase 2 — dashboard portfolio math + charts (Dashboard tab still a placeholder).
+
 ## 2026-08-09 — TrackInvest migration Phase 1.1: ledger CRUD UI (committed `15ee70b`, pushed)
 
 The LEDGER tab is now a real list backed by Room, with an add/edit bottom sheet.
