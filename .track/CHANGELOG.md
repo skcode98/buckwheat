@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration Phase 2.3: Portfolio tab (committed `d47c447`, pushed)
+
+Third main tab — the PORTFOLIO screen, matching the web's `portfolio-grid`/`alloc-bar`/`alloc-legend` layout (`app_part3.js:397-416`). Donut/allocation/maturity reuse the dashboard math; PDF wealth report, goals + AI sync deferred (goals = 2.4).
+
+- **`data/Portfolio.kt`** — `TypeValuation` gained `lastDate: Long?` (max investment date per type, computed in both `strictValuation` and `computePortfolioSummary`).
+- **`home/portfolio/PortfolioViewModel.kt`** — `summary: LiveData<PortfolioSummary>` (`PortfolioRepository.summary()`) + `currencySymbol: LiveData<String>` (`SettingsRepository.getCurrencySymbol()`).
+- **`home/portfolio/Portfolio.kt`** — `Portfolio()` screen: spinner while null; empty state when `typeTotals` empty. `NetWorthCard` (net-worth headline, invested + P&L stats, 180dp `DonutChart` centered on net worth, new `AllocationBar` stacked-segment Canvas bar, `AllocationLegend` rows of color dot + type + `NN% · value`), `AssetGridCard` (2-column card grid via `chunked(2)` — each `TypeCard` shows type, current value, P&L tag `+₹X`/`-₹X` colored success/error, `Last: <ISO date>`), `MaturityCard` (all maturities in the 90-day window).
+- **`home/MainScreen.kt`** — `MainTab` enum + PORTFOLIO tab; icon selection switched to `when`; `Portfolio()` wired.
+- **`res/drawable/ic_tab_portfolio.xml`** — Material "pie chart" vector; **`res/values/strings.xml`** — `tab_portfolio`, `portfolio_assets`, `portfolio_last`, `portfolio_no_entries`, `portfolio_empty`, `portfolio_empty_hint`.
+- **Tests**: `PortfolioCalculatorTest` summary case asserts `lastDate` per type (FD 2022-01-01, PPF 2025-12-10, SIP 2026-01-05). **47 tests green**, `assembleDebug` BUILD SUCCESSFUL.
+- **Next**: Phase 1.3 — goal linkage, or Phase 2.4 — Goals + FIRE sheet (Goal entity exists with `linkedCategory`). Deferred: live NAV for SIP/Stocks, sankey/heatmap, advisor/AI, backtester, PDF wealth report.
+
 ## 2026-08-09 — TrackInvest migration Phase 2: dashboard portfolio math + charts (committed `cf59c17`, `d71e5ea`, pushed)
 
 The DASHBOARD tab now shows live portfolio math and charts, replacing the placeholder. Live NAV for SIP/Stocks is still deferred — both fall back to invested-amount (user-approved). Sankey/heatmap/advisor/AI/mini-cards/backtester deferred.

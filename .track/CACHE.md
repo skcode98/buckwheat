@@ -64,6 +64,7 @@
 | Dashboard charts | `trackinvest/.../home/dashboard/DashboardCharts.kt` (custom Canvas `LineChart`/`BarChart`/`DonutChart`/`ProgressRing`/`ChartLabelsRow` — no chart lib) |
 | Income sheet | `trackinvest/.../home/dashboard/IncomeSheet.kt` (salary + New/Old regime FilterChips) |
 | Portfolio tests | `trackinvest/src/test/java/.../data/PortfolioCalculatorTest.kt` (21 tests; **use `assertBig(expected, actual)` compareTo helper — `assertEquals(BigDecimal, BigDecimal)` is scale-sensitive, `0` vs `0.00` fails**) |
+| Portfolio tab | `trackinvest/.../home/portfolio/Portfolio.kt` (NetWorthCard donut + AllocationBar + legend, AssetGridCard 2-col, MaturityCard) + `PortfolioViewModel.kt`; `TypeValuation.lastDate` per-type max date |
 | Copyright | `spotless/copyright-trackinvest.kt` — module files use `/* Copyright 2026, skcode98, All rights reserved. */` (trackinvest subproject header; app keeps `spotless/copyright.kt`) |
 | Amount format | `trackinvest/.../util/numberFormat.kt` (`formatAmount(amount, symbol)`, US grouping) + test `util/NumberFormatTest.kt` |
 | Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` / `ic_add.xml` / `ic_delete.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
