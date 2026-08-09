@@ -115,6 +115,8 @@
   <string name="voice_widget_design_amount_desc">How much is left of today\'s budget</string>
   <string name="voice_widget_design_ring">Ring</string>
   <string name="voice_widget_design_ring_desc">Ring gauge with the remaining percent</string>
+  <string name="voice_widget_design_graph_bg">Graph background</string>
+  <string name="voice_widget_design_graph_bg_desc">Spend chart as the background, tinted green to red as the budget runs low</string>
   <string name="voice_widget_result_title">Spend added</string>
   <string name="voice_widget_added">Added %1$s</string>
   <string name="voice_widget_added_comment">Added %1$s — %2$s</string>

@@ -82,7 +82,27 @@ import kotlinx.coroutines.launch
 
 enum class VoiceFeedbackState { IDLE, LISTENING, PROCESSING, ADDED }
 
-enum class VoiceWidgetDesign { PERCENT, AMOUNT, RING }
+enum class VoiceWidgetDesign { PERCENT, AMOUNT, RING, GRAPH_BG }
+
+// Palette for the graph-background design: the widget surface is tinted pastel green → amber
+// → red as the fraction of the daily budget still left falls from 1 → 0. The deep variants
+// tint the background chart so it reads on top of the pastel without fighting the text.
+private val StatusGreen = Color(0xFFC9E7C5)
+private val StatusAmber = Color(0xFFFFE3B0)
+private val StatusRed = Color(0xFFFFC9C6)
+private val StatusDeepGreen = Color(0xFF4C8B48)
+private val StatusDeepAmber = Color(0xFFD99A2B)
+private val StatusDeepRed = Color(0xFFD5534C)
+private val StatusTextColor = Color(0xFF2A2A2A)
+private val StatusTextSecondaryColor = Color(0xFF464646)
+private val StatusAddedColor = Color(0xFF1B7A2F)
+
+// fraction = remaining fraction of the daily budget (1 = plenty, 0 = none).
+private fun statusColor(fraction: Float): Color =
+    combineColors(listOf(StatusGreen, StatusAmber, StatusRed), 1f - fraction)
+
+private fun statusDeepColor(fraction: Float): Color =
+    combineColors(listOf(StatusDeepGreen, StatusDeepAmber, StatusDeepRed), 1f - fraction)
 
 // Writes the transient input-feedback state to every voice widget and re-renders it. Called
 // from the mic tap (with the exact glanceId for an instant response) and from the commit
@@ -204,6 +224,7 @@ fun VoiceWidgetContent() {
             prefs[WidgetReceiver.voiceDesignPreferenceKey] ?: VoiceWidgetDesign.PERCENT.name
         )
     }.getOrDefault(VoiceWidgetDesign.PERCENT)
+    val isGraphBg = widgetDesign == VoiceWidgetDesign.GRAPH_BG
 
     val primaryColor = GlanceTheme.colors.primary.getColor(context)
     val onSurfaceVariantColor = GlanceTheme.colors.onSurfaceVariant.getColor(context)
@@ -219,6 +240,18 @@ fun VoiceWidgetContent() {
         prefs[WidgetReceiver.currencyPreferenceKey] ?: "RUB"
     )
 
+    val todaySpent = series.lastOrNull() ?: BigDecimal.ZERO
+    val dailyRemaining = (dailyBudget - todaySpent).coerceAtLeast(BigDecimal.ZERO)
+    val remainingFraction = if (dailyBudget.signum() > 0) {
+        dailyRemaining
+            .divide(dailyBudget, 4, RoundingMode.HALF_UP)
+            .toFloat()
+            .coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val remainingPercent = (remainingFraction * 100f).roundToInt()
+
     CompositionLocalProvider(
         LocalContentColor provides GlanceTheme.colors.onSurface,
         LocalAccentColor provides GlanceTheme.colors.primary,
@@ -231,7 +264,20 @@ fun VoiceWidgetContent() {
         ) {
             Image(
                 modifier = GlanceModifier.fillMaxSize(),
-                provider = ImageProvider(R.drawable.voice_widget_preview_background),
+                provider = if (isGraphBg && stateSet) {
+                    ImageProvider(
+                        drawStatusBackgroundBitmap(
+                            context = context,
+                            statusColor = statusColor(remainingFraction),
+                            chartColor = statusDeepColor(remainingFraction),
+                            series = series,
+                            dailyBudget = dailyBudget,
+                            markerColor = StatusTextColor,
+                        )
+                    )
+                } else {
+                    ImageProvider(R.drawable.voice_widget_preview_background)
+                },
                 contentScale = ContentScale.FillBounds,
                 contentDescription = null,
             )
@@ -254,27 +300,21 @@ fun VoiceWidgetContent() {
                             modifier = GlanceModifier.fillMaxWidth(),
                             text = captionFor(context, prefs, feedbackState),
                             style = TextStyle(
-                                color = if (feedbackState === VoiceFeedbackState.ADDED) {
-                                    ColorProvider(colorGood)
-                                } else {
-                                    GlanceTheme.colors.onSurfaceVariant
+                                color = when {
+                                    feedbackState === VoiceFeedbackState.ADDED ->
+                                        if (isGraphBg) {
+                                            ColorProvider(StatusAddedColor)
+                                        } else {
+                                            ColorProvider(colorGood)
+                                        }
+                                    isGraphBg -> ColorProvider(StatusTextSecondaryColor)
+                                    else -> GlanceTheme.colors.onSurfaceVariant
                                 },
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 10.sp,
                             ),
                         )
                         Spacer(modifier = GlanceModifier.height(2.dp))
-                        val todaySpent = series.lastOrNull() ?: BigDecimal.ZERO
-                        val dailyRemaining = (dailyBudget - todaySpent).coerceAtLeast(BigDecimal.ZERO)
-                        val remainingFraction = if (dailyBudget.signum() > 0) {
-                            dailyRemaining
-                                .divide(dailyBudget, 4, RoundingMode.HALF_UP)
-                                .toFloat()
-                                .coerceIn(0f, 1f)
-                        } else {
-                            0f
-                        }
-                        val remainingPercent = (remainingFraction * 100f).roundToInt()
                         when (widgetDesign) {
                             VoiceWidgetDesign.PERCENT -> {
                                 CanvasText(
@@ -282,6 +322,17 @@ fun VoiceWidgetContent() {
                                     text = "$remainingPercent%",
                                     style = TextStyle(
                                         color = GlanceTheme.colors.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 20.sp,
+                                    ),
+                                )
+                            }
+                            VoiceWidgetDesign.GRAPH_BG -> {
+                                CanvasText(
+                                    modifier = GlanceModifier.fillMaxWidth(),
+                                    text = "$remainingPercent%",
+                                    style = TextStyle(
+                                        color = ColorProvider(StatusTextColor),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 20.sp,
                                     ),
@@ -352,7 +403,11 @@ fun VoiceWidgetContent() {
                                         .getOrDefault(dailyBudget.toPlainString()),
                                 ),
                                 style = TextStyle(
-                                    color = GlanceTheme.colors.onSurfaceVariant,
+                                    color = if (isGraphBg) {
+                                        ColorProvider(StatusTextSecondaryColor)
+                                    } else {
+                                        GlanceTheme.colors.onSurfaceVariant
+                                    },
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 9.sp,
                                 ),
@@ -366,17 +421,19 @@ fun VoiceWidgetContent() {
                                 trackColor = onSurfaceVariantColor.copy(alpha = 0.25f),
                             )
                         }
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-                        VoiceWidgetChart(
-                            series = series,
-                            dailyBudget = dailyBudget,
-                            topColor = colorMax,
-                            bottomColor = colorMin,
-                            todayColor = primaryColor,
-                            goalLineColor = onSurfaceVariantColor.copy(alpha = 0.55f),
-                            markerColor = Color.White,
-                        )
-                        Spacer(modifier = GlanceModifier.height(2.dp))
+                        if (widgetDesign != VoiceWidgetDesign.GRAPH_BG) {
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            VoiceWidgetChart(
+                                series = series,
+                                dailyBudget = dailyBudget,
+                                topColor = colorMax,
+                                bottomColor = colorMin,
+                                todayColor = primaryColor,
+                                goalLineColor = onSurfaceVariantColor.copy(alpha = 0.55f),
+                                markerColor = Color.White,
+                            )
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                        }
                         CanvasText(
                             modifier = GlanceModifier.fillMaxWidth(),
                             text = context.getString(
@@ -389,7 +446,11 @@ fun VoiceWidgetContent() {
                                     .getOrDefault(dailyRemaining.toPlainString()),
                             ),
                             style = TextStyle(
-                                color = GlanceTheme.colors.onSurfaceVariant,
+                                color = if (isGraphBg) {
+                                    ColorProvider(StatusTextSecondaryColor)
+                                } else {
+                                    GlanceTheme.colors.onSurfaceVariant
+                                },
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 9.sp,
                             ),
@@ -727,6 +788,100 @@ private fun drawRingBitmap(
     val fontMetrics = textPaint.fontMetrics
     val baseline = size / 2f - (fontMetrics.ascent + fontMetrics.descent) / 2f
     canvas.drawText(percentText, size / 2f, baseline, textPaint)
+
+    return bitmap
+}
+
+// Full-bleed background for the graph-background design: fills the widget with the pastel
+// status color (green → red by how much of the daily budget is left) and draws the spend
+// chart over it in a deeper tint so the curve reads behind the foreground text.
+private fun drawStatusBackgroundBitmap(
+    context: Context,
+    statusColor: Color,
+    chartColor: Color,
+    series: List<BigDecimal>,
+    dailyBudget: BigDecimal,
+    markerColor: Color,
+): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val width = (300f * density).roundToInt().coerceAtLeast(1)
+    val height = (120f * density).roundToInt().coerceAtLeast(1)
+    val bitmap = createBitmap(width, height)
+    val canvas = Canvas(bitmap)
+
+    canvas.drawColor(statusColor.toArgb())
+
+    if (series.isEmpty()) return bitmap
+
+    val maxScale = maxOf(dailyBudget, maxNonZero(series)).coerceAtLeast(BigDecimal.ONE)
+    val fractions = series.map { fraction ->
+        fraction.divide(maxScale, 4, RoundingMode.HALF_EVEN).toFloat().coerceIn(0f, 1f)
+    }
+    val lastIndex = fractions.size - 1
+
+    val padLeft = 2f * density
+    val padRight = 2f * density
+    val padTop = 2f * density
+    val innerWidth = (width - padLeft - padRight).coerceAtLeast(1f)
+    val innerHeight = (height - 4f * density).coerceAtLeast(1f)
+
+    fun xAt(index: Int): Float =
+        if (lastIndex <= 0) padLeft + innerWidth / 2f
+        else padLeft + innerWidth * index / lastIndex
+
+    fun yAt(fraction: Float): Float = padTop + innerHeight * (1f - fraction)
+
+    val area = Path()
+    var lastY = 0f
+    fractions.forEachIndexed { index, fraction ->
+        val x = xAt(index)
+        val y = yAt(fraction)
+        if (index == 0) {
+            area.moveTo(x, y)
+        } else {
+            val controlX = padLeft + innerWidth * (index - 0.5f) / lastIndex
+            area.cubicTo(controlX, lastY, controlX, y, x, y)
+        }
+        lastY = y
+    }
+
+    val baselineY = yAt(0f)
+    area.lineTo(xAt(lastIndex), baselineY)
+    area.lineTo(xAt(0), baselineY)
+    area.close()
+
+    val areaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = chartColor.copy(alpha = 0.35f).toArgb()
+    }
+    canvas.drawPath(area, areaPaint)
+
+    val goalFraction = dailyBudget
+        .divide(maxScale, 4, RoundingMode.HALF_EVEN)
+        .toFloat()
+        .coerceIn(0f, 1f)
+    val goalY = yAt(goalFraction).coerceIn(padTop, height - 1f)
+    val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = chartColor.copy(alpha = 0.55f).toArgb()
+        style = Paint.Style.STROKE
+        strokeWidth = (1f * density).coerceAtLeast(1f)
+        pathEffect = DashPathEffect(floatArrayOf(6f * density, 4f * density), 0f)
+    }
+    canvas.drawLine(padLeft, goalY, width - padRight, goalY, goalPaint)
+
+    val markerX = xAt(lastIndex)
+    val markerY = yAt(fractions.last())
+    val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+        color = chartColor.toArgb()
+    }
+    canvas.drawCircle(markerX, markerY, 5f * density, ringPaint)
+    val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = markerColor.toArgb()
+    }
+    canvas.drawCircle(markerX, markerY, 3f * density, dotPaint)
 
     return bitmap
 }

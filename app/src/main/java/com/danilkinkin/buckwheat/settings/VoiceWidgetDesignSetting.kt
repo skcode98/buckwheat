@@ -77,6 +77,7 @@ fun VoiceWidgetDesignSetting(
                 VoiceWidgetDesign.PERCENT -> R.string.voice_widget_design_percent
                 VoiceWidgetDesign.AMOUNT -> R.string.voice_widget_design_amount
                 VoiceWidgetDesign.RING -> R.string.voice_widget_design_ring
+                VoiceWidgetDesign.GRAPH_BG -> R.string.voice_widget_design_graph_bg
             }
         ),
         onClick = {
@@ -132,6 +133,12 @@ fun VoiceWidgetDesignSettingDialog(onClose: () -> Unit) {
                 onValueChange = { handleSwitch(VoiceWidgetDesign.RING) },
                 text = stringResource(R.string.voice_widget_design_ring),
                 description = stringResource(R.string.voice_widget_design_ring_desc),
+            )
+            CheckedRow(
+                checked = design == VoiceWidgetDesign.GRAPH_BG,
+                onValueChange = { handleSwitch(VoiceWidgetDesign.GRAPH_BG) },
+                text = stringResource(R.string.voice_widget_design_graph_bg),
+                description = stringResource(R.string.voice_widget_design_graph_bg_desc),
             )
         }
     }
