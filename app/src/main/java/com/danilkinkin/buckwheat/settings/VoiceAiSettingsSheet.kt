@@ -40,6 +40,9 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
+import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
+import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
@@ -61,18 +64,20 @@ fun VoiceAiSettingsSheet(
     val coroutineScope = rememberCoroutineScope()
     var voiceAiApiKey by rememberSaveable { mutableStateOf("") }
     var voiceAiProviderUrl by rememberSaveable {
-        mutableStateOf("https://openrouter.ai/api/v1/chat/completions")
+        mutableStateOf(DEFAULT_VOICE_AI_PROVIDER_URL)
     }
-    var voiceAiModel by rememberSaveable { mutableStateOf("nvidia/nemotron-3-ultra-550b-a55b:free") }
+    var voiceAiModel by rememberSaveable { mutableStateOf(DEFAULT_VOICE_AI_MODEL) }
 
     LaunchedEffect(Unit) {
         voiceAiApiKey = context.settingsDataStore.data.first()[voiceAiApiKeyStoreKey].orEmpty()
         voiceAiProviderUrl = context.settingsDataStore.data.first()[voiceAiProviderUrlStoreKey]
             .orEmpty()
-            .ifBlank { "https://openrouter.ai/api/v1/chat/completions" }
-        voiceAiModel = context.settingsDataStore.data.first()[voiceAiModelStoreKey]
-            .orEmpty()
-            .ifBlank { "nvidia/nemotron-3-ultra-550b-a55b:free" }
+            .ifBlank { DEFAULT_VOICE_AI_PROVIDER_URL }
+        voiceAiModel = normalizeVoiceAiModel(
+            context.settingsDataStore.data.first()[voiceAiModelStoreKey]
+        )
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_VOICE_AI_MODEL
     }
 
     val freeModels by voiceAiSettingsViewModel.freeModels.observeAsState(emptyList())

@@ -6,6 +6,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,7 +59,7 @@ class VoiceAiSettingsViewModel @Inject constructor(
 suspend fun loadFreeModels(context: Context): List<FreeModel> = withContext(Dispatchers.IO) {
     val providerUrl = context.settingsDataStore.data.first()[voiceAiProviderUrlStoreKey]
         .orEmpty()
-        .ifBlank { "https://openrouter.ai/api/v1/chat/completions" }
+        .ifBlank { DEFAULT_VOICE_AI_PROVIDER_URL }
 
     // The models endpoint shares the OpenRouter base; for non-OpenRouter providers
     // (or a custom URL without the chat/completions suffix) there's no public models

@@ -2,6 +2,9 @@ package com.danilkinkin.buckwheat.keyboard
 
 import android.content.Context
 import android.util.Log
+import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
+import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
+import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
@@ -45,11 +48,11 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
         if (apiKey.isBlank()) return@withContext VoiceAiResult.NotConfigured
 
         val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
-            "https://openrouter.ai/api/v1/chat/completions"
+            DEFAULT_VOICE_AI_PROVIDER_URL
         }
-        val model = prefs[voiceAiModelStoreKey].orEmpty().ifBlank {
-            "nvidia/nemotron-3-ultra-550b-a55b:free"
-        }
+        val model = normalizeVoiceAiModel(prefs[voiceAiModelStoreKey])
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_VOICE_AI_MODEL
 
         // Built via JSONObject so the transcript (which may contain quotes/newlines) is
         // escaped correctly instead of being interpolated into a hand-built string.
