@@ -3,4 +3,12 @@
     <string name="app_name">TrackInvest</string>
     <string name="tab_dashboard">Dashboard</string>
     <string name="tab_ledger">Ledger</string>
+    <string name="export_csv">Export CSV</string>
+    <string name="import_csv">Import CSV</string>
+    <string name="export_csv_file_name">InvestPro_%1$s.csv</string>
+    <string name="csv_exported">CSV exported</string>
+    <string name="csv_export_failed">CSV export failed</string>
+    <string name="csv_imported">Imported %1$d records</string>
+    <string name="csv_import_empty">No records found in the file</string>
+    <string name="csv_import_failed">CSV import failed</string>
 </resources>
