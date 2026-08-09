@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-09 — Voice widget 4th design: Graph background (committed `053dbc2`)
+
+Added a **Graph background** option to the voice widget design switcher (`VoiceWidgetDesign.GRAPH_BG`). Instead of the static preview pill, the whole widget surface is tinted by how much of the daily budget remains and the spend chart is drawn full-bleed behind the text.
+
+- **Palette** (`VoiceWidget.kt`): `statusColor(fraction)` pastel green `C9E7C5` → amber `FFE3B0` → red `FFC9C6` blended by `1 - remainingFraction` (`combineColors(list, t)`); `statusDeepColor(fraction)` = the same ramp in deep tones (`4C8B48` → `D99A2B` → `D5534C`) used for the chart fill/stroke so the curve reads over the pastel. Foreground text switches to fixed dark `2A2A2A` / secondary `464646` (ADDED state → `1B7A2F`). `remainingFraction` / `remainingPercent` were hoisted above the design `when` so both the hero and the tint share one computation.
+- **Background**: `drawStatusBackgroundBitmap(context, statusColor, chartColor, series, dailyBudget, markerColor)` — a full-bleed 300×120dp bitmap: pastel base, cubic-bezier filled area (35% deep tint), dashed goal line at the daily-budget level (55% tint), and a ring + dot today marker in the text color. Rendered as the pill's first-child `Image` (`ContentScale.FillBounds`) only when `isGraphBg && stateSet`; otherwise the static `voice_widget_preview_background` pill is kept (this preserves the 16dp-corner fix from `cedc0e0` — no `background(ImageProvider)` modifier). Since the chart is now in the background, the mid-column `VoiceWidgetChart` row is skipped for `GRAPH_BG`.
+- **Hero**: `GRAPH_BG` shows the **remaining percent** (`20sp` bold dark) under the caption, like the PERCENT design but tinted per budget health.
+- **Verify**: `compileDebugKotlin` green. (Golden pipeline `spotlessApply` + `testDebugUnitTest` + `assembleDebug` ran green on this change before committing.) Not yet pushed. On-emulator pixel verification of the new design is still pending.
+
 ## 2026-08-09 — AI-voice diagnosis step 1: surface AI failure on the widget voice path (committed `dbee831`, pushed)
 
 User picked "Finish the AI-voice diagnosis" (voice input "parses wrong, no AI"). Findings from the path map: user **has** an API key configured and hits the **widget mic** — and the widget path (`VoiceWidgetCommitService.parseTranscript`) **silently swallowed** `VoiceAiResult.Failure` and committed offline-parsed results with no indication AI had failed (the in-app path already shows red `voice_ai_error_prefix + message` at `Keyboard.kt:211`). `NotConfigured` is a genuine silent-offline case (no key), but with a key set every AI failure on the widget was invisible.
