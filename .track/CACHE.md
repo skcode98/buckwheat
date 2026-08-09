@@ -41,6 +41,11 @@
 | Entities | `trackinvest/.../data/entities/` (Investment, Goal, RecurringSip, Template, Category, CategoryDetail, AllocTarget, MarketValue, Milestone) |
 | DAOs | `trackinvest/.../data/dao/` (each has LiveData `getAll()`, suspend CRUD, `@Transaction deleteAllAndInsert`) |
 | Converters | `trackinvest/.../di/TrackInvestConverters.kt` (BigDecimal↔String, List<String>↔comma) |
+| CSV codec | `trackinvest/.../data/CsvCodec.kt` (investmentsToCsv / csvToInvestments, header `Date,Type,Amount,Account,Note,Tags`, ISO dates, RFC-4180, date-desc sort) |
+| CSV repo | `trackinvest/.../di/LedgerRepository.kt` (exportCsv / importCsv: Int) |
+| CSV VM | `trackinvest/.../data/LedgerViewModel.kt` (@HiltViewModel) |
+| CSV launchers | `trackinvest/.../backup/rememberExportCsv.kt` (CreateDocument "text/csv", name `InvestPro_%1$s.csv`) / `rememberImportCsv.kt` (OpenDocument "text/*") |
+| CSV tests | `trackinvest/src/test/java/.../data/CsvCodecTest.kt` (11 tests) |
 | Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
 | Migration reference | `.track/trackinvest.md` |
 

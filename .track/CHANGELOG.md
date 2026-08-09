@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration Phase 0.3: CSV backup/restore (committed `69ac5b7`, pushed)
+
+CSV export/import for the `trackinvest` module, matching the web app's format (`InvestPro_<date>.csv`, header `Date, Type, Amount, Account, Note, Tags`, rows by date desc, RFC-4180 quoting — `app_part1.js:1052`).
+
+- **`data/CsvCodec.kt`** — pure functions: `formatInvestmentDate`/`parseInvestmentDate` (ISO `yyyy-MM-dd`, system zone, epoch millis), `splitTags` (comma split + trim + drop blanks), `investmentsToCsv` (commons-csv `CSVPrinter`, sorts by date desc, tags joined with commas and auto-quoted), `csvToInvestments` (`CSVParser`, skips malformed rows — header falls out since "Amount" fails `toBigDecimalOrNull`; blank type defaults to `Cash`; `CSVRecord.size()` is a method, not a property — first compile error).
+- **`di/LedgerRepository.kt`** — `exportCsv(): String`, `importCsv(csv): Int` (additive `insertAll`, matching the web's appending import).
+- **`data/LedgerViewModel.kt`** — `@HiltViewModel` wrapping export/import.
+- **`backup/rememberExportCsv.kt`** / **`backup/rememberImportCsv.kt`** — Buckwheat launcher pattern (`CreateDocument("text/csv")` / `OpenDocument("text/*")`, `CompositionLocalProvider(LocalActivityResultRegistryOwner …)`, no-op `{}` when owner null). Export filename from `R.string.export_csv_file_name` (`InvestPro_%1$s.csv`).
+- **UI**: LEDGER tab placeholder in `home/MainScreen.kt` gained Export/Import `OutlinedButton`s + feedback text (`csv_exported`/`csv_imported`/… strings added to `strings.xml`). Full ledger UI is still Phase 1.1.
+- **Tests**: `data/CsvCodecTest.kt` — 11 unit tests (header, round-trip incl. comma/quote/newline note, date-desc sort, header skip, invalid-row skip, blank type → Cash, quoted tags split, ISO format, `splitTags` blanks, empty ledger). Tags test initially failed because the fixture wrote an **unquoted** multi-comma tags field (RFC-4180 splits it into extra columns) — fixed by quoting the fixture; the codec already quotes on export.
+- **Verify**: golden pipeline green — 11 tests, `assembleDebug` BUILD SUCCESSFUL.
+
 ## 2026-08-09 — TrackInvest migration Phase 0.1 + 0.2 (committed `3d32732`, `61b5b77`, pushed)
 
 New `trackinvest` Gradle module (`com.danilkinkin.trackinvest`) implementing the MVP scope (ledger + dashboard) of the TrackInvest web→Android migration, in Buckwheat's style.
