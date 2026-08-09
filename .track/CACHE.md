@@ -46,7 +46,10 @@
 | CSV VM | `trackinvest/.../data/LedgerViewModel.kt` (@HiltViewModel) |
 | CSV launchers | `trackinvest/.../backup/rememberExportCsv.kt` (CreateDocument "text/csv", name `InvestPro_%1$s.csv`) / `rememberImportCsv.kt` (OpenDocument "text/*") |
 | CSV tests | `trackinvest/src/test/java/.../data/CsvCodecTest.kt` (11 tests) |
-| Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
+| Ledger screen | `trackinvest/.../ledger/Ledger.kt` (Room list + export/import + FAB + empty state) |
+| Editor sheet | `trackinvest/.../ledger/InvestmentEditorSheet.kt` (type chips, amount, M3 DatePickerDialog, account/note/tags, monthly switch) |
+| Amount format | `trackinvest/.../util/numberFormat.kt` (`formatAmount(amount, symbol)`, US grouping) + test `util/NumberFormatTest.kt` |
+| Tab icons | `trackinvest/src/main/res/drawable/ic_tab_dashboard.xml` / `ic_tab_ledger.xml` / `ic_add.xml` (repo has NO material-icons; use vector drawables + `painterResource`) |
 | Migration reference | `.track/trackinvest.md` |
 
 ## Key File Paths (Upstream Master)

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-09 — TrackInvest migration Phase 1.1: ledger CRUD UI (committed `15ee70b`, pushed)
+
+The LEDGER tab is now a real list backed by Room, with an add/edit bottom sheet.
+
+- **`ledger/Ledger.kt`** — replaces the placeholder. Top row: "Ledger" title + Export CSV / Import CSV `TextButton`s (moved from the old placeholder; feedback text preserved). `LazyColumn` of `InvestmentRow`s (`Surface` cards: type + "Monthly" badge, ISO date, note, `account · tags` secondary line, right-aligned `formatAmount`), empty state (`investments_empty`/`_hint`), and a FAB (new module-local `ic_add.xml` vector — repo has no material-icons) that opens the editor for a new entry. Tapping a row opens it for edit.
+- **`ledger/InvestmentEditorSheet.kt`** — M3 `ModalBottomSheet` (`skipPartiallyExpanded`). Fields mirror the web form core: type (8 default-category `FilterChip`s — FD, PPF, PF, SIP, Liquid, Home, Cash, Stocks — plus an editable `OutlinedTextField` for custom types), amount (decimal keyboard, error state + `investment_invalid_amount` when unparsable), date (M3 `DatePickerDialog`, UTC-midnight→system-zone epoch conversion), account, note, tags (comma-separated, split via `CsvCodec.splitTags`), monthly-contribution `Switch`, Save (disabled until valid), Delete (edit only, error-colored). `ModalBottomSheet` is `@OptIn(ExperimentalMaterial3Api)`.
+- **`data/LedgerViewModel.kt`** — gained `investments: LiveData<List<Investment>>` (DAO), `currencySymbol: LiveData<String>` (`SettingsRepository.getCurrencySymbol().asLiveData()`), `saveInvestment`/`deleteInvestment`.
+- **`di/LedgerRepository.kt`** — gained `investments()`, `saveInvestment` (uid == 0 → `insert`, else `update`), `deleteInvestment` (`deleteById`).
+- **`util/numberFormat.kt`** — `formatAmount(amount, symbol)` (US grouping, 0-2 decimals).
+- **Gotcha**: `Investment.uid` is a class-body `var` (not a constructor param), so `data class copy()` **resets it to 0** — the editor re-assigns `uid` via `.also { it.uid = investment.uid }` after `copy()`.
+- **Tests**: `util/NumberFormatTest.kt` — 3 cases. First run failed because US-locale grouping is `100,000` (not Indian `1,00,000`); expectation corrected. 14 tests total green; `assembleDebug` BUILD SUCCESSFUL.
+- **Next**: Phase 1.2 — recurring SIPs + templates (RecurringSip/Template entities already exist), or Phase 1.3 — goal linkage. Dashboard tab still a placeholder (Phase 2).
+
 ## 2026-08-09 — TrackInvest migration Phase 0.3: CSV backup/restore (committed `69ac5b7`, pushed)
 
 CSV export/import for the `trackinvest` module, matching the web app's format (`InvestPro_<date>.csv`, header `Date, Type, Amount, Account, Note, Tags`, rows by date desc, RFC-4180 quoting — `app_part1.js:1052`).
