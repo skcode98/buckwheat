@@ -175,8 +175,8 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `autoBackupInterval` — backup interval (Int)
 - `debug` — debug-mode flag (String; toggled via keyboard "0"×8 + "." + apply)
 - `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String; **deliberately excluded from backup exports** — `asBackupMap()` skips it, so restore never restores or clobbers the key)
-- `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String)
-- `voiceAiModelStoreKey` — model name (String)
+- `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String; blank → `DEFAULT_VOICE_AI_PROVIDER_URL` = `https://openrouter.ai/api/v1/chat/completions`)
+- `voiceAiModelStoreKey` — model name (String; blank or legacy `nvidia/nemotron-3-ultra-550b-a55b:free` → `DEFAULT_VOICE_AI_MODEL` = `openai/gpt-oss-20b:free`, via `normalizeVoiceAiModel` in `SettingsRepository.kt` since `96feeec`)
 - `reminderEnabledStoreKey` — daily budget reminder toggle (Boolean)
-- `reminderHourStoreKey` / `reminderMinuteStoreKey` — reminder time (Int)
+- `reminderHourStoreKey` / `reminderMinuteStoreKey` — reminder time (Int); the daily reminder is a one-shot `setWindow` (10-min window) that `DailyBudgetReminderReceiver.rearmNextDay` re-arms at the stored time
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)

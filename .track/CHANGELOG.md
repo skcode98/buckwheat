@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-09 — AI-voice root cause fixed: reliable default model (committed `96feeec`)
+
+The surfaced AI-failure reason pointed at the default model. Live check of OpenRouter's models listing (2026-08-09) shows `nvidia/nemotron-3-ultra-550b-a55b:free` is **not dead** — it's still a listed free model — but it's a **550B ultra** model whose free tier is heavily rate-limited, so the observed failures were `HTTP 429`/availability, not a 404-deleted model. Fix: swap the default to a small, structured-output-tuned model that is reliable on the free tier and is the **first pick of the settings sheet's live "fastest-first" dropdown** (smallest context length → sorted first): **`openai/gpt-oss-20b:free`**.
+
+- **Centralized defaults** (fixes the long-noted "two sources of truth" duplication): new top-level constants in `di/SettingsRepository.kt` — `DEFAULT_VOICE_AI_PROVIDER_URL` (`https://openrouter.ai/api/v1/chat/completions`) and `DEFAULT_VOICE_AI_MODEL` (`openai/gpt-oss-20b:free`) — plus `normalizeVoiceAiModel(saved: String?)` which maps the **legacy** `nvidia/nemotron-3-ultra-550b-a55b:free` string to the new default, so already-saved DataStore settings auto-upgrade on the user's device without them touching the settings sheet.
+- **All consumers updated** to the constants/normalizer: `SettingsRepository.getVoiceAiProviderUrl`/`getVoiceAiModel`, `keyboard/VoiceAi.kt`, `settings/VoiceAiSettingsSheet.kt` (initial states + `LaunchedEffect`), `settings/VoiceAiSettingsViewModel.kt` (`loadFreeModels` base URL), and `data/categories/SpendCategorizer.kt` (AI categorization shares the same defaults).
+- **Verify**: `spotlessCheck` + `testDebugUnitTest` (153, 0 failures) + `assembleDebug` green. Confirmed via `Invoke-RestMethod https://openrouter.ai/api/v1/models` that the new default is live and the legacy model is still present (but rate-limited).
+- **User action**: on the next install/update the old saved model resolves to the new one automatically; if a custom model was manually typed in the sheet, it's left untouched (only the legacy default string is mapped).
+
+## 2026-08-09 — Daily budget reminder ported from `setRepeating` to `setWindow` (committed `96feeec`)
+
+The daily budget reminder was the last remaining `setRepeating` alarm — the same inexact ~18h-window flaw the midnight widget refresh fixed on 2026-08-08, which could defer the 20:00 reminder far past its time.
+
+- **`notifications/DailyBudgetReminderScheduler.kt`**: `schedule()` now calls `alarmManager.setWindow(RTC_WAKEUP, trigger, WINDOW_MILLIS = 10 min, pi)` instead of `setRepeating(..., INTERVAL_DAY, ...)` — bounds the delay to ≤10 min past the configured time with no `SCHEDULE_EXACT_ALARM` needed. One-shot.
+- **`notifications/DailyBudgetReminderReceiver.kt`**: after posting the notification it now calls `rearmNextDay(context)` — reads the stored `reminderHour`/`reminderMinute` (`settingsDataStore`, defaults 20:00) and calls `schedule(context, hour, minute)` again, so the alarm fires at the user's configured time every day. `ReminderBootReceiver`, `BackupRepository.restoreBackup`, and `DailyBudgetReminderSetting` are unchanged (they already call `schedule`/`cancel` with the right args).
+- **Follow-up noted**: `notifications/OnTrackAlertScheduler.kt` still uses `setRepeating` — same flaw, out of scope this round.
+
 ## 2026-08-09 — Voice widget 4th design: Graph background (committed `053dbc2`, pushed)
 
 Added a **Graph background** option to the voice widget design switcher (`VoiceWidgetDesign.GRAPH_BG`). Instead of the static preview pill, the whole widget surface is tinted by how much of the daily budget remains and the spend chart is drawn full-bleed behind the text.
