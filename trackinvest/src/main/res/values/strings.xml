@@ -28,4 +28,22 @@
     <string name="investments_empty">No investments yet</string>
     <string name="investments_empty_hint">Tap + to log your first investment</string>
     <string name="investment_invalid_amount">Enter a valid amount</string>
+    <string name="recurring_title">Recurring SIPs</string>
+    <string name="recurring_add">Add SIP</string>
+    <string name="recurring_process">Process now</string>
+    <string name="recurring_log">Log recurring SIP</string>
+    <string name="recurring_edit">Edit recurring SIP</string>
+    <string name="recurring_delete">Delete SIP</string>
+    <string name="recurring_next_run">Next: %1$s</string>
+    <string name="recurring_empty">No recurring SIPs</string>
+    <string name="recurring_empty_hint">Set up automatic monthly investments to build wealth consistently</string>
+    <string name="recurring_processed">Auto-processed %1$d entries</string>
+    <string name="recurring_process_none">No SIPs due</string>
+    <string name="templates_title">Templates</string>
+    <string name="template_add">Add template</string>
+    <string name="template_log">New template</string>
+    <string name="template_delete">Delete template</string>
+    <string name="template_quick_logged">Quick logged</string>
+    <string name="templates_empty">No templates yet</string>
+    <string name="templates_empty_hint">Save an investment entry as a template to add it in one tap</string>
 </resources>

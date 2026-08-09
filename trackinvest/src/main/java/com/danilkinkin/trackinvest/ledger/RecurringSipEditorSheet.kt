@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -38,8 +37,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.danilkinkin.trackinvest.R
-import com.danilkinkin.trackinvest.data.entities.Investment
+import com.danilkinkin.trackinvest.data.entities.RecurringSip
 import com.danilkinkin.trackinvest.data.formatInvestmentDate
+import com.danilkinkin.trackinvest.data.nextMonthlyRun
 import com.danilkinkin.trackinvest.data.splitTags
 import java.time.Instant
 import java.time.LocalDate
@@ -48,29 +48,29 @@ import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InvestmentEditorSheet(
-    investment: Investment?,
-    onSave: (Investment) -> Unit,
-    onDelete: (Investment) -> Unit,
+fun RecurringSipEditorSheet(
+    sip: RecurringSip?,
+    onSave: (RecurringSip) -> Unit,
+    onDelete: (RecurringSip) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var type by remember(investment) { mutableStateOf(investment?.type ?: "Cash") }
-    var amountText by remember(investment) { mutableStateOf(investment?.amount?.toPlainString() ?: "") }
-    var date by remember(investment) {
+    var type by remember(sip) { mutableStateOf(sip?.type ?: "SIP") }
+    var amountText by remember(sip) { mutableStateOf(sip?.amount?.toPlainString() ?: "") }
+    var note by remember(sip) { mutableStateOf(sip?.note ?: "") }
+    var tagsText by remember(sip) { mutableStateOf(sip?.tags?.joinToString(", ") ?: "") }
+    var account by remember(sip) { mutableStateOf(sip?.account.orEmpty()) }
+    var startDate by remember(sip) {
         mutableStateOf(
-            investment?.date
+            sip?.nextRun
                 ?: LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
         )
     }
-    var account by remember(investment) { mutableStateOf(investment?.account.orEmpty()) }
-    var note by remember(investment) { mutableStateOf(investment?.note ?: "") }
-    var tagsText by remember(investment) { mutableStateOf(investment?.tags?.joinToString(", ") ?: "") }
-    var isMonthly by remember(investment) { mutableStateOf(investment?.isMonthlyContrib ?: false) }
-    var showDatePicker by remember(investment) { mutableStateOf(false) }
+    var showDatePicker by remember(sip) { mutableStateOf(false) }
 
     val amount = amountText.trim().toBigDecimalOrNull()
+    val zoneId = ZoneId.systemDefault()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -85,7 +85,7 @@ fun InvestmentEditorSheet(
         ) {
             Text(
                 text = stringResource(
-                    if (investment == null) R.string.investment_log else R.string.investment_edit,
+                    if (sip == null) R.string.recurring_log else R.string.recurring_edit,
                 ),
                 style = MaterialTheme.typography.titleLarge,
             )
@@ -130,7 +130,7 @@ fun InvestmentEditorSheet(
             Spacer(Modifier.height(16.dp))
 
             OutlinedButton(onClick = { showDatePicker = true }) {
-                Text(formatInvestmentDate(date))
+                Text(formatInvestmentDate(startDate))
             }
 
             Spacer(Modifier.height(16.dp))
@@ -164,32 +164,15 @@ fun InvestmentEditorSheet(
                 singleLine = true,
             )
 
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.investment_monthly_contrib),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = isMonthly,
-                    onCheckedChange = { isMonthly = it },
-                )
-            }
-
             Spacer(Modifier.height(24.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (investment != null) {
+                if (sip != null) {
                     OutlinedButton(
-                        onClick = { onDelete(investment) },
+                        onClick = { onDelete(sip) },
                     ) {
                         Text(
-                            text = stringResource(R.string.investment_delete),
+                            text = stringResource(R.string.recurring_delete),
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -198,25 +181,24 @@ fun InvestmentEditorSheet(
 
                 Button(
                     onClick = {
-                        val savedType = type.trim().ifBlank { "Cash" }
                         val amountValue = amount ?: return@Button
-                        val updated = investment?.copy(
-                            date = date,
+                        val savedType = type.trim().ifBlank { "SIP" }
+                        val nextRun = nextMonthlyRun(startDate, zoneId)
+                        val updated = sip?.copy(
                             type = savedType,
                             amount = amountValue,
-                            account = account.trim().ifBlank { null },
                             note = note.trim(),
                             tags = splitTags(tagsText),
-                            isMonthlyContrib = isMonthly,
-                        )?.also { it.uid = investment.uid }
-                            ?: Investment(
-                                date = date,
+                            account = account.trim().ifBlank { null },
+                            nextRun = nextRun,
+                        )?.also { it.uid = sip.uid }
+                            ?: RecurringSip(
                                 type = savedType,
                                 amount = amountValue,
-                                account = account.trim().ifBlank { null },
                                 note = note.trim(),
                                 tags = splitTags(tagsText),
-                                isMonthlyContrib = isMonthly,
+                                account = account.trim().ifBlank { null },
+                                nextRun = nextRun,
                             )
                         onSave(updated)
                     },
@@ -230,7 +212,7 @@ fun InvestmentEditorSheet(
     }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = date)
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -238,7 +220,7 @@ fun InvestmentEditorSheet(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
                             val local = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                            date = local.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            startDate = local.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
                         }
                         showDatePicker = false
                     },

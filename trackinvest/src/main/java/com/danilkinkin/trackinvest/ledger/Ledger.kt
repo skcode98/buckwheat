@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,7 @@ import com.danilkinkin.trackinvest.R
 import com.danilkinkin.trackinvest.backup.rememberExportCsv
 import com.danilkinkin.trackinvest.backup.rememberImportCsv
 import com.danilkinkin.trackinvest.data.LedgerViewModel
+import com.danilkinkin.trackinvest.data.RecurringViewModel
 import com.danilkinkin.trackinvest.data.entities.Investment
 import com.danilkinkin.trackinvest.data.formatInvestmentDate
 import com.danilkinkin.trackinvest.util.formatAmount
@@ -54,6 +56,7 @@ private data class EditorState(val investment: Investment?)
 @Composable
 fun Ledger(activityResultRegistryOwner: ActivityResultRegistryOwner?) {
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
+    val recurringViewModel: RecurringViewModel = hiltViewModel()
     val investments by ledgerViewModel.investments.observeAsState(emptyList())
     val currencySymbol by ledgerViewModel.currencySymbol.observeAsState("₹")
     val context = LocalContext.current
@@ -61,6 +64,13 @@ fun Ledger(activityResultRegistryOwner: ActivityResultRegistryOwner?) {
 
     var feedback by remember { mutableStateOf<String?>(null) }
     var editorState by remember { mutableStateOf<EditorState?>(null) }
+    var showSips by remember { mutableStateOf(false) }
+    var showTemplates by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val count = recurringViewModel.processDueSips()
+        if (count > 0) feedback = context.getString(R.string.recurring_processed, count)
+    }
 
     val exportCsv = rememberExportCsv(
         ledgerViewModel = ledgerViewModel,
@@ -98,6 +108,21 @@ fun Ledger(activityResultRegistryOwner: ActivityResultRegistryOwner?) {
                         .padding(horizontal = 12.dp),
                 )
 
+                TextButton(onClick = { showSips = true }) {
+                    Text(stringResource(R.string.recurring_title))
+                }
+
+                TextButton(onClick = { showTemplates = true }) {
+                    Text(stringResource(R.string.templates_title))
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
                 TextButton(onClick = exportCsv) {
                     Text(stringResource(R.string.export_csv))
                 }
@@ -160,6 +185,28 @@ fun Ledger(activityResultRegistryOwner: ActivityResultRegistryOwner?) {
                 editorState = null
             },
             onDismiss = { editorState = null },
+        )
+    }
+
+    if (showSips) {
+        RecurringSipsSheet(
+            currencySymbol = currencySymbol,
+            onDismiss = { showSips = false },
+            onProcessed = { count ->
+                feedback = if (count > 0) {
+                    context.getString(R.string.recurring_processed, count)
+                } else {
+                    context.getString(R.string.recurring_process_none)
+                }
+            },
+        )
+    }
+
+    if (showTemplates) {
+        TemplatesSheet(
+            currencySymbol = currencySymbol,
+            onDismiss = { showTemplates = false },
+            onQuickLogged = { feedback = context.getString(R.string.template_quick_logged) },
         )
     }
 }
