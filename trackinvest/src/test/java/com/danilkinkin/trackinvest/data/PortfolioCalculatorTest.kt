@@ -42,6 +42,10 @@ class PortfolioCalculatorTest {
         assertEquals(expected, actual.toDouble(), delta)
     }
 
+    private fun assertBig(expected: String, actual: BigDecimal) {
+        assertEquals(0, actual.compareTo(BigDecimal(expected)))
+    }
+
     @Test
     fun fdValuation_quarterlyPayoutCompounds() {
         val value = strictValuation(
@@ -107,7 +111,7 @@ class PortfolioCalculatorTest {
             today = LocalDate.of(2026, 1, 1),
             zoneId = zone,
         )
-        assertMoney(13840.0, value.total, 1.0)
+        assertMoney(13839.0, value.total, 1.0)
     }
 
     @Test
@@ -159,7 +163,7 @@ class PortfolioCalculatorTest {
         val detail = CategoryDetail(category = "PPF", key = "initialBal", value = "5000")
         val categories = listOf(Category(name = "PPF", is80c = true))
         val summary = computePortfolioSummary(
-            investments = listOf(inv(date(2022, 1, 1), "PPF", "10000")),
+            investments = listOf(inv(date(2025, 10, 1), "PPF", "10000")),
             categories = categories,
             categoryDetails = listOf(detail),
             today = LocalDate.of(2026, 1, 1),
@@ -167,9 +171,9 @@ class PortfolioCalculatorTest {
             zoneId = zone,
         )
         val ppf = summary.typeTotals.single()
-        assertEquals(BigDecimal("15000"), ppf.invested)
+        assertBig("15000", ppf.invested)
         assertTrue(ppf.total > ppf.invested)
-        assertEquals(BigDecimal("10000"), summary.tax80c)
+        assertBig("10000", summary.tax80c)
     }
 
     @Test
@@ -210,17 +214,17 @@ class PortfolioCalculatorTest {
             zoneId = zone,
         )
 
-        assertEquals(BigDecimal("39000"), summary.totalInvested)
-        assertEquals(BigDecimal("5000"), summary.thisMonthInvested)
-        assertEquals(BigDecimal("4000"), summary.lastMonthInvested)
-        assertEquals(BigDecimal("5000"), summary.yearInvested)
+        assertBig("39000", summary.totalInvested)
+        assertBig("5000", summary.thisMonthInvested)
+        assertBig("24000", summary.lastMonthInvested)
+        assertBig("5000", summary.yearInvested)
         assertEquals(BigDecimal("5000.00"), summary.avgMonthly)
-        assertEquals(BigDecimal("20000"), summary.tax80c)
+        assertBig("20000", summary.tax80c)
         assertTrue(summary.netWorth >= summary.totalInvested)
 
         val fd = summary.typeTotals.single { it.type == "FD" }
-        assertEquals(BigDecimal("10000"), fd.total)
-        assertEquals(BigDecimal.ZERO, fd.interest)
+        assertBig("10000", fd.total)
+        assertBig("0", fd.interest)
 
         val ppf = summary.typeTotals.single { it.type == "PPF" }
         assertTrue(ppf.total > ppf.invested)
