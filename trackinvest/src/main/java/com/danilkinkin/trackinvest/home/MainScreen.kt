@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Danil Zakhvatkin (Danilkinkin), All rights reserved.
+ * Copyright 2026, skcode98, All rights reserved.
  */
 
 package com.danilkinkin.trackinvest.home
@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -19,11 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.danilkinkin.trackinvest.R
+import com.danilkinkin.trackinvest.home.dashboard.Dashboard
 import com.danilkinkin.trackinvest.ledger.Ledger
 
 enum class MainTab(val titleRes: Int) {
@@ -67,22 +66,9 @@ fun MainScreen() {
                 .padding(paddingValues),
         ) {
             when (selectedTab) {
-                MainTab.DASHBOARD -> DashboardPlaceholder()
+                MainTab.DASHBOARD -> Dashboard()
                 MainTab.LEDGER -> Ledger(activityResultRegistryOwner)
             }
         }
-    }
-}
-
-@Composable
-private fun DashboardPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.tab_dashboard),
-            style = MaterialTheme.typography.titleLarge,
-        )
     }
 }

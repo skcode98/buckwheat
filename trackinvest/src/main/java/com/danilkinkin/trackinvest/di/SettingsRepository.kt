@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Danil Zakhvatkin (Danilkinkin), All rights reserved.
+ * Copyright 2026, skcode98, All rights reserved.
  */
 
 package com.danilkinkin.trackinvest.di
@@ -33,6 +33,8 @@ private val themeKey = stringPreferencesKey("theme")
 private val accountsKey = stringSetPreferencesKey("accounts")
 private val activeAccountFilterKey = stringPreferencesKey("active_account_filter")
 private val fyStartMonthKey = intPreferencesKey("fy_start_month")
+private val salaryKey = doublePreferencesKey("salary")
+private val regimeKey = stringPreferencesKey("tax_regime")
 
 @Singleton
 class SettingsRepository @Inject constructor(
@@ -51,7 +53,7 @@ class SettingsRepository @Inject constructor(
     }
 
     fun getCurrencySymbol(): Flow<String> = context.trackinvestDataStore.data.map {
-        it[currencySymbolKey] ?: "₹"
+        it[currencySymbolKey] ?: "â‚¹"
     }
 
     fun isPrivacyMode(): Flow<Boolean> = context.trackinvestDataStore.data.map {
@@ -72,6 +74,26 @@ class SettingsRepository @Inject constructor(
 
     fun getFyStartMonth(): Flow<Int> = context.trackinvestDataStore.data.map {
         it[fyStartMonthKey] ?: 3
+    }
+
+    fun getSalary(): Flow<Double> = context.trackinvestDataStore.data.map {
+        it[salaryKey] ?: 0.0
+    }
+
+    fun getRegime(): Flow<String> = context.trackinvestDataStore.data.map {
+        it[regimeKey] ?: "new"
+    }
+
+    suspend fun setSalary(salary: Double) {
+        context.trackinvestDataStore.edit {
+            it[salaryKey] = salary
+        }
+    }
+
+    suspend fun setRegime(regime: String) {
+        context.trackinvestDataStore.edit {
+            it[regimeKey] = regime
+        }
     }
 
     suspend fun setMonthlyInvestmentTarget(target: Double) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Danil Zakhvatkin (Danilkinkin), All rights reserved.
+ * Copyright 2026, skcode98, All rights reserved.
  */
 
 package com.danilkinkin.trackinvest.ledger
@@ -185,7 +185,7 @@ private fun RecurringSipRow(
                         sip.type,
                         stringResource(R.string.recurring_next_run, formatInvestmentDate(sip.nextRun)),
                         sip.account,
-                    ).joinToString(" · "),
+                    ).joinToString(" Â· "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

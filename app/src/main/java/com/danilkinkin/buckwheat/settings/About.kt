@@ -101,6 +101,11 @@ fun About(
 
                 },
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.trackinvest_credit),
+                style = MaterialTheme.typography.bodyMedium,
+            )
             Spacer(modifier = Modifier.height(24.dp))
             DescriptionButton(
                 title = { Text(stringResource(R.string.contribute)) },

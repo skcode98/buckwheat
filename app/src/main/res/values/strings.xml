@@ -139,6 +139,7 @@
   <string name="report_bug">Report a bug</string>
   <string name="contribute">Contribute</string>
   <string name="developer">Development &amp; design:</string>
+  <string name="trackinvest_credit">TrackInvest development: skcode98</string>
   <string name="report_bug_title">Report a bug</string>
   <string name="report_via_github">Via GitHub issue</string>
   <string name="report_via_email">Via email</string>

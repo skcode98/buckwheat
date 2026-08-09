@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Danil Zakhvatkin (Danilkinkin), All rights reserved.
+ * Copyright 2026, skcode98, All rights reserved.
  */
 
 package com.danilkinkin.trackinvest.ledger
@@ -58,7 +58,7 @@ fun Ledger(activityResultRegistryOwner: ActivityResultRegistryOwner?) {
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val recurringViewModel: RecurringViewModel = hiltViewModel()
     val investments by ledgerViewModel.investments.observeAsState(emptyList())
-    val currencySymbol by ledgerViewModel.currencySymbol.observeAsState("₹")
+    val currencySymbol by ledgerViewModel.currencySymbol.observeAsState("â‚¹")
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -244,7 +244,7 @@ private fun InvestmentRow(
     val secondary = listOfNotNull(
         investment.account,
         investment.tags.joinToString(", ").ifBlank { null },
-    ).joinToString(" · ")
+    ).joinToString(" Â· ")
 
     Surface(
         onClick = onClick,

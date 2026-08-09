@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Danil Zakhvatkin (Danilkinkin), All rights reserved.
+ * Copyright 2026, skcode98, All rights reserved.
  */
 
 package com.danilkinkin.trackinvest.util

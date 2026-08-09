@@ -8,7 +8,10 @@ subprojects {
             ktlint()   // has its own section below
             diktat()   // has its own section below
             prettier() // has its own section below
-            licenseHeaderFile(rootProject.file("spotless/copyright.kt")) // or licenseHeaderFile
+            val headerFile =
+                if (name == "trackinvest") "spotless/copyright-trackinvest.kt"
+                else "spotless/copyright.kt"
+            licenseHeaderFile(rootProject.file(headerFile))
         }
         kotlinGradle {
             target("*.gradle.kts") // default target for kotlinGradle
