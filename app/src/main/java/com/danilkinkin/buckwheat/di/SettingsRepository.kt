@@ -20,6 +20,7 @@ val voiceAiApiKeyStoreKey = stringPreferencesKey("voiceAiApiKey")
 val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
 val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
 val voiceWidgetDesignStoreKey = stringPreferencesKey("voiceWidgetDesign")
+val roundValuesStoreKey = booleanPreferencesKey("roundValues")
 val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
 val reminderHourStoreKey = intPreferencesKey("reminderHour")
 val reminderMinuteStoreKey = intPreferencesKey("reminderMinute")
@@ -85,6 +86,10 @@ class SettingsRepository @Inject constructor(
         it[reminderHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
     }
 
+    fun isRoundValuesEnabled() = context.settingsDataStore.data.map {
+        it[roundValuesStoreKey] ?: false
+    }
+
     fun getReminderMinute() = context.settingsDataStore.data.map {
         it[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
     }
@@ -116,6 +121,12 @@ class SettingsRepository @Inject constructor(
     suspend fun switchReminderEnabled(enabled: Boolean) {
         context.settingsDataStore.edit {
             it[reminderEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun switchRoundValues(enabled: Boolean) {
+        context.settingsDataStore.edit {
+            it[roundValuesStoreKey] = enabled
         }
     }
 

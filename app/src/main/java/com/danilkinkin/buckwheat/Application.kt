@@ -9,21 +9,38 @@ import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
 import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
+import com.danilkinkin.buckwheat.util.NumberDisplayConfig
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
 import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
+import com.danilkinkin.buckwheat.di.roundValuesStoreKey
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class Application : Application(), Configuration.Provider {
+    private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
     override fun onCreate() {
         CrashLogger.install(this)
 
         super.onCreate()
+
+        configScope.launch {
+            settingsDataStore.data
+                .map { it[roundValuesStoreKey] ?: false }
+                .distinctUntilChanged()
+                .collect { NumberDisplayConfig.roundValues = it }
+        }
 
         createNotificationChannel()
 

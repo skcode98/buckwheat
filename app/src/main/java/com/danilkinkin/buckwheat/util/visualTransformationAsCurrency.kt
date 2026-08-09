@@ -76,6 +76,7 @@ private fun visualTransformationAsCurrency(
         currency,
         maximumFractionDigits = 2,
         minimumFractionDigits = 1,
+        applyRoundValues = false,
     ).replace(currSymbol, "").trim()
 
     val forceShowAfterDot = input.text.contains(".0")

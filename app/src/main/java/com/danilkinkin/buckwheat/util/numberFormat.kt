@@ -25,6 +25,7 @@ fun numberFormat(
     currency: ExtendCurrency,
     trimDecimalPlaces: Boolean = false,
     forceShowAfterDot: Boolean = false,
+    applyRoundValues: Boolean = true,
     maximumFractionDigits: Int = if (forceShowAfterDot) 5 else 2,
     minimumFractionDigits: Int = if (forceShowAfterDot) 1 else 0,
 ): String {
@@ -36,8 +37,11 @@ fun numberFormat(
         NumberFormat.getNumberInstance(Locale.getDefault())
     }
 
-    formatter.maximumFractionDigits = maximumFractionDigits
-    formatter.minimumFractionDigits = minimumFractionDigits
+    // "Round values" drops the decimals everywhere except live-typed amount
+    // inputs (callers opt out via applyRoundValues / forceShowAfterDot).
+    val roundToWhole = applyRoundValues && NumberDisplayConfig.roundValues && !forceShowAfterDot
+    formatter.maximumFractionDigits = if (roundToWhole) 0 else maximumFractionDigits
+    formatter.minimumFractionDigits = if (roundToWhole) 0 else minimumFractionDigits
 
     if (currency.type === ExtendCurrency.Type.FROM_LIST) formatter.currency =
         Currency.getInstance(currency.value)

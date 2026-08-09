@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-09 — New feature: Round values setting
+
+A global "Round values" toggle in Settings (`settings/RoundValuesSetting.kt`, placed after Language) that shows all amounts as whole numbers without decimals.
+
+- **`di/SettingsRepository.kt`**: new `roundValuesStoreKey` (DataStore, default **off** = current behaviour preserved), `isRoundValuesEnabled()` / `switchRoundValues()`.
+- **`util/NumberDisplayConfig.kt`** (new): `@Volatile` cached copy of the setting so the synchronous, context-free `numberFormat()` helper can decide without a DataStore read per call.
+- **`Application.kt`**: collects `settingsDataStore[roundValuesStoreKey]` (`distinctUntilChanged`) into `NumberDisplayConfig` at startup, so the preference survives restarts.
+- **`util/numberFormat.kt`**: new `applyRoundValues: Boolean = true` param. When the setting is on (and not `forceShowAfterDot`), `maximumFractionDigits`/`minimumFractionDigits` are forced to 0 → whole-number display everywhere (wallet, analytics, history, widgets, notifications).
+- **Live inputs excluded**: `visualTransformationAsCurrency` passes `applyRoundValues = false` so typed amounts in the editor keep their decimals (the parser splits on the decimal divider).
+- **Verify**: `NumberFormatTest` (4 tests: default decimals, rounded whole, `forceShowAfterDot` override, `applyRoundValues=false`). Golden pipeline `:app:testDebugUnitTest` (157 tests, 0 failures) + `:app:assembleDebug` green.
+
 ## 2026-08-09 — TrackInvest migration closed & archived; back to Buckwheat enhancements
 
 The TrackInvest web → Android migration was **archived** to refocus on Buckwheat's own improvements. Full record in **`.track/trackinvest-migration.md`**.

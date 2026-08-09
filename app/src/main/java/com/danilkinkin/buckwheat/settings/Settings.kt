@@ -62,6 +62,7 @@ fun Settings(
             ) {
                 ThemeSwitcher()
                 LangSwitcher()
+                RoundValuesSetting()
                 DailyBudgetReminderSetting()
                 OverspendNotificationSetting()
                 OnTrackAlertSetting()
