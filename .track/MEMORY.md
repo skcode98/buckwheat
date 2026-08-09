@@ -3,8 +3,12 @@
 ## Active Context
 - **Base branch**: `master` — clean fork of `danilkinkin/buckwheat` upstream/master @ `4b60102`
 - **Our saved work**: `our-fixes` branch on origin (all prior changes preserved there)
+- **Backup branch (2026-08-09)**: `backup/pre-trackinvest-2026-08-09` on origin — full snapshot of `master` @ `bc5e922` (everything achieved so far, see "Achieved so far" below), created BEFORE starting the TrackInvest web-app → Android migration. Master keeps moving past this snapshot; the backup is the frozen pre-migration state.
 - **Upstream**: `https://github.com/danilkinkin/buckwheat.git`
 - **Origin**: `https://github.com/skcode98/buckwheat`
+
+### Achieved so far (as of backup `bc5e922`, 2026-08-09)
+Voice widget suite (5 designs: Percent left, Amount left, Ring, Graph background, + render fixes), voice AI parsing with live free-model dropdown + reliable default (`openai/gpt-oss-20b:free`, centralized defaults), widget failure surfacing (`AI off: <reason>`), midnight widget refresh (`setWindow`), AI spend categories + emoji picker + category management, full JSON backup & restore, daily budget reminder + on-track overspend alert + instant overspend notification (all `setWindow`-based now except `OnTrackAlertScheduler`), analytics suite (trend card, weekday breakdown, vs-previous, calendar heatmap, share summary), recurring payments, savings goals, CSV import/export, currency (INR default), tags, custom keyboard + batch voice input. **153 unit tests green**, golden pipeline (`spotlessApply` + `testDebugUnitTest` + `assembleDebug`) green. Feature history in `CHANGELOG.md`; newest commits: `96feeec` (AI-voice root cause + reminder `setWindow`), `bc5e922` (docs).
 
 ## Current State
 - **2026-08-09 Daily budget reminder ported to `setWindow` (committed `96feeec`, pushed)**: the daily reminder was the last remaining `setRepeating` alarm (the ~18h inexact window the widget refresh fixed on 08-08). `DailyBudgetReminderScheduler.schedule()` now uses `alarmManager.setWindow(RTC_WAKEUP, trigger, WINDOW_MILLIS = 10 min, pi)`; `DailyBudgetReminderReceiver` posts the notification then `rearmNextDay(context)` reads the stored `reminderHour`/`reminderMinute` (defaults 20:00) and re-schedules for the next day. `ReminderBootReceiver`/`BackupRepository`/`DailyBudgetReminderSetting` unchanged. **Follow-up noted**: `OnTrackAlertScheduler` still uses `setRepeating` (same flaw, out of scope).

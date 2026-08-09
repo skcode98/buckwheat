@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-09 — Project pivot: TrackInvest web → Android migration (backup + docs)
+
+New initiative: convert the **TrackInvest** web app (`D:\Just-try\TrackInvest\TrackInvest` — vanilla HTML/JS/PWA: `index.html`, `account_overview.html`, `money_flow.html`, `monthly_plan.html`, `spend_tracker.html`, `shared_ai.js`, `app_part1-3.js`, `style.css`, `sw.js`) into an Android app in **Buckwheat's** Compose/M3/Room/Hilt/DataStore style.
+
+- **Backup**: created + pushed `backup/pre-trackinvest-2026-08-09` on origin — frozen snapshot of `master` @ `bc5e922` (all Buckwheat achievements to date; summary in `MEMORY.md` "Achieved so far"). Pre-migration rollback point.
+- **Docs updated**: `AGENTS.md` (backup branch), `MEMORY.md` (backup + achievements summary), this file.
+- **Next**: review the TrackInvest source → write `.track/trackinvest.md` (architecture/features/files/data model) → plan the migration task list → execute one by one.
+
 ## 2026-08-09 — AI-voice root cause fixed: reliable default model (committed `96feeec`)
 
 The surfaced AI-failure reason pointed at the default model. Live check of OpenRouter's models listing (2026-08-09) shows `nvidia/nemotron-3-ultra-550b-a55b:free` is **not dead** — it's still a listed free model — but it's a **550B ultra** model whose free tier is heavily rate-limited, so the observed failures were `HTTP 429`/availability, not a 404-deleted model. Fix: swap the default to a small, structured-output-tuned model that is reliable on the free tier and is the **first pick of the settings sheet's live "fastest-first" dropdown** (smallest context length → sorted first): **`openai/gpt-oss-20b:free`**.
