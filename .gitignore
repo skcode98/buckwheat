@@ -5,6 +5,7 @@
 .DS_Store
 /build
 /app/release
+/trackinvest/build
 /captures
 .externalNativeBuild
 .cxx

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TrackInvest</string>
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_ledger">Ledger</string>
+</resources>
