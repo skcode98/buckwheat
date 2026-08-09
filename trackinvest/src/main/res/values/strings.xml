@@ -11,4 +11,21 @@
     <string name="csv_imported">Imported %1$d records</string>
     <string name="csv_import_empty">No records found in the file</string>
     <string name="csv_import_failed">CSV import failed</string>
+    <string name="investment_log">Log investment</string>
+    <string name="investment_edit">Edit investment</string>
+    <string name="investment_type">Type</string>
+    <string name="investment_amount">Amount</string>
+    <string name="investment_date">Date</string>
+    <string name="investment_account">Account</string>
+    <string name="investment_note">Note</string>
+    <string name="investment_tags">Tags</string>
+    <string name="investment_tags_hint">Comma separated</string>
+    <string name="investment_monthly_contrib">Monthly contribution</string>
+    <string name="investment_monthly_short">Monthly</string>
+    <string name="investment_save">Save</string>
+    <string name="investment_delete">Delete</string>
+    <string name="investment_add">Add investment</string>
+    <string name="investments_empty">No investments yet</string>
+    <string name="investments_empty_hint">Tap + to log your first investment</string>
+    <string name="investment_invalid_amount">Enter a valid amount</string>
 </resources>
