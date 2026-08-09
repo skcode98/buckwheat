@@ -38,6 +38,7 @@
 | Voice Input Parser | `app/.../keyboard/VoiceInputParser.kt` |
 | Voice AI Parser | `app/.../keyboard/VoiceAi.kt` |
 | Voice AI Settings Sheet | `app/.../settings/VoiceAiSettingsSheet.kt` |
+| Voice Widget Commit Service | `app/.../widget/voice/VoiceWidgetCommitService.kt` |
 | Voice Widget Design Setting | `app/.../settings/VoiceWidgetDesignSetting.kt` |
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
 | Midnight Widget Refresh Receiver | `app/.../widget/WidgetRefreshReceiver.kt` |

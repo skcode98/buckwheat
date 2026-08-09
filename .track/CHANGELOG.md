@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-09 — AI-voice diagnosis step 1: surface AI failure on the widget voice path (committed `dbee831`, pushed)
+
+User picked "Finish the AI-voice diagnosis" (voice input "parses wrong, no AI"). Findings from the path map: user **has** an API key configured and hits the **widget mic** — and the widget path (`VoiceWidgetCommitService.parseTranscript`) **silently swallowed** `VoiceAiResult.Failure` and committed offline-parsed results with no indication AI had failed (the in-app path already shows red `voice_ai_error_prefix + message` at `Keyboard.kt:211`). `NotConfigured` is a genuine silent-offline case (no key), but with a key set every AI failure on the widget was invisible.
+
+- **Fix**: `parseTranscript` now returns a `ParsedTranscript(results, aiFailure)`; `Failure` is `Log.w`-ed (`"VoiceAI"` tag, same tag as `VoiceAi.kt`) and its message carried back. `commit()` surfaces it: on zero transactions the failure notification body shows `AI off: <reason>` (instead of generic "Couldn't understand"); on success the notification **and** the ADDED widget caption append ` · AI off: <reason>`. New string `voice_widget_ai_off` (`"AI off: %1$s"`). Display reasons are whitespace-collapsed + capped at 90 chars (`aiReasonForDisplay`) since provider bodies are multi-line JSON (up to 200 chars in `VoiceAi.kt`). `NotConfigured` stays silent (intended config state). Also added the same `Log.w` to the in-app failure branch in `Keyboard.kt`.
+- **Diagnosis payload**: next time the user voice-inputs on the widget, the visible reason (e.g. `HTTP 404 — <model not found>` for the possibly-dead default `nvidia/nemotron-3-ultra-550b-a55b:free`, or `HTTP 429` rate limit) tells us the actual root cause — then a fix (swapping the default model / better error messaging) can be made. Intentional design kept: `parseVoiceAiContents` prose fallback to the offline splitter is **tested behavior** (`VoiceInputParserTest.kt:244`, `377`) — model prose replies still produce records; not changed.
+- **Verify**: `spotlessApply` + `testDebugUnitTest` (153 tests, 0 failures) + `assembleDebug` green. No unit test added for the private widget plumbing (compile-level widget tests only).
+
 ## 2026-08-08 — Daily midnight widget refresh (committed `81b7ab2`, pushed)
 
 User picked "Midnight widget refresh" from the next-feature pitch. Placed widgets (voice/minimal/extend) previously only re-read their DataStore state when the app was paused/opened, so after midnight a never-opened widget could keep showing yesterday's chart / "Left today" until the user opened the app.
