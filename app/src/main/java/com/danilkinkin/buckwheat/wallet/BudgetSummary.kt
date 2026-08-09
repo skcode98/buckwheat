@@ -20,6 +20,7 @@ fun BudgetSummary(
 ) {
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
+    val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
 
@@ -46,6 +47,20 @@ fun BudgetSummary(
             DaysLeftCard(
                 startDate = startPeriodDate ?: Date(),
                 finishDate = finishPeriodDate,
+            )
+        }
+        forecastEndOfPeriodSpend(
+            budget = wholeBudget,
+            spent = spent,
+            startDate = startPeriodDate ?: Date(),
+            finishDate = finishPeriodDate ?: Date(),
+            today = Date(),
+        )?.let { forecast ->
+            Spacer(modifier = Modifier.height(16.dp))
+            SpendForecastCard(
+                forecast = forecast,
+                currency = currency,
+                finishDate = finishPeriodDate ?: Date(),
             )
         }
         EditButton(onClick = { onEdit() })

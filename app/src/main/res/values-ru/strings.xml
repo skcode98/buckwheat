@@ -63,6 +63,7 @@
   <string name="locale_system">Системный</string>
   <string name="round_values_title">Округлять значения</string>
   <string name="round_values_description">Показывать все суммы целыми числами без десятичных знаков</string>
+  <string name="forecast_projected">Такими темпами вы потратите ~%1$d%% бюджета (%2$s) к %3$s</string>
   <string name="version">Версия: %1$s</string>
   <string name="about">О приложении</string>
   <string name="description">Гречка — это приложение, которое помогает осознанно тратить деньги. Записывание каждой траты отрезвляет ум и дает понимание сколько и как вы можете тратить</string>
