@@ -5,12 +5,18 @@ import android.content.Context
 import android.content.Intent
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_HOUR
+import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.di.recurringAlertEnabledStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertHourStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertMinuteStoreKey
 import com.danilkinkin.buckwheat.di.reminderEnabledStoreKey
 import com.danilkinkin.buckwheat.di.reminderHourStoreKey
 import com.danilkinkin.buckwheat.di.reminderMinuteStoreKey
+import com.danilkinkin.buckwheat.di.spendDigestEnabledStoreKey
+import com.danilkinkin.buckwheat.di.spendDigestFrequencyStoreKey
+import com.danilkinkin.buckwheat.di.spendDigestHourStoreKey
+import com.danilkinkin.buckwheat.di.spendDigestMinuteStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +43,17 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     val hour = prefs[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
                     val minute = prefs[recurringAlertMinuteStoreKey] ?: RECURRING_ALERT_DEFAULT_MINUTE
                     RecurringPaymentAlertScheduler.schedule(context, hour, minute)
+                }
+                val digestEnabled = prefs[spendDigestEnabledStoreKey] ?: false
+                if (digestEnabled) {
+                    val hour = prefs[spendDigestHourStoreKey] ?: SPEND_DIGEST_DEFAULT_HOUR
+                    val minute = prefs[spendDigestMinuteStoreKey] ?: SPEND_DIGEST_DEFAULT_MINUTE
+                    val frequency = runCatching {
+                        SpendDigestFrequency.valueOf(
+                            prefs[spendDigestFrequencyStoreKey] ?: ""
+                        )
+                    }.getOrDefault(SpendDigestFrequency.WEEKLY)
+                    SpendDigestScheduler.schedule(context, hour, minute, frequency)
                 }
                 WidgetRefreshScheduler.schedule(context)
             } finally {

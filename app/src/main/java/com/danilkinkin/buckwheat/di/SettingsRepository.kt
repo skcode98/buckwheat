@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -32,6 +33,10 @@ val onTrackAlertMinuteStoreKey = intPreferencesKey("onTrackAlertMinute")
 val recurringAlertEnabledStoreKey = booleanPreferencesKey("recurringAlertEnabled")
 val recurringAlertHourStoreKey = intPreferencesKey("recurringAlertHour")
 val recurringAlertMinuteStoreKey = intPreferencesKey("recurringAlertMinute")
+val spendDigestEnabledStoreKey = booleanPreferencesKey("spendDigestEnabled")
+val spendDigestFrequencyStoreKey = stringPreferencesKey("spendDigestFrequency")
+val spendDigestHourStoreKey = intPreferencesKey("spendDigestHour")
+val spendDigestMinuteStoreKey = intPreferencesKey("spendDigestMinute")
 val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotified")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -39,6 +44,9 @@ const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
 
 const val RECURRING_ALERT_DEFAULT_HOUR = 9
 const val RECURRING_ALERT_DEFAULT_MINUTE = 0
+
+const val SPEND_DIGEST_DEFAULT_HOUR = 20
+const val SPEND_DIGEST_DEFAULT_MINUTE = 0
 
 private const val LEGACY_VOICE_AI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 
@@ -110,6 +118,24 @@ class SettingsRepository @Inject constructor(
         it[recurringAlertEnabledStoreKey] ?: false
     }
 
+    fun isSpendDigestEnabled() = context.settingsDataStore.data.map {
+        it[spendDigestEnabledStoreKey] ?: false
+    }
+
+    fun getSpendDigestFrequency() = context.settingsDataStore.data.map {
+        runCatching {
+            SpendDigestFrequency.valueOf(it[spendDigestFrequencyStoreKey] ?: "")
+        }.getOrDefault(SpendDigestFrequency.WEEKLY)
+    }
+
+    fun getSpendDigestHour() = context.settingsDataStore.data.map {
+        it[spendDigestHourStoreKey] ?: SPEND_DIGEST_DEFAULT_HOUR
+    }
+
+    fun getSpendDigestMinute() = context.settingsDataStore.data.map {
+        it[spendDigestMinuteStoreKey] ?: SPEND_DIGEST_DEFAULT_MINUTE
+    }
+
     fun getRecurringAlertHour() = context.settingsDataStore.data.map {
         it[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
     }
@@ -166,6 +192,25 @@ class SettingsRepository @Inject constructor(
     suspend fun switchRecurringAlertEnabled(enabled: Boolean) {
         context.settingsDataStore.edit {
             it[recurringAlertEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun switchSpendDigestEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit {
+            it[spendDigestEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun setSpendDigestFrequency(frequency: SpendDigestFrequency) {
+        context.settingsDataStore.edit {
+            it[spendDigestFrequencyStoreKey] = frequency.name
+        }
+    }
+
+    suspend fun setSpendDigestTime(hour: Int, minute: Int) {
+        context.settingsDataStore.edit {
+            it[spendDigestHourStoreKey] = hour
+            it[spendDigestMinuteStoreKey] = minute
         }
     }
 
