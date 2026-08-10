@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-10 — Bug fix: "vs previous" analytics disappears on early period restart (committed `52fc39c`)
+
+When a user started a new budget period before the old period's scheduled finish date, the "vs previous" comparison card vanished — it appeared for 1-2 recompositions then disappeared.
+
+**Root cause**: `archiveCurrentPeriod()` (in `SpendsRepository.kt`) saved the archived period's `finishDate` as the *scheduled* finish date from DataStore. When a new period started mid-cycle (early restart), the archived period's `finishDate` was still in the future relative to the new period's start. `findPreviousPeriod()` then filtered out the just-archived period (`!effectiveFinishDate(it).toLocalDate().isAfter(startDay)` evaluated to false), so the comparison had no previous period to compare against.
+
+**Fix**: `archiveCurrentPeriod()` now takes the new period's start date (`setBudget` passes `startDate`), caps the archived period's `finishDate` to that date when the scheduled finish is later, and filters `inPeriod` transactions using the capped date so out-of-period transactions don't get mis-archived. The `actualFinishDate` is also clamped to never exceed the capped finish date. This ensures every archived period has a `finishDate` (and effective finish date) before the next period's start, so `findPreviousPeriod()` always finds it.
+
+- **Files changed**: `di/SpendsRepository.kt` (3 locations), `analytics/CompareToLastPeriodTest.kt` (new test `findPreviousPeriodFindsManuallyFinishedPeriodBeforeEarlyRestart`)
+- **Verify**: `compareDebugKotlin` + `testDebugUnitTest` (incl. new test) + `assembleDebug` all BUILD SUCCESSFUL
+
 ## 2026-08-10 — Feature 9: Category spending caps (committed `7f9d481`, pushed)
 
 Each spendable category can have a per-category monetary cap. When cumulative spend in the current budget period reaches 80% of the cap, a near-threshold notification fires; at 100% a reached notification fires. Progress is shown as a progress bar under each category chip in Analytics. Caps reset on period change.
