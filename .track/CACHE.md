@@ -77,6 +77,19 @@
 | Recurring DAO | `app/.../data/dao/RecurringDao.kt` |
 | BudgetPeriod DAO | `app/.../data/dao/BudgetPeriodDao.kt` |
 | RecurringTemplate entity | `app/.../data/entities/RecurringTemplate.kt` |
+| Recurring due alerts scheduler | `app/.../notifications/RecurringPaymentAlertScheduler.kt` |
+| Recurring due alerts receiver | `app/.../notifications/RecurringPaymentAlertReceiver.kt` |
+| Recurring due text builder | `app/.../notifications/RecurringDueContent.kt` |
+| Recurring alert settings UI | `app/.../settings/RecurringPaymentAlertSetting.kt` |
+| Recurring due content tests | `app/src/test/java/.../notifications/RecurringDueContentTest.kt` |
+| Goal progress nudge logic | `app/.../settings/GoalProgressNudge.kt` |
+| Goal progress notifier | `app/.../notifications/GoalProgressNotifier.kt` |
+| Goal nudge tests | `app/src/test/java/.../notifications/GoalProgressNudgeTest.kt` |
+| Spend digest content builder | `app/.../notifications/SpendDigestContent.kt` |
+| Spend digest scheduler | `app/.../notifications/SpendDigestScheduler.kt` |
+| Spend digest receiver | `app/.../notifications/SpendDigestReceiver.kt` |
+| Spend digest settings UI | `app/.../settings/SpendDigestSetting.kt` |
+| Spend digest content tests | `app/src/test/java/.../notifications/SpendDigestContentTest.kt` |
 | SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
 | BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
 | ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
@@ -195,4 +208,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `voiceAiModelStoreKey` — model name (String; blank or legacy `nvidia/nemotron-3-ultra-550b-a55b:free` → `DEFAULT_VOICE_AI_MODEL` = `openai/gpt-oss-20b:free`, via `normalizeVoiceAiModel` in `SettingsRepository.kt` since `96feeec`)
 - `reminderEnabledStoreKey` — daily budget reminder toggle (Boolean)
 - `reminderHourStoreKey` / `reminderMinuteStoreKey` — reminder time (Int); the daily reminder is a one-shot `setWindow` (10-min window) that `DailyBudgetReminderReceiver.rearmNextDay` re-arms at the stored time
+- `recurringAlertEnabledStoreKey` / `recurringAlertHourStoreKey` / `recurringAlertMinuteStoreKey` — recurring-payment due-alert toggle + time (Int), defaults 09:00 (`RECURRING_ALERT_DEFAULT_HOUR/MINUTE`); one-shot `setWindow` + `rearmNextDay`
+- `spendDigestEnabledStoreKey` (Boolean) / `spendDigestFrequencyStoreKey` (String `WEEKLY`/`MONTHLY`) / `spendDigestHourStoreKey` / `spendDigestMinuteStoreKey` (Int, default 20:00 `SPEND_DIGEST_DEFAULT_HOUR/MINUTE`) — weekly/monthly spend digest; one-shot `setWindow` re-armed +7 days / +1 calendar month by `SpendDigestReceiver.rearm`
+- `goalMilestonesNotifiedStoreKey` — per-goal already-notified milestone buckets, serialized `"goalId:bucket;goalId:bucket"` (String; write via `getGoalNotifiedMilestones()`/`setGoalNotifiedMilestones()`)
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)

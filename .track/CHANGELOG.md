@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-10 — New feature: Weekly/monthly spend digest (committed `1314350`, pushed)
+
+A settings toggle that posts a periodic summary of spending over the last 7 or 30 days.
+
+- **`notifications/SpendDigestContent.kt`** (new): pure logic — `SpendDigestFrequency` enum (WEEKLY/MONTHLY), `digestRange(frequency, today)` (inclusive last 7 / last 30 days ending today), `buildSpendDigest(spends, from, to)` (sums + counts SPENT transactions, filters out-of-window, `dailyAverage = total / window days` scale 2 HALF_UP, zero when count is 0), `SpendDigestMessage` + `buildSpendDigestMessage(context, digest, frequency, currency)` (title `Last 7/30 days: <total>`, text `<N> transactions — <avg>/day average`).
+- **`notifications/SpendDigestScheduler.kt`** (new): one-shot `setWindow` (10-min window), `ACTION_SPEND_DIGEST`, `NOTIFICATION_ID = 105`, `REQUEST_CODE = 105`. `schedule(context, hour, minute, frequency)` fires today at the time if still ahead, else +7 days (WEEKLY) / +1 calendar month via `Calendar.add(MONTH, 1)` (MONTHLY).
+- **`notifications/SpendDigestReceiver.kt`** (new): `@AndroidEntryPoint` with injected `TransactionDao`; on fire reads frequency/time from DataStore, queries `getAll(SPENT, fromMillis, toMillis)` (LocalDate→epoch via system zone, inclusive through the `to` day) through `.asFlow().first()`, builds + posts the digest (channel `spend_digest`, BigTextStyle, skips when 0 transactions), then re-arms the next period. Registered in the manifest `exported="false"`.
+- **`di/SettingsRepository.kt`**: keys `spendDigestEnabledStoreKey` / `spendDigestFrequencyStoreKey` (String) / `spendDigestHourStoreKey` / `spendDigestMinuteStoreKey`; constants `SPEND_DIGEST_DEFAULT_HOUR = 20`, `SPEND_DIGEST_DEFAULT_MINUTE = 0`; accessors `isSpendDigestEnabled()` / `getSpendDigestFrequency()` / `getSpendDigestHour()` / `getSpendDigestMinute()` (frequency `runCatching`-mapped, default WEEKLY) and setters `switchSpendDigestEnabled()` / `setSpendDigestFrequency()` / `setSpendDigestTime()`.
+- **`notifications/ReminderBootReceiver.kt`**: also reschedules the digest after boot when `spendDigestEnabledStoreKey` is true.
+- **`settings/SpendDigestSetting.kt`** (new): switch row (with `POST_NOTIFICATIONS` permission launcher on TIRAMISU+, same as the daily reminder) + `Frequency` row opening an `AlertDialog` with two `CheckedRow`s (Weekly "Last 7 days" / Monthly "Last 30 days") + `TimePickerDialog` row; changing frequency/time re-arms the alarm; wired into `Settings.kt` after `RecurringPaymentAlertSetting`.
+- **`Application.kt`**: creates the `spend_digest` channel.
+- **Strings**: EN+RU `spend_digest_setting_title`, `spend_digest_frequency`, `spend_digest_frequency_weekly/monthly` (+ `_description`), `spend_digest_time`, `spend_digest_channel_name/description`, `spend_digest_weekly_title` (`Last 7 days: %1$s`), `spend_digest_monthly_title`, `spend_digest_text` (`%1$d transactions — %2$s/day average`). Deliberately no literal `"` in any new string (avoids the aapt2 strip).
+- **Verify**: `SpendDigestContentTest` (7 Robolectric tests: weekly/monthly range bounds, in-range sum/count, daily average 140/7 = 20.00, out-of-window ignored, weekly + monthly message text). Golden pipeline green — **180 tests, 0 failures** + `assembleDebug`. `--no-build-cache` used after the `strings.xml` edit per the recorded aapt2/linked-resources pitfall.
+
 ## 2026-08-10 — New feature: Savings-goal milestone progress nudges (committed `8f04f0e`)
 
 Allocating money to a savings goal now fires a notification when the goal crosses a progress milestone (25% / 50% / 75% / 100%).
