@@ -1,6 +1,7 @@
 # AGENTS.md — AI Agent Guide for Buckwheat
 
 > **Read this file at the start of every request before doing any work.**
+> **Also read `.track/SECURITY.md` — its security rules are binding on every agent.**
 > After completing work, update `.track/CHANGELOG.md`, `.track/MEMORY.md`, and `.track/CACHE.md` if anything changed.
 
 ---
@@ -112,8 +113,7 @@ val localState = remember { mutableStateOf(viewModel.someLiveData.value) }
 com.danilkinkin.buckwheat/
 ├── Application.kt              # @HiltAndroidApp, NotificationChannels, installs CrashLogger
 ├── MainActivity.kt             # Single Activity, LaunchedEffect setup
-├── CrashLogger.kt              # Uncaught handler → Downloads/buckwheat-crash-*.txt
-├── CatchAndSendCrashReport.kt  # Crash reporting
+├── CrashLogger.kt              # Uncaught handler → Downloads/buckwheat-crash-*.txt (local only)
 │
 ├── data/
 │   ├── dao/
@@ -241,7 +241,6 @@ com.danilkinkin.buckwheat/
 │   ├── ThemeSwitcher.kt
 │   ├── LangSwitcher.kt
 │   ├── About.kt
-│   ├── BugReporter.kt
 │   ├── TryWidget.kt
 │   ├── GoalsSheet.kt + GoalsViewModel.kt
 │   ├── RecurringPaymentsSheet.kt + RecurringPaymentsViewModel.kt
@@ -299,14 +298,12 @@ com.danilkinkin.buckwheat/
     ├── string.kt               # String manipulation
     ├── colors.kt
     ├── observeLiveData.kt      # Composable helper for LiveData observation
-    ├── openIn.kt
     ├── lockOrientation.kt
     ├── Swipeable.kt
     ├── setSystemBarStyle.kt
     ├── toSP.kt
     ├── visualTransformationAsCurrency.kt
     ├── animationTimeMillis.kt
-    ├── collectEnvInfo.kt
     └── YearMonthExt.kt
 ```
 
@@ -399,7 +396,7 @@ AppViewModel.activateTutorial(TUTORS.X) / dismissTutorial()
 
 ## 8. Session Protocol
 
-1. **START**: Read `.track/AGENTS.md` (this file), then `.track/MEMORY.md`, `.track/CACHE.md`
+1. **START**: Read `.track/AGENTS.md` (this file), then `.track/SECURITY.md` (binding rules), then `.track/MEMORY.md`, `.track/CACHE.md`
 2. **DURING**: Understand the codebase before writing code. Use grep/glob/read tools.
 3. **AFTER**: Update `.track/CHANGELOG.md` with changes, `.track/MEMORY.md` with decisions, `.track/CACHE.md` with new info.
 4. **BUILD**: Always run `.\gradlew.bat assembleDebug` after changes to verify compilation.

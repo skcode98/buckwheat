@@ -1,5 +1,7 @@
 # Cache — Quick Reference
 
+> **Security rules for all agents: see `.track/SECURITY.md`** (binding). No hardcoded external links/emails; API key excluded from all backups; `exported` stays false unless the OS requires it; no analytics SDKs.
+
 ## Build Commands
 ```powershell
 # Quick compile check (faster than full build)
@@ -210,7 +212,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `TUTOR_*` — tutorial stage booleans
 - `autoBackupInterval` — backup interval (Int)
 - `debug` — debug-mode flag (String; toggled via keyboard "0"×8 + "." + apply)
-- `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String; **deliberately excluded from backup exports** — `asBackupMap()` skips it, so restore never restores or clobbers the key)
+- `voiceAiApiKeyStoreKey` — Voice AI / category AI API key (String; **deliberately excluded from backup exports** — `asBackupMap()` skips it, so restore never restores or clobbers the key; also excluded from Android cloud backup/transfer via `res/xml/backup_rules.xml` + `data_extraction_rules.xml` — `file: datastore/settings.preferences_pb`. The API key is the ONLY credential in the app; it is never logged).
 - `voiceAiProviderUrlStoreKey` — OpenAI-compatible base URL (String; blank → `DEFAULT_VOICE_AI_PROVIDER_URL` = `https://openrouter.ai/api/v1/chat/completions`)
 - `voiceAiModelStoreKey` — model name (String; blank or legacy `nvidia/nemotron-3-ultra-550b-a55b:free` → `DEFAULT_VOICE_AI_MODEL` = `openai/gpt-oss-20b:free`, via `normalizeVoiceAiModel` in `SettingsRepository.kt` since `96feeec`)
 - `reminderEnabledStoreKey` — daily budget reminder toggle (Boolean)
