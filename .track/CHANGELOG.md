@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-10 — New feature: Category drill-down analytics (committed `372b3c5`)
+
+Tapping a category chip in the analytics breakdown (`SpendCategoriesCard`) now opens the period's transaction history filtered to that category, reusing the existing `ViewerHistory` sheet.
+
+- **`data/categories/SpendCategorizer.kt`**: new pure `transactionMatchesCategory(transaction, key)` helper (`categoryKey(transaction) == key`) backing the drill-down filter.
+- **`history/History.kt`**: `History` + `composeHistoryRows` accept an optional `onlyCategoryKey: CategoryKey?`; the row filter now requires `transactionMatchesCategory(entry.tx, onlyCategoryKey)` when set (archived rows still only join when a search query is active, same as the `onlyDay` filter). Added to the `LaunchedEffect` keys so the list recomposes when the sheet opens.
+- **`analytics/ViewerHistory.kt`**: new `onlyCategoryKey: CategoryKey?` param; the header title shows the category (`🍔 Food` for built-ins via localized `labelRes`, raw name for custom categories) and forwards the filter into `History`. New sheet const `CATEGORY_HISTORY_SHEET = "categoryHistory"`.
+- **`analytics/categoriesChart/TagAmount.kt`**: added optional `onClick` — the chip now uses the Material3 clickable `Surface` overload (ripple clipped to the circle) instead of the plain one; no-op + disabled when `onClick` is null.
+- **`analytics/categoriesChart/SpendCategoriesCard.kt`**: keeps the `CategoryKey` alongside each `TagUsage` (rendered list becomes `List<Pair<CategoryKey, TagUsage>>`), new `onCategoryClick: ((CategoryKey) -> Unit)?` param wired into `TagAmount`; `DonutChart` now receives `categories.map { it.second }`.
+- **`analytics/Analytics.kt`**: passes `onCategoryClick` that opens `CATEGORY_HISTORY_SHEET` with `args = mapOf("onlyCategoryKey" to key)` (mirrors the existing `onlyDay` pattern).
+- **`home/BottomSheets.kt`**: registers `CATEGORY_HISTORY_SHEET` → `ViewerHistory(onlyCategoryKey = state.args["onlyCategoryKey"] as CategoryKey?)`.
+- **No new strings** (title reuses `history_title` fallback + category labels) — no aapt2/resource concerns.
+- **Verify**: `SpendCategorizerTest` +3 tests (persisted built-in/custom match, offline keyword match, mismatch rejection — `assertTrue`/`assertFalse`). Golden pipeline green — **183 tests, 0 failures** + `assembleDebug` (one failed run in between: `History.kt` used `entry.tx` but the private `HistoryEntry` field is `transaction` — fixed before the green run).
+
 ## 2026-08-10 — New feature: Weekly/monthly spend digest (committed `1314350`, pushed)
 
 A settings toggle that posts a periodic summary of spending over the last 7 or 30 days.

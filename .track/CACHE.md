@@ -90,6 +90,9 @@
 | Spend digest receiver | `app/.../notifications/SpendDigestReceiver.kt` |
 | Spend digest settings UI | `app/.../settings/SpendDigestSetting.kt` |
 | Spend digest content tests | `app/src/test/java/.../notifications/SpendDigestContentTest.kt` |
+| Category drill-down helper | `app/.../data/categories/SpendCategorizer.kt` (`transactionMatchesCategory`) |
+| Category drill-down sheet | `app/.../analytics/ViewerHistory.kt` (`CATEGORY_HISTORY_SHEET` const + `onlyCategoryKey`) |
+| Category chips (tappable) | `app/.../analytics/categoriesChart/TagAmount.kt` + `SpendCategoriesCard.kt` (`onCategoryClick`) |
 | SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
 | BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
 | ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
