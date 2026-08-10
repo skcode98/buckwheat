@@ -93,6 +93,10 @@
 | Category drill-down helper | `app/.../data/categories/SpendCategorizer.kt` (`transactionMatchesCategory`) |
 | Category drill-down sheet | `app/.../analytics/ViewerHistory.kt` (`CATEGORY_HISTORY_SHEET` const + `onlyCategoryKey`) |
 | Category chips (tappable) | `app/.../analytics/categoriesChart/TagAmount.kt` + `SpendCategoriesCard.kt` (`onCategoryClick`) |
+| Voice widget per-instance config activity | `app/.../widget/voice/VoiceWidgetConfigureActivity.kt` (new) |
+| Effective voice-widget design helper | `app/.../widget/voice/VoiceWidget.kt` (`effectiveVoiceWidgetDesign`) |
+| Voice widget per-instance override key | `app/.../widget/CommonWidgetReceiver.kt` (`voiceDesignOverridePreferenceKey`) |
+| Voice widget config tests | `app/src/test/java/.../widget/voice/VoiceWidgetConfigTest.kt` (new) |
 | SavingsGoal entity | `app/.../data/entities/SavingsGoal.kt` |
 | BudgetPeriod entity | `app/.../data/entities/BudgetPeriod.kt` |
 | ArchivedTransaction entity | `app/.../data/entities/ArchivedTransaction.kt` |
@@ -215,3 +219,11 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `spendDigestEnabledStoreKey` (Boolean) / `spendDigestFrequencyStoreKey` (String `WEEKLY`/`MONTHLY`) / `spendDigestHourStoreKey` / `spendDigestMinuteStoreKey` (Int, default 20:00 `SPEND_DIGEST_DEFAULT_HOUR/MINUTE`) — weekly/monthly spend digest; one-shot `setWindow` re-armed +7 days / +1 calendar month by `SpendDigestReceiver.rearm`
 - `goalMilestonesNotifiedStoreKey` — per-goal already-notified milestone buckets, serialized `"goalId:bucket;goalId:bucket"` (String; write via `getGoalNotifiedMilestones()`/`setGoalNotifiedMilestones()`)
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)
+
+## Glance 1.1.1 per-instance widget facts (verified 2026-08-10 via AAR/sources inspection)
+- Widget Glance state (`PreferencesGlanceStateDefinition`) is keyed purely by `appWidgetId` (`createUniqueRemoteUiName(glanceId.appWidgetId)`), so per-instance values are already isolated — `getAppWidgetState(context, definition, glanceId)` / `updateAppWidgetState(...)` read/write only that widget.
+- `androidx.glance.appwidget.AppWidgetId(widgetId: Int)` has a **public constructor** and `getAppWidgetId(): Int` — you can build the GlanceId for an app-widget id yourself.
+- `GlanceAppWidgetManager.getGlanceIdBy(appWidgetId)` does **NOT** exist in 1.1.1 (checked the classes.jar); to map an `onUpdate` `appWidgetIds` entry to a GlanceId, scan `getGlanceIds(...)` and match `(it as? AppWidgetId)?.getAppWidgetId() == appWidgetId`.
+- The 3-arg `updateAppWidgetState(context, glanceId) { it: MutablePreferences -> ... }` overload passes the prefs as a **lambda parameter**, not receiver (the `this[...]` form is the 4-arg `updateAppWidgetState(context, definition, glanceId) { prefs -> prefs.toMutablePreferences().apply { this[...] = ... } }` used by `CommonWidgetReceiver.observeData`).
+- `android:configure` on the receiver launches the configure activity at placement; the activity must `setResult(RESULT_OK, Intent().putExtra(EXTRA_APPWIDGET_ID, id))` (back = RESULT_CANCELED = not placed). Not exercisable via Robolectric — on-device placement is the authoritative check.
+
