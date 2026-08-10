@@ -129,6 +129,20 @@ class CompareToLastPeriodTest {
     }
 
     @Test
+    fun findPreviousPeriodFindsManuallyFinishedPeriodBeforeEarlyRestart() {
+        // Simulates the bug where a new period starts before the old
+        // period's scheduled finish date. After our fix, archiveCurrentPeriod()
+        // caps the archived finishDate at the new start date.
+        val currentStart = daysAgo(5)
+
+        val restartedPeriod = period(30, id = 1).copy(
+            actualFinishDate = daysAgo(6), // manually finished early
+        )
+
+        assertSame(restartedPeriod, findPreviousPeriod(listOf(restartedPeriod), currentStart))
+    }
+
+    @Test
     fun effectiveFinishDateFallsBackToScheduledFinish() {
         val scheduled = daysAgo(6)
         val period = period(6, id = 1)

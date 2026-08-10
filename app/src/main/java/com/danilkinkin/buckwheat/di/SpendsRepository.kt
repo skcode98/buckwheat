@@ -252,11 +252,10 @@ class SpendsRepository @Inject constructor(
         val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
         val hasStoredTransactions = transactionDao.getAll().asFlow().first()
             .any { it.type == TransactionType.SPENT }
-        if (oldSpent > BigDecimal.ZERO || hasStoredTransactions) {
-            archiveCurrentPeriod()
-        }
-
         val startDate = roundToDay(newStartDate ?: getCurrentDateUseCase())
+        if (oldSpent > BigDecimal.ZERO || hasStoredTransactions) {
+            archiveCurrentPeriod(startDate)
+        }
 
         context.budgetDataStore.edit {
             it[budgetStoreKey] = newBudget.toString()
@@ -295,7 +294,7 @@ class SpendsRepository @Inject constructor(
         clearCategoryCapNotifiedNow()
     }
 
-    private suspend fun archiveCurrentPeriod() {
+    private suspend fun archiveCurrentPeriod(newPeriodStartDate: Date) {
         val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
         if (transactions.isEmpty()) return
 
@@ -303,20 +302,29 @@ class SpendsRepository @Inject constructor(
             ?: transactions.minOf { it.date }
         val finishDate = getFinishPeriodDate().firstOrNull()
             ?: transactions.maxOf { it.date }
+        // When a new period starts before the old period's scheduled finish,
+        // cap the archived period's finish date at the new start date so
+        // "vs previous" comparisons remain valid (the previous period
+        // effectively ended when the new one began).
+        val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
+        val cappedFinishDate = if (finishDate.after(newPeriodStartDate)) {
+            newPeriodStartDate
+        } else {
+            finishDate
+        }
 
         // Only archive transactions that belong to this period. Out-of-period rows
         // (e.g. CSV imports for the next period, recurring backfill before the start)
         // must stay in the active table — they are scope-guarded and must not be
         // archived into a past period.
         val inPeriod = transactions.filter {
-            !it.date.before(startDate) && !it.date.after(finishDate)
+            !it.date.before(startDate) && !it.date.after(cappedFinishDate)
         }
         val spends = inPeriod.filter { it.type == TransactionType.SPENT }
 
         if (inPeriod.isEmpty()) return
 
         val oldBudget = getBudget().firstOrNull() ?: BigDecimal.ZERO
-        val actualFinishDate = getFinishPeriodActualDate().firstOrNull()
         val currencyCode = currentCurrencyCode()
 
         val totalSpent = spends.map { it.value }.fold(BigDecimal.ZERO) { acc, v -> acc + v }
@@ -325,8 +333,8 @@ class SpendsRepository @Inject constructor(
             BudgetPeriod(
                 budget = oldBudget,
                 startDate = startDate,
-                finishDate = finishDate,
-                actualFinishDate = actualFinishDate,
+                finishDate = cappedFinishDate,
+                actualFinishDate = actualFinishDate?.takeIf { !it.after(cappedFinishDate) },
                 currencyCode = currencyCode,
                 totalSpent = totalSpent,
             )
