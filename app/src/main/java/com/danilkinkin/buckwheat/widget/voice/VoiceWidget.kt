@@ -84,6 +84,13 @@ enum class VoiceFeedbackState { IDLE, LISTENING, PROCESSING, ADDED }
 
 enum class VoiceWidgetDesign { PERCENT, AMOUNT, RING, GRAPH_BG }
 
+// The design a voice widget instance should render: its own per-instance override when set
+// (non-blank), otherwise the global "Voice widget design" setting. Blank is the "follow
+// global" marker written by the per-instance configuration flow. Pure so it is trivially
+// unit-testable.
+fun effectiveVoiceWidgetDesign(overrideName: String?, globalName: String): String =
+    overrideName?.takeIf { it.isNotBlank() } ?: globalName
+
 // Palette for the graph-background design: the widget surface is tinted pastel green → amber
 // → red as the fraction of the daily budget still left falls from 1 → 0. The deep variants
 // tint the background chart so it reads on top of the pastel without fighting the text.

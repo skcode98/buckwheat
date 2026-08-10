@@ -17,6 +17,7 @@ import com.danilkinkin.buckwheat.analytics.dailySpendTotals
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.*
+import com.danilkinkin.buckwheat.widget.voice.effectiveVoiceWidgetDesign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,6 +68,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         val voiceFeedbackStatePreferenceKey = stringPreferencesKey("voice-feedback-state-key")
         val voiceFeedbackTextPreferenceKey = stringPreferencesKey("voice-feedback-text-key")
         val voiceDesignPreferenceKey = stringPreferencesKey("voice-design-key")
+        val voiceDesignOverridePreferenceKey = stringPreferencesKey("voice-design-override-key")
 
         fun requestUpdateData(context: Context, receiverClass: Class<*>) {
             val intent = Intent(context, receiverClass)
@@ -224,7 +226,10 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                                 this[voiceChartSeriesPreferenceKey] =
                                     chartSeries.joinToString(",") { it.toPlainString() }
                                 this[voiceDailyBudgetPreferenceKey] = dailyBudget.toPlainString()
-                                this[voiceDesignPreferenceKey] = widgetDesign.name
+                                this[voiceDesignPreferenceKey] = effectiveVoiceWidgetDesign(
+                                    overrideName = this[voiceDesignOverridePreferenceKey],
+                                    globalName = widgetDesign.name,
+                                )
                             }
                     }
 

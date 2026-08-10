@@ -117,6 +117,11 @@
   <string name="voice_widget_design_ring_desc">Ring gauge with the remaining percent</string>
   <string name="voice_widget_design_graph_bg">Graph background</string>
   <string name="voice_widget_design_graph_bg_desc">Spend chart as the background, tinted green to red as the budget runs low</string>
+  <string name="voice_widget_configure_title">Voice widget design</string>
+  <string name="voice_widget_configure_hint">This choice applies only to the widget you are adding. Other voice widgets keep their own design.</string>
+  <string name="voice_widget_configure_default">Follow global design</string>
+  <string name="voice_widget_configure_default_desc">Use the design chosen in Settings</string>
+  <string name="voice_widget_configure_add">Add widget</string>
   <string name="voice_widget_result_title">Spend added</string>
   <string name="voice_widget_added">Added %1$s</string>
   <string name="voice_widget_added_comment">Added %1$s — %2$s</string>

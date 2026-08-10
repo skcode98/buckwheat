@@ -49,6 +49,7 @@
         <receiver
             android:name=".widget.voice.VoiceWidgetReceiver"
             android:label="@string/app_widget_voice_name"
+            android:configure=".widget.voice.VoiceWidgetConfigureActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -90,6 +91,15 @@
             android:name=".widget.voice.VoiceWidgetCommitService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <activity
+            android:name=".widget.voice.VoiceWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Buckwheat">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".MainActivity"
