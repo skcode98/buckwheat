@@ -21,6 +21,22 @@
 .\gradlew.bat spotlessCheck
 ```
 
+## Gradle on this machine (IMPORTANT — flaky daemons)
+- **Full builds are SLOW (~30 min on a cold daemon)** — `compileDebugKotlin` alone can take 15+ min when the Kotlin compile daemon has to start cold.
+- The opencode shell tool **kills the process tree when a command times out**, which often takes the Gradle daemon down mid-compile. A killed-but-alive daemon left in "busy" state will make later `gradlew` invocations hang or start yet another daemon ("1 busy ... could not be reused").
+- **Workaround**: run the build **detached** and poll the log instead of blocking:
+  ```powershell
+  $log = "$env:TEMP\buckwheat_gradle_out.log"
+  Remove-Item $log -ErrorAction SilentlyContinue
+  $inner = "gradlew.bat :app:spotlessApply :app:testDebugUnitTest :app:assembleDebug > `"$log`" 2>&1"
+  $p = Start-Process -FilePath "cmd.exe" -ArgumentList '/c',$inner -WorkingDirectory "D:\Just-try\buckwheat" -PassThru
+  $p.Id | Out-File "$env:TEMP\buckwheat_gradle.pid"
+  ```
+  then poll `Get-Content $log -Tail 4` every ~100 s until `BUILD SUCCESSFUL`/`FAILED`. The detached daemon survives tool-call kills.
+- **Never run two detached builds at once** (they spawn competing daemons that fight over locks). If a run stalls, `Get-CimInstance Win32_Process -Filter "Name='java.exe'"` → `Get-Process java | Stop-Process -Force` to reset.
+- **Avoid** `Start-Process -RedirectStandardOutput` with a `.bat` — it hangs. Use `cmd /c "gradlew.bat ... > log 2>&1"` instead.
+- Test results XML: `app\build\test-results\testDebugUnitTest\*.xml` (per-suite `tests=`/`failures=`).
+
 ## Key File Paths (Upstream Master)
 | Purpose | Path |
 |---------|------|

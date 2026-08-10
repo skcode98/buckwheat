@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-10 — New feature: Recurring payment due alerts (committed `31e02b7`)
+
+A settings toggle that notifies you on a chosen time of day when recurring payments are due today.
+
+- **`di/SettingsRepository.kt`**: new keys `recurringAlertEnabledStoreKey`, `recurringAlertHourStoreKey`, `recurringAlertMinuteStoreKey`; constants `RECURRING_ALERT_DEFAULT_HOUR = 9`, `RECURRING_ALERT_DEFAULT_MINUTE = 0`; accessors `isRecurringAlertEnabled()` / `getRecurringAlertHour()` / `getRecurringAlertMinute()` and setters `switchRecurringAlertEnabled()` / `setRecurringAlertTime(hour, minute)`.
+- **`notifications/RecurringPaymentAlertScheduler.kt`** (new): one-shot `setWindow` (10-min window), `ACTION_RECURRING_ALERT`, `NOTIFICATION_ID = 103`, `REQUEST_CODE = 103`.
+- **`notifications/RecurringPaymentAlertReceiver.kt`** (new): `@AndroidEntryPoint` BroadcastReceiver with injected `RecurringDao`; on fire queries `getDueOnDay(today.dayOfMonth)` and posts a `recurring_due` channel notification (title + BigText list of `comment — amount` lines), then re-arms for the next day; reads alert hour/minute from DataStore. Registered in the manifest with `android:exported="false"`.
+- **`notifications/RecurringDueContent.kt`** (new): pure `buildRecurringDueText(context, templates, currency)` kept testable (mirrors `DailyReminderContent`); trims the trailing space that `numberFormat` appends.
+- **`notifications/ReminderBootReceiver.kt`**: also reschedules the recurring alert after boot when `recurringAlertEnabledStoreKey` is true.
+- **`settings/RecurringPaymentAlertSetting.kt`** (new): switch row (with `POST_NOTIFICATIONS` permission launcher on TIRAMISU+) + `TimePickerDialog` row to set alert time (`ic_autorenew`/`ic_clock`); wired into `Settings.kt` after the daily budget reminder.
+- **`Application.kt`**: creates the `recurring_due` channel.
+- **Strings**: EN+RU `recurring_alert_setting_title`, `recurring_alert_time`, `recurring_due_channel_name`, `recurring_due_channel_description`, `recurring_due_notification_title`.
+- **Verify**: `RecurringDueContentTest` (4 Robolectric tests). Golden pipeline green — **167 tests, 0 failures** + `assembleDebug`.
+
 ## 2026-08-09 — New feature: Round values setting
 
 A global "Round values" toggle in Settings (`settings/RoundValuesSetting.kt`, placed after Language) that shows all amounts as whole numbers without decimals.
