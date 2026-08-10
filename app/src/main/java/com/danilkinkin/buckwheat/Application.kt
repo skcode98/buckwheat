@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
+import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
@@ -130,6 +131,15 @@ class Application : Application(), Configuration.Provider {
                 description = getString(R.string.goal_nudge_channel_description)
             }
             notificationManager.createNotificationChannel(goalProgressChannel)
+
+            val categoryCapChannel = NotificationChannel(
+                CategoryCapNotifier.CHANNEL_ID,
+                getString(R.string.category_caps_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.category_caps_channel_description)
+            }
+            notificationManager.createNotificationChannel(categoryCapChannel)
 
             val spendDigestChannel = NotificationChannel(
                 SpendDigestReceiver.CHANNEL_ID,

@@ -265,6 +265,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = CATEGORY_CAPS_SHEET,
+    ) { state ->
+        CategoryCapsSheet()
+    }
+
+    BottomSheetWrapper(
         name = CATEGORY_SELECTOR_SHEET,
     ) { state ->
         CategorySelectorSheet(

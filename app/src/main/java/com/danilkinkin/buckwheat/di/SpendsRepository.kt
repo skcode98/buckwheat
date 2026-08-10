@@ -22,7 +22,12 @@ import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
+import com.danilkinkin.buckwheat.data.categories.categoryCapBucket
+import com.danilkinkin.buckwheat.data.categories.categoryKey
+import com.danilkinkin.buckwheat.data.categories.highestNewlyReachedCapBucket
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.countDays
@@ -284,6 +289,10 @@ class SpendsRepository @Inject constructor(
         setDailyBudget(whatBudgetForDay())
 
         hideOverspendingWarn(false)
+
+        // New period: reset per-category cap crossing bookkeeping so the 80%/100% alerts
+        // can fire again against the fresh period's spend totals.
+        clearCategoryCapNotifiedNow()
     }
 
     private suspend fun archiveCurrentPeriod() {
@@ -749,6 +758,8 @@ class SpendsRepository @Inject constructor(
                 ?: ExtendCurrency.none()
             OverspendingNotifier.notify(context, dailyBudget, spentFromDailyBudget, currency)
         }
+
+        checkCategoryCapAlert(newTransaction)
     }
 
     suspend fun importTransactions(transactions: List<Transaction>) {
@@ -933,6 +944,95 @@ class SpendsRepository @Inject constructor(
                 it[spentStoreKey] = (spent - transactionForRemove.value)
                     .coerceAtLeast(BigDecimal.ZERO)
                     .toString()
+            }
+        }
+
+        resyncCategoryCapNotified(transactionForRemove)
+    }
+
+    // Reads a transaction's category the same way the analytics categories card does
+    // (offline keyword fallback), sums the current period's spend in that category, and
+    // posts the 80%/100% cap alert once per newly reached level.
+    private suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
+        if (newTransaction.type != TransactionType.SPENT) return
+        val prefs = context.budgetDataStore.data.first()
+        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
+        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
+        if (newTransaction.date.before(start) || newTransaction.date.after(finish)) return
+
+        val key = categoryKey(newTransaction)
+        val categoryName = categoryNameOf(key)
+        val cap = parseCategoryCaps(
+            context.settingsDataStore.data.first()[categoryCapsStoreKey]
+        )[categoryName] ?: return
+
+        val total = periodCategoryTotal(start, finish, key)
+
+        val newBucket = categoryCapBucket(total, cap)
+        val notified = parseCategoryCapNotified(
+            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
+        )
+        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
+        if (newlyReached == 0) return
+
+        val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
+            ?: ExtendCurrency.none()
+        CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
+        setCategoryCapNotifiedNow(notified + (categoryName to newlyReached))
+    }
+
+    // Lowers a category's announced cap level when a removal drops the period spend back
+    // under it, so a later crossing announces again (mirrors the overspend flag resync).
+    private suspend fun resyncCategoryCapNotified(removed: Transaction) {
+        if (removed.type != TransactionType.SPENT) return
+        val prefs = context.budgetDataStore.data.first()
+        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
+        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
+        if (removed.date.before(start) || removed.date.after(finish)) return
+
+        val key = categoryKey(removed)
+        val categoryName = categoryNameOf(key)
+        val cap = parseCategoryCaps(
+            context.settingsDataStore.data.first()[categoryCapsStoreKey]
+        )[categoryName] ?: return
+
+        val total = periodCategoryTotal(start, finish, key)
+        val currentBucket = categoryCapBucket(total, cap)
+        val notified = parseCategoryCapNotified(
+            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
+        )
+        val storedBucket = notified[categoryName] ?: 0
+        if (currentBucket >= storedBucket) return
+
+        val updated =
+            if (currentBucket == 0) notified - categoryName
+            else notified + (categoryName to currentBucket)
+        setCategoryCapNotifiedNow(updated)
+    }
+
+    private fun categoryNameOf(key: CategoryKey): String = when (key) {
+        is CategoryKey.BuiltIn -> key.category.name
+        is CategoryKey.Custom -> key.name
+    }
+
+    private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
+        transactionDao.getAll().asFlow().first()
+            .filter { it.type == TransactionType.SPENT }
+            .filter { !it.date.before(start) && !it.date.after(finish) }
+            .filter { categoryKey(it) == key }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
+
+    private suspend fun clearCategoryCapNotifiedNow() {
+        context.settingsDataStore.edit { it.remove(categoryCapNotifiedStoreKey) }
+    }
+
+    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Int>) {
+        val serialized = serializeCategoryCapNotified(notified)
+        context.settingsDataStore.edit {
+            if (serialized.isEmpty()) {
+                it.remove(categoryCapNotifiedStoreKey)
+            } else {
+                it[categoryCapNotifiedStoreKey] = serialized
             }
         }
     }

@@ -12,8 +12,10 @@ import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.math.BigDecimal
 import javax.inject.Inject
 
 val debugStoreKey = booleanPreferencesKey("debug")
@@ -38,6 +40,8 @@ val spendDigestFrequencyStoreKey = stringPreferencesKey("spendDigestFrequency")
 val spendDigestHourStoreKey = intPreferencesKey("spendDigestHour")
 val spendDigestMinuteStoreKey = intPreferencesKey("spendDigestMinute")
 val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotified")
+val categoryCapsStoreKey = stringPreferencesKey("categoryCaps")
+val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
@@ -54,6 +58,47 @@ private const val LEGACY_VOICE_AI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:fre
 // Map it to the current default so already-saved settings upgrade automatically.
 fun normalizeVoiceAiModel(saved: String?): String? =
     if (saved == LEGACY_VOICE_AI_MODEL) DEFAULT_VOICE_AI_MODEL else saved
+
+// Category spend caps, serialized as "name:amount;name:amount". Caps are period-scoped:
+// progress is measured against the current budget period's spend totals (the same numbers
+// the analytics categories card shows). Zero/negative amounts mean "no cap".
+fun serializeCategoryCaps(caps: Map<String, BigDecimal>): String =
+    caps.entries
+        .filter { it.value > BigDecimal.ZERO }
+        .sortedBy { it.key }
+        .joinToString(";") { "${it.key}:${it.value.toPlainString()}" }
+
+fun parseCategoryCaps(raw: String?): Map<String, BigDecimal> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return raw.split(';').mapNotNull { entry ->
+        val parts = entry.split(':', limit = 2)
+        if (parts.size != 2) return@mapNotNull null
+        val name = parts[0].trim()
+        val amount = parts[1].toBigDecimalOrNull() ?: return@mapNotNull null
+        if (name.isBlank() || amount <= BigDecimal.ZERO) return@mapNotNull null
+        name to amount
+    }.toMap()
+}
+
+// Per-category already-announced cap level, serialized as "name:bucket;name:bucket".
+// Bucket 0 = nothing announced, 1 = 80% crossing announced, 2 = 100% crossing announced.
+fun serializeCategoryCapNotified(notified: Map<String, Int>): String =
+    notified.entries
+        .filter { it.value > 0 }
+        .sortedBy { it.key }
+        .joinToString(";") { "${it.key}:${it.value}" }
+
+fun parseCategoryCapNotified(raw: String?): Map<String, Int> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return raw.split(';').mapNotNull { entry ->
+        val parts = entry.split(':', limit = 2)
+        if (parts.size != 2) return@mapNotNull null
+        val name = parts[0].trim()
+        val bucket = parts[1].toIntOrNull() ?: return@mapNotNull null
+        if (name.isBlank() || bucket <= 0) return@mapNotNull null
+        name to bucket
+    }.toMap()
+}
 
 enum class TUTORIAL_STAGE {
     NONE,
@@ -251,6 +296,47 @@ class SettingsRepository @Inject constructor(
                 it.remove(goalMilestonesNotifiedStoreKey)
             } else {
                 it[goalMilestonesNotifiedStoreKey] = serialized
+            }
+        }
+    }
+
+    // Observe the configured per-category caps (empty map when none are set).
+    fun getCategoryCaps(): Flow<Map<String, BigDecimal>> =
+        context.settingsDataStore.data.map { parseCategoryCaps(it[categoryCapsStoreKey]) }
+
+    // Persist the full caps map. Any change re-arms the 80%/100% crossing notifications
+    // from the new baseline (the previous announced levels no longer apply).
+    suspend fun setCategoryCaps(caps: Map<String, BigDecimal>) {
+        val serialized = serializeCategoryCaps(caps)
+        context.settingsDataStore.edit {
+            if (serialized.isEmpty()) {
+                it.remove(categoryCapsStoreKey)
+            } else {
+                it[categoryCapsStoreKey] = serialized
+            }
+            it.remove(categoryCapNotifiedStoreKey)
+        }
+    }
+
+    // Forget every announced cap level, so the alerts can fire again (used on a new period).
+    suspend fun clearCategoryCapNotified() {
+        context.settingsDataStore.edit {
+            it.remove(categoryCapNotifiedStoreKey)
+        }
+    }
+
+    suspend fun getCategoryCapNotified(): Map<String, Int> {
+        val raw = context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
+        return parseCategoryCapNotified(raw)
+    }
+
+    suspend fun setCategoryCapNotified(notified: Map<String, Int>) {
+        val serialized = serializeCategoryCapNotified(notified)
+        context.settingsDataStore.edit {
+            if (serialized.isEmpty()) {
+                it.remove(categoryCapNotifiedStoreKey)
+            } else {
+                it[categoryCapNotifiedStoreKey] = serialized
             }
         }
     }
