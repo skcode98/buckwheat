@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-08-10 — Feature 9: Category spending caps (committed `7f9d481`, pushed)
+
+Each spendable category can have a per-category monetary cap. When cumulative spend in the current budget period reaches 80% of the cap, a near-threshold notification fires; at 100% a reached notification fires. Progress is shown as a progress bar under each category chip in Analytics. Caps reset on period change.
+
+- **`di/SettingsRepository.kt`**: new DataStore keys `categoryCapsStoreKey` (String, serialized `"name:amount;name:amount"`, drops ≤0 amounts) and `categoryCapNotifiedStoreKey` (String, serialized `"name:bucket;name:bucket"` where bucket 0=none/1=near/2=reached, drops ≤0 buckets). Codecs: `serializeCategoryCaps`/`parseCategoryCaps`, `serializeCategoryCapNotified`/`parseCategoryCapNotified`. APIs: `getCategoryCaps()` Flow, `setCategoryCaps`, `clearCategoryCapNotified`, `getCategoryCapNotified`, `setCategoryCapNotified`. Added `Flow`/`BigDecimal` imports.
+
+- **`data/categories/CategoryCap.kt`** (new): pure logic. `CATEGORY_CAP_NEAR_BUCKET = 1`, `CATEGORY_CAP_REACHED_BUCKET = 2`, `CATEGORY_CAP_NEAR_PERCENT = 80`. `categoryCapPercent(spent, cap)` (floored int, clamped 0–100), `categoryCapBucket(spent, cap)` (0 if spent < 80%, 1 if ≥80%, 2 if ≥100%), `highestNewlyReachedCapBucket(spent, cap, wasNotifiedBucket)` (only newly-crossed bucket: returns the higher of current vs. previously notified).
+
+- **`notifications/CategoryCapNotifier.kt`** (new): `CHANNEL_ID = "category_cap"`, `NOTIFICATION_ID = 300`. `notify(context, cat, spent, cap)` builds a notification with near-title (`Category cap approaching`) at 80% (`%1$s — %2$d%% of your %3$s cap spent`) and reached-title (`Category cap reached`) at 100% (`%1$s — you've spent the full cap of %2$s`). Uses `numberFormat(context, cap, currency)` for formatting.
+
+- **`Application.kt`**: creates the `category_cap` notification channel (id 300, name `category_caps_channel_name`, description `category_caps_channel_description`).
+
+- **`di/SpendsRepository.kt`**: 
+  - `addSpent` calls `checkCategoryCapAlert` after committing a SPENT transaction: aggregates current period spend per category, looks up each category's cap, computes the newly-reached bucket via `highestNewlyReachedCapBucket`, and if it crossed → `CategoryCapNotifier.notify` + `setCategoryCapNotifiedNow`.
+  - `removeSpent` calls `resyncCategoryCapNotified` to lower the announced bucket if spend drops back (resets to bucket 0 if now under cap).
+  - `setBudget` new period (`changeDayAction` / period-finish) calls `clearCategoryCapNotifiedNow` to re-arm caps for the new period.
+  - Private helpers: `categoryNameOf(tx)` (`BuiltIn` → `.name`; `Custom` → raw stored name), `periodCategoryTotal(spends, categoryKey, periodStart, periodEnd)` (sums SPENT transactions matching the category within the day-bounded period).
+
+- **`settings/CategoryCapsViewModel.kt`** (new): `caps: LiveData<Map<String, BigDecimal>>` via `settingsDataStore.data.map { it[categoryCapsStoreKey] }.asLiveData()` (returns empty map if unset); `setCap(name, amountOrNull)` (`null`/≤0 → removes entry, else serializes). 
+
+- **`settings/CategoryCapsSheet.kt`** (new): sheet id `CATEGORY_CAPS_SHEET`. `LazyColumn` over `CategoriesManagementViewModel.allCategories` (built-ins first via `SpendCategory` enum, then custom categories from `SavedCategoryDao`); each row shows emoji (`SpendCategory.emojiFor(item.name, item.emoji)`) + name; `OutlinedTextField(textAlign = Center, keyboard = Decimal)` for the decimal cap amount (prefilled from `caps[name]?.toPlainString("")`, `KeyboardType.Decimal`, `IME_ACTION_DONE`), with a `delete`/`ic_delete_forever` icon row clearing the cap. `Done`/back-dismiss persists via `viewModel.setCap`.
+
+- **`settings/Settings.kt`**: new `TextRow` (`ic_money`) opening `CATEGORY_CAPS_SHEET` with `args = { caps: caps }`.
+
+- **`home/BottomSheets.kt`**: registers `CATEGORY_CAPS_SHEET` → `CategoryCapsSheet(caps = state.args["caps"] as Map<String, BigDecimal>)`.
+
+- **`analytics/categoriesChart/SpendCategoriesCard.kt`**: new `caps: Map<String, BigDecimal> = emptyMap()` param. `CapProgressBar(categoryName, spent, cap)` composable: computes `fraction = spent.divide(cap, 6, HALF_UP).toDouble().coerceIn(0.0, 1.0)`; shows a `LinearProgressIndicator` (color `0xFFE6A23C` amber at ≥80%, `MaterialTheme.colorScheme.error` red at ≥100%) with a label `category_cap_progress` (`"%1$d%% of cap"`) or `category_cap_reached_label` ("Cap reached"). Wrapped under the chip column only when a cap is set for that category.
+
+- **`analytics/Analytics.kt`**: observes `CategoryCapsViewModel` caps via `categoriesViewModel.caps.observeAsState(emptyMap())` and passes `caps = caps` into `SpendCategoriesCard`; the ViewModel is obtained via the existing `hiltViewModel()` from the parent — added `CategoryCapsViewModel` import.
+
+- **`app/src/main/res/values/strings.xml`**: EN-only strings (project convention — `values-ru` is valid UTF-8, not corrupted): `category_caps_channel_name` ("Category caps"), `category_caps_channel_description`, `category_cap_near_title`, `category_cap_near_text` (`"%1$s — %2$d%% of your %3$s cap spent"`), `category_cap_reached_title`, `category_cap_reached_text` (`"you've spent the full cap of %2$s"` — single-escaped apostrophe), `category_caps_title`, `category_caps_description`, `category_caps_hint`, `category_caps_remove`, `category_cap_progress` (`"%1$d%% of cap"`), `category_cap_reached_label`.
+
+- **`app/src/test/java/com/danilkinkin/buckwheat/data/categories/CategoryCapsTest.kt`** (new): 10 tests. `serializeCategoryCapsRoundTrip`/`DropsZeroOrNegative`/`EmptyMap`/`parseMalformedSkipsBadEntries`. `categoryCapPercent`/`categoryCapBucket`/`highestNewlyReachedCapBucket` (80% boundary, 100% boundary, 1% below 80%, newly-reached only-once semantics).
+
+- **Design decisions**: caps are **period-scoped** — progress measured against current budget period spend totals (`startPeriodDate`/`finishPeriodDate` from `budgetDataStore`), same numbers as the Analytics breakdown. **Notification once per crossing**: bucket 0/1/2 = none/80%/100%; `highestNewlyReachedCapBucket` ensures we only announce the highest bucket actually reached since the last notification for that category. Cap-notified state is serialized as `"name:bucket;..."`. Resync logic: `addSpent` → announce newly-reached; `removeSpent` → recompute bucket (may drop back); `setBudget` new period → clear all notified flags (caps re-arm from zero). `setCategoryCaps` edit → also clears notified map (re-arm baseline). Cap-notified DataStore lives in the same `settings.preferences_pb` file as the Voice AI API key — **entire settings file is excluded from cloud backup + device transfer** (per 2026-08-10 security audit), so caps don't survive a device transfer; this is accepted (caps are re-enterable, not mission-critical data). **EN strings only** — follows the existing convention (e.g., `voice_widget_design_*` strings are EN-only; the earlier belief that `values-ru/strings.xml` was corrupted was debunked in the security-audit entry: it's valid UTF-8).
+
+- **Verify**: golden pipeline (`:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`) green — **197 tests** (187 baseline + 10 new `CategoryCapsTest`), 0 failures. One build failure during iteration: `Unresolved reference 'category_cap_channel_name'` in `Application.kt:137` — **root cause**: a naming mismatch between the resource name in `strings.xml` (`category_caps_channel_name`, plural) and the code reference (`category_cap_channel_name`, singular). The string had been added to `strings.xml` but never linked to the Kotlin code due to the pluralization discrepancy. Fixed by updating `Application.kt` to reference `R.string.category_caps_channel_name` and `R.string.category_caps_channel_description`. Also fixed a `@Composable` invocation error in `SpendCategoriesCard.kt:174` (lambda typing fix for the chip content lambda).
+
 ## 2026-08-10 — Security audit + remove hardcoded external links (committed `29f4ad8`)
 
 Full security review of the app (see `.track/SECURITY.md`, which every future agent must follow). Findings fixed:

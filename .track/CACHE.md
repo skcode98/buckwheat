@@ -58,6 +58,14 @@
 | Voice AI Settings Sheet | `app/.../settings/VoiceAiSettingsSheet.kt` |
 | Voice Widget Commit Service | `app/.../widget/voice/VoiceWidgetCommitService.kt` |
 | Voice Widget Design Setting | `app/.../settings/VoiceWidgetDesignSetting.kt` |
+| Category Cap Logic | `app/.../data/categories/CategoryCap.kt` |
+| Category Cap Notifier | `app/.../notifications/CategoryCapNotifier.kt` |
+| Category Caps ViewModel | `app/.../settings/CategoryCapsViewModel.kt` |
+| Category Caps Sheet | `app/.../settings/CategoryCapsSheet.kt` |
+| Spend Categories Card | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
+| Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
+
+--- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
 | Midnight Widget Refresh Receiver | `app/.../widget/WidgetRefreshReceiver.kt` |
 | Recalc Budget VM | `app/.../recalcBudget/RecalcBudgetViewModel.kt` |
@@ -221,6 +229,8 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `spendDigestEnabledStoreKey` (Boolean) / `spendDigestFrequencyStoreKey` (String `WEEKLY`/`MONTHLY`) / `spendDigestHourStoreKey` / `spendDigestMinuteStoreKey` (Int, default 20:00 `SPEND_DIGEST_DEFAULT_HOUR/MINUTE`) — weekly/monthly spend digest; one-shot `setWindow` re-armed +7 days / +1 calendar month by `SpendDigestReceiver.rearm`
 - `goalMilestonesNotifiedStoreKey` — per-goal already-notified milestone buckets, serialized `"goalId:bucket;goalId:bucket"` (String; write via `getGoalNotifiedMilestones()`/`setGoalNotifiedMilestones()`)
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)
+- `categoryCapsStoreKey` — per-category spending caps, serialized `"name:amount;name:amount"` (String; drops ≤0 amounts; whole settings DataStore file excluded from cloud backup so caps don't survive device transfer)
+- `categoryCapNotifiedStoreKey` — per-category last-announced bucket, serialized `"name:bucket;name:bucket"` (String; bucket 0=none, 1=near/80%, 2=reached/100%; cleared on new budget period and cleared when caps are edited)
 
 ## Glance 1.1.1 per-instance widget facts (verified 2026-08-10 via AAR/sources inspection)
 - Widget Glance state (`PreferencesGlanceStateDefinition`) is keyed purely by `appWidgetId` (`createUniqueRemoteUiName(glanceId.appWidgetId)`), so per-instance values are already isolated — `getAppWidgetState(context, definition, glanceId)` / `updateAppWidgetState(...)` read/write only that widget.
