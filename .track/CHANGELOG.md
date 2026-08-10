@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-10 — New feature: Savings-goal milestone progress nudges (committed `8f04f0e`)
+
+Allocating money to a savings goal now fires a notification when the goal crosses a progress milestone (25% / 50% / 75% / 100%).
+
+- **`settings/GoalProgressNudge.kt`** (new): pure logic — `GOAL_MILESTONES = [25, 50, 75, 100]`, `goalProgressPercent(goal)` (floored, clamped 0..100, 0 when target not positive), `goalMilestoneBucket(percent)` (count of reached milestones), `highestNewlyCrossedMilestone(lastBucket, newBucket)` (only the highest new milestone is announced), `GoalNudgeMessage` + `buildGoalNudgeMessage(context, goal, milestone, currency)`.
+- **`notifications/GoalProgressNotifier.kt`** (new): object like `OverspendingNotifier` — channel `goal_progress`, `NOTIFICATION_ID = 104`, BigTextStyle, tap opens `MainActivity`.
+- **`di/SettingsRepository.kt`**: `goalMilestonesNotifiedStoreKey` (String, serialized `"goalId:bucket;goalId:bucket"`) + `getGoalNotifiedMilestones()` / `setGoalNotifiedMilestones()` so a milestone is announced only once per goal.
+- **`settings/GoalsViewModel.kt`**: `allocateToGoal` now calls `notifyMilestone(goal.id, updatedGoal)` inside the allocation mutex (reads the notified map, computes the new bucket, posts the nudge + persists); `deleteGoal` cleans up the goal's map entry. Injects `SettingsRepository` + `@ApplicationContext`.
+- **`Application.kt`**: creates the `goal_progress` channel.
+- **Strings** EN+RU: `goal_nudge_channel_name/description`, `goal_nudge_milestone_title` (`X — N% saved`), `goal_nudge_milestone_text`, `goal_nudge_reached_title`, `goal_nudge_reached_text`.
+- **Gotcha hit**: aapt2 strips unescaped `"` from string values (`Goal "%1$s" reached` compiled to `Goal %1$s reached`) — fixed with `\"` escape; the Gradle build cache then kept serving the stale linked `.ap_`, resolved by deleting `intermediates\linked_resources_binary_format` + `--no-build-cache`. Both recorded in `AGENTS.md` pitfalls.
+- **Verify**: `GoalProgressNudgeTest` (6 tests: percent floor/clamp, bucket counting, milestone crossing, milestone + reached messages). Golden pipeline green — **173 tests, 0 failures** + `assembleDebug`.
+
 ## 2026-08-10 — New feature: Recurring payment due alerts (committed `31e02b7`)
 
 A settings toggle that notifies you on a chosen time of day when recurring payments are due today.

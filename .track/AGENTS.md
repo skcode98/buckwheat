@@ -332,6 +332,8 @@ com.danilkinkin.buckwheat/
 | Referenced `R.drawable.ic_*` doesn't exist | `glob app/src/main/res/drawable/ic_*.xml` before building; swap to an existing icon (e.g. `ic_warning` → `ic_priority_high`) |
 | `getString(R.string.x, a, b)` but the string has no `%1$s`/`%2$s` placeholders | Args are silently ignored (no crash) but the amounts/values are lost — keep placeholders in sync with the number of args |
 | New top-level function referenced from another file but import missing | Kotlin requires the import even inside the same top package prefix — after edits, `grep` the call site to confirm the import landed (an edit can silently target the wrong spot) |
+| Literal `"` inside a `<string>` resource (e.g. `Goal "%1$s" reached`) | aapt2 **strips unescaped double quotes** from string values during compilation, so `getString` returns `Goal %1$s reached`. Use the escape `\"` (verified 2026-08-10) or `&quot;` |
+| `testDebugUnitTest` (Robolectric) still sees old string values after editing `strings.xml` | The Gradle build cache / aapt2 link step (`processDebugResources`) can stay UP-TO-DATE on a resource edit. Fix: delete `app\build\intermediates\linked_resources_binary_format` (+ optionally the incremental merge dir) and rerun with `--no-build-cache` |
 | Compiler session files under `.kotlin/sessions/*.salive` | Never stage/commit them — `git restore --staged` before committing; they're transient build artifacts |
 | `spotlessCheck` reports UP-TO-DATE right after adding new files | Force a format pass with `spotlessApply` on new/changed files, then `spotlessCheck` |
 
