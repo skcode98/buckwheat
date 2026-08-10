@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.settings
 
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,8 +8,12 @@ import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
+import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +25,8 @@ import javax.inject.Inject
 class GoalsViewModel @Inject constructor(
     private val savingsGoalDao: SavingsGoalDao,
     private val spendsRepository: SpendsRepository,
+    private val settingsRepository: SettingsRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
     val goals: LiveData<List<SavingsGoal>> = savingsGoalDao.getAll()
 
@@ -50,9 +57,8 @@ class GoalsViewModel @Inject constructor(
                 if (budgetRest < amount) return@withLock
                 val newAmount = goal.currentAmount + amount
                 val completed = newAmount >= goal.targetAmount
-                savingsGoalDao.update(
-                    goal.copy(currentAmount = newAmount, completed = completed)
-                )
+                val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
+                savingsGoalDao.update(updatedGoal)
                 spendsRepository.addSpent(
                     Transaction(
                         type = TransactionType.SPENT,
@@ -61,13 +67,34 @@ class GoalsViewModel @Inject constructor(
                         comment = "\u2192 ${goal.name}",
                     )
                 )
+                notifyMilestone(goal.id, updatedGoal)
             }
         }
+    }
+
+    // Posts a progress nudge when the allocation crossed a milestone that has not been
+    // announced yet for this goal. Only the highest newly reached milestone is announced,
+    // and the bucket is persisted so the same milestone never notifies twice.
+    private suspend fun notifyMilestone(goalId: Long, goal: SavingsGoal) {
+        val notified = settingsRepository.getGoalNotifiedMilestones()
+        val lastBucket = notified[goalId] ?: 0
+        val newBucket = goalMilestoneBucket(goalProgressPercent(goal))
+        val milestone = highestNewlyCrossedMilestone(lastBucket, newBucket) ?: return
+        val currency = spendsRepository.getCurrency().first()
+        GoalProgressNotifier.notify(
+            appContext,
+            buildGoalNudgeMessage(appContext, goal, milestone, currency),
+        )
+        settingsRepository.setGoalNotifiedMilestones(notified + (goalId to newBucket))
     }
 
     fun deleteGoal(id: Long) {
         viewModelScope.launch {
             savingsGoalDao.deleteById(id)
+            val notified = settingsRepository.getGoalNotifiedMilestones()
+            if (notified.containsKey(id)) {
+                settingsRepository.setGoalNotifiedMilestones(notified - id)
+            }
         }
     }
 }

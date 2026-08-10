@@ -141,6 +141,12 @@
   <string name="recurring_due_channel_name">Recurring payments</string>
   <string name="recurring_due_channel_description">Notifications for recurring payments due today</string>
   <string name="recurring_due_notification_title">Recurring payments due today</string>
+  <string name="goal_nudge_channel_name">Savings goals</string>
+  <string name="goal_nudge_channel_description">Progress nudges when a savings goal reaches a milestone</string>
+  <string name="goal_nudge_milestone_title">%1$s — %2$d%% saved</string>
+  <string name="goal_nudge_milestone_text">You\'ve saved %1$s of %2$s — keep going!</string>
+  <string name="goal_nudge_reached_title">Goal reached!</string>
+  <string name="goal_nudge_reached_text">Goal \"%1$s\" reached — you saved %2$s of %3$s!</string>
   <string name="version">Version: %1$s</string>
   <string name="about">About app</string>
   <string name="description">Buckwheat is an app that helps you spend money wisely. Writing down each spending sobers the mind and gives you an idea of how much and how you can spend.</string>

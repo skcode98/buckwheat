@@ -11,6 +11,7 @@ import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -31,6 +32,7 @@ val onTrackAlertMinuteStoreKey = intPreferencesKey("onTrackAlertMinute")
 val recurringAlertEnabledStoreKey = booleanPreferencesKey("recurringAlertEnabled")
 val recurringAlertHourStoreKey = intPreferencesKey("recurringAlertHour")
 val recurringAlertMinuteStoreKey = intPreferencesKey("recurringAlertMinute")
+val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotified")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
@@ -178,6 +180,33 @@ class SettingsRepository @Inject constructor(
         context.settingsDataStore.edit {
             it[onTrackAlertHourStoreKey] = hour
             it[onTrackAlertMinuteStoreKey] = minute
+        }
+    }
+
+    // The per-goal last-notified milestone bucket, serialized as "goalId:bucket;goalId:bucket",
+    // so a milestone nudge is posted only once per goal.
+    suspend fun getGoalNotifiedMilestones(): Map<Long, Int> {
+        val raw = context.settingsDataStore.data.first()[goalMilestonesNotifiedStoreKey]
+            ?: return emptyMap()
+        return raw.split(';').mapNotNull { entry ->
+            val parts = entry.split(':')
+            if (parts.size != 2) return@mapNotNull null
+            val id = parts[0].toLongOrNull() ?: return@mapNotNull null
+            val bucket = parts[1].toIntOrNull() ?: return@mapNotNull null
+            id to bucket
+        }.toMap()
+    }
+
+    suspend fun setGoalNotifiedMilestones(milestones: Map<Long, Int>) {
+        val serialized = milestones.entries
+            .sortedBy { it.key }
+            .joinToString(";") { "${it.key}:${it.value}" }
+        context.settingsDataStore.edit {
+            if (serialized.isEmpty()) {
+                it.remove(goalMilestonesNotifiedStoreKey)
+            } else {
+                it[goalMilestonesNotifiedStoreKey] = serialized
+            }
         }
     }
 

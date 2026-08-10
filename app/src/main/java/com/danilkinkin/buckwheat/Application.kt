@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
+import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.notifications.RecurringPaymentAlertReceiver
@@ -119,6 +120,15 @@ class Application : Application(), Configuration.Provider {
                 description = getString(R.string.recurring_due_channel_description)
             }
             notificationManager.createNotificationChannel(recurringChannel)
+
+            val goalProgressChannel = NotificationChannel(
+                GoalProgressNotifier.CHANNEL_ID,
+                getString(R.string.goal_nudge_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.goal_nudge_channel_description)
+            }
+            notificationManager.createNotificationChannel(goalProgressChannel)
 
             val voiceWidgetChannel = NotificationChannel(
                 VoiceWidgetNotifications.CHANNEL_ID,
