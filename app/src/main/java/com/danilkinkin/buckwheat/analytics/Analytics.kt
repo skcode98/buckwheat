@@ -213,6 +213,14 @@ fun Analytics(
                                 currency = currency,
                                 isCategorizing = isCategorizing,
                                 categoryEmojis = categoryEmojis,
+                                onCategoryClick = { key ->
+                                    appViewModel.openSheet(
+                                        PathState(
+                                            name = CATEGORY_HISTORY_SHEET,
+                                            args = mapOf("onlyCategoryKey" to key),
+                                        )
+                                    )
+                                },
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             CategoriesChartCard(

@@ -3,7 +3,9 @@ package com.danilkinkin.buckwheat.data.categories
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 import java.util.Date
@@ -156,6 +158,39 @@ class SpendCategorizerTest {
         assertNull(SpendCategory.fromStored(""))
         assertNull(SpendCategory.fromStored("   "))
         assertNull(SpendCategory.fromStored(null))
+    }
+
+    @Test
+    fun `transactionMatchesCategory matches persisted built-in and custom categories`() {
+        val builtIn = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "FOOD")
+        val custom = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts")
+
+        assertTrue(
+            transactionMatchesCategory(builtIn, CategoryKey.BuiltIn(SpendCategory.FOOD))
+        )
+        assertTrue(transactionMatchesCategory(custom, CategoryKey.Custom("Gifts")))
+    }
+
+    @Test
+    fun `transactionMatchesCategory matches offline keyword classification`() {
+        val transaction = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "bus")
+
+        assertTrue(
+            transactionMatchesCategory(transaction, CategoryKey.BuiltIn(SpendCategory.TRANSPORT))
+        )
+    }
+
+    @Test
+    fun `transactionMatchesCategory rejects other categories`() {
+        val builtIn = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "FOOD")
+        val custom = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts")
+
+        assertFalse(
+            transactionMatchesCategory(builtIn, CategoryKey.BuiltIn(SpendCategory.TRAVEL))
+        )
+        assertFalse(transactionMatchesCategory(builtIn, CategoryKey.Custom("Gifts")))
+        assertFalse(transactionMatchesCategory(custom, CategoryKey.BuiltIn(SpendCategory.FOOD)))
+        assertFalse(transactionMatchesCategory(custom, CategoryKey.Custom("Toys")))
     }
 
     @Test

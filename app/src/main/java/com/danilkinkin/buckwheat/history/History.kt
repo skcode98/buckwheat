@@ -26,6 +26,8 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
+import com.danilkinkin.buckwheat.data.categories.transactionMatchesCategory
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.toTransaction
@@ -57,6 +59,7 @@ fun History(
     onClose: () -> Unit = {},
     searchQuery: String = "",
     onlyDay: LocalDate? = null,
+    onlyCategoryKey: CategoryKey? = null,
 ) {
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -73,8 +76,14 @@ fun History(
     val periodSpends by spendsViewModel.periodSpends.observeAsState(emptyList())
     val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
 
-    LaunchedEffect(searchQuery, onlyDay, periodSpends, archivedTransactions) {
-        historyList = composeHistoryRows(periodSpends, archivedTransactions, searchQuery, onlyDay)
+    LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, periodSpends, archivedTransactions) {
+        historyList = composeHistoryRows(
+            periodSpends,
+            archivedTransactions,
+            searchQuery,
+            onlyDay,
+            onlyCategoryKey,
+        )
     }
 
     DisposableEffect(Unit) {
@@ -301,6 +310,7 @@ private fun composeHistoryRows(
     archivedTransactions: List<ArchivedTransaction>,
     searchQuery: String,
     onlyDay: LocalDate? = null,
+    onlyCategoryKey: CategoryKey? = null,
 ): List<RowEntity> {
     val searching = searchQuery.isNotBlank()
 
@@ -333,7 +343,8 @@ private fun composeHistoryRows(
         }
     }.filter { entry ->
         (!searching || entry.comment.contains(searchQuery, ignoreCase = true)) &&
-            (onlyDay == null || entry.date.toLocalDate().isEqual(onlyDay))
+            (onlyDay == null || entry.date.toLocalDate().isEqual(onlyDay)) &&
+            (onlyCategoryKey == null || transactionMatchesCategory(entry.transaction, onlyCategoryKey))
     }.sortedBy { it.date }
 
     val composedList = emptyList<RowEntity>().toMutableList()

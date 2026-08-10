@@ -54,6 +54,7 @@ fun SpendCategoriesCard(
     currency: ExtendCurrency,
     isCategorizing: Boolean = false,
     categoryEmojis: Map<String, String> = emptyMap(),
+    onCategoryClick: ((CategoryKey) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isNightMode = isNightMode()
@@ -82,7 +83,7 @@ fun SpendCategoriesCard(
         mutableStateOf(
             categoryTotals(spends)
                 .map { (key, total) ->
-                    when (key) {
+                    val usage = when (key) {
                         is CategoryKey.BuiltIn -> TagUsage(
                             name = context.getString(key.category.labelRes),
                             amount = total,
@@ -102,8 +103,9 @@ fun SpendCategoriesCard(
                             emoji = SpendCategory.emojiFor(key.name, categoryEmojis[key.name]),
                         )
                     }
+                    key to usage
                 }
-                .sortedBy { it.amount }
+                .sortedBy { it.second.amount }
                 .reversed(),
         )
     }
@@ -145,7 +147,7 @@ fun SpendCategoriesCard(
                 modifier = Modifier
                     .padding(bottom = 8.dp)
                     .size(64.dp),
-                items = categories,
+                items = categories.map { it.second },
             )
             if (categories.isEmpty()) {
                 Box(Modifier.padding(vertical = 8.dp)) {
@@ -158,7 +160,7 @@ fun SpendCategoriesCard(
                 }
             } else {
                 FlowRow(Modifier.padding(4.dp, 4.dp)) {
-                    categories.forEach { category ->
+                    categories.forEach { (key, category) ->
                         TagAmount(
                             modifier = Modifier.padding(4.dp, 4.dp),
                             value = category.name,
@@ -167,6 +169,7 @@ fun SpendCategoriesCard(
                             palette = category.color,
                             isSpecial = category.isSpecial,
                             currency = currency,
+                            onClick = onCategoryClick?.let { { it(key) } },
                         )
                     }
                 }

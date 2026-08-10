@@ -29,10 +29,13 @@ fun TagAmount(
     isSpecial: Boolean = false,
     palette: HarmonizedColorPalette? = null,
     currency: ExtendCurrency,
+    onClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
     Surface(
+        onClick = onClick ?: {},
+        enabled = onClick != null,
         shape = CircleShape,
         color = palette?.main ?: MaterialTheme.colorScheme.surface,
         contentColor = palette?.onSurface ?: MaterialTheme.colorScheme.onSurface,

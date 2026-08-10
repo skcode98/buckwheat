@@ -24,18 +24,21 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.history.History
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.toDate
 import java.time.LocalDate
 
 const val VIEWER_HISTORY_SHEET = "viewerHistory"
+const val CATEGORY_HISTORY_SHEET = "categoryHistory"
 
 @Composable
 fun ViewerHistory(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     appViewModel: AppViewModel = hiltViewModel(),
     onlyDay: LocalDate? = null,
+    onlyCategoryKey: CategoryKey? = null,
     onClose: () -> Unit = {},
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -60,14 +63,18 @@ fun ViewerHistory(
                 }
                 Spacer(Modifier.weight(1F))
                 Text(
-                    text = if (onlyDay != null) {
-                        prettyDate(
+                    text = when {
+                        onlyCategoryKey != null -> when (onlyCategoryKey) {
+                            is CategoryKey.BuiltIn ->
+                                "${onlyCategoryKey.category.emoji} ${stringResource(onlyCategoryKey.category.labelRes)}"
+                            is CategoryKey.Custom -> onlyCategoryKey.name
+                        }
+                        onlyDay != null -> prettyDate(
                             onlyDay.toDate(),
                             showTime = false,
                             forceShowDate = true,
                         )
-                    } else {
-                        stringResource(R.string.history_title)
+                        else -> stringResource(R.string.history_title)
                     },
                     style = MaterialTheme.typography.titleLarge,
                 )
@@ -77,6 +84,7 @@ fun ViewerHistory(
             History(
                 readOnly = true,
                 onlyDay = onlyDay,
+                onlyCategoryKey = onlyCategoryKey,
             )
         }
     }

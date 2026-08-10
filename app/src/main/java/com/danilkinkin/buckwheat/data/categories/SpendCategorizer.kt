@@ -83,6 +83,11 @@ fun categoryTotals(spends: List<Transaction>): List<Pair<CategoryKey, BigDecimal
     return totals.filterValues { it > BigDecimal.ZERO }.toList()
 }
 
+// Whether a transaction is displayed under the given category key in the analytics breakdown.
+// The filter backing the category drill-down. Pure so it is trivially unit-testable.
+fun transactionMatchesCategory(transaction: Transaction, key: CategoryKey): Boolean =
+    categoryKey(transaction) == key
+
 // Batch-assigns categories to uncategorized spends via the configured OpenAI-compatible
 // provider (the same settings as Voice AI). Returns an empty map when no API key is saved,
 // the call fails, or nothing could be parsed — the offline keyword classifier then stands in.
