@@ -91,8 +91,6 @@ class MainActivity : ComponentActivity() {
             micPermissionLauncher.launch(permissions.toTypedArray())
         }
 
-        CrashLogger.consumePersisted(context)?.let { errorForReport = it }
-
         setContent {
             val localContext = LocalContext.current
             val activityResultRegistryOwner = LocalActivityResultRegistryOwner.current
@@ -114,8 +112,6 @@ class MainActivity : ComponentActivity() {
             val windowInsets = WindowInsets
                 .systemBars
                 .asPaddingValues()
-
-            CatchAndSendCrashReport()
 
             if (isReady.value) {
                 BuckwheatTheme {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android backup (API 31+) rules.
+    The settings DataStore (files/datastore/settings.preferences_pb) holds the
+    Voice AI API key and other preferences; it must never leave the device via
+    cloud backup or device-to-device transfer, so it is excluded from both.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="file"
+            path="datastore/settings.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="file"
+            path="datastore/settings.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

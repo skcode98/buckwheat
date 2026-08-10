@@ -326,7 +326,7 @@ class SpendsViewModel @Inject constructor(
 
                 processDueRecurringPayments()
 
-                // Bug fix https://github.com/danilkinkin/buckwheat/issues/28
+                // Bug fix: hide the overspending warning again once today is back under budget
                 if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
                     hideOverspendingWarn(false)
                 }

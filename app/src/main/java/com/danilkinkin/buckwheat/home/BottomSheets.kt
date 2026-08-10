@@ -217,16 +217,6 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
-        name = BUG_REPORTER_SHEET,
-    ) { state ->
-        BugReporter(
-            onClose = {
-                coroutineScope.launch { state.hide() }
-            },
-        )
-    }
-
-    BottomSheetWrapper(
         name = SETTINGS_CHANGE_THEME_SHEET,
     ) { state ->
         ThemeSwitcherDialog(

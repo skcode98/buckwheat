@@ -167,12 +167,6 @@
   <string name="version">Version: %1$s</string>
   <string name="about">About app</string>
   <string name="description">Buckwheat is an app that helps you spend money wisely. Writing down each spending sobers the mind and gives you an idea of how much and how you can spend.</string>
-  <string name="report_bug">Report a bug</string>
-  <string name="contribute">Contribute</string>
-  <string name="developer">Development &amp; design:</string>
-  <string name="report_bug_title">Report a bug</string>
-  <string name="report_via_github">Via GitHub issue</string>
-  <string name="report_via_email">Via email</string>
   <string name="new_day_title">Congratulations! You saved</string>
   <string name="recalc_budget">Find out how to budget</string>
   <string name="split_rest_days_title">Split by remaining days</string>
@@ -201,8 +195,6 @@
   <string name="help_record_spends_description">The application will calculate how much you need to spend per day to fit into the budget, write down the expenses and keep track of the budget</string>
   <string name="help_good_luck_title">Spend wisely</string>
   <string name="help_good_luck_description">Over time, you will learn to feel how much you really spend and how much you need. Learn to understand whether you can spend money on a trinket right now</string>
-  <string name="copy_in_clipboard">Copied to clipboard</string>
-  <string name="not_found_email_clients">No email clients found</string>
   <string name="cancel">Cancel</string>
   <string name="accept">Accept</string>
   <string name="today">Today</string>
@@ -255,9 +247,6 @@
   <string name="avg_per_day">avg/day %1$s</string>
   <string name="vs_previous_period">vs previous period</string>
   <string name="export_to_csv_file_name">Spends (from %1$s to %2$s)</string>
-  <string name="crash_report_ready">An error occurred</string>
-  <string name="send_crash_report">Send report</string>
-  <string name="add_your_comment_to_report">Add your comment here if you wish. You can delete the block with information about the device if you think that this information does not matter</string>
   <string name="history_title">History</string>
   <string name="view_analytics">View analytics</string>
   <string name="analytics_title">Analytics</string>
