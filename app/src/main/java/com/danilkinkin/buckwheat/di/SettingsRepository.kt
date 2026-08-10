@@ -28,9 +28,15 @@ val overspendNotifyEnabledStoreKey = booleanPreferencesKey("overspendNotifyEnabl
 val onTrackAlertEnabledStoreKey = booleanPreferencesKey("onTrackAlertEnabled")
 val onTrackAlertHourStoreKey = intPreferencesKey("onTrackAlertHour")
 val onTrackAlertMinuteStoreKey = intPreferencesKey("onTrackAlertMinute")
+val recurringAlertEnabledStoreKey = booleanPreferencesKey("recurringAlertEnabled")
+val recurringAlertHourStoreKey = intPreferencesKey("recurringAlertHour")
+val recurringAlertMinuteStoreKey = intPreferencesKey("recurringAlertMinute")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
+
+const val RECURRING_ALERT_DEFAULT_HOUR = 9
+const val RECURRING_ALERT_DEFAULT_MINUTE = 0
 
 private const val LEGACY_VOICE_AI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 
@@ -98,6 +104,18 @@ class SettingsRepository @Inject constructor(
         it[onTrackAlertEnabledStoreKey] ?: false
     }
 
+    fun isRecurringAlertEnabled() = context.settingsDataStore.data.map {
+        it[recurringAlertEnabledStoreKey] ?: false
+    }
+
+    fun getRecurringAlertHour() = context.settingsDataStore.data.map {
+        it[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
+    }
+
+    fun getRecurringAlertMinute() = context.settingsDataStore.data.map {
+        it[recurringAlertMinuteStoreKey] ?: RECURRING_ALERT_DEFAULT_MINUTE
+    }
+
     fun getOnTrackAlertHour() = context.settingsDataStore.data.map {
         it[onTrackAlertHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
     }
@@ -140,6 +158,19 @@ class SettingsRepository @Inject constructor(
     suspend fun switchOnTrackAlertEnabled(enabled: Boolean) {
         context.settingsDataStore.edit {
             it[onTrackAlertEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun switchRecurringAlertEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit {
+            it[recurringAlertEnabledStoreKey] = enabled
+        }
+    }
+
+    suspend fun setRecurringAlertTime(hour: Int, minute: Int) {
+        context.settingsDataStore.edit {
+            it[recurringAlertHourStoreKey] = hour
+            it[recurringAlertMinuteStoreKey] = minute
         }
     }
 

@@ -9,6 +9,7 @@ import android.os.Bundle
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderReceiver
 import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
+import com.danilkinkin.buckwheat.notifications.RecurringPaymentAlertReceiver
 import com.danilkinkin.buckwheat.util.NumberDisplayConfig
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
@@ -109,6 +110,15 @@ class Application : Application(), Configuration.Provider {
                 description = getString(R.string.on_track_alert_channel_description)
             }
             notificationManager.createNotificationChannel(onTrackChannel)
+
+            val recurringChannel = NotificationChannel(
+                RecurringPaymentAlertReceiver.CHANNEL_ID,
+                getString(R.string.recurring_due_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.recurring_due_channel_description)
+            }
+            notificationManager.createNotificationChannel(recurringChannel)
 
             val voiceWidgetChannel = NotificationChannel(
                 VoiceWidgetNotifications.CHANNEL_ID,

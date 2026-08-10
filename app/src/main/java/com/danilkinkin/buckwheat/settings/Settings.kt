@@ -64,6 +64,7 @@ fun Settings(
                 LangSwitcher()
                 RoundValuesSetting()
                 DailyBudgetReminderSetting()
+                RecurringPaymentAlertSetting()
                 OverspendNotificationSetting()
                 OnTrackAlertSetting()
                 TextRow(

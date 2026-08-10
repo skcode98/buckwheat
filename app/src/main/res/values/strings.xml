@@ -136,6 +136,11 @@
   <string name="round_values_title">Round values</string>
   <string name="round_values_description">Show all amounts as whole numbers without decimals</string>
   <string name="forecast_projected">At this pace you\'ll use ~%1$d%% of your budget (%2$s) by %3$s</string>
+  <string name="recurring_alert_setting_title">Recurring payment alerts</string>
+  <string name="recurring_alert_time">Alert time</string>
+  <string name="recurring_due_channel_name">Recurring payments</string>
+  <string name="recurring_due_channel_description">Notifications for recurring payments due today</string>
+  <string name="recurring_due_notification_title">Recurring payments due today</string>
   <string name="version">Version: %1$s</string>
   <string name="about">About app</string>
   <string name="description">Buckwheat is an app that helps you spend money wisely. Writing down each spending sobers the mind and gives you an idea of how much and how you can spend.</string>

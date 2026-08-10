@@ -3,6 +3,11 @@ package com.danilkinkin.buckwheat.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_HOUR
+import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.di.recurringAlertEnabledStoreKey
+import com.danilkinkin.buckwheat.di.recurringAlertHourStoreKey
+import com.danilkinkin.buckwheat.di.recurringAlertMinuteStoreKey
 import com.danilkinkin.buckwheat.di.reminderEnabledStoreKey
 import com.danilkinkin.buckwheat.di.reminderHourStoreKey
 import com.danilkinkin.buckwheat.di.reminderMinuteStoreKey
@@ -26,6 +31,12 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     val hour = prefs[reminderHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
                     val minute = prefs[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
                     DailyBudgetReminderScheduler.schedule(context, hour, minute)
+                }
+                val recurringEnabled = prefs[recurringAlertEnabledStoreKey] ?: false
+                if (recurringEnabled) {
+                    val hour = prefs[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
+                    val minute = prefs[recurringAlertMinuteStoreKey] ?: RECURRING_ALERT_DEFAULT_MINUTE
+                    RecurringPaymentAlertScheduler.schedule(context, hour, minute)
                 }
                 WidgetRefreshScheduler.schedule(context)
             } finally {
