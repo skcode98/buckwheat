@@ -1,6 +1,18 @@
 # Changelog
 
-## 2026-08-11 — Settings reorganization + analytics calendar fixes + AI master toggle (uncommitted)
+## 2026-08-11 — Interleaved budget engine: Phase 1 shipped (interleaved/InterleavedBudget.kt)
+
+- New pure engine (no Android/DataStore/Room imports): `CategoryFrequency` (DAILY/MONTHLY/QUARTERLY/ANNUAL with `freqMonths`), `InterleavedCategory` (name, amount, frequency, anchorEpochDay), `WindowSpend` view.
+- `windowFor` — calendar-month windows `[start, end)` via `java.time` (clamps month-end + leap years; DAILY → null; today before anchor → first window).
+- `hasRolled` — true when the recorded window start belongs to an earlier window (sentinel `Long.MIN_VALUE` forces a reset; DAILY never rolls).
+- `windowSpent` — sums matching in-window transactions (half-open end, future/backfilled txs excluded, case-insensitive category match).
+- `monthlyEquivalent` — amount/freqMonths (DAILY → amount as-is).
+- `daysLeftInWindow` — days incl. today, restarts at each new window.
+- `projectedExhaustionDate` — day the window runs dry at current pace; null when nothing spent or window ends first.
+- Tests: `interleaved/InterleavedBudgetTest` (28 cases). Reused caps helpers `categoryCapPercent`/`categoryCapBucket` later.
+- Open questions auto-resolved with plan defaults: calendar months; no untracked mode; Phase 5 wallet integration stays a stretch goal.
+
+## 2026-08-11 — Settings reorganization + analytics calendar fixes + AI master toggle (committed `e87bded` / docs `b5af869`)
 
 Three UX improvements landed together (auto-triggered, tracked via this file):
 

@@ -1,9 +1,11 @@
 # Interleaved Budget Categories — Implementation Plan (v2)
 
-> **Status**: PLANNED — revised 2026-08-11 after Feature 9 (category caps) shipped.
+> **Status**: PHASE 1 SHIPPED (engine) — revised 2026-08-11 after Feature 9 (category caps) shipped.
 > v2 reconciles this feature with the caps system instead of building a parallel one, which
 > roughly halves the scope and removes all database-migration risk.
 > Phase 6 (data calibration) remains deferred pending your 6-month transaction export.
+> Open questions auto-resolved with the plan's documented defaults (calendar months; no
+> untracked; Phase 5 stretch only).
 
 ## What changed from v1 (superseded plan)
 
@@ -63,7 +65,7 @@ data class InterleavedCategory(
   `windowEnd   = windowStart.plusMonths(freqMonths)`  // [start, end), tx at end excluded
   `freqMonths = 1 / 3 / 12` (DAILY = 0 → plain cap semantics, no window).
 
-## Phase 1: Pure engine — `interleaved/InterleavedBudget.kt` (3-4h)
+## Phase 1: Pure engine — `interleaved/InterleavedBudget.kt` (3-4h) — ✅ SHIPPED 2026-08-11
 
 No Android/DataStore/Room imports. Unit-testable in the JVM.
 
@@ -80,7 +82,7 @@ fun windowSpent(transactions: List<WindowSpend>, category: InterleavedCategory, 
 // amount / freqMonths — the "monthly equivalent" used by the wallet stretch goal.
 fun monthlyEquivalent(category: InterleavedCategory): BigDecimal
 
-// Days (incl. today) left in the window, or 0 when exhausted. Used for velocity + exhaustion math.
+// Days (incl. today) left in the window (the count restarts at the next window start).
 fun daysLeftInWindow(category: InterleavedCategory, today: LocalDate): Int
 
 // At current pace, the day the window runs dry: spent / elapsedDays * windowDays >= amount.
@@ -184,7 +186,7 @@ When you provide the transaction export:
 
 ## Definition of done
 
-- [ ] Pure engine + tests green; no Android imports in `InterleavedBudget.kt`
+- [x] Pure engine + tests green; no Android imports in `InterleavedBudget.kt` (28 tests, `InterleavedBudgetTest`)
 - [ ] Schedules persist/load via DataStore; legacy data unaffected
 - [ ] Rollover resets notifications exactly once per window crossing
 - [ ] Caps sheet edits frequency + anchor; single `edit {}` write
@@ -192,13 +194,11 @@ When you provide the transaction export:
 - [ ] Full pipeline green: `:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`
 - [ ] CHANGELOG / MEMORY / CACHE updated; committed + pushed
 
-## Open questions
+## Open questions — RESOLVED 2026-08-11 (auto-decision, plan defaults)
 
-1. Calendar quarters (`plusMonths(3)`) vs fixed 90-day windows — plan assumes calendar months
-   (more intuitive). Confirm.
-2. Should a scheduled category also be allowed to be *untracked* (visible, no notifications)?
-   Plan: no — notifications are the point of a budget.
-3. Phase 5 stretch: do you want wallet integration at all, or is per-category visibility enough?
+1. Calendar quarters (`plusMonths(3)`) vs fixed 90-day windows — **calendar months** (intuitive, clamps via `java.time`).
+2. Should a scheduled category also be allowed to be *untracked* (visible, no notifications)? **No** — notifications are the point of a budget.
+3. Phase 5 stretch: do you want wallet integration at all, or is per-category visibility enough? **Stretch only** — build Phases 1-4 first; wallet integration deferred unless the UX warrants it.
 
 ## Dependencies
 

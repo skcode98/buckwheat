@@ -64,6 +64,8 @@
 | Category Caps Sheet | `app/.../settings/CategoryCapsSheet.kt` |
 | Spend Categories Card | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
+| Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`daysLeftInWindow`/`projectedExhaustionDate`) |
+| Interleaved Budget Test | `app/.../test/.../interleaved/InterleavedBudgetTest.kt` |
 
 --- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
@@ -232,6 +234,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `aiIntelligenceEnabledStoreKey` — AI Intelligence master toggle (Boolean; default **on** via `aiIntelligenceEnabled(prefs)` in `SettingsRepository.kt`; `false` disables both voice-AI parsing → `NotConfigured` and AI categorization → empty map, offline fallbacks stand in)
 - `categoryCapsStoreKey` — per-category spending caps, serialized `"name:amount;name:amount"` (String; drops ≤0 amounts; whole settings DataStore file excluded from cloud backup so caps don't survive device transfer)
 - `categoryCapNotifiedStoreKey` — per-category last-announced bucket, serialized `"name:bucket;name:bucket"` (String; bucket 0=none, 1=near/80%, 2=reached/100%; cleared on new budget period and cleared when caps are edited)
+- `categorySchedulesStoreKey` — **PLANNED (Phase 2)**: interleaved budget schedules, serialized `"name:frequency:anchorEpochDay;..."` (String; no Room migration — extends caps; engine in `interleaved/InterleavedBudget.kt`)
 
 ## Glance 1.1.1 per-instance widget facts (verified 2026-08-10 via AAR/sources inspection)
 - Widget Glance state (`PreferencesGlanceStateDefinition`) is keyed purely by `appWidgetId` (`createUniqueRemoteUiName(glanceId.appWidgetId)`), so per-instance values are already isolated — `getAppWidgetState(context, definition, glanceId)` / `updateAppWidgetState(...)` read/write only that widget.
