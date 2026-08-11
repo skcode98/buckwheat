@@ -109,7 +109,7 @@ fun Analytics(
     val aiInsightState by aiInsightViewModel.state.observeAsState(AiInsightUiState.Idle)
 
     LaunchedEffect(spends) {
-        spendCategoriesViewModel.categorizeUncategorized(spends)
+        spendCategoriesViewModel.categorizeUncategorized()
     }
 
     val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)

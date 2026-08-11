@@ -23,9 +23,11 @@ import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
+import com.danilkinkin.buckwheat.data.categories.categorizeSpendsWithAi
 import com.danilkinkin.buckwheat.data.categories.categoryCapBucket
 import com.danilkinkin.buckwheat.data.categories.categoryKey
 import com.danilkinkin.buckwheat.data.categories.highestNewlyReachedCapBucket
+import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
 import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
@@ -805,25 +807,53 @@ class SpendsRepository @Inject constructor(
         val filtered = unique.values.toList()
         if (filtered.isEmpty()) return
 
+        // Persist the offline keyword category on any imported row that has none, so the
+        // assignment is saved with the data and never needs an AI reload later. Rows without
+        // a confident keyword match stay uncategorized (display falls back to OTHER).
+        val categorized = filtered.map { transaction ->
+            if (transaction.category.isNullOrBlank()) {
+                offlineCategoryOrNull(transaction.comment)
+                    ?.let { transaction.copy(category = it.name) }
+                    ?: transaction
+            } else {
+                transaction
+            }
+        }
+
         val currentPeriodStart = context.budgetDataStore.data.first()[startPeriodDateStoreKey]
             ?.let { Date(it) }
         val currentPeriodFinish = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
             ?.let { Date(it) }
 
         if (currentPeriodStart == null || currentPeriodFinish == null) {
-            filtered.forEach { addSpent(it) }
+            categorized.forEach { addSpent(it) }
+            persistAiCategories(categorized)
             return
         }
 
-        val inPeriod = filtered.filter {
+        val inPeriod = categorized.filter {
             !it.date.before(currentPeriodStart) && !it.date.after(currentPeriodFinish)
         }
-        val outOfPeriod = filtered.filter {
+        val outOfPeriod = categorized.filter {
             it.date.before(currentPeriodStart) || it.date.after(currentPeriodFinish)
         }
 
         inPeriod.forEach { addSpent(it) }
         archiveImported(outOfPeriod)
+        persistAiCategories(inPeriod)
+    }
+
+    // Batch-assigns AI categories to imported rows that still have none and saves them to the
+    // transactions table (the provider settings are the same as Voice AI). A no-op when the
+    // AI Intelligence toggle is off or no API key is saved. Only rows actually inserted into
+    // the transactions table should be passed — their uids are required for the update.
+    private suspend fun persistAiCategories(inserted: List<Transaction>) {
+        val candidates = inserted.filter { it.category.isNullOrBlank() }
+        if (candidates.isEmpty()) return
+        val assigned = categorizeSpendsWithAi(context, candidates)
+        assigned.forEach { (uid, category) ->
+            transactionDao.updateCategory(uid, category.name)
+        }
     }
 
     // Rows that fall outside the active budget period are archived into month buckets

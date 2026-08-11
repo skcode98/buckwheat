@@ -42,6 +42,19 @@ class SpendCategorizerTest {
     }
 
     @Test
+    fun `offlineCategoryOrNull returns the keyword category for a match`() {
+        assertEquals(SpendCategory.FOOD, offlineCategoryOrNull("lunch with friends"))
+        assertEquals(SpendCategory.BILLS, offlineCategoryOrNull("rent"))
+    }
+
+    @Test
+    fun `offlineCategoryOrNull returns null for unknown or blank comments`() {
+        assertNull(offlineCategoryOrNull("random expense"))
+        assertNull(offlineCategoryOrNull(""))
+        assertNull(offlineCategoryOrNull("   "))
+    }
+
+    @Test
     fun `categoryFor uses persisted category over keywords`() {
         val transaction = Transaction(
             type = TransactionType.SPENT,

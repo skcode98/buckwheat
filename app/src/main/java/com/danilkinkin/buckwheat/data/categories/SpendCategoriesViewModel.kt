@@ -7,15 +7,16 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
-import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Drives the analytics-only AI categorization. On Analytics open it batch-assigns the
-// predefined categories to every spend that has none yet and persists them to the
-// transactions table; display falls back to the offline keyword classifier until then.
+// Categorizes every spend in the transactions table that has no persisted category and saves
+// the assignment to the DB: the offline keyword classifier first (instant, deterministic, no
+// AI needed), then the AI model for whatever the keywords couldn't place. Persisting means
+// the analytics category breakdown is stable and no AI reload is ever required.
 @HiltViewModel
 class SpendCategoriesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -25,15 +26,29 @@ class SpendCategoriesViewModel @Inject constructor(
     private val _isCategorizing = MutableLiveData(false)
     val isCategorizing: LiveData<Boolean> = _isCategorizing
 
-    fun categorizeUncategorized(spends: List<Transaction>) {
-        val uncategorized = spends.filter { it.category.isNullOrBlank() }
-        if (uncategorized.isEmpty()) return
-
+    fun categorizeUncategorized() {
         viewModelScope.launch {
             if (_isCategorizing.value == true) return@launch
             _isCategorizing.value = true
             try {
-                val assigned = categorizeSpendsWithAi(context, uncategorized)
+                val uncategorized = transactionDao.getAllNow()
+                    .filter { it.type == TransactionType.SPENT && it.category.isNullOrBlank() }
+                if (uncategorized.isEmpty()) return@launch
+
+                val offlineAssigned = uncategorized.mapNotNull { transaction ->
+                    offlineCategoryOrNull(transaction.comment)
+                        ?.let { transaction.uid to it.name }
+                }
+                offlineAssigned.forEach { (uid, category) ->
+                    transactionDao.updateCategory(uid, category)
+                }
+
+                val aiCandidates = uncategorized.filter {
+                    offlineCategoryOrNull(it.comment) == null
+                }
+                if (aiCandidates.isEmpty()) return@launch
+
+                val assigned = categorizeSpendsWithAi(context, aiCandidates)
                 assigned.forEach { (uid, category) ->
                     transactionDao.updateCategory(uid, category.name)
                 }

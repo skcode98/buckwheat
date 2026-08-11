@@ -48,6 +48,13 @@ fun offlineClassify(comment: String): SpendCategory {
     } ?: SpendCategory.OTHER
 }
 
+// The offline keyword category to PERSIST on a transaction, or null when there is no
+// confident keyword match (offlineClassify would return OTHER). Unlike offlineClassify this
+// never returns OTHER, so blank/junk comments stay uncategorized and can still be refined
+// by the AI pass (or left to the display fallback). Pure so it is trivially unit-testable.
+fun offlineCategoryOrNull(comment: String): SpendCategory? =
+    offlineClassify(comment).takeIf { it != SpendCategory.OTHER }
+
 // The category a transaction is displayed under in analytics: the persisted AI category when
 // present, otherwise the offline keyword guess. Pure so it is trivially unit-testable.
 fun categoryFor(transaction: Transaction): SpendCategory =
