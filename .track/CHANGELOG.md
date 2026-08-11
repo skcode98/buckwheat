@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-08-11 — Big batch: on-track alert fix, archived categories, Phase 5 allowance, Phase 6 miner, past-period analytics
+
+User request: "do this all. plan first then work on them all" (5 items). Plan: `.track/BIG_BATCH_PLAN.md`. Golden pipeline green — **281 tests, 0 failures**, APK built. Committed + pushed: A `b23b12d`, B `c39e21b`, C `124491e`, D `d61edc4`, E `84f5aaf`.
+
+### A — On-track overspend alert: last `setRepeating` → `setWindow`
+
+- **`notifications/OnTrackAlertScheduler.kt`**: `setRepeating` (inexact on modern Android, up to ~18h late) → `setWindow(RTC_WAKEUP, trigger, WINDOW_MILLIS=10min)`, one-shot. This was the last `setRepeating` alarm; the daily reminder, widget refresh, spend digest, and recurring-due alerts already use `setWindow`.
+- **`notifications/OnTrackAlertReceiver.kt`**: after posting, re-arms the next day's alert from `onTrackAlertHourStoreKey`/`onTrackAlertMinuteStoreKey` (defaults `DAILY_REMINDER_DEFAULT_HOUR/MINUTE`) — but only while `onTrackAlertEnabledStoreKey` is still true (a one-shot must not resurface after the user toggles the alert off).
+- **`notifications/ReminderBootReceiver.kt`**: reschedules the on-track alert on `ACTION_BOOT_COMPLETED` when enabled (mirrors the daily-reminder/recurring blocks; previously missing).
+- No strings, no tests (alarm scheduling is Android-side; matches the existing untested pattern).
+
+### B — Archived transactions: persistent category (Room v13 → v14) + full-history backfill
+
+- **`data/entities/ArchivedTransaction.kt`**: new `@ColumnInfo(name="category") val category: String? = null`; `toTransaction()` now carries it.
+- **`di/DatabaseModule.kt`**: manual `AutoMigration13to14` (`ALTER TABLE archived_transactions ADD COLUMN category TEXT`), `version = 14`, registered in `MANUAL_MIGRATIONS`.
+- **`di/SpendsRepository.kt` `archiveImported`**: out-of-period imported rows keep their offline/AI category on the archived row.
+- **`backup/BackupData.kt`**: codec round-trips `category` (`isNull`-safe → v1 exports restore fine); `BackupDataTest` fixture now carries `category = "FOOD"`.
+- **`data/dao/BudgetPeriodDao.kt`**: new `updateCategory(uid, category)` for `archived_transactions`.
+- **`data/categories/SpendCategoriesViewModel.kt` `categorizeUncategorized()`**: split into `categorizeTransactions()` + `categorizeArchived()` — archived spends (separate table / uid space) are scanned for missing categories, offline-first then AI, persisted via `BudgetPeriodDao.updateCategory`. Analytics now categorizes the WHOLE history, not just the active period.
+- Tests: `FakeBudgetPeriodDao` + `updateCategory` (must re-apply the uid after `copy` — same gotcha as `updateTotalSpent`); `ImportAutoCategorizeTest` +2 (out-of-period import archives the offline category; past-dated row keeps it through `toTransaction`).
+
+### C — Interleaved Phase 5: wallet daily-allowance reservation (mitigated)
+
+- **`interleaved/InterleavedBudget.kt`**: new pure `dailyPace(category)` — DAILY → `amount`; MONTHLY/QUARTERLY/ANNUAL → `amount / (freqMonths × 30)` (per-day share). **Correction over the plan draft's literal `monthlyEquivalent`**: that would reserve ~30× the intended amount; the plan's own example ("FOOD monthly @5000 ≈ ₹166/day") requires the per-day pace. New pure `applyCategoryAllowance(raw, allowance) = max(raw − allowance, raw×0.80, 0)` normalized to scale 2 (plan's ±20% clamp).
+- **`di/SpendsRepository.kt`**: private `interleavedDailyAllowance()` = Σ `dailyPace` over all scheduled categories (DAILY included — a per-day cap is already a daily reservation); applied as an overlay at the two recompute points `whatBudgetForDay(...)` and `nextDayBudget(...)`. `updateDailyBudget` (explicit manual edit) and `setDailyBudget` (explicit commit) are untouched. Zero schedules → allowance 0 → byte-identical to before.
+- Tests: `InterleavedBudgetTest` +4 (`dailyPace` ×2, `applyCategoryAllowance` ×2); new `di/InterleavedAllowanceTest` (5 Robolectric cases: no-schedule unchanged 2000.00; MONTHLY 6000 → 1800.00; nextDayBudget same; DAILY 200 → 1800.00; 20% clamp 5000/10d → 400.00). `countDays` is inclusive — `plusDays(9)` → restDays 10.
+
+### D — Interleaved Phase 6 (data calibration): pattern-miner engine
+
+Real calibration is still **blocked on the user's 6-month export**; the engine is built + tested and ready to run.
+
+- **`interleaved/AnalyzeSpendingPatterns.kt`** (new, pure): `ScheduleSuggestion(name, amount, frequency)`, `suggestFrequency(dates)` (≥2 occurrences over ≥60 days; median gap 20–45d → MONTHLY, 60–120d → QUARTERLY, span ≥330d → ANNUAL, else null), `medianGapDays`, `medianAmount` (scale-2 HALF_EVEN), `analyzeSpendingPatterns(spends)` grouped by persisted category (uncategorized ignored).
+- **`di/SettingsRepository.kt`**: `applyScheduleSuggestions(suggestions, anchor)` — seeds schedule + cap only for categories with **no existing schedule** (user choices always win), single `edit` via `setCategoryCapsAndSchedules`.
+- Tests: `interleaved/AnalyzeSpendingPatternsTest` (10); `InterleavedRolloverTest` +2 (`applyScheduleSuggestions` seeds + keeps an existing DAILY schedule untouched).
+
+### E — Whole-history analytics: past-periods viewer upgraded
+
+The archive viewer already existed (**Settings → Past periods → period detail**), so no duplicate Analytics entry was added. What was missing was the analytics depth.
+
+- **`settings/PeriodDetailSheet.kt`**: when a period has spends, the detail sheet now renders the analytics cards — `SpendCategoriesCard` (persisted categories via Task B, keyword fallback for legacy rows, `categoryEmojis` from `CategoriesManagementViewModel`), `CategoriesChartCard`, `SpendsTrendCard` (all periods passed in → vs-previous works for archived periods too), `SpendsWeekdayCard`. Imported (month-bucket) periods get the same cards. No new strings (all card titles are internal).
+
 ## 2026-08-11 — Auto-categorization persisted to DB (offline + AI), incl. CSV imports
 
 User request: "AUTOCATEGORIZATION for the imported data and save it in db, no need to load again from AI." The editor already has a manual `CategorySelector` and analytics already shows category utilization (`SpendCategoriesCard` donut + chips), so the work focused on making categorization *persistent and complete*.

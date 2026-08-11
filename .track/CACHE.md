@@ -64,8 +64,13 @@
 | Category Caps Sheet | `app/.../settings/CategoryCapsSheet.kt` |
 | Spend Categories Card | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
-| Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`daysLeftInWindow`/`projectedExhaustionDate`) |
+| Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`dailyPace`/`applyCategoryAllowance`/`daysLeftInWindow`/`projectedExhaustionDate`) |
 | Interleaved Budget Test | `app/.../test/.../interleaved/InterleavedBudgetTest.kt` |
+| Interleaved Allowance Test | `app/.../test/.../di/InterleavedAllowanceTest.kt` (Phase 5 daily-allowance overlay) |
+| Pattern Miner Engine | `app/.../interleaved/AnalyzeSpendingPatterns.kt` (pure, `suggestFrequency`/`medianAmount`/`analyzeSpendingPatterns`; write via `SettingsRepository.applyScheduleSuggestions`) |
+| Pattern Miner Test | `app/.../test/.../interleaved/AnalyzeSpendingPatternsTest.kt` |
+| On-Track Alert Scheduler | `app/.../notifications/OnTrackAlertScheduler.kt` (`setWindow`, re-armed by receiver) |
+| Past-Periods Sheets | `app/.../settings/PastPeriodsSheet.kt` (list) + `PeriodDetailSheet.kt` (detail incl. analytics cards) + `ArchivesViewModel.kt` |
 | Interleaved Anchor Sheet | `app/.../settings/InterleavedAnchorSheet.kt` (INTERLEAVED_ANCHOR_SHEET, single-day DatePicker for the window anchor) |
 
 --- 

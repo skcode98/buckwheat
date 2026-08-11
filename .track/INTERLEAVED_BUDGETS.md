@@ -138,19 +138,25 @@ progress source.
 - Data: `SpendsRepository.getInterleavedProgress()` `Flow` = `combine` of the schedules+caps DataStore flow with `transactionDao.getAll().asFlow()` (window-spent via `windowSpent`, skips DAILY + zero-amount, sorted by name) → observed via `spendsViewModel.interleavedProgress.asLiveData()` (no `runBlocking`, no key-less `remember{}`).
 - `CapProgressBar` visibility `private` → `internal` for reuse; 6 new EN strings.
 
-## Phase 5 (stretch, no commitment): wallet daily-allowance integration (6-8h)
+## Phase 5: wallet daily-allowance integration — ✅ SHIPPED 2026-08-11 (mitigated)
 
-Aggregate `monthlyEquivalent(category)` across scheduled categories into the wallet's daily
-counter, clamped to `dailyBudget ± 20%` (existing `spentFromDailyBudgetStoreKey` reallocation
-blocks at `SpendsRepository.kt:416-444`, `714`). Do **not** start until Phases 1-4 ship and the
-UX is validated — this touches the core wallet math every screen depends on.
+Implemented conservatively as a pure overlay (no core-math rewrite): `dailyPace(category)` =
+DAILY → `amount`; MONTHLY/QUARTERLY/ANNUAL → `amount / (freqMonths × 30)` (per-day share, per
+the plan's own "₹166/day" example — the draft's literal `monthlyEquivalent` would over-reserve
+~30×). `applyCategoryAllowance(raw, allowance) = max(raw − allowance, raw×0.80, 0)` (scale-2).
+Applied only at `whatBudgetForDay`/`nextDayBudget` returns; `updateDailyBudget`/`setDailyBudget`
+untouched; no schedules → allowance 0 → behavior identical. See `.track/CHANGELOG.md`.
 
 ## Phase 6 (deferred — PENDING YOUR 6-MONTH DATA): calibration
 
-When you provide the transaction export:
+The pattern-miner **engine is built + tested and ready to run** (`interleaved/AnalyzeSpendingPatterns.kt`
++ `SettingsRepository.applyScheduleSuggestions`, 12 tests). Actual calibration (tuning defaults
+from the real export) is **still blocked until you provide the 6-month transaction export**. When
+you provide it:
 1. Pattern miner (`interleaved/AnalyzeSpendingPatterns.kt`): group by category, infer frequency
    (4-6 months → MONTHLY, every 3 → QUARTERLY, once/yr → ANNUAL), median amount → suggested `amount`.
-2. Backfill `categorySchedulesStoreKey` rows for detected patterns.
+2. Backfill `categorySchedulesStoreKey` rows for detected patterns via `applyScheduleSuggestions`
+   (only categories with no existing schedule; user choices win).
 3. Validation harness: replay export through engine; assert projected-vs-actual within tolerance.
 
 ## Edge cases & semantics
