@@ -229,6 +229,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `spendDigestEnabledStoreKey` (Boolean) / `spendDigestFrequencyStoreKey` (String `WEEKLY`/`MONTHLY`) / `spendDigestHourStoreKey` / `spendDigestMinuteStoreKey` (Int, default 20:00 `SPEND_DIGEST_DEFAULT_HOUR/MINUTE`) — weekly/monthly spend digest; one-shot `setWindow` re-armed +7 days / +1 calendar month by `SpendDigestReceiver.rearm`
 - `goalMilestonesNotifiedStoreKey` — per-goal already-notified milestone buckets, serialized `"goalId:bucket;goalId:bucket"` (String; write via `getGoalNotifiedMilestones()`/`setGoalNotifiedMilestones()`)
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)
+- `aiIntelligenceEnabledStoreKey` — AI Intelligence master toggle (Boolean; default **on** via `aiIntelligenceEnabled(prefs)` in `SettingsRepository.kt`; `false` disables both voice-AI parsing → `NotConfigured` and AI categorization → empty map, offline fallbacks stand in)
 - `categoryCapsStoreKey` — per-category spending caps, serialized `"name:amount;name:amount"` (String; drops ≤0 amounts; whole settings DataStore file excluded from cloud backup so caps don't survive device transfer)
 - `categoryCapNotifiedStoreKey` — per-category last-announced bucket, serialized `"name:bucket;name:bucket"` (String; bucket 0=none, 1=near/80%, 2=reached/100%; cleared on new budget period and cleared when caps are edited)
 

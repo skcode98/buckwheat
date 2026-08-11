@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-11 — Settings reorganization + analytics calendar fixes + AI master toggle (uncommitted)
+
+Three UX improvements landed together (auto-triggered, tracked via this file):
+
+1. **Analytics calendar (heatmap) color + header fixes** — `analytics/SpendsCalendar.kt`:
+   - Root cause of "green days showing red": the per-day aggregation walked transactions in order and treated any same-day `SET_DAILY_BUDGET` row as spending (adding the daily-budget amount to the day's spend total), and used `0` as the fallback budget for days without a manual budget row. Rebuilt `spendingDays` order-independently: per-day spend = `SPENT` rows only; per-day budget = last `SET_DAILY_BUDGET` override for that day else the current `dailyBudget` (new param, now passed from `Analytics` via `spendsViewModel.dailyBudget`). Also guarded the green-blend division (never divide by a non-positive budget).
+   - Month heading misalignment: `MonthHeader` used `Alignment.Bottom` inside the 48dp (`CELL_SIZE`) row while the navigation arrows are centered — the title sat visibly lower than the arrows. Changed to `Alignment.CenterVertically`.
+2. **Notifications submenu** — new `settings/NotificationsSheet.kt` (`NOTIFICATIONS_SHEET = "notifications"`) hosts the 5 notification settings (`DailyBudgetReminderSetting`, `RecurringPaymentAlertSetting`, `SpendDigestSetting`, `OverspendNotificationSetting`, `OnTrackAlertSetting`). `Settings.kt` now shows a single "Notifications" row (`ic_notifications`) that opens the submenu. Registered in `home/BottomSheets.kt`. New string `notifications_title`.
+3. **AI Intelligence master toggle** — new `settings/AiIntelligenceSetting.kt` placed at the top of the Voice AI submenu (`VoiceAiSettingsSheet`). New DataStore key `aiIntelligenceEnabledStoreKey` (`booleanPreferencesKey("aiIntelligenceEnabled")`, default **on**). Pure helper `aiIntelligenceEnabled(prefs)` in `di/SettingsRepository.kt`. When off, `parseVoiceInputWithAi` returns `NotConfigured` (offline parser stands in) and `categorizeSpendsWithAi` returns an empty map (offline keyword classifier stands in). New strings `ai_intelligence_title` + `ai_intelligence_description`. Tests: `di/AiIntelligenceGateTest` (4 cases).
+
+## 2026-08-11 — Interleaved-budget plan revised to v2 (`.track/INTERLEAVED_BUDGETS.md`)
+
+The planned interleaved-budgets feature was redesigned to build on the shipped Feature 9 caps instead of a parallel Room system. Key changes: no DB migration (extend DataStore with `categorySchedulesStoreKey` = `"name:frequency:anchorEpochDay;..."`), pure `java.time` engine `interleaved/InterleavedBudget.kt` (calendar-month window math), notified state carries `windowStartEpochDay` for rollover detection, `setBudget` does NOT reset scheduled windows, and wallet daily-allowance integration moved to a Phase 5 stretch goal. Corrected v1 errors: DB version is 13 (not 14), kotlinx-datetime is not a dependency, `changeDayAction()` doesn't exist. Open questions recorded at the bottom of the plan.
+
 ## 2026-08-10 — Bug fix: "vs previous" analytics disappears on early period restart (committed `52fc39c`)
 
 When a user started a new budget period before the old period's scheduled finish date, the "vs previous" comparison card vanished — it appeared for 1-2 recompositions then disappeared.
