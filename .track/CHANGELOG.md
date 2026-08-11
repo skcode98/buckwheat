@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-11 — Interleaved budgets Phase 4: Analytics card (committed `<PENDING_HASH>`, pushed)
+
+- **`analytics/InterleavedBudgetCard.kt`** (new): full-width card rendered in `Analytics.kt` right after `WholeBudgetCard`; composable self-hides when `progress.isEmpty()` (zero scheduled categories → nothing renders). Per scheduled category shows: emoji + localized name (`categoryDisplayName`), window date range ("1 Sep – 30 Sep" via `prettyDate("dd MMM")` on `windowStart`…`windowEnd-1` since the engine window is half-open), `numberFormat` amounts ("₹1,200 of ₹5,000"), the reused `CapProgressBar` (amber ≥80% / red ≥100%), and a velocity line — "at ₹X/day → runs out on <date>" (`projectedExhaustionDate`), "at ₹X/day — on track for this window", or "Nothing spent yet".
+- **`di/SpendsRepository.kt`**: new public `getInterleavedProgress(): Flow<List<InterleavedProgress>>` — `combine` of the schedules+caps DataStore flow with `transactionDao.getAll().asFlow()`; per category: current `windowFor` window, `windowSpent` (SPENT only), skips DAILY / zero-amount schedules, sorted by name. Top-level `data class InterleavedProgress(category, spent, windowStart, windowEnd, today)`.
+- **`data/SpendsViewModel.kt`**: `interleavedProgress = spendsRepository.getInterleavedProgress().asLiveData()`; `Analytics.kt` observes it with `.observeAsState(emptyList())`.
+- **`analytics/categoriesChart/SpendCategoriesCard.kt`**: `CapProgressBar` changed `private` → `internal` so the new card reuses it.
+- **`values/strings.xml`**: 6 new EN strings (`interleaved_budgets_title`, `interleaved_window_range`, `interleaved_spent_of_cap`, `interleaved_velocity_no_spend`, `interleaved_velocity_on_track`, `interleaved_velocity_runs_out`).
+- Note: the plan said "after `SpendsBudgetCard`" but that card is not composed anywhere in `Analytics.kt` (only its own previews exist); the interleaved card sits after `WholeBudgetCard` at the top of the analytics column.
+- Verify: golden pipeline (`:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`) green — **243 tests, 0 failures**, APK built.
+
 ## 2026-08-11 — Interleaved budgets Phase 3: Settings UI (frequency + anchor + templates)
 
 - **`settings/CategoryCapsSheet.kt`**: each cap row gained an `ExposedDropdownMenuBox` frequency dropdown (DAILY/MONTHLY/QUARTERLY/ANNUAL; DAILY removes the schedule → plain cap). Non-DAILY rows show a tappable anchor date (`prettyDate`, primary color) that opens the anchor picker. Three quick-template `AssistChip`s (Monthly Essentials FOOD/TRANSPORT/BILLS @5000, Quarterly Big Tickets HEALTH/SHOPPING/ENTERTAINMENT @15000, Annual Obligations TRAVEL/BILLS @60000) use built-in stored names so `windowSpent` matches persisted categories; template default amounts seed caps (a zero-amount schedule can never cross a cap).

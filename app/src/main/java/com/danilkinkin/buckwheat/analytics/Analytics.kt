@@ -100,6 +100,7 @@ fun Analytics(
 
     val categoryCapsViewModel: CategoryCapsViewModel = hiltViewModel()
     val categoryCaps by categoryCapsViewModel.caps.observeAsState(emptyMap())
+    val interleavedProgress by spendsViewModel.interleavedProgress.observeAsState(emptyList())
 
     LaunchedEffect(spends) {
         spendCategoriesViewModel.categorizeUncategorized(spends)
@@ -143,6 +144,12 @@ fun Analytics(
                             startDate = startPeriodDate,
                             finishDate = finishPeriodDate,
                             actualFinishDate = finishPeriodActualDate,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        InterleavedBudgetCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            progress = interleavedProgress,
+                            currency = currency,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         if (spends.isNotEmpty()) {

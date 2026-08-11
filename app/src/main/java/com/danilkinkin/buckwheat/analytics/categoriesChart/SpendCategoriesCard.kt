@@ -207,7 +207,7 @@ fun SpendCategoriesCard(
 // Thin progress bar under a category chip when a cap is configured. Turns amber at/above
 // 80% and red once the cap is reached; the label shows the percent of the cap spent.
 @Composable
-private fun CapProgressBar(
+internal fun CapProgressBar(
     progress: BigDecimal,
     cap: BigDecimal,
     modifier: Modifier = Modifier,

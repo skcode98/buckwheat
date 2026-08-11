@@ -46,6 +46,7 @@ class SpendsViewModel @Inject constructor(
     var finishPeriodDate = spendsRepository.getFinishPeriodDate().asLiveData()
     var finishPeriodActualDate = spendsRepository.getFinishPeriodActualDate().asLiveData()
     var lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().asLiveData()
+    var interleavedProgress = spendsRepository.getInterleavedProgress().asLiveData()
 
     val periodSpends: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
         value = emptyList()

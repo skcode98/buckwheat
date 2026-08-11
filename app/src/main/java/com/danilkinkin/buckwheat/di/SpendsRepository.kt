@@ -43,12 +43,15 @@ import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.firstOrNull
 import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Date
 import javax.inject.Inject
@@ -1149,4 +1152,52 @@ class SpendsRepository @Inject constructor(
             }
         }
     }
+
+    // Emits per-category progress for every non-DAILY scheduled category inside its current
+    // interleaved window, recomputed on schedule/cap/transaction changes. Drives the
+    // analytics InterleavedBudgetCard.
+    fun getInterleavedProgress(): Flow<List<InterleavedProgress>> {
+        val schedulesFlow: Flow<Map<String, InterleavedCategory>> =
+            context.settingsDataStore.data.map { prefs ->
+                parseCategorySchedules(prefs[categorySchedulesStoreKey])
+                    .mapValues { (name, schedule) ->
+                        schedule.copy(
+                            amount = parseCategoryCaps(prefs[categoryCapsStoreKey])[name]
+                                ?: BigDecimal.ZERO,
+                        )
+                    }
+            }
+        val transactionsFlow: Flow<List<Transaction>> = transactionDao.getAll().asFlow()
+        return combine(schedulesFlow, transactionsFlow) { schedules, transactions ->
+            val today = getCurrentDateUseCase().toLocalDate()
+            val spends = transactions
+                .filter { it.type == TransactionType.SPENT }
+                .map { WindowSpend(it.date, it.value, it.category) }
+            schedules.values
+                .asSequence()
+                .filter { it.frequency != CategoryFrequency.DAILY && it.amount > BigDecimal.ZERO }
+                .mapNotNull { category ->
+                    val window = windowFor(category, today) ?: return@mapNotNull null
+                    InterleavedProgress(
+                        category = category,
+                        spent = windowSpent(spends, category, today),
+                        windowStart = window.first,
+                        windowEnd = window.second,
+                        today = today,
+                    )
+                }
+                .sortedBy { it.category.name }
+                .toList()
+        }
+    }
 }
+
+// Aggregated progress for one scheduled category inside its current interleaved window,
+// ready for the analytics InterleavedBudgetCard.
+data class InterleavedProgress(
+    val category: InterleavedCategory,
+    val spent: BigDecimal,
+    val windowStart: LocalDate,
+    val windowEnd: LocalDate,
+    val today: LocalDate,
+)

@@ -131,14 +131,12 @@ progress source.
   `edit {}` writes via `setCategoryCapsAndSchedules` (caps + schedules + notified reset together).
 - 13 new EN strings.
 
-## Phase 4: Analytics card — `InterleavedBudgetCard` (3-4h)
+## Phase 4: Analytics card — `InterleavedBudgetCard` — ✅ SHIPPED 2026-08-11
 
-- New card after `SpendsBudgetCard` in `Analytics.kt`, rendered only when ≥1 scheduled category exists.
-- Per category: name + emoji, window date range ("Sep 1 – Sep 30"), progress bar (reuse
-  `CapProgressBar`: amber ≥80%, red ≥100%), velocity line
-  ("at ₹45/day → 70% of window in 12 days"), and projected exhaustion date.
-- Data: combine the schedules DataStore flow with window-spent totals from the DAO query in a
-  repository `Flow`; observe via `.asLiveData()` (no `runBlocking`, no `remember{}` without keys).
+- New card in `Analytics.kt` right after `WholeBudgetCard`, rendered only when ≥1 scheduled category exists (composable self-hides on empty progress; `SpendsBudgetCard` from the original plan is never actually composed in Analytics, so the card anchored to the top budget block instead).
+- Per category: name + emoji, window date range ("1 Sep – 30 Sep" = `windowStart`…`windowEnd−1`, half-open engine window), reused `CapProgressBar` (amber ≥80%, red ≥100%), "₹1,200 of ₹5,000" amounts, velocity line ("at ₹X/day → runs out on <date>" via `projectedExhaustionDate`; "at ₹X/day — on track for this window"; "Nothing spent yet").
+- Data: `SpendsRepository.getInterleavedProgress()` `Flow` = `combine` of the schedules+caps DataStore flow with `transactionDao.getAll().asFlow()` (window-spent via `windowSpent`, skips DAILY + zero-amount, sorted by name) → observed via `spendsViewModel.interleavedProgress.asLiveData()` (no `runBlocking`, no key-less `remember{}`).
+- `CapProgressBar` visibility `private` → `internal` for reuse; 6 new EN strings.
 
 ## Phase 5 (stretch, no commitment): wallet daily-allowance integration (6-8h)
 
