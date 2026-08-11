@@ -108,6 +108,14 @@
   <string name="interleaved_velocity_no_spend">Nothing spent yet</string>
   <string name="interleaved_velocity_on_track">at %1$s/day — on track for this window</string>
   <string name="interleaved_velocity_runs_out">at %1$s/day → runs out on %2$s</string>
+  <string name="ai_insight_title">AI Insight</string>
+  <string name="ai_insight_description">An AI analysis of this period\'s spending — budget pace, category concentration, and what to watch out for.</string>
+  <string name="ai_insight_generate">Generate report</string>
+  <string name="ai_insight_regenerate">Regenerate</string>
+  <string name="ai_insight_loading">Analyzing your spending…</string>
+  <string name="ai_insight_not_configured_text">AI reports need an API key. Set one up under AI Intelligence to unlock this analysis.</string>
+  <string name="ai_insight_open_settings">Set up AI</string>
+  <string name="ai_insight_retry">Try again</string>
   <string name="on_track_alert_setting_title">Warn before the daily budget is exceeded</string>
   <string name="on_track_alert_time">Alert time</string>
   <string name="on_track_alert_schedule_format">Every day at %1$s</string>

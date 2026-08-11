@@ -42,6 +42,9 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.ai.AiInsightUiState
+import com.danilkinkin.buckwheat.ai.AiInsightViewModel
+import com.danilkinkin.buckwheat.settings.VOICE_AI_SETTINGS_SHEET
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
 import java.util.*
@@ -102,6 +105,9 @@ fun Analytics(
     val categoryCaps by categoryCapsViewModel.caps.observeAsState(emptyMap())
     val interleavedProgress by spendsViewModel.interleavedProgress.observeAsState(emptyList())
 
+    val aiInsightViewModel: AiInsightViewModel = hiltViewModel()
+    val aiInsightState by aiInsightViewModel.state.observeAsState(AiInsightUiState.Idle)
+
     LaunchedEffect(spends) {
         spendCategoriesViewModel.categorizeUncategorized(spends)
     }
@@ -150,6 +156,17 @@ fun Analytics(
                             modifier = Modifier.fillMaxWidth(),
                             progress = interleavedProgress,
                             currency = currency,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        AiInsightCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            state = aiInsightState,
+                            onGenerate = { aiInsightViewModel.generate() },
+                            onOpenAiSettings = {
+                                appViewModel.openSheet(
+                                    PathState(name = VOICE_AI_SETTINGS_SHEET)
+                                )
+                            },
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         if (spends.isNotEmpty()) {
