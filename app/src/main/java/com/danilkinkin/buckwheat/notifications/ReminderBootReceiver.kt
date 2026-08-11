@@ -13,6 +13,9 @@ import com.danilkinkin.buckwheat.di.recurringAlertMinuteStoreKey
 import com.danilkinkin.buckwheat.di.reminderEnabledStoreKey
 import com.danilkinkin.buckwheat.di.reminderHourStoreKey
 import com.danilkinkin.buckwheat.di.reminderMinuteStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertEnabledStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertHourStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertMinuteStoreKey
 import com.danilkinkin.buckwheat.di.spendDigestEnabledStoreKey
 import com.danilkinkin.buckwheat.di.spendDigestFrequencyStoreKey
 import com.danilkinkin.buckwheat.di.spendDigestHourStoreKey
@@ -43,6 +46,12 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     val hour = prefs[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
                     val minute = prefs[recurringAlertMinuteStoreKey] ?: RECURRING_ALERT_DEFAULT_MINUTE
                     RecurringPaymentAlertScheduler.schedule(context, hour, minute)
+                }
+                val onTrackEnabled = prefs[onTrackAlertEnabledStoreKey] ?: false
+                if (onTrackEnabled) {
+                    val hour = prefs[onTrackAlertHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+                    val minute = prefs[onTrackAlertMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+                    OnTrackAlertScheduler.schedule(context, hour, minute)
                 }
                 val digestEnabled = prefs[spendDigestEnabledStoreKey] ?: false
                 if (digestEnabled) {

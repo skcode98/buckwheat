@@ -10,7 +10,12 @@ object OnTrackAlertScheduler {
     const val ACTION_ON_TRACK_ALERT = "com.danilkinkin.buckwheat.ON_TRACK_ALERT"
     const val NOTIFICATION_ID = 102
     private const val REQUEST_CODE = 102
+    private const val WINDOW_MILLIS = 10 * 60 * 1000L
 
+    // Uses setWindow (not setRepeating) because on modern Android setRepeating is inexact with
+    // a huge window (~18h), which could defer the alert far past its configured time. setWindow
+    // bounds the delay to WINDOW_MILLIS past the trigger without requiring SCHEDULE_EXACT_ALARM.
+    // Because setWindow is one-shot, the receiver re-arms the next day's alert after each fire.
     fun schedule(
         context: Context,
         hour: Int = DAILY_REMINDER_DEFAULT_HOUR,
@@ -27,10 +32,10 @@ object OnTrackAlertScheduler {
             }
         }
 
-        alarmManager.setRepeating(
+        alarmManager.setWindow(
             AlarmManager.RTC_WAKEUP,
             calendar.timeInMillis,
-            AlarmManager.INTERVAL_DAY,
+            WINDOW_MILLIS,
             buildPendingIntent(context),
         )
     }

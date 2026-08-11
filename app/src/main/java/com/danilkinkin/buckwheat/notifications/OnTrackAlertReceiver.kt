@@ -11,7 +11,11 @@ import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.di.currencyStoreKey
 import com.danilkinkin.buckwheat.di.dailyBudgetStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertEnabledStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertHourStoreKey
+import com.danilkinkin.buckwheat.di.onTrackAlertMinuteStoreKey
 import com.danilkinkin.buckwheat.di.spentFromDailyBudgetStoreKey
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.numberFormat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +33,21 @@ class OnTrackAlertReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 postAlert(context)
+                // setWindow is one-shot: re-arm the next day's alert at the stored time while
+                // the toggle is still on.
+                rearmNextDay(context)
             } finally {
                 pendingResult.finish()
             }
         }
+    }
+
+    private suspend fun rearmNextDay(context: Context) {
+        val prefs = context.settingsDataStore.data.first()
+        if (prefs[onTrackAlertEnabledStoreKey] != true) return
+        val hour = prefs[onTrackAlertHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+        val minute = prefs[onTrackAlertMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+        OnTrackAlertScheduler.schedule(context, hour, minute)
     }
 
     private suspend fun postAlert(context: Context) {
