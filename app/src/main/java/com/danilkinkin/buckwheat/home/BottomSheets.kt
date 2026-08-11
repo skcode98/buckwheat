@@ -273,7 +273,37 @@ fun BottomSheets(
     BottomSheetWrapper(
         name = CATEGORY_CAPS_SHEET,
     ) { state ->
-        CategoryCapsSheet()
+        CategoryCapsSheet(
+            onEditAnchor = { name, anchorEpochDay ->
+                coroutineScope.launch {
+                    appViewModel.openSheet(
+                        PathState(
+                            name = INTERLEAVED_ANCHOR_SHEET,
+                            args = mapOf(
+                                "categoryName" to name,
+                                "anchorEpochDay" to anchorEpochDay,
+                            ),
+                        )
+                    )
+                }
+            },
+        )
+    }
+
+    BottomSheetWrapper(
+        name = INTERLEAVED_ANCHOR_SHEET,
+    ) { state ->
+        val categoryName = state.args["categoryName"] as? String
+        if (categoryName != null) {
+            InterleavedAnchorSheet(
+                categoryName = categoryName,
+                anchorEpochDay = state.args["anchorEpochDay"] as? Long
+                    ?: LocalDate.now().toEpochDay(),
+                onClose = {
+                    coroutineScope.launch { state.hide() }
+                },
+            )
+        }
     }
 
     BottomSheetWrapper(

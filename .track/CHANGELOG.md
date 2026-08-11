@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-11 — Interleaved budgets Phase 3: Settings UI (frequency + anchor + templates)
+
+- **`settings/CategoryCapsSheet.kt`**: each cap row gained an `ExposedDropdownMenuBox` frequency dropdown (DAILY/MONTHLY/QUARTERLY/ANNUAL; DAILY removes the schedule → plain cap). Non-DAILY rows show a tappable anchor date (`prettyDate`, primary color) that opens the anchor picker. Three quick-template `AssistChip`s (Monthly Essentials FOOD/TRANSPORT/BILLS @5000, Quarterly Big Tickets HEALTH/SHOPPING/ENTERTAINMENT @15000, Annual Obligations TRAVEL/BILLS @60000) use built-in stored names so `windowSpent` matches persisted categories; template default amounts seed caps (a zero-amount schedule can never cross a cap).
+- **`settings/InterleavedAnchorSheet.kt`** (new): single-day `DatePicker` sheet (`INTERLEAVED_ANCHOR_SHEET`) that moves only the window anchor via `setAnchor` (frequency + amount preserved). Registered in `home/BottomSheets.kt`; `CategoryCapsSheet` opens it through `appViewModel.openSheet(PathState(...))` with `onEditAnchor`.
+- **`settings/CategoryCapsViewModel.kt`**: new `interleaved: LiveData<Map<String, InterleavedCategory>>` (from `getInterleavedCategories()`), plus `setInterleaved` (frequency/anchor, single `edit {}` via `setCategoryCapsAndSchedules`), `setAnchor`, `applyTemplate`.
+- **`values/strings.xml`**: 13 new EN strings (frequency labels, anchor hint, templates title + 3 names, anchor picker title).
+- **`test/.../util/NumberFormatTest.kt`** (flake fix): `roundsToWholeWhenRoundValuesEnabled` raced `Application.kt`'s DataStore collector (which asynchronously resets `NumberDisplayConfig.roundValues` to the stored default), so the golden pipeline intermittently failed. The test now drives the flag through the real DataStore (`roundValuesStoreKey`) and waits for the collector to apply it; `@After` removes the key.
+- Verify: golden pipeline (`:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`) green — **243 tests, 0 failures**, APK built.
+
 ## 2026-08-11 — Interleaved budgets Phase 2: schedules codec + repository rollover wiring
 
 - **`di/SettingsRepository.kt`**: new `categorySchedulesStoreKey` (`"name:frequency:anchorEpochDay;..."`) with `serializeCategorySchedules`/`parseCategorySchedules` (defensive, drops malformed entries). New window-aware notified codec `parseCategoryCapNotifiedWithWindow`/`serializeCategoryCapNotifiedWithWindow` (`"name:bucket@windowStartEpochDay"`; legacy `"name:bucket"` → sentinel window, so first rollover resets). `parseCategoryCapNotified` now delegates to the window-aware parse (existing callers unchanged). New APIs: `getCategorySchedules()` Flow, `getInterleavedCategories()` Flow (schedules merged with cap amounts), `setCategoryCapsAndSchedules()` (caps + schedules + notified reset in a single edit).

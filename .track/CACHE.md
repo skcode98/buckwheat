@@ -66,6 +66,7 @@
 | Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
 | Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`daysLeftInWindow`/`projectedExhaustionDate`) |
 | Interleaved Budget Test | `app/.../test/.../interleaved/InterleavedBudgetTest.kt` |
+| Interleaved Anchor Sheet | `app/.../settings/InterleavedAnchorSheet.kt` (INTERLEAVED_ANCHOR_SHEET, single-day DatePicker for the window anchor) |
 
 --- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |

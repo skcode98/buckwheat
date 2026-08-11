@@ -89,6 +89,17 @@
   <string name="category_caps_description">Set a cap per category. You\'ll get a notification at 80% and 100% of the cap.</string>
   <string name="category_caps_hint">Cap</string>
   <string name="category_caps_remove">Remove cap</string>
+  <string name="category_caps_frequency">Frequency</string>
+  <string name="category_caps_frequency_daily">Daily</string>
+  <string name="category_caps_frequency_monthly">Monthly</string>
+  <string name="category_caps_frequency_quarterly">Quarterly</string>
+  <string name="category_caps_frequency_annual">Annual</string>
+  <string name="category_caps_anchor_hint">Set start date</string>
+  <string name="category_caps_templates_title">Quick templates</string>
+  <string name="category_caps_template_monthly_essentials">Monthly Essentials</string>
+  <string name="category_caps_template_quarterly_big_tickets">Quarterly Big Tickets</string>
+  <string name="category_caps_template_annual_obligations">Annual Obligations</string>
+  <string name="interleaved_anchor_title">Start date</string>
   <string name="category_cap_progress">%1$d%% of cap</string>
   <string name="category_cap_reached_label">Cap reached</string>
   <string name="on_track_alert_setting_title">Warn before the daily budget is exceeded</string>

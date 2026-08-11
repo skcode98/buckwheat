@@ -1,8 +1,12 @@
 package com.danilkinkin.buckwheat.util
 
 import android.content.Context
+import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.di.roundValuesStoreKey
+import com.danilkinkin.buckwheat.settingsDataStore
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -27,7 +31,22 @@ class NumberFormatTest {
 
     @After
     fun tearDown() {
+        runBlocking { context.settingsDataStore.edit { it.remove(roundValuesStoreKey) } }
         NumberDisplayConfig.roundValues = false
+    }
+
+    // The Application (Application.kt) syncs NumberDisplayConfig.roundValues from the
+    // settings DataStore on a background scope, so a direct flag write can be clobbered
+    // by that collector's initial false emission. Drive the flag through the real
+    // DataStore instead and wait for the collector to apply it, making the test
+    // deterministic.
+    private fun setRoundValuesViaStore(enabled: Boolean) {
+        runBlocking { context.settingsDataStore.edit { it[roundValuesStoreKey] = enabled } }
+
+        val deadline = System.currentTimeMillis() + 5_000
+        while (NumberDisplayConfig.roundValues != enabled && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
     }
 
     private fun expected(value: BigDecimal, maxFraction: Int, minFraction: Int): String {
@@ -47,7 +66,7 @@ class NumberFormatTest {
 
     @Test
     fun roundsToWholeWhenRoundValuesEnabled() {
-        NumberDisplayConfig.roundValues = true
+        setRoundValuesViaStore(true)
 
         assertEquals(
             expected(BigDecimal("1234.50"), 0, 0),

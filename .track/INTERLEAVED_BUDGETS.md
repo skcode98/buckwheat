@@ -115,17 +115,21 @@ progress source.
 - **Progress source switch**: cap alerts now measure scheduled categories against the current
   window (`categoryProgressTotal` → `windowSpent`) instead of the budget-period total.
 
-## Phase 3: Settings UI — `CategoryCapsSheet.kt` (2-3h)
+## Phase 3: Settings UI — `CategoryCapsSheet.kt` (2-3h) — ✅ SHIPPED 2026-08-11
 
-- Each cap row gains a frequency dropdown (`DAILY/MONTHLY/QUARTERLY/ANNUAL`) and, when not DAILY,
-  an anchor date picker (reuse `base/datePicker`). DAILY stays "plain cap" (current behavior).
-- "Add (+)" gets three quick templates: **Monthly Essentials** (Groceries, Fuel, Transport),
-  **Quarterly Big Tickets** (Medical, Clothing, Repairs), **Annual Obligations** (Insurance,
-  Maintenance) — each template sets frequency + anchor = today.
-- `CategoryCapsViewModel` exposes `interleaved` LiveData derived from `SettingsRepository`
-  `categorySchedulesStoreKey` flow.
-- Strings EN-only in `values/strings.xml` (12 existing cap strings stay; add ~6 new: frequency
-  labels, anchor picker title, template names).
+- Each cap row gains a frequency dropdown (`ExposedDropdownMenuBox`, DAILY/MONTHLY/QUARTERLY/ANNUAL);
+  DAILY removes the schedule entry ("plain cap", current behavior). Non-DAILY rows show the anchor
+  date (tappable, `prettyDate`) that opens a single-day picker sheet (`InterleavedAnchorSheet`,
+  registered as `INTERLEAVED_ANCHOR_SHEET`) writing only the anchor via `setAnchor` (frequency kept).
+- Three quick-template chips (**Monthly Essentials** FOOD/TRANSPORT/BILLS @5000,
+  **Quarterly Big Tickets** HEALTH/SHOPPING/ENTERTAINMENT @15000, **Annual Obligations**
+  TRAVEL/BILLS @60000) — built-in stored names so `windowSpent` matches persisted categories;
+  template default amounts seed caps so no schedule is left at zero (a zero-amount cap never
+  crosses). Anchor = today.
+- `CategoryCapsViewModel` exposes `interleaved` LiveData (`getInterleavedCategories` = schedules
+  merged with cap amounts) plus `setInterleaved` / `setAnchor` / `applyTemplate` — all single
+  `edit {}` writes via `setCategoryCapsAndSchedules` (caps + schedules + notified reset together).
+- 13 new EN strings.
 
 ## Phase 4: Analytics card — `InterleavedBudgetCard` (3-4h)
 
@@ -190,7 +194,7 @@ When you provide the transaction export:
 - [x] Pure engine + tests green; no Android imports in `InterleavedBudget.kt` (28 tests, `InterleavedBudgetTest`)
 - [x] Schedules persist/load via DataStore; legacy data unaffected (codec + window-aware notified parse, 11 `InterleavedScheduleCodecTest`)
 - [x] Rollover resets notifications exactly once per window crossing (4 `InterleavedRolloverTest`; `resyncInterleavedNotified` + window start in notified entries)
-- [ ] Caps sheet edits frequency + anchor; single `edit {}` write
+- [x] Caps sheet edits frequency + anchor; single `edit {}` write (frequency dropdown + anchor picker sheet + 3 template chips; `setInterleaved`/`setAnchor`/`applyTemplate` via `setCategoryCapsAndSchedules`)
 - [ ] `InterleavedBudgetCard` renders windows, progress, velocity; hidden when no schedules
 - [ ] Full pipeline green: `:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`
 - [ ] CHANGELOG / MEMORY / CACHE updated; committed + pushed
