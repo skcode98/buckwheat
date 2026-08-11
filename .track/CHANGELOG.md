@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-08-11 — Interleaved budgets Phase 4: Analytics card (committed `<PENDING_HASH>`, pushed)
+## 2026-08-11 — Interleaved budgets Phase 4: Analytics card (committed `8c8eabf`, pushed)
 
 - **`analytics/InterleavedBudgetCard.kt`** (new): full-width card rendered in `Analytics.kt` right after `WholeBudgetCard`; composable self-hides when `progress.isEmpty()` (zero scheduled categories → nothing renders). Per scheduled category shows: emoji + localized name (`categoryDisplayName`), window date range ("1 Sep – 30 Sep" via `prettyDate("dd MMM")` on `windowStart`…`windowEnd-1` since the engine window is half-open), `numberFormat` amounts ("₹1,200 of ₹5,000"), the reused `CapProgressBar` (amber ≥80% / red ≥100%), and a velocity line — "at ₹X/day → runs out on <date>" (`projectedExhaustionDate`), "at ₹X/day — on track for this window", or "Nothing spent yet".
 - **`di/SpendsRepository.kt`**: new public `getInterleavedProgress(): Flow<List<InterleavedProgress>>` — `combine` of the schedules+caps DataStore flow with `transactionDao.getAll().asFlow()`; per category: current `windowFor` window, `windowSpent` (SPENT only), skips DAILY / zero-amount schedules, sorted by name. Top-level `data class InterleavedProgress(category, spent, windowStart, windowEnd, today)`.
