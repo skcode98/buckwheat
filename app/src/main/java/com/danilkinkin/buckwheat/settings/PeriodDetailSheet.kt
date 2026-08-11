@@ -16,11 +16,16 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.analytics.MinMaxSpentCard
 import com.danilkinkin.buckwheat.analytics.SpendsCountCard
+import com.danilkinkin.buckwheat.analytics.SpendsTrendCard
+import com.danilkinkin.buckwheat.analytics.SpendsWeekdayCard
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
+import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
+import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.base.Divider
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
+import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
 import java.math.BigDecimal
@@ -29,11 +34,17 @@ import java.util.Date
 @Composable
 fun PeriodDetailSheet(
     archivesViewModel: ArchivesViewModel = hiltViewModel(),
+    categoriesManagementViewModel: CategoriesManagementViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val context = LocalContext.current
     val period by archivesViewModel.selectedPeriod.observeAsState(null)
     val transactions by archivesViewModel.selectedPeriodTransactions.observeAsState(emptyList())
+    val periods by archivesViewModel.periods.observeAsState(emptyList())
+    val allCategories by categoriesManagementViewModel.allCategories.observeAsState(emptyList())
+    val categoryEmojis = remember(allCategories) {
+        allCategories.associate { it.name to it.emoji }
+    }
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -145,6 +156,47 @@ fun PeriodDetailSheet(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
+                    if (spends.isNotEmpty()) {
+                        item {
+                            SpendCategoriesCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends.map { it.toTransaction() },
+                                currency = currency,
+                                categoryEmojis = categoryEmojis,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        item {
+                            CategoriesChartCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends.map { it.toTransaction() },
+                                currency = currency,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        item {
+                            SpendsTrendCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends.map { it.toTransaction() },
+                                startDate = period!!.startDate,
+                                finishDate = period!!.finishDate,
+                                currency = currency,
+                                periods = periods,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        item {
+                            SpendsWeekdayCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                spends = spends.map { it.toTransaction() },
+                                startDate = period!!.startDate,
+                                finishDate = period!!.finishDate,
+                                currency = currency,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
 
