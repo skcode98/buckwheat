@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
+import com.danilkinkin.buckwheat.di.aiIntelligenceEnabled
 import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
@@ -41,11 +42,15 @@ sealed class VoiceAiResult {
 // Structured voice-AI parsing. Network access is bounded (10s connect / 20s read), the socket
 // is always disconnected, and every failure is reported through VoiceAiResult.Failure so the
 // caller can fall back to the offline VoiceInputParser and tell the user why AI did not run.
+// When the AI Intelligence master toggle is off the caller sees NotConfigured, same as having
+// no API key, and silently uses the offline parser.
 suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAiResult =
     withContext(Dispatchers.IO) {
         val prefs = context.settingsDataStore.data.first()
         val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        if (apiKey.isBlank()) return@withContext VoiceAiResult.NotConfigured
+        if (!aiIntelligenceEnabled(prefs) || apiKey.isBlank()) {
+            return@withContext VoiceAiResult.NotConfigured
+        }
 
         val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
             DEFAULT_VOICE_AI_PROVIDER_URL

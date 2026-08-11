@@ -63,11 +63,16 @@ fun Settings(
                 ThemeSwitcher()
                 LangSwitcher()
                 RoundValuesSetting()
-                DailyBudgetReminderSetting()
-                RecurringPaymentAlertSetting()
-                SpendDigestSetting()
-                OverspendNotificationSetting()
-                OnTrackAlertSetting()
+                TextRow(
+                    icon = painterResource(R.drawable.ic_notifications),
+                    text = stringResource(R.string.notifications_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(NOTIFICATIONS_SHEET)
+                        )
+                    },
+                )
                 TextRow(
                     icon = painterResource(R.drawable.ic_mic),
                     text = stringResource(R.string.voice_ai_title),

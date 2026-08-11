@@ -126,6 +126,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = NOTIFICATIONS_SHEET,
+    ) {
+        NotificationsSheet()
+    }
+
+    BottomSheetWrapper(
         name = RECALCULATE_DAILY_BUDGET_SHEET,
         cancelable = false,
     ) { state ->

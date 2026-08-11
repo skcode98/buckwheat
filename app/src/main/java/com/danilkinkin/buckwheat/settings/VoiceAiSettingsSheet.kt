@@ -106,6 +106,7 @@ fun VoiceAiSettingsSheet(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = navigationBarHeight)
             ) {
+                AiIntelligenceSetting()
                 Text(
                     text = stringResource(R.string.voice_ai_optional),
                     style = MaterialTheme.typography.titleSmall,

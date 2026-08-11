@@ -60,7 +60,6 @@ import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.getWeek
 import com.danilkinkin.buckwheat.util.getNumberWeeks
 import com.danilkinkin.buckwheat.util.harmonize
-import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.isZero
 import com.danilkinkin.buckwheat.util.prettyWeekDay
 import com.danilkinkin.buckwheat.util.prettyYearMonth
@@ -92,57 +91,36 @@ fun SpendsCalendar(
     finishDate: Date,
     actualFinishDate: Date? = null,
     currency: ExtendCurrency,
+    dailyBudget: BigDecimal = BigDecimal.ZERO,
     onDayClick: (LocalDate) -> Unit = {},
 ) {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
 
-    val spendingDays = remember(transactions) {
-        val days: MutableMap<LocalDate, SpendingDay> =
-            emptyMap<LocalDate, SpendingDay>().toMutableMap()
-        var currDay: SpendingDay? = null
+    // Order-independent per-day aggregation: the daily budget override (SET_DAILY_BUDGET,
+    // last row of the day wins) and the day's spends (SPENT rows only) are built separately,
+    // so a budget row stored after a spend row (manual daily-budget change mid-day) no longer
+    // gets counted as spending — which used to inflate the day over budget and render it red.
+    val spendingDays = remember(transactions, dailyBudget) {
+        val manualBudgets = transactions
+            .asSequence()
+            .filter { it.type == TransactionType.SET_DAILY_BUDGET }
+            .groupBy { it.date.toLocalDate() }
+            .mapValues { (_, rows) -> rows.maxBy { it.date.time }.value }
 
-        transactions.forEach {
-            if (it.type == TransactionType.INCOME) {
-                return@forEach
-            }
+        val spendsByDay = transactions
+            .asSequence()
+            .filter { it.type == TransactionType.SPENT }
+            .groupBy { it.date.toLocalDate() }
 
-            if (currDay == null || !isSameDay(currDay!!.date.time, it.date.time)) {
-                if (currDay !== null) {
-                    days[currDay!!.date.toLocalDate()] = currDay!!
-                }
-
-                if (it.type == TransactionType.SET_DAILY_BUDGET) {
-                    currDay = SpendingDay(
-                        date = it.date,
-                        spends = listOf(),
-                        spending = BigDecimal.ZERO,
-                        budget = it.value,
-                    )
-
-                    return@forEach
-                }
-
-                currDay = SpendingDay(
-                    date = it.date,
-                    spends = listOf(it),
-                    spending = it.value,
-                    budget = currDay?.budget ?: BigDecimal.ZERO,
-                )
-
-                return@forEach
-            }
-
-            currDay = currDay!!.copy(
-                spending = currDay!!.spending + it.value, spends = currDay!!.spends.plus(it)
+        spendsByDay.mapValues { (day, txs) ->
+            SpendingDay(
+                date = day.toDate(),
+                spends = txs,
+                spending = txs.fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value },
+                budget = manualBudgets[day] ?: dailyBudget,
             )
-        }
-
-        if (currDay != null) {
-            days[currDay!!.date.toLocalDate()] = currDay!!
-        }
-
-        days.toMutableMap()
+        }.toMutableMap()
     }
 
     val disabledBefore = startDate.toLocalDate()
@@ -258,7 +236,10 @@ fun SpendsCalendar(
 
 @Composable
 internal fun MonthHeader(modifier: Modifier = Modifier, yearMonth: YearMonth) {
-    Row(modifier = modifier.height(CELL_SIZE), verticalAlignment = Alignment.Bottom) {
+    Row(
+        modifier = modifier.height(CELL_SIZE),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             modifier = Modifier
                 .padding(start = 24.dp)
@@ -355,7 +336,10 @@ internal fun Day(
 
     val harmonizedColor = if (spendingDay !== null) toPalette(
         harmonize(
-            if (spendingDay.spending <= spendingDay.budget) {
+            if (
+                spendingDay.budget > BigDecimal.ZERO &&
+                spendingDay.spending <= spendingDay.budget
+            ) {
                 combineColors(
                     listOf(
                         colorNotGood,

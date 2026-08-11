@@ -52,6 +52,9 @@
   <string name="use_last">Previous values</string>
   <string name="days_left">Days left</string>
   <string name="settings_title">Settings</string>
+  <string name="ai_intelligence_title">AI Intelligence</string>
+  <string name="ai_intelligence_description">Master switch for all AI features. When off, offline parsing and keyword classification are used instead.</string>
+  <string name="notifications_title">Notifications</string>
   <string name="voice_ai_optional">Voice AI (optional)</string>
   <string name="voice_ai_title">Voice AI</string>
   <string name="voice_ai_api_key">API key</string>

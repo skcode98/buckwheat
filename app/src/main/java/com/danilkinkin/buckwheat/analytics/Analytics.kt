@@ -71,6 +71,7 @@ fun Analytics(
     val transactions by spendsViewModel.periodTransactions.observeAsState(emptyList())
     val spends by spendsViewModel.periodSpends.observeAsState(emptyList())
     val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
+    val dailyBudget by spendsViewModel.dailyBudget.observeAsState(BigDecimal.ZERO)
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
     val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
@@ -200,6 +201,7 @@ fun Analytics(
                                     finishDate = finishPeriodDate!!,
                                     actualFinishDate = finishPeriodActualDate,
                                     currency = currency,
+                                    dailyBudget = dailyBudget,
                                     onDayClick = { date ->
                                         appViewModel.openSheet(
                                             PathState(

@@ -5,6 +5,7 @@ import android.util.Log
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
+import com.danilkinkin.buckwheat.di.aiIntelligenceEnabled
 import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
@@ -89,8 +90,9 @@ fun transactionMatchesCategory(transaction: Transaction, key: CategoryKey): Bool
     categoryKey(transaction) == key
 
 // Batch-assigns categories to uncategorized spends via the configured OpenAI-compatible
-// provider (the same settings as Voice AI). Returns an empty map when no API key is saved,
-// the call fails, or nothing could be parsed — the offline keyword classifier then stands in.
+// provider (the same settings as Voice AI). Returns an empty map when the AI Intelligence
+// master toggle is off, no API key is saved, the call fails, or nothing could be parsed —
+// the offline keyword classifier then stands in.
 suspend fun categorizeSpendsWithAi(
     context: Context,
     spends: List<Transaction>,
@@ -100,7 +102,9 @@ suspend fun categorizeSpendsWithAi(
     return withContext(Dispatchers.IO) {
         val prefs = context.settingsDataStore.data.first()
         val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        if (apiKey.isBlank()) return@withContext emptyMap()
+        if (!aiIntelligenceEnabled(prefs) || apiKey.isBlank()) {
+            return@withContext emptyMap()
+        }
 
         val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
             DEFAULT_VOICE_AI_PROVIDER_URL

@@ -23,6 +23,7 @@ val showSpentCardByDefaultStoreKey = booleanPreferencesKey("showSpentCardByDefau
 val voiceAiApiKeyStoreKey = stringPreferencesKey("voiceAiApiKey")
 val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
 val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
+val aiIntelligenceEnabledStoreKey = booleanPreferencesKey("aiIntelligenceEnabled")
 val voiceWidgetDesignStoreKey = stringPreferencesKey("voiceWidgetDesign")
 val roundValuesStoreKey = booleanPreferencesKey("roundValues")
 val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
@@ -45,6 +46,10 @@ val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
+
+// Master gate for every AI-powered feature. Defaults to enabled; a saved `false` turns AI off
+// app-wide (voice parsing and spend categorization then use their offline fallbacks).
+fun aiIntelligenceEnabled(prefs: Preferences): Boolean = prefs[aiIntelligenceEnabledStoreKey] ?: true
 
 const val RECURRING_ALERT_DEFAULT_HOUR = 9
 const val RECURRING_ALERT_DEFAULT_MINUTE = 0
