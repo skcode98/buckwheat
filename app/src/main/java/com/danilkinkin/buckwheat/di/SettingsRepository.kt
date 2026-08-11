@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
 import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
+import com.danilkinkin.buckwheat.interleaved.ScheduleSuggestion
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
+import java.time.LocalDate
 import javax.inject.Inject
 
 val debugStoreKey = booleanPreferencesKey("debug")
@@ -408,6 +410,36 @@ class SettingsRepository @Inject constructor(
             }
             it.remove(categoryCapNotifiedStoreKey)
         }
+    }
+
+    // Merge detected recurring patterns (Phase 6 calibration) into the caps+schedules store:
+    // a suggestion seeds the schedule and cap for a category that isn't scheduled yet. Any
+    // existing schedule is kept as-is, so user choices always win over mined suggestions.
+    // Single edit, re-arms the 80%/100% alerts.
+    suspend fun applyScheduleSuggestions(
+        suggestions: List<ScheduleSuggestion>,
+        anchor: LocalDate,
+    ) {
+        if (suggestions.isEmpty()) return
+        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
+            .toMutableMap()
+        val schedules =
+            parseCategorySchedules(context.settingsDataStore.data.first()[categorySchedulesStoreKey])
+                .toMutableMap()
+        var changed = false
+        suggestions.forEach { suggestion ->
+            if (schedules[suggestion.name] == null) {
+                schedules[suggestion.name] = InterleavedCategory(
+                    name = suggestion.name,
+                    amount = suggestion.amount,
+                    frequency = suggestion.frequency,
+                    anchorEpochDay = anchor.toEpochDay(),
+                )
+                caps[suggestion.name] = suggestion.amount
+                changed = true
+            }
+        }
+        if (changed) setCategoryCapsAndSchedules(caps, schedules)
     }
 
     // Forget every announced cap level, so the alerts can fire again (used on a new period).
