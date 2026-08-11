@@ -7,6 +7,7 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
 import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
+import com.danilkinkin.buckwheat.interleaved.ScheduleSuggestion
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.toDate
 import kotlinx.coroutines.flow.first
@@ -166,5 +167,59 @@ class InterleavedRolloverTest {
             anchorDay.plusDays(30).toDate(),
         )
         assertNull(context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey])
+    }
+
+    @Test
+    fun `applyScheduleSuggestions seeds schedules and caps at the anchor`() = runTest {
+        settingsRepository.applyScheduleSuggestions(
+            listOf(
+                ScheduleSuggestion(
+                    "FOOD", BigDecimal("5000"), CategoryFrequency.MONTHLY,
+                ),
+                ScheduleSuggestion(
+                    "TRAVEL", BigDecimal("60000"), CategoryFrequency.ANNUAL,
+                ),
+            ),
+            anchor = anchorDay,
+        )
+
+        val schedules = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )
+        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
+        assertEquals(CategoryFrequency.MONTHLY, schedules["FOOD"]?.frequency)
+        assertEquals(anchorDay.toEpochDay(), schedules["FOOD"]?.anchorEpochDay)
+        assertEquals(BigDecimal("5000"), caps["FOOD"])
+        assertEquals(CategoryFrequency.ANNUAL, schedules["TRAVEL"]?.frequency)
+        assertEquals(BigDecimal("60000"), caps["TRAVEL"])
+    }
+
+    @Test
+    fun `applyScheduleSuggestions keeps an existing schedule untouched`() = runTest {
+        settingsRepository.setCategoryCapsAndSchedules(
+            caps = mapOf("FOOD" to BigDecimal("500")),
+            schedules = mapOf(
+                "FOOD" to InterleavedCategory(
+                    "FOOD", BigDecimal("500"), CategoryFrequency.DAILY, anchorDay.toEpochDay(),
+                )
+            ),
+        )
+
+        settingsRepository.applyScheduleSuggestions(
+            listOf(
+                ScheduleSuggestion(
+                    "FOOD", BigDecimal("5000"), CategoryFrequency.MONTHLY,
+                )
+            ),
+            anchor = anchorDay,
+        )
+
+        val schedules = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )
+        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
+        // The user's DAILY schedule wins over the mined MONTHLY suggestion.
+        assertEquals(CategoryFrequency.DAILY, schedules["FOOD"]?.frequency)
+        assertEquals(BigDecimal("500"), caps["FOOD"])
     }
 }

@@ -197,6 +197,63 @@ class InterleavedBudgetTest {
         )
     }
 
+    // --- dailyPace ---
+
+    @Test
+    fun `daily pace divides by 30 days per month`() {
+        assertEquals(
+            BigDecimal("166.67"),
+            dailyPace(category(amount = "5000")),
+        )
+        assertEquals(
+            BigDecimal("33.33"),
+            dailyPace(category(amount = "3000", frequency = CategoryFrequency.QUARTERLY)),
+        )
+        assertEquals(
+            BigDecimal("8.33"),
+            dailyPace(category(amount = "3000", frequency = CategoryFrequency.ANNUAL)),
+        )
+    }
+
+    @Test
+    fun `daily pace for a daily schedule is the cap amount`() {
+        assertEquals(
+            BigDecimal("200"),
+            dailyPace(category(amount = "200", frequency = CategoryFrequency.DAILY)),
+        )
+    }
+
+    // --- applyCategoryAllowance ---
+
+    @Test
+    fun `allowance reduces the budget but clamps at 20 percent`() {
+        assertEquals(
+            BigDecimal("1800.00"),
+            applyCategoryAllowance(BigDecimal("2000"), BigDecimal("200")),
+        )
+        // 2000 - 300 = 1700, floor = 1600 -> 1700
+        assertEquals(
+            BigDecimal("1700.00"),
+            applyCategoryAllowance(BigDecimal("2000"), BigDecimal("300")),
+        )
+        // 2000 - 500 = 1500 < floor 1600 -> 1600
+        assertEquals(
+            BigDecimal("1600.00"),
+            applyCategoryAllowance(BigDecimal("2000"), BigDecimal("500")),
+        )
+    }
+
+    @Test
+    fun `allowance never goes below zero or changes a zero budget`() {
+        assertEquals(BigDecimal("0.00"), applyCategoryAllowance(BigDecimal("0"), BigDecimal("200")))
+        // 200 - 10000 would go negative; the 20% floor (160.00) wins.
+        assertEquals(
+            BigDecimal("160.00"),
+            applyCategoryAllowance(BigDecimal("200"), BigDecimal("10000")),
+        )
+        assertEquals(BigDecimal("2000"), applyCategoryAllowance(BigDecimal("2000"), BigDecimal.ZERO))
+    }
+
     // --- daysLeftInWindow ---
 
     @Test

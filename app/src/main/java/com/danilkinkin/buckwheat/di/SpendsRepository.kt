@@ -32,6 +32,8 @@ import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
 import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
 import com.danilkinkin.buckwheat.interleaved.WindowSpend
+import com.danilkinkin.buckwheat.interleaved.applyCategoryAllowance
+import com.danilkinkin.buckwheat.interleaved.dailyPace
 import com.danilkinkin.buckwheat.interleaved.hasRolled
 import com.danilkinkin.buckwheat.interleaved.windowFor
 import com.danilkinkin.buckwheat.interleaved.windowSpent
@@ -522,7 +524,7 @@ class SpendsRepository @Inject constructor(
                     + "]"
         )
 
-        return whatBudgetForDay
+        return applyCategoryAllowance(whatBudgetForDay, interleavedDailyAllowance())
     }
 
     suspend fun howMuchBudgetRest(): BigDecimal {
@@ -650,7 +652,7 @@ class SpendsRepository @Inject constructor(
                     + "]"
         )
 
-        return nextDailyBudget
+        return applyCategoryAllowance(nextDailyBudget, interleavedDailyAllowance())
     }
 
     // The amount the user actually saved over the elapsed days, i.e. the leftover that
@@ -1091,6 +1093,14 @@ class SpendsRepository @Inject constructor(
             schedule.copy(amount = caps[name] ?: BigDecimal.ZERO)
         }
     }
+
+    // Sum of scheduled category budgets normalized to a daily pace (see `dailyPace`). Reserved
+    // out of the recomputed daily budget (whatBudgetForDay/nextDayBudget) so the wallet's daily
+    // counter reflects planned category spend like FOOD; DAILY schedules are per-day caps and
+    // count as-is. Zero when nothing is scheduled, so default users are untouched.
+    private suspend fun interleavedDailyAllowance(): BigDecimal =
+        interleavedCategoriesNow().values
+            .fold(BigDecimal.ZERO) { acc, category -> acc + dailyPace(category) }
 
     // Spend for a category in its cap progress source: the current interleaved window for
     // scheduled categories (DAILY schedule = no window -> plain-cap period behavior), else

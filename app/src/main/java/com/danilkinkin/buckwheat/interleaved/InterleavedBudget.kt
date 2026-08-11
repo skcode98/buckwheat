@@ -77,8 +77,8 @@ fun windowSpent(
         .fold(BigDecimal.ZERO) { acc, spend -> acc + spend.value }
 }
 
-// The amount normalized to a monthly pace, used by the wallet daily-allowance stretch goal.
-// DAILY has no window, so the cap amount is returned as-is.
+// The amount normalized to a monthly pace. DAILY has no window, so the cap amount is
+// returned as-is.
 fun monthlyEquivalent(category: InterleavedCategory): BigDecimal {
     if (category.frequency == CategoryFrequency.DAILY) return category.amount
     return category.amount.divide(
@@ -86,6 +86,31 @@ fun monthlyEquivalent(category: InterleavedCategory): BigDecimal {
         2,
         RoundingMode.HALF_EVEN,
     )
+}
+
+// The amount normalized to a daily pace, used by the wallet daily-allowance reservation.
+// A MONTHLY/QUARTERLY/ANNUAL schedule reserves its per-day share (30 days/month, matching the
+// Phase 5 example "FOOD monthly @5000 ≈ ₹166/day"); a DAILY schedule is already a per-day cap.
+fun dailyPace(category: InterleavedCategory): BigDecimal {
+    if (category.frequency == CategoryFrequency.DAILY) return category.amount
+    return category.amount.divide(
+        category.frequency.freqMonths.toBigDecimal().multiply(BigDecimal(30)),
+        2,
+        RoundingMode.HALF_EVEN,
+    )
+}
+
+// Reserved daily allowance (scheduled category budgets normalized to a daily pace) subtracted
+// from a recomputed daily budget so the wallet's daily counter reflects it. Never reduces the
+// budget by more than 20% of the unadjusted value and never below zero, so the daily spend
+// number stays usable even when schedules add up to more than the budget.
+fun applyCategoryAllowance(raw: BigDecimal, allowance: BigDecimal): BigDecimal {
+    if (allowance <= BigDecimal.ZERO) return raw
+    val floor = raw.multiply(BigDecimal("0.8")).setScale(2, RoundingMode.HALF_EVEN)
+    return raw.minus(allowance)
+        .max(floor)
+        .max(BigDecimal.ZERO)
+        .setScale(2, RoundingMode.HALF_EVEN)
 }
 
 // Days left in the window including today, or 0 once the window is over.
