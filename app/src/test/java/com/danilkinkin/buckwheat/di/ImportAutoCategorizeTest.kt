@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.toTransaction
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -83,5 +84,45 @@ class ImportAutoCategorizeTest {
 
         assertEquals("BILLS", spentRows().first { it.comment == "rent payment" }.category)
         assertNull(spentRows().first { it.comment == "weird thing" }.category)
+    }
+
+    @Test
+    fun `out of period import archives rows with the offline category`() = runTest {
+        setBudget()
+        val future = java.util.Date(currentDateUseCase.value.time + 20L * 24 * 3600 * 1000)
+        spendsRepository.importTransactions(
+            listOf(
+                Transaction(
+                    type = TransactionType.SPENT,
+                    value = BigDecimal(100),
+                    date = future,
+                    comment = "bus fare to the city",
+                )
+            )
+        )
+
+        val archived = budgetPeriodDao.getAllArchivedNow()
+        assertEquals(1, archived.size)
+        assertEquals("TRANSPORT", archived.single().category)
+    }
+
+    @Test
+    fun `archived rows outside the active period keep the category via toTransaction`() = runTest {
+        setBudget()
+        val past = java.util.Date(currentDateUseCase.value.time - 20L * 24 * 3600 * 1000)
+        spendsRepository.importTransactions(
+            listOf(
+                Transaction(
+                    type = TransactionType.SPENT,
+                    value = BigDecimal(100),
+                    date = past,
+                    comment = "electricity bill",
+                )
+            )
+        )
+
+        val archived = budgetPeriodDao.getAllArchivedNow()
+        assertEquals(1, archived.size)
+        assertEquals("BILLS", archived.single().toTransaction().category)
     }
 }

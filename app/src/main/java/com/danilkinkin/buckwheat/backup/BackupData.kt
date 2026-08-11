@@ -186,6 +186,7 @@ private fun ArchivedTransaction.toJson(): JSONObject = JSONObject()
     .put("value", value.toPlainString())
     .put("date", date.time)
     .put("comment", comment)
+    .put("category", category ?: JSONObject.NULL)
 
 private fun JSONObject.toArchivedTransaction(): ArchivedTransaction {
     val transaction = ArchivedTransaction(
@@ -194,6 +195,7 @@ private fun JSONObject.toArchivedTransaction(): ArchivedTransaction {
         value = BigDecimal(optString("value", "0")),
         date = Date(optLong("date")),
         comment = optString("comment"),
+        category = if (isNull("category")) null else optString("category", null),
     )
     transaction.uid = optInt("uid")
     return transaction

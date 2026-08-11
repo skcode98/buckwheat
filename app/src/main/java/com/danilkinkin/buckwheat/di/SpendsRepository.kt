@@ -906,6 +906,7 @@ class SpendsRepository @Inject constructor(
                         value = tx.value,
                         date = tx.date,
                         comment = tx.comment,
+                        category = tx.category,
                     )
                 }
             )

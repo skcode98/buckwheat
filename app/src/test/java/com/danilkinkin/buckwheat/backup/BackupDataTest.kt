@@ -58,6 +58,7 @@ class BackupDataTest {
             value = BigDecimal("20.00"),
             date = now,
             comment = "coffee",
+            category = "FOOD",
         ).also { it.uid = 9 }
 
         val tag = SavedTag(name = "work").also { it.id = 1 }

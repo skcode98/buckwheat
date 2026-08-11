@@ -133,6 +133,16 @@ val AutoMigration12to13: Migration = object : Migration(12, 13) {
     }
 }
 
+// Add category to archived_transactions so archived (historical) spends carry the
+// offline/AI-assigned spend category shown in the past-period analytics view
+val AutoMigration13to14: Migration = object : Migration(13, 14) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE `archived_transactions` ADD COLUMN `category` TEXT"
+        )
+    }
+}
+
 // Rename Spent to Transaction
 val AutoMigration4to5: Migration = object : Migration(4, 5) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -159,7 +169,7 @@ val AutoMigration4to5: Migration = object : Migration(4, 5) {
 
 @Database(
     entities = [Transaction::class, Storage::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 13,
+    version = 14,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -186,6 +196,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14)
     }
 }

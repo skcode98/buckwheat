@@ -68,4 +68,11 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
     override suspend fun insertArchivedTransactions(transactions: List<ArchivedTransaction>) {
         archivedTransactions.addAll(transactions)
     }
+
+    override suspend fun updateCategory(uid: Int, category: String?) {
+        val index = archivedTransactions.indexOfFirst { it.uid == uid }
+        if (index >= 0) {
+            archivedTransactions[index] = archivedTransactions[index].copy(category = category).also { it.uid = uid }
+        }
+    }
 }

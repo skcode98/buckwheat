@@ -41,6 +41,9 @@ interface BudgetPeriodDao {
     @Query("UPDATE budget_periods SET total_spent = :totalSpent WHERE id = :periodId")
     suspend fun updateTotalSpent(periodId: Int, totalSpent: BigDecimal)
 
+    @Query("UPDATE archived_transactions SET category = :category WHERE uid = :uid")
+    suspend fun updateCategory(uid: Int, category: String?)
+
     @Insert
     suspend fun insertArchivedTransactions(transactions: List<ArchivedTransaction>)
 }

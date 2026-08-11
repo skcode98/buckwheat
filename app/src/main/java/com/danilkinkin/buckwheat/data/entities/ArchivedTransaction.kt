@@ -26,6 +26,10 @@ data class ArchivedTransaction(
     @ColumnInfo(name = "value") val value: BigDecimal,
     @ColumnInfo(name = "date") val date: Date,
     @ColumnInfo(name = "comment") val comment: String,
+    // Predefined spend category (SpendCategory.name) assigned by the offline/AI classifier and
+    // shown in analytics for archived periods. Null until categorized; display falls back to
+    // offline keyword matching (SpendCategorizer.categoryFor).
+    @ColumnInfo(name = "category") val category: String? = null,
 ) {
     @PrimaryKey(autoGenerate = true) var uid: Int = 0
 }
@@ -36,4 +40,5 @@ fun ArchivedTransaction.toTransaction(): Transaction =
         value = this.value,
         date = this.date,
         comment = this.comment,
+        category = this.category,
     ).also { it.uid = this.uid }
