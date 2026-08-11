@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-11 — Interleaved budgets Phase 2: schedules codec + repository rollover wiring
+
+- **`di/SettingsRepository.kt`**: new `categorySchedulesStoreKey` (`"name:frequency:anchorEpochDay;..."`) with `serializeCategorySchedules`/`parseCategorySchedules` (defensive, drops malformed entries). New window-aware notified codec `parseCategoryCapNotifiedWithWindow`/`serializeCategoryCapNotifiedWithWindow` (`"name:bucket@windowStartEpochDay"`; legacy `"name:bucket"` → sentinel window, so first rollover resets). `parseCategoryCapNotified` now delegates to the window-aware parse (existing callers unchanged). New APIs: `getCategorySchedules()` Flow, `getInterleavedCategories()` Flow (schedules merged with cap amounts), `setCategoryCapsAndSchedules()` (caps + schedules + notified reset in a single edit).
+- **`di/SpendsRepository.kt`**: cap alerts are now window-aware — `categoryProgressTotal` uses the current interleaved window's spend for scheduled categories (via the pure `windowSpent`) and the budget-period total for plain caps; `checkCategoryCapAlert`/`resyncCategoryCapNotified` record the window start so the next crossing can detect rollover. `resyncInterleavedNotified()` resets a scheduled category's announced bucket when its window rolls (called on `addSpent` + `removeSpent`, before the alert so the fresh window evaluates). `clearCategoryCapNotifiedNow()` (new-period reset) now keeps windowed (non-DAILY) scheduled entries while clearing plain caps; DAILY schedules keep plain-cap semantics.
+- Tests: `di/InterleavedScheduleCodecTest` (11), `di/InterleavedRolloverTest` (4: windowed crossing records window start; boundary crossing re-notifies; new period keeps windowed entries but clears plain caps; DAILY = plain cap).
+
 ## 2026-08-11 — Interleaved budget engine: Phase 1 shipped (interleaved/InterleavedBudget.kt)
 
 - New pure engine (no Android/DataStore/Room imports): `CategoryFrequency` (DAILY/MONTHLY/QUARTERLY/ANNUAL with `freqMonths`), `InterleavedCategory` (name, amount, frequency, anchorEpochDay), `WindowSpend` view.

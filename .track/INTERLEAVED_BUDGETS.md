@@ -97,22 +97,23 @@ Reuse `categoryCapPercent` / `categoryCapBucket` / `highestNewlyReachedCapBucket
 `CategoryCap.kt` for progress and crossings — the window replaces "current budget period" as the
 progress source.
 
-## Phase 2: Repository rollover wiring — `SpendsRepository.kt` (3-4h)
+## Phase 2: Repository rollover wiring — `SpendsRepository.kt` (3-4h) — ✅ SHIPPED 2026-08-11
 
-- **Window spend source**: add a DAO query
-  `SELECT SUM(value) FROM transactions WHERE type = 'SPENT' AND date >= :start AND date < :end AND category = :name`
-  (filters future backfilled txs out of the window automatically). Fall back to a defensive
-  in-memory filter if a plain query is awkward.
-- **Rollover check on every mutation**: in `addSpent` / `removeSpent`, and at repository init,
-  run `resyncInterleavedNotified()` — for each scheduled category compute `windowFor(today)` and,
-  when the stored notified `windowStart` differs, reset that category's bucket to 0 (new window
-  can announce 80%/100% again).
-- **`setBudget` independence**: interleaved windows do **not** reset when the main budget period
-  changes. `clearCategoryCapNotifiedNow()` stays scoped to plain (unscheduled) caps.
-- **`setCategorySchedules`**: write caps + schedules in one `edit {}` block (per the single-edit
-  rule). It must also reset notified state for the affected category.
-- **Clock injection**: use `GetCurrentDateUseCase` (already `open`, injectable) so rollover tests
-  run against a fake date.
+- **Window spend source**: in-memory filter over the active transactions (SPENT rows only,
+  window date range + category match) via the pure `windowSpent`; no new DAO query needed.
+- **Rollover check on every mutation**: `resyncInterleavedNotified()` runs in `addSpent` /
+  `removeSpent` (before the cap-alert evaluation so the fresh window is measured). For each
+  scheduled category it recomputes `windowFor(today)` and, when the stored notified window
+  start differs, resets that category's bucket (a new window can announce 80%/100% again).
+- **Notified state**: `categoryCapNotifiedStoreKey` entries are now `"name:bucket@windowStartEpochDay"`
+  (legacy `"name:bucket"` parses with the sentinel window so the first rollover resets). Plain
+  caps keep the suffix-less format for backward compatibility.
+- **setBudget independence**: `clearCategoryCapNotifiedNow()` keeps windowed (non-DAILY)
+  scheduled entries across a period change; plain caps (and DAILY schedules) still clear.
+- **`setCategoryCapsAndSchedules`**: caps + schedules + notified reset in one `edit {}` block.
+- **Clock injection**: uses `GetCurrentDateUseCase` (already `open`, injectable).
+- **Progress source switch**: cap alerts now measure scheduled categories against the current
+  window (`categoryProgressTotal` → `windowSpent`) instead of the budget-period total.
 
 ## Phase 3: Settings UI — `CategoryCapsSheet.kt` (2-3h)
 
@@ -187,8 +188,8 @@ When you provide the transaction export:
 ## Definition of done
 
 - [x] Pure engine + tests green; no Android imports in `InterleavedBudget.kt` (28 tests, `InterleavedBudgetTest`)
-- [ ] Schedules persist/load via DataStore; legacy data unaffected
-- [ ] Rollover resets notifications exactly once per window crossing
+- [x] Schedules persist/load via DataStore; legacy data unaffected (codec + window-aware notified parse, 11 `InterleavedScheduleCodecTest`)
+- [x] Rollover resets notifications exactly once per window crossing (4 `InterleavedRolloverTest`; `resyncInterleavedNotified` + window start in notified entries)
 - [ ] Caps sheet edits frequency + anchor; single `edit {}` write
 - [ ] `InterleavedBudgetCard` renders windows, progress, velocity; hidden when no schedules
 - [ ] Full pipeline green: `:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`

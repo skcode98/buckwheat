@@ -27,6 +27,12 @@ import com.danilkinkin.buckwheat.data.categories.categoryCapBucket
 import com.danilkinkin.buckwheat.data.categories.categoryKey
 import com.danilkinkin.buckwheat.data.categories.highestNewlyReachedCapBucket
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
+import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
+import com.danilkinkin.buckwheat.interleaved.WindowSpend
+import com.danilkinkin.buckwheat.interleaved.hasRolled
+import com.danilkinkin.buckwheat.interleaved.windowFor
+import com.danilkinkin.buckwheat.interleaved.windowSpent
 import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
@@ -34,6 +40,7 @@ import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
 import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -767,6 +774,7 @@ class SpendsRepository @Inject constructor(
             OverspendingNotifier.notify(context, dailyBudget, spentFromDailyBudget, currency)
         }
 
+        resyncInterleavedNotified()
         checkCategoryCapAlert(newTransaction)
     }
 
@@ -956,11 +964,13 @@ class SpendsRepository @Inject constructor(
         }
 
         resyncCategoryCapNotified(transactionForRemove)
+        resyncInterleavedNotified()
     }
 
     // Reads a transaction's category the same way the analytics categories card does
-    // (offline keyword fallback), sums the current period's spend in that category, and
-    // posts the 80%/100% cap alert once per newly reached level.
+    // (offline keyword fallback), sums the category's spend in its progress source — the
+    // current interleaved window for scheduled categories, else the current budget period —
+    // and posts the 80%/100% cap alert once per newly reached level.
     private suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
         if (newTransaction.type != TransactionType.SPENT) return
         val prefs = context.budgetDataStore.data.first()
@@ -970,27 +980,34 @@ class SpendsRepository @Inject constructor(
 
         val key = categoryKey(newTransaction)
         val categoryName = categoryNameOf(key)
-        val cap = parseCategoryCaps(
+        val caps = parseCategoryCaps(
             context.settingsDataStore.data.first()[categoryCapsStoreKey]
-        )[categoryName] ?: return
-
-        val total = periodCategoryTotal(start, finish, key)
+        )
+        val cap = caps[categoryName] ?: return
+        val scheduled = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )[categoryName]
+        val today = getCurrentDateUseCase()
+        val total = categoryProgressTotal(key, categoryName, cap, scheduled, today, start, finish)
 
         val newBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotified(
+        val notified = parseCategoryCapNotifiedWithWindow(
             context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
         )
-        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
+        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName]?.first ?: 0, newBucket)
         if (newlyReached == 0) return
 
         val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
             ?: ExtendCurrency.none()
         CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
-        setCategoryCapNotifiedNow(notified + (categoryName to newlyReached))
+        val windowStart = scheduled?.let { windowFor(it.copy(amount = cap), today.toLocalDate())?.first }
+            ?.toEpochDay() ?: Long.MIN_VALUE
+        setCategoryCapNotifiedNow(notified + (categoryName to (newlyReached to windowStart)))
     }
 
-    // Lowers a category's announced cap level when a removal drops the period spend back
-    // under it, so a later crossing announces again (mirrors the overspend flag resync).
+    // Lowers a category's announced cap level when a removal drops the spend back under it
+    // (in the interleaved window for scheduled categories, else the budget period), so a
+    // later crossing announces again (mirrors the overspend flag resync).
     private suspend fun resyncCategoryCapNotified(removed: Transaction) {
         if (removed.type != TransactionType.SPENT) return
         val prefs = context.budgetDataStore.data.first()
@@ -1000,27 +1017,72 @@ class SpendsRepository @Inject constructor(
 
         val key = categoryKey(removed)
         val categoryName = categoryNameOf(key)
-        val cap = parseCategoryCaps(
+        val caps = parseCategoryCaps(
             context.settingsDataStore.data.first()[categoryCapsStoreKey]
-        )[categoryName] ?: return
-
-        val total = periodCategoryTotal(start, finish, key)
+        )
+        val cap = caps[categoryName] ?: return
+        val scheduled = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )[categoryName]
+        val today = getCurrentDateUseCase()
+        val total = categoryProgressTotal(key, categoryName, cap, scheduled, today, start, finish)
         val currentBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotified(
+        val notified = parseCategoryCapNotifiedWithWindow(
             context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
         )
-        val storedBucket = notified[categoryName] ?: 0
+        val storedBucket = notified[categoryName]?.first ?: 0
         if (currentBucket >= storedBucket) return
 
-        val updated =
-            if (currentBucket == 0) notified - categoryName
-            else notified + (categoryName to currentBucket)
+        val updated = notified.toMutableMap()
+        if (currentBucket == 0) {
+            updated.remove(categoryName)
+        } else {
+            updated[categoryName] = currentBucket to (notified[categoryName]?.second ?: Long.MIN_VALUE)
+        }
         setCategoryCapNotifiedNow(updated)
     }
 
     private fun categoryNameOf(key: CategoryKey): String = when (key) {
         is CategoryKey.BuiltIn -> key.category.name
         is CategoryKey.Custom -> key.name
+    }
+
+    // Scheduled interleaved categories merged with their cap amounts.
+    private suspend fun interleavedCategoriesNow(): Map<String, InterleavedCategory> {
+        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
+        val schedules = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )
+        return schedules.mapValues { (name, schedule) ->
+            schedule.copy(amount = caps[name] ?: BigDecimal.ZERO)
+        }
+    }
+
+    // Spend for a category in its cap progress source: the current interleaved window for
+    // scheduled categories (DAILY schedule = no window -> plain-cap period behavior), else
+    // the main budget period's spend total.
+    private suspend fun categoryProgressTotal(
+        key: CategoryKey,
+        categoryName: String,
+        cap: BigDecimal,
+        scheduled: InterleavedCategory?,
+        today: Date,
+        start: Date,
+        finish: Date,
+    ): BigDecimal {
+        if (scheduled != null) {
+            val window = windowFor(scheduled.copy(amount = cap), today.toLocalDate())
+            if (window != null) {
+                return windowSpent(
+                    transactionDao.getAll().asFlow().first()
+                        .filter { it.type == TransactionType.SPENT }
+                        .map { WindowSpend(it.date, it.value, it.category) },
+                    scheduled.copy(amount = cap),
+                    today.toLocalDate(),
+                )
+            }
+        }
+        return periodCategoryTotal(start, finish, key)
     }
 
     private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
@@ -1030,12 +1092,55 @@ class SpendsRepository @Inject constructor(
             .filter { categoryKey(it) == key }
             .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
 
-    private suspend fun clearCategoryCapNotifiedNow() {
-        context.settingsDataStore.edit { it.remove(categoryCapNotifiedStoreKey) }
+    // Interleaved windows roll over independently of the main budget period. On every
+    // mutation, reset the announced cap bucket of any scheduled category whose window has
+    // advanced, so the 80%/100% alerts can fire again for the new window.
+    private suspend fun resyncInterleavedNotified() {
+        val schedules = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )
+        if (schedules.isEmpty()) return
+        val today = getCurrentDateUseCase().toLocalDate()
+        val notified = parseCategoryCapNotifiedWithWindow(
+            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
+        )
+        var changed = false
+        val updated = notified.toMutableMap()
+        interleavedCategoriesNow().values.forEach { category ->
+            if (hasRolled(category, today, updated[category.name]?.second ?: Long.MIN_VALUE)) {
+                updated.remove(category.name)
+                changed = true
+            }
+        }
+        if (changed) setCategoryCapNotifiedNow(updated)
     }
 
-    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Int>) {
-        val serialized = serializeCategoryCapNotified(notified)
+    // Clears the cap bookkeeping on a new budget period, but keeps windowed (non-DAILY)
+    // scheduled entries — their progress is window-scoped, not period-scoped, so a period
+    // change must not reset a window that hasn't rolled yet. DAILY schedules are plain caps.
+    private suspend fun clearCategoryCapNotifiedNow() {
+        val schedules = parseCategorySchedules(
+            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
+        )
+        context.settingsDataStore.edit {
+            if (schedules.isEmpty()) {
+                it.remove(categoryCapNotifiedStoreKey)
+            } else {
+                val windowed = schedules.filterValues { it.frequency != CategoryFrequency.DAILY }.keys
+                val current = parseCategoryCapNotifiedWithWindow(it[categoryCapNotifiedStoreKey])
+                val kept = current.filterKeys { name -> name in windowed }
+                val serialized = serializeCategoryCapNotifiedWithWindow(kept)
+                if (serialized.isEmpty()) {
+                    it.remove(categoryCapNotifiedStoreKey)
+                } else {
+                    it[categoryCapNotifiedStoreKey] = serialized
+                }
+            }
+        }
+    }
+
+    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Pair<Int, Long>>) {
+        val serialized = serializeCategoryCapNotifiedWithWindow(notified)
         context.settingsDataStore.edit {
             if (serialized.isEmpty()) {
                 it.remove(categoryCapNotifiedStoreKey)
