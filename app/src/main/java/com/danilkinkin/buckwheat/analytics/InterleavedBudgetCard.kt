@@ -31,8 +31,6 @@ import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.toDate
 import java.math.BigDecimal
-import java.math.RoundingMode
-import java.time.temporal.ChronoUnit
 
 // Progress of every scheduled (interleaved) category budget inside its current window.
 // Rendered only when at least one schedule exists; hidden entirely otherwise.
@@ -82,8 +80,9 @@ private fun InterleavedBudgetRow(
         "dd MMM",
         simplifyIfToday = false,
     )
+    val range = stringResource(R.string.interleaved_window_range, rangeStart, rangeEnd)
 
-    Column {
+    Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = SpendCategory.emojiFor(item.category.name, null),
@@ -97,22 +96,16 @@ private fun InterleavedBudgetRow(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = stringResource(R.string.interleaved_window_range, rangeStart, rangeEnd),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = stringResource(
+                    R.string.interleaved_spent_of_cap,
+                    numberFormat(context, item.spent, currency),
+                    numberFormat(context, cap, currency),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(
-                R.string.interleaved_spent_of_cap,
-                numberFormat(context, item.spent, currency),
-                numberFormat(context, cap, currency),
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         CapProgressBar(
             progress = item.spent,
             cap = cap,
@@ -120,34 +113,30 @@ private fun InterleavedBudgetRow(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = velocityText(item, currency),
+            text = stringResource(
+                R.string.interleaved_window_status,
+                range,
+                statusText(item),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-// "at Rs45/day -> runs out on 12 Sep" while on pace, "at Rs45/day — on track" when the
-// window ends first, "Nothing spent yet" when there's no spend.
+// Short one-line status: "on track", "runs out on <date>", or "nothing spent yet".
 @Composable
-private fun velocityText(item: InterleavedProgress, currency: ExtendCurrency): String {
-    val context = LocalContext.current
+private fun statusText(item: InterleavedProgress): String {
     if (item.spent <= BigDecimal.ZERO) {
         return stringResource(R.string.interleaved_velocity_no_spend)
     }
-    val elapsedDays = ChronoUnit.DAYS.between(item.windowStart, item.today)
-        .toInt()
-        .coerceAtLeast(1)
-    val pace = item.spent.divide(elapsedDays.toBigDecimal(), 2, RoundingMode.HALF_EVEN)
-    val paceText = numberFormat(context, pace, currency)
     val exhaustion = projectedExhaustionDate(item.category, item.today, item.spent)
     return if (exhaustion != null) {
         stringResource(
             R.string.interleaved_velocity_runs_out,
-            paceText,
             prettyDate(exhaustion.toDate(), "dd MMM", simplifyIfToday = false),
         )
     } else {
-        stringResource(R.string.interleaved_velocity_on_track, paceText)
+        stringResource(R.string.interleaved_velocity_on_track)
     }
 }

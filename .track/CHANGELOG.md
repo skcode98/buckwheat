@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-12 — UI cleanup: AI report → Settings, simpler interleaved + category-caps UI
+
+User feedback on the previous sessions' work: the AI report "is just normal text" and is in the wrong place (Analytics), and the interleaved-budget card + the category-caps sheet look messy / don't match the app's standard feel. Golden pipeline green — **286 tests, 0 failures**, APK built.
+
+### AI report moved from Analytics to Settings
+- **`analytics/AiInsightCard.kt` deleted**; its usage + `AiInsightViewModel` wiring removed from `analytics/Analytics.kt` (the analytics column is now pure budget/period stats).
+- **`settings/AiInsightSheet.kt`** (new, `AI_INSIGHT_SHEET`): sheet scaffold (title, description, Regenerate/Retry in the header) with the same state-driven bodies as before — Idle/Generate, Loading, Report, Error, NotConfigured ("Set up AI" → `VOICE_AI_SETTINGS_SHEET`). Registered in `BottomSheets.kt`.
+- **`settings/Settings.kt`**: new "AI Insight" row (`ic_analytics`) directly under the "Voice AI" row → opens the sheet.
+- **Report rendering upgraded from "just normal text"**: `ReportBody` renders `• ` bullet lines as bullet rows (primary `•` + text) and everything else as paragraphs, so the AI output is scannable instead of a wall of text.
+
+### `analytics/InterleavedBudgetCard.kt` simplified
+- Each category row is now: emoji + name (weight) with **"₹X / ₹Y" right-aligned**, the `CapProgressBar`, then a **single small status caption** `"12 Aug – 10 Sep · runs out on 12 Sep"` / `"· on track"` / `"· nothing spent yet"`.
+- Removed the wrap-heavy `"at ₹X/day → runs out on …"` velocity sentence (pace calc deleted; `numberFormat`/`ChronoUnit`/`RoundingMode` no longer used here).
+
+### `settings/CategoryCapsSheet.kt` simplified
+- Per-row frequency `ExposedDropdownMenuBox` (heavy OutlinedTextField) **replaced with 4 equal-width `FilterChip`s** (Daily/Monthly/Quarterly/Annual); selecting one writes the schedule immediately (same behavior as the dropdown).
+- Anchor shown only when a schedule is active: small clickable **"Starts 12 Aug 2026"** caption (new string `category_caps_anchor`) → opens the existing `InterleavedAnchorSheet` date picker.
+- Dropped the redundant "Quick templates" label above the template chips.
+
+### Strings (EN-only, as convention)
+- `interleaved_spent_of_cap`: `%1$s of %2$s` → `%1$s / %2$s`; `interleaved_velocity_on_track`: `at %1$s/day — on track for this window` → `on track`; `interleaved_velocity_runs_out`: `at %1$s/day → runs out on %2$s` → `runs out on %1$s`; `interleaved_velocity_no_spend`: `Nothing spent yet` → `nothing spent yet`. New `interleaved_window_status` `%1$s · %2$s` and `category_caps_anchor` `Starts %1$s`.
+- Unused-but-kept: `category_caps_frequency` (label), `category_caps_anchor_hint`, `category_caps_templates_title` (dropped from UI, left in strings.xml).
+
+## 2026-08-12 — Repeat-last-spend quick action in the Editor
+
+User asked for a docs overhaul (all `.track` md files updated; new `DECISIONS.md` + `FEATURES_AND_IMPROVEMENTS.md` living docs) and then to pick + build one backlog feature. Selected **Repeat-last-spend** (backlog #3) via `DECISIONS.md`. Golden pipeline green — **286 tests, 0 failures** (281 + 5 new), APK built.
+
+- **`editor/RepeatLastSpend.kt`** (new, pure): `lastSpendToRepeat(spends: List<Transaction>): Transaction?` — filters to `TransactionType.SPENT` only, returns the most recent by `date` then `uid` (`maxWithOrNull`), null on empty/no-SPENT input. No Android imports — JVM-testable.
+- **`editor/EditorViewModel.kt`**: `startRepeatSpend(transaction)` — prefills the editor's existing commit path with the last spend's value/comment/category, date reset to today, `rawSpentValue` via `tryConvertStringToNumber(value.toString()).join(third = false)` (same as `startEditingSpent`), then `editedTransaction = null`, `mode = ADD`, `stage = EDIT_SPENT` so confirming creates a NEW row instead of overwriting the old one.
+- **`editor/Editor.kt`**: `AssistChip` (leading `ic_autorenew`, `numberFormat` amount + comment, `maxLines = 1` ellipsis, `.trim()` on the composed label) rendered between `TaggingToolbar` and `CategorySelector` only when `mode == ADD && lastSpend != null`; fed from `spendsViewModel.periodSpends` observed via `remember(periodSpends) { lastSpendToRepeat(periodSpends) }`.
+- **`strings.xml`**: `repeat_last_spend` = `"Repeat last: %1$s %2$s"`.
+- Tests: **`editor/RepeatLastSpendTest`** (5): empty → null; non-SPENT-only → null; picks most recent SPENT ignoring a later SET_DAILY_BUDGET; same-date tie broken by higher uid; comment + category preserved. Test count baseline was 281 → 286.
+
 ## 2026-08-11 — Big batch: on-track alert fix, archived categories, Phase 5 allowance, Phase 6 miner, past-period analytics
 
 User request: "do this all. plan first then work on them all" (5 items). Plan: `.track/BIG_BATCH_PLAN.md`. Golden pipeline green — **281 tests, 0 failures**, APK built. Committed + pushed: A `b23b12d`, B `c39e21b`, C `124491e`, D `d61edc4`, E `84f5aaf`.

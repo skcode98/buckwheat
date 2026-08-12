@@ -126,6 +126,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = AI_INSIGHT_SHEET,
+    ) {
+        AiInsightSheet()
+    }
+
+    BottomSheetWrapper(
         name = NOTIFICATIONS_SHEET,
     ) {
         NotificationsSheet()

@@ -94,6 +94,7 @@
   <string name="category_caps_frequency_monthly">Monthly</string>
   <string name="category_caps_frequency_quarterly">Quarterly</string>
   <string name="category_caps_frequency_annual">Annual</string>
+  <string name="category_caps_anchor">Starts %1$s</string>
   <string name="category_caps_anchor_hint">Set start date</string>
   <string name="category_caps_templates_title">Quick templates</string>
   <string name="category_caps_template_monthly_essentials">Monthly Essentials</string>
@@ -104,10 +105,11 @@
   <string name="category_cap_reached_label">Cap reached</string>
   <string name="interleaved_budgets_title">Interleaved budgets</string>
   <string name="interleaved_window_range">%1$s – %2$s</string>
-  <string name="interleaved_spent_of_cap">%1$s of %2$s</string>
-  <string name="interleaved_velocity_no_spend">Nothing spent yet</string>
-  <string name="interleaved_velocity_on_track">at %1$s/day — on track for this window</string>
-  <string name="interleaved_velocity_runs_out">at %1$s/day → runs out on %2$s</string>
+  <string name="interleaved_spent_of_cap">%1$s / %2$s</string>
+  <string name="interleaved_window_status">%1$s · %2$s</string>
+  <string name="interleaved_velocity_no_spend">nothing spent yet</string>
+  <string name="interleaved_velocity_on_track">on track</string>
+  <string name="interleaved_velocity_runs_out">runs out on %1$s</string>
   <string name="ai_insight_title">AI Insight</string>
   <string name="ai_insight_description">An AI analysis of this period\'s spending — budget pace, category concentration, and what to watch out for.</string>
   <string name="ai_insight_generate">Generate report</string>
@@ -280,6 +282,7 @@
   <string name="category_travel">Travel</string>
   <string name="category_other">Other</string>
   <string name="category_auto">Auto</string>
+  <string name="repeat_last_spend">Repeat last: %1$s %2$s</string>
   <string name="categories_refining">Refining with AI…</string>
   <string name="spends_calendar_hint">Chart show how much you spent every day relative to your daily budget</string>
   <string name="monthly_trend_title">Monthly trend</string>

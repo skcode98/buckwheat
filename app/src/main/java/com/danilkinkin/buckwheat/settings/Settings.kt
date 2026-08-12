@@ -83,6 +83,16 @@ fun Settings(
                         )
                     },
                 )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_analytics),
+                    text = stringResource(R.string.ai_insight_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(AI_INSIGHT_SHEET)
+                        )
+                    },
+                )
                 VoiceWidgetDesignSetting(appViewModel = appViewModel)
                 TryWidget(onTried = {
                     onTriedWidget()

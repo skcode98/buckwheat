@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,9 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,7 +88,6 @@ private val categoryCapTemplates = listOf(
 // period's spend totals and drive the 80%/100% instant notifications and the progress bars
 // in the analytics categories card. A category with a schedule entry (frequency + anchor)
 // becomes an interleaved budget that rolls over on its own window instead of the period.
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryCapsSheet(
     onEditAnchor: ((name: String, anchorEpochDay: Long) -> Unit)? = null,
@@ -121,12 +119,6 @@ fun CategoryCapsSheet(
             }
             Text(
                 text = stringResource(R.string.category_caps_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-            Text(
-                text = stringResource(R.string.category_caps_templates_title),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -191,7 +183,6 @@ private fun frequencyLabel(frequency: CategoryFrequency): String = when (frequen
     CategoryFrequency.ANNUAL -> stringResource(R.string.category_caps_frequency_annual)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CategoryCapRow(
     name: String,
@@ -206,7 +197,6 @@ private fun CategoryCapRow(
     var capText by remember(name, cap) { mutableStateOf(cap?.toPlainString() ?: "") }
     val frequency = schedule?.frequency ?: CategoryFrequency.DAILY
     val anchorEpochDay = schedule?.anchorEpochDay ?: LocalDate.now().toEpochDay()
-    var frequencyExpanded by remember(name) { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -256,69 +246,43 @@ private fun CategoryCapRow(
                 }
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ExposedDropdownMenuBox(
-                expanded = frequencyExpanded,
-                onExpandedChange = { frequencyExpanded = !frequencyExpanded },
-                modifier = Modifier.weight(1f),
-            ) {
-                OutlinedTextField(
-                    value = frequencyLabel(frequency),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(stringResource(R.string.category_caps_frequency)) },
-                    trailingIcon = {
-                        IconButton(onClick = { frequencyExpanded = !frequencyExpanded }) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_down),
-                                contentDescription = stringResource(R.string.category_caps_frequency),
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                )
-                ExposedDropdownMenu(
-                    expanded = frequencyExpanded,
-                    onDismissRequest = { frequencyExpanded = false },
-                ) {
-                    CategoryFrequency.entries.forEach { candidate ->
-                        DropdownMenuItem(
-                            text = { Text(frequencyLabel(candidate)) },
-                            onClick = {
-                                frequencyExpanded = false
-                                onSetInterleaved(candidate, anchorEpochDay)
-                            },
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth()) {
+            CategoryFrequency.entries.forEachIndexed { index, candidate ->
+                if (index > 0) Spacer(Modifier.width(8.dp))
+                FilterChip(
+                    selected = frequency == candidate,
+                    onClick = { onSetInterleaved(candidate, anchorEpochDay) },
+                    label = {
+                        Text(
+                            text = frequencyLabel(candidate),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
                         )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (frequency != CategoryFrequency.DAILY) {
+            Spacer(Modifier.height(4.dp))
+            val anchorText = prettyDate(
+                LocalDate.ofEpochDay(anchorEpochDay).toDate(),
+                "dd MMM yyyy",
+                simplifyIfToday = false,
+            )
+            Text(
+                text = stringResource(R.string.category_caps_anchor, anchorText),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clickable(enabled = onEditAnchor != null) {
+                        onEditAnchor?.invoke(name, anchorEpochDay)
                     }
-                }
-            }
-            if (frequency != CategoryFrequency.DAILY) {
-                Spacer(Modifier.width(12.dp))
-                val anchorText = prettyDate(
-                    LocalDate.ofEpochDay(anchorEpochDay).toDate(),
-                    "dd MMM yyyy",
-                    simplifyIfToday = false,
-                )
-                Text(
-                    text = anchorText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .clickable(enabled = onEditAnchor != null) {
-                            onEditAnchor?.invoke(name, anchorEpochDay)
-                        }
-                        .padding(horizontal = 4.dp, vertical = 8.dp),
-                )
-            }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+            )
         }
     }
 }
