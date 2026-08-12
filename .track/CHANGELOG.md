@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-12 — Category budget utilization as battery indicators in Analytics
+
+User request: analytics category caps should read like a **battery** — used budget = filled portion, remaining = the unfilled part, right on the category pill itself, showing the category name, amount used, and used percentage. Golden pipeline green — **290 tests, 0 failures** (289 + 1 new), APK built.
+
+- **`analytics/categoriesChart/CategoryBatteryChip.kt`** (new): replaces the old "chip + thin progress bar below" combo for capped categories. A full-width pill drawn as a battery:
+  - **Body** = rounded pill; track = category color @ 15% alpha; **fill** = category color over the left `fraction` of the pill (`categoryBatteryFraction`), amber (`E6A23C`) at ≥80%, error red at ≥100%.
+  - **Label** overlaid directly on the pill via a clipped two-layer draw (`drawWithContent` + `clipRect(right = fillW)`): emoji + category name (ellipsized) + amount used + `NN%` (`category_battery_percent`). The fill region re-renders the text in the fill-contrast color so it's readable on both the used and the remaining parts.
+  - **Terminal** = 3dp × 12dp rounded nub on the right (body inset 5dp), tinted like the current fill level.
+  - Tap → category history sheet (same `onCategoryClick` wiring as the old chip).
+- **`SpendCategoriesCard.kt`**: capped categories now render `CategoryBatteryChip` (full width, one per row); uncapped categories keep the plain `TagAmount` pill. `CapProgressBar` stays (still used by `InterleavedBudgetCard`).
+- **`CategoryCap.kt`**: new pure `categoryBatteryFraction(progress, cap): Float` (0..1, 0 for non-positive cap). Deliberately uses `divide(cap, 4, HALF_UP)` — Kotlin's `BigDecimal.div` rounds to scale 0 (50/100 → 0).
+- **Strings** (EN): `category_battery_percent` `%1$d%%`.
+- **Tests**: `CategoryCapsTest` +1 (`battery fraction is clamped to the cap`, 8 cases).
+
 ## 2026-08-12 — Tap-to-edit + long-press actions in History (backlog #1)
 
 Picked the next Tier-1 backlog item. History rows on the wallet screen were gesture-only (swipe to edit/delete, tap did nothing). Golden pipeline green — **289 tests, 0 failures** (286 + 3 new), APK built.

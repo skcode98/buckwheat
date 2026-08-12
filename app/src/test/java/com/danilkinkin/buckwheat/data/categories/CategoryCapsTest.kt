@@ -83,6 +83,18 @@ class CategoryCapsTest {
     }
 
     @Test
+    fun `battery fraction is clamped to the cap`() {
+        assertEquals(0f, categoryBatteryFraction(BigDecimal.ZERO, BigDecimal("100")))
+        assertEquals(0f, categoryBatteryFraction(BigDecimal.ZERO, BigDecimal.ZERO))
+        assertEquals(0f, categoryBatteryFraction(BigDecimal("50"), BigDecimal.ZERO))
+        assertEquals(0.5f, categoryBatteryFraction(BigDecimal("50"), BigDecimal("100")))
+        assertEquals(0.25f, categoryBatteryFraction(BigDecimal("25"), BigDecimal("100")))
+        assertEquals(1f, categoryBatteryFraction(BigDecimal("100"), BigDecimal("100")))
+        assertEquals(1f, categoryBatteryFraction(BigDecimal("250"), BigDecimal("100")))
+        assertEquals(1f, categoryBatteryFraction(BigDecimal("100.5"), BigDecimal("100")))
+    }
+
+    @Test
     fun `only a newly reached level announces`() {
         assertEquals(0, highestNewlyReachedCapBucket(0, 0))
         assertEquals(1, highestNewlyReachedCapBucket(0, 1))

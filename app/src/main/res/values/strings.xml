@@ -103,6 +103,7 @@
   <string name="interleaved_anchor_title">Start date</string>
   <string name="category_cap_progress">%1$d%% of cap</string>
   <string name="category_cap_reached_label">Cap reached</string>
+  <string name="category_battery_percent">%1$d%%</string>
   <string name="interleaved_budgets_title">Interleaved budgets</string>
   <string name="interleaved_window_range">%1$s – %2$s</string>
   <string name="interleaved_spent_of_cap">%1$s / %2$s</string>

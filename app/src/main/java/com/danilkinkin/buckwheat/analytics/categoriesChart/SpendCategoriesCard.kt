@@ -183,15 +183,18 @@ fun SpendCategoriesCard(
                             )
                         }
                         if (cap != null && cap > BigDecimal.ZERO) {
-                            Column(Modifier.padding(4.dp, 4.dp)) {
-                                chip()
-                                Spacer(Modifier.height(2.dp))
-                                CapProgressBar(
-                                    progress = category.amount,
-                                    cap = cap,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                            CategoryBatteryChip(
+                                modifier = Modifier
+                                    .padding(4.dp, 4.dp)
+                                    .fillMaxWidth(),
+                                name = category.name,
+                                emoji = category.emoji,
+                                amount = category.amount,
+                                currency = currency,
+                                cap = cap,
+                                palette = category.color,
+                                onClick = onCategoryClick?.let { { it(key) } },
+                            )
                         } else {
                             Box(Modifier.padding(4.dp, 4.dp)) {
                                 chip()
@@ -255,6 +258,12 @@ private fun PreviewCategories() {
         SpendCategoriesCard(
             modifier = Modifier.fillMaxWidth(),
             currency = ExtendCurrency.getInstance("EUR"),
+            caps = mapOf(
+                "FOOD" to BigDecimal("300"),
+                "TRANSPORT" to BigDecimal("150"),
+                "BILLS" to BigDecimal("400"),
+                "TRAVEL" to BigDecimal("1000"),
+            ),
             spends = comments.mapIndexed { index, it ->
                 Transaction(
                     type = TransactionType.SPENT,

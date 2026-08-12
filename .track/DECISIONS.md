@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-08-12 — Decision: Category budget utilization rendered as battery indicators
+
+**Decision**: Replaced the "category chip + thin progress bar underneath" treatment in `SpendCategoriesCard` with a full-width **battery pill** for capped categories — the pill itself is the progress indicator (filled portion = budget used up to the cap, unfilled = remaining), with the category name, amount used, and used percentage overlaid directly on it.
+
+**Why**: User asked for exactly this — "like battery indicator, used budget as filled and remaining on the categories pill directly, show the category name and amount used and the battery indicator and the used percentage". A battery reads the fill/remaining state at a glance, keeps the drill-down tap, and removes the separate percent label below the chip (the percentage now lives on the pill).
+
+**Implementation notes**:
+- Fill geometry is a pure helper `categoryBatteryFraction(progress, cap)` in `CategoryCap.kt` (0..1, clamped). **Kotlin's `BigDecimal.div` rounds to scale 0 (HALF_EVEN), so 50/100 → 0** — the helper must use `divide(cap, 4, HALF_UP)`; a regression test locks this in.
+- The label over a partially-filled pill needs two text colors. The fill layer is a `Box` with `drawWithContent { clipRect(right = size.width * fraction) { scope.drawContent() } }` that clips the fill rect + a *second* full-width text row to the fill region; both text rows are laid out full-width with identical padding so glyph positions match exactly.
+- Colors: fill = category palette `main`; ≥80% → amber `E6A23C` (dark text); ≥100% → theme `error` (onError text). Track = category color @ 15% alpha. A 3dp × 12dp rounded nub on the right (body inset 5dp) sells the battery metaphor.
+- Only **capped** categories get the battery (a cap defines "remaining"); uncapped categories keep the plain `TagAmount` pill. `CapProgressBar` is retained for `InterleavedBudgetCard`, which has its own richer row layout (window range + status line).
+
+**Rejected**: drawing the battery as a separate small icon next to an unchanged chip (the user explicitly wanted the fill/remaining on the pill itself); converting uncapped categories to batteries (no budget → no remaining to show); retrofitting `InterleavedBudgetCard` rows in the same pass (different layout, kept for a future consistency pass).
+
+**Outcome**: `analytics/categoriesChart/CategoryBatteryChip.kt` (new), `SpendCategoriesCard.kt` uses it for capped categories, `CategoryCap.kt` `categoryBatteryFraction`, EN string `category_battery_percent` `%1$d%%`, 1 new `CategoryCapsTest` case. Golden pipeline green: **290 tests, 0 failures** (289 + 1 new).
+
 ## 2026-08-12 — Decision: Tap-to-edit + long-press actions in History (backlog #1)
 
 **Decision**: Implemented the next Tier-1 backlog item. History rows now respond to tap (edit) and long-press (Edit / Delete / Copy menu) in addition to the existing swipe gestures.

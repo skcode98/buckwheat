@@ -21,6 +21,16 @@ fun categoryCapPercent(progress: BigDecimal, cap: BigDecimal): Int {
         .coerceIn(0, 100)
 }
 
+// Fill fraction (0..1) of the category battery pill. The filled part shows the budget used
+// up to the cap and the unfilled part is what remains; 0 for a non-positive cap.
+fun categoryBatteryFraction(progress: BigDecimal, cap: BigDecimal): Float {
+    if (cap <= BigDecimal.ZERO) return 0f
+    return progress
+        .divide(cap, 4, RoundingMode.HALF_UP)
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
+
 // 0 = nothing reached, 1 = at/above 80% of the cap, 2 = at/above the full cap.
 fun categoryCapBucket(progress: BigDecimal, cap: BigDecimal): Int =
     if (cap <= BigDecimal.ZERO) 0

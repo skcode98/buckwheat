@@ -63,6 +63,7 @@
 | Category Caps ViewModel | `app/.../settings/CategoryCapsViewModel.kt` |
 | Category Caps Sheet | `app/.../settings/CategoryCapsSheet.kt` |
 | Spend Categories Card | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
+| Category Battery Chip | `app/.../analytics/categoriesChart/CategoryBatteryChip.kt` (new 2026-08-12; battery pill for capped categories — fill = used up to cap via `categoryBatteryFraction`, label overlaid via `drawWithContent` + `clipRect`, amber ≥80%, red ≥100%) |
 | Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
 | Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`dailyPace`/`applyCategoryAllowance`/`daysLeftInWindow`/`projectedExhaustionDate`) |
 | Interleaved Budget Test | `app/.../test/.../interleaved/InterleavedBudgetTest.kt` |
