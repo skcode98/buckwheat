@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-08-12 — Decision: Tap-to-edit + long-press actions in History (backlog #1)
+
+**Decision**: Implemented the next Tier-1 backlog item. History rows now respond to tap (edit) and long-press (Edit / Delete / Copy menu) in addition to the existing swipe gestures.
+
+**Why**: The wallet's history is the second-most-touched screen after the editor, but rows were gesture-only (swipe to edit/delete) with no discoverable tap affordance. Tap-to-edit matches the editor's primary action; the long-press menu adds delete (previously only via swipe) and copy-to-clipboard. Wired only in the non-readOnly branch so read-only viewers (`ViewerHistory`, `SearchHistorySheet`) stay inert — archived spends can't be edited through the editor.
+
+**Gesture-conflict note**: `combinedClickable` (tap/long-press) coexists with `SwipeToDismiss`'s drag — taps fire only when the gesture never exceeds touch slop, drags are claimed by the dismiss. Menu delete is instant (`removeSpent`), consistent with swipe-delete (no confirmation dialog in either path).
+
+**Rejected**: a full-blown delete confirmation dialog (adds friction; swipe delete has none); copy as "duplicate transaction" instead of clipboard (the repeat-last-spend chip already covers re-adding).
+
+**Outcome**: `history/SpentItemActions.kt` (combinedClickable + DropdownMenu), `History.kt` wiring (tap→`startEditingSpent`+`onClose()`, delete→`removeSpent`, copy→clipboard via pure `buildSpendCopyText` + snackbar), new `ic_content_copy.xml`, 4 EN strings, 3 `SpentItemActionsTest` cases. Golden pipeline green: **289 tests, 0 failures** (286 + 3 new).
+
 ## 2026-08-12 — Decision: AI report belongs in Settings (not Analytics); interleaved + category-caps UIs simplified
 
 **Decision**: User feedback ("AI report it's just normal text and placement is also wrong, add it in setting page not in analytics; interleaved budget looks messy in analytics; category caps settings UI is a mess"). Moved the AI report out of the analytics column into a dedicated Settings sheet (`AI_INSIGHT_SHEET` under a new "AI Insight" row), rendered the report's `• ` bullets as real bullet rows, replaced the interleaved card's wordy velocity sentence with one compact status caption, and swapped the per-row frequency dropdown in the caps sheet for four FilterChips.
@@ -22,7 +34,7 @@
 - Fit with existing architecture: the editor already routes commits through `SpendsViewModel.addSpent`; prefilling `currentSpent/currentComment/currentCategory/rawSpentValue` and setting stage `EDIT_SPENT` reuses the whole commit path unchanged.
 
 **Rejected alternatives (with reasons)**:
-- Tap-to-edit + long-press in History (Tier 1, High) — higher value but touches the `SwipeActions` gesture stack (risk of gesture conflicts) and is UI-only (hard to unit test).
+- Tap-to-edit + long-press in History (Tier 1, High) — higher value but touches the `SwipeActions` gesture stack (risk of gesture conflicts) and is UI-only (hard to unit test). ✅ **SHIPPED as the next item (2026-08-12) — see the decision above; `combinedClickable` coexists cleanly with the swipe gestures.**
 - Category chips on history rows — lower daily frequency; display-only change.
 - App lock (PIN/biometric) — Large complexity, security surface, needs `BiometricPrompt` + new settings; better as its own focused session.
 - Per-category widget / savings widget — medium complexity; widget E2E can't be verified without an emulator.

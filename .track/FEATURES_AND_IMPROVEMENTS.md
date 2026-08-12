@@ -7,11 +7,11 @@
 
 ## Tier 1 — High daily value
 
-### 1. Tap-to-edit + long-press actions in History
-- **Files**: `history/History.kt` (rows 145–168), `data/SpendsViewModel.kt`
+### 1. Tap-to-edit + long-press actions in History ✅ **SHIPPED 2026-08-12**
+- **Files**: `history/History.kt`, `history/SpentItemActions.kt` (new, `combinedClickable` + `DropdownMenu`)
 - **What**: Today only swipe-gestures edit/delete; tap does nothing. Add tap → `startEditingSpent`, long-press → edit/delete/copy menu.
 - **Complexity**: Small · **Value**: High (discoverability)
-- **Status**: Backlog
+- **Status**: ✅ Implemented — golden pipeline green, **289 tests, 0 failures**. Tap = edit, long-press = Edit/Delete/Copy menu (copy → clipboard + snackbar). Read-only viewers unchanged. Pending commit + push.
 
 ### 2. Search sheet filters: category, amount range, date range
 - **Files**: `settings/SearchHistorySheet.kt`, `history/History.kt`
@@ -23,7 +23,7 @@
 - **Files**: `editor/RepeatLastSpend.kt` (pure `lastSpendToRepeat`), `editor/EditorViewModel.kt` (`startRepeatSpend`), `editor/Editor.kt` (AssistChip), `strings.xml`
 - **What**: One-tap re-add of the most recent transaction (amount + comment + category) for frequent small spends (coffee/transport). Prefills the editor's existing commit path; user just confirms.
 - **Complexity**: Small · **Value**: High (fastest daily interaction)
-- **Status**: ✅ Implemented (golden pipeline green, 286 tests) — pending user sign-off before commit + push.
+- **Status**: ✅ SHIPPED 2026-08-12 (committed `10c3693`, pushed). Golden pipeline green, 286 tests.
 
 ### 4. Multi-period month-over-month trend
 - **Files**: `analytics/` (new `MultiPeriodTrendCard`), `data/dao/BudgetPeriodDao.kt` (monthly-totals aggregate)

@@ -16,8 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -39,6 +42,7 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.isSameDay
+import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.launch
@@ -63,6 +67,9 @@ fun History(
 ) {
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
 
     var historyList by remember { mutableStateOf<List<RowEntity>>(emptyList()) }
     val budget = spendsViewModel.budget.observeAsState(initial = BigDecimal.ZERO)
@@ -223,9 +230,34 @@ fun History(
                                 Box(
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 ) {
-                                    SpentItem(
+                                    SpentItemActions(
                                         transaction = row.transaction!!,
-                                        currency = currency.value
+                                        currency = currency.value,
+                                        onEdit = {
+                                            editorViewModel.startEditingSpent(row.transaction!!)
+                                            onClose()
+                                        },
+                                        onDelete = {
+                                            spendsViewModel.removeSpent(row.transaction!!)
+                                        },
+                                        onCopy = {
+                                            val transaction = row.transaction!!
+                                            clipboard.setText(
+                                                AnnotatedString(
+                                                    buildSpendCopyText(
+                                                        amount = numberFormat(
+                                                            context = context,
+                                                            transaction.value,
+                                                            currency = currency.value,
+                                                        ),
+                                                        comment = transaction.comment,
+                                                    )
+                                                )
+                                            )
+                                            appViewModel.showSnackbar(
+                                                context.getString(R.string.history_actions_copied)
+                                            )
+                                        },
                                     )
                                 }
                             }

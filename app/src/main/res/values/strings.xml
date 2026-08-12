@@ -291,6 +291,10 @@
   <string name="vs_previous_period">vs previous period</string>
   <string name="export_to_csv_file_name">Spends (from %1$s to %2$s)</string>
   <string name="history_title">History</string>
+  <string name="history_actions_edit">Edit</string>
+  <string name="history_actions_delete">Delete</string>
+  <string name="history_actions_copy">Copy</string>
+  <string name="history_actions_copied">Amount copied to clipboard</string>
   <string name="view_analytics">View analytics</string>
   <string name="analytics_title">Analytics</string>
   <string name="finish_early">Finish early</string>

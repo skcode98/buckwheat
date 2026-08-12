@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-12 — Tap-to-edit + long-press actions in History (backlog #1)
+
+Picked the next Tier-1 backlog item. History rows on the wallet screen were gesture-only (swipe to edit/delete, tap did nothing). Golden pipeline green — **289 tests, 0 failures** (286 + 3 new), APK built.
+
+- **`history/SpentItemActions.kt`** (new): wraps `SpentItem` with a `combinedClickable` — **tap** = edit (same path as swipe-start-to-end: `startEditingSpent` + close), **long-press** = `DropdownMenu` with Edit / Delete / Copy.
+- **Menu wiring in `history/History.kt`** (non-readOnly branch only, matching where swipes live): Edit → `editorViewModel.startEditingSpent(tx)` + `onClose()`; Delete → `spendsViewModel.removeSpent(tx)`; Copy → clipboard via `LocalClipboardManager` of formatted amount + comment (`buildSpendCopyText`, separator ` — `) + `showSnackbar("Amount copied to clipboard")`.
+- Read-only contexts (`ViewerHistory`, `SearchHistorySheet`) unchanged — plain `SpentItem`, no tap/long-press.
+- **`res/drawable/ic_content_copy.xml`** (new): Material "content-copy" vector icon (two overlapping rounded rectangles).
+- **Strings** (EN-only): `history_actions_edit` "Edit", `history_actions_delete` "Delete", `history_actions_copy` "Copy", `history_actions_copied` "Amount copied to clipboard".
+- **Tests**: `history/SpentItemActionsTest` — 3 cases for pure `buildSpendCopyText(amount, comment)` (amount-only, blank comment trimmed, amount — comment). Feature is otherwise UI-only (per `DECISIONS.md`).
+
 ## 2026-08-12 — UI cleanup: AI report → Settings, simpler interleaved + category-caps UI
 
 User feedback on the previous sessions' work: the AI report "is just normal text" and is in the wrong place (Analytics), and the interleaved-budget card + the category-caps sheet look messy / don't match the app's standard feel. Golden pipeline green — **286 tests, 0 failures**, APK built.
