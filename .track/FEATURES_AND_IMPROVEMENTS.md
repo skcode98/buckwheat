@@ -62,7 +62,8 @@
 ### 9. Edit archived transactions
 - **Files**: `settings/PeriodDetailSheet.kt`, `data/dao/BudgetPeriodDao.kt` (add `update`), `data/entities/ArchivedTransaction.kt`
 - **What**: Swipe/tap archived rows to change value/comment/category, then recompute that period's `totalSpent` (fix imported CSV errors).
-- **Complexity**: Medium · **Value**: Medium–High
+- **Complexity**: Medium · **Value**: Medium
+- **Status**: Backlog — note 2026-08-13: the detail screen now renders a single `PeriodSummaryCard` (`settings/PeriodSummaryCard.kt`) above the records, so edits must also refresh the card (or recompute from the row list).–High
 - **Status**: Backlog
 
 ### 10. Upcoming recurring payments widget / wallet preview
@@ -121,7 +122,7 @@
 - **Files**: `analytics/SpendsWeekdayCard.kt`, `CompareToLastPeriodCard.kt`
 - **What**: Overlay this period's per-weekday spend vs previous period on the weekday card.
 - **Complexity**: Medium · **Value**: Low–Medium
-- **Status**: Backlog
+- **Status**: ❌ CANCELLED 2026-08-13 — the past-period detail screen (`settings/PeriodDetailSheet.kt`) no longer renders the weekday/trend/categories charts; it shows only a single `PeriodSummaryCard` + the spend records. Any cross-period comparison now belongs on the current-period Analytics sheet (`analytics/Analytics.kt`).
 
 ### 19. Import feedback: amount-range validation + skipped-row report
 - **Files**: `di/SpendsRepository.kt` (import path, near the in-file dedupe)

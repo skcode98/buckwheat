@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-13 (late) — Past-period detail: one summary card + spend records only
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (**264 tests, 0 failures**); committed `c36b006`, pushed. User asked to strip the past-period screen down to the spend records plus a single details card. Rewrote `settings/PeriodDetailSheet.kt`: deleted WholeBudgetCard, Spent/Rest + Days count cards, Min/Max spend cards, Spends count card, SpendCategoriesCard (donut), CategoriesChartCard, SpendsTrendCard and SpendsWeekdayCard. New `settings/PeriodSummary.kt` (pure `buildPeriodSummary` + `PeriodSummary`/`PeriodSummarySpend`/`PeriodSummaryDay`/`PeriodSummaryCategory`) and `settings/PeriodSummaryCard.kt`: start/end dates, spent vs budget + utilization bar (green/amber/red by remaining %, `spentPercent` null for imported no-budget periods), total spends, biggest/lowest spend with dates, biggest day, no-spend days (range days − distinct spend days), per-category rows (emoji + name + amount). 12 new `PeriodSummaryTest` cases. Imports: `prettyDate`, `numberFormat`, `countDays`, `categoryTotals`, `SpendCategory.emojiFor`, `combineColors`.
+
 ## 2026-08-13 (late) — Repeat-last-spend quick action removed from the editor
 
 `compileDebugKotlin` + full `testDebugUnitTest` green (**252 tests, 0 failures**); committed `9f5383f`, pushed. User asked to remove the "repeat last" feature from the editor. Deleted `editor/RepeatLastSpend.kt` (pure `lastSpendToRepeat`), `EditorViewModel.startRepeatSpend`, the `AssistChip` in `Editor.kt` (plus the now-unused imports/observes — `periodSpends`, `currency`, `ExtendCurrency`, `numberFormat`, `Text`, `Icon`, `AssistChip`, `Row`, `Alignment`), the `repeat_last_spend` string, and `RepeatLastSpendTest`. Editor layout back to `TaggingToolbar → CategorySelector`. `ic_autorenew` kept (used by CategoryCapsSheet + others). 5 tests removed, backlog item #3 marked removed.
