@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-13 (late) — Free-models dropdown FIXED: uses live typed URL/key with default fallback
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `b591afc`, pushed. User: "the model dropdown is not showing for any provider". Root cause: `loadFreeModels` read the provider URL from DataStore WITHOUT falling back to the provider default — and the settings save path deletes the stored URL whenever it equals the provider default, so the common (default) case stored a blank URL and the dropdown fetched nothing. Also the sheet fetched from the SAVED key/URL while the user was still typing.
+
+- **Root cause**: `CategoryCapsViewModel`/settings `saveAll` writes `aiProviderUrlStoreKey` only when non-default (`saveAll` removes keys equal to the default so backups/restores stay clean). `loadFreeModels(context, provider)` then read that possibly-blank URL directly → non-OpenRouter providers also aborted on the blank key → empty list every time.
+- **Fix** (`settings/VoiceAiSettingsViewModel.kt`): new pure `modelsEndpoint(provider, apiKey, providerUrl)` derives the GET models URL from the typed provider URL with `providerUrl.trim().ifBlank { provider.defaultUrl }` (chat-completions → `<base>/models`, Gemini strips `:generateContent`+`{model}`); returns null for unusable URLs or a missing non-OpenRouter key. `loadFreeModels(provider, apiKey, providerUrl)` now delegates to it; the old DataStore-reading signature is gone. New `refreshFreeModels(provider, apiKey, providerUrl)` passes the sheet's LIVE (typed, unsaved) values.
+- **Sheet** (`settings/VoiceAiSettingsSheet.kt`): the model-dropdown caller now passes the currently-typed `apiKeys[p.id]`/`providerUrls[p.id]` instead of a bare `provider`, so the list reflects in-progress edits before Save. Added a disabled "No models available — check the URL and key, then tap again" row (`ai_provider_no_models`) so an empty fetch is visible instead of a silently empty menu.
+- **Tests**: new `VoiceAiSettingsViewModelTest` (5 cases) → 297 total: blank URL falls back to each provider default (GROQ/OPENROUTER/CEREBRAS/GITHUB/NIM), custom chat URL → `<base>/models`, Gemini template URL → reduced `.../v1beta/models` (used as-is), OpenRouter lists without a key, non-OpenRouter without a key → null.
+- **Build gotcha this round**: `DropdownMenuItem` requires `onClick` even when `enabled = false` (first compile failed with "No value passed for parameter 'onClick'"; fixed with `onClick = {}`).
+
 ## 2026-08-13 (late) — Category cap auto-assign FIXED: every category gets a cap + completed periods only
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**292 tests, 0 failures**); committed + pushed. User: "the category cap auto assignment have issues i think as its not correctly assign the amount and divided correctly according to category". Review found two real bugs in `data/categories/CategoryAutoAssign.kt` + `settings/CategoryCapsViewModel.kt`:
