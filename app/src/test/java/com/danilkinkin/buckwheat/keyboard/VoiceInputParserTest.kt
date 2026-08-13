@@ -358,6 +358,22 @@ class VoiceInputParserTest {
     }
 
     @Test
+    fun `isValidAiProviderUrl accepts http and https urls`() {
+        assertEquals(true, isValidAiProviderUrl("https://openrouter.ai/api/v1/chat/completions"))
+        assertEquals(true, isValidAiProviderUrl("http://localhost:8080/v1"))
+        assertEquals(true, isValidAiProviderUrl("  https://example.com/v1/chat/completions  "))
+    }
+
+    @Test
+    fun `isValidAiProviderUrl rejects malformed or non-http urls`() {
+        assertEquals(false, isValidAiProviderUrl(""))
+        assertEquals(false, isValidAiProviderUrl("openrouter.ai/api/v1"))
+        assertEquals(false, isValidAiProviderUrl("ftp://openrouter.ai"))
+        assertEquals(false, isValidAiProviderUrl("https://"))
+        assertEquals(false, isValidAiProviderUrl("not a url"))
+    }
+
+    @Test
     fun `parseVoiceAiContent parses amount from envelope content json`() {
         val result = parseVoiceAiContent("""{"amount":"150","comment":"tea","date":"today"}""")
 

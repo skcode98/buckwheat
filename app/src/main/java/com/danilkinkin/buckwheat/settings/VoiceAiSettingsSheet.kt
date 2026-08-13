@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,6 +53,9 @@ import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
+import com.danilkinkin.buckwheat.keyboard.AiConnectionResult
+import com.danilkinkin.buckwheat.keyboard.isValidAiProviderUrl
+import com.danilkinkin.buckwheat.keyboard.testAiConnection
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorGood
@@ -75,6 +79,24 @@ fun VoiceAiSettingsSheet(
         mutableStateOf(DEFAULT_VOICE_AI_PROVIDER_URL)
     }
     var voiceAiModel by rememberSaveable { mutableStateOf(DEFAULT_VOICE_AI_MODEL) }
+
+    var testState by remember { mutableStateOf<AiConnectionResult?>(null) }
+    var testing by remember { mutableStateOf(false) }
+
+    fun runTest() {
+        val scope = coroutineScope
+        testing = true
+        testState = null
+        scope.launch {
+            testState = testAiConnection(
+                context = context,
+                providerUrl = voiceAiProviderUrl,
+                apiKey = voiceAiApiKey,
+                model = voiceAiModel,
+            )
+            testing = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         voiceAiApiKey = context.settingsDataStore.data.first()[voiceAiApiKeyStoreKey].orEmpty()
@@ -195,16 +217,23 @@ fun VoiceAiSettingsSheet(
                 Button(
                     onClick = {
                         coroutineScope.launch {
+                            val url = voiceAiProviderUrl.trim()
+                            if (!isValidAiProviderUrl(url)) {
+                                appViewModel.showSnackbar(
+                                    context.getString(R.string.voice_ai_invalid_url)
+                                )
+                                return@launch
+                            }
                             context.settingsDataStore.edit {
                                 if (voiceAiApiKey.isBlank()) {
                                     it.remove(voiceAiApiKeyStoreKey)
                                 } else {
                                     it[voiceAiApiKeyStoreKey] = voiceAiApiKey.trim()
                                 }
-                                if (voiceAiProviderUrl.isBlank()) {
+                                if (url.isBlank()) {
                                     it.remove(voiceAiProviderUrlStoreKey)
                                 } else {
-                                    it[voiceAiProviderUrlStoreKey] = voiceAiProviderUrl.trim()
+                                    it[voiceAiProviderUrlStoreKey] = url
                                 }
                                 if (voiceAiModel.isBlank()) {
                                     it.remove(voiceAiModelStoreKey)
@@ -220,6 +249,44 @@ fun VoiceAiSettingsSheet(
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
                 ) {
                     Text(stringResource(R.string.save_api_key))
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { runTest() },
+                        enabled = !testing,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (testing) R.string.voice_ai_testing
+                                else R.string.voice_ai_test_connection
+                            )
+                        )
+                    }
+                }
+                val testResult = testState
+                when {
+                    testResult is AiConnectionResult.Success -> {
+                        Text(
+                            text = stringResource(R.string.voice_ai_test_success, testResult.reply),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorGood,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                        )
+                    }
+                    testResult is AiConnectionResult.Failure -> {
+                        Text(
+                            text = stringResource(R.string.voice_ai_test_failed, testResult.message),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                        )
+                    }
                 }
                 Text(
                     text = stringResource(R.string.voice_ai_fallback_hint),

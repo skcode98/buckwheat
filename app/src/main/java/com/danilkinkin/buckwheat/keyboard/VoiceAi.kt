@@ -138,6 +138,90 @@ suspend fun parseVoiceInputWithAi(context: Context, transcript: String): VoiceAi
         }
     }
 
+// Outcome of a "test connection" attempt from the AI settings sheet.
+sealed class AiConnectionResult {
+    data class Success(val reply: String) : AiConnectionResult()
+    data class Failure(val message: String) : AiConnectionResult()
+}
+
+// Validates an AI provider URL: must parse and use http/https with a non-empty host. Pure so
+// it is unit-testable.
+internal fun isValidAiProviderUrl(raw: String): Boolean {
+    val parsed = runCatching { URL(raw.trim()) }.getOrNull() ?: return false
+    return (parsed.protocol == "http" || parsed.protocol == "https") &&
+        parsed.host.isNotBlank()
+}
+
+// Sends a minimal chat-completions request to the configured provider so the user can verify
+// the URL + API key + model before relying on it. Returns Success (with a short echo of the
+// model's reply) or a human-readable Failure; never throws. Bounded by the same connect/read
+// timeouts as the real AI calls.
+suspend fun testAiConnection(
+    context: Context,
+    providerUrl: String,
+    apiKey: String,
+    model: String,
+): AiConnectionResult = withContext(Dispatchers.IO) {
+    val url = providerUrl.trim()
+    if (url.isBlank() || apiKey.isBlank() || model.isBlank()) {
+        return@withContext AiConnectionResult.Failure(
+            "API key, provider URL and model are all required."
+        )
+    }
+    if (!isValidAiProviderUrl(url)) {
+        return@withContext AiConnectionResult.Failure(
+            "Provider URL must start with http:// or https://"
+        )
+    }
+
+    val requestBody = JSONObject()
+        .put("model", model)
+        .put("temperature", 0)
+        .put(
+            "messages",
+            org.json.JSONArray()
+                .put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("content", "Reply with exactly the word: ok")
+                )
+        )
+        .toString()
+
+    var connection: HttpURLConnection? = null
+    try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        connection = conn
+        conn.requestMethod = "POST"
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        conn.doOutput = true
+
+        OutputStreamWriter(conn.outputStream).use { writer ->
+            writer.write(requestBody)
+            writer.flush()
+        }
+
+        if (conn.responseCode !in 200..299) {
+            val errorBody = runCatching {
+                conn.errorStream?.bufferedReader()?.use { it.readText() }
+            }.getOrNull().orEmpty().trim().take(200)
+            val suffix = if (errorBody.isNotEmpty()) " — $errorBody" else ""
+            return@withContext AiConnectionResult.Failure("HTTP ${conn.responseCode}$suffix")
+        }
+
+        val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+        val content = extractModelContent(responseText).trim().take(80)
+        return@withContext AiConnectionResult.Success(content.ifBlank { "connected" })
+    } catch (e: Exception) {
+        AiConnectionResult.Failure(e.message ?: e.javaClass.simpleName)
+    } finally {
+        connection?.disconnect()
+    }
+}
+
 // Extracts the JSON payload from a model reply that may be wrapped in markdown fences or prose.
 internal fun extractJsonContent(raw: String): String? {
     val start = raw.indexOf('{')

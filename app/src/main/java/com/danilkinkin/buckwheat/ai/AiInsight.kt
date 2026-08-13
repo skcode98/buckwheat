@@ -303,27 +303,27 @@ suspend fun generateAiInsight(
         ?.takeIf { it.isNotBlank() }
         ?: DEFAULT_VOICE_AI_MODEL
 
-    val requestBody = JSONObject()
-        .put("model", model)
-        .put("temperature", 0)
-        .put(
-            "messages",
-            JSONArray()
-                .put(
-                    JSONObject()
-                        .put("role", "system")
-                        .put("content", buildAiInsightSystemPrompt())
-                )
-                .put(
-                    JSONObject()
-                        .put("role", "user")
-                        .put("content", buildAiInsightUserPrompt(summary))
-                )
-        )
-        .toString()
-
     var connection: HttpURLConnection? = null
     try {
+        val requestBody = JSONObject()
+            .put("model", model)
+            .put("temperature", 0)
+            .put(
+                "messages",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("role", "system")
+                            .put("content", buildAiInsightSystemPrompt())
+                    )
+                    .put(
+                        JSONObject()
+                            .put("role", "user")
+                            .put("content", buildAiInsightUserPrompt(summary))
+                    )
+            )
+            .toString()
+
         val url = URL(providerUrl)
         val conn = url.openConnection() as HttpURLConnection
         connection = conn
