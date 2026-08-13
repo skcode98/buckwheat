@@ -89,7 +89,8 @@
   <string name="category_caps_description">Set a cap per category. You\'ll get a notification at 80% and 100% of the cap.</string>
   <string name="category_caps_hint">Cap</string>
   <string name="category_caps_remove">Remove cap</string>
-  <string name="category_caps_auto">Auto</string>
+  <string name="category_caps_auto_assign">Auto-assign budget</string>
+  <string name="category_caps_auto_assign_hint">Splits your budget across categories by your typical monthly spending — adjust any cap afterwards.</string>
   <string name="category_cap_progress">%1$d%% of cap</string>
   <string name="category_cap_reached_label">Cap reached</string>
   <string name="category_battery_percent">%1$d%%</string>

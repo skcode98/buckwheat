@@ -6,14 +6,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +47,8 @@ const val CATEGORY_CAPS_SHEET = "categoryCaps"
 
 // Settings sheet for the monthly cap per category. Caps apply to the current budget period's
 // spend totals and drive the 80%/100% instant notifications and the battery pill in the
-// analytics categories card. "Auto" seeds a cap with the current budget amount.
+// analytics categories card. "Auto-assign budget" splits the current budget across all
+// categories by their typical monthly spend; each cap stays editable afterwards.
 @Composable
 fun CategoryCapsSheet(
     categoriesViewModel: CategoriesManagementViewModel = hiltViewModel(),
@@ -82,6 +82,25 @@ fun CategoryCapsSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
+            Button(
+                onClick = { capsViewModel.autoAssignBudget(categories.map { it.name }) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_autorenew),
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.category_caps_auto_assign))
+            }
+            Text(
+                text = stringResource(R.string.category_caps_auto_assign_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -96,7 +115,6 @@ fun CategoryCapsSheet(
                         cap = caps[item.name],
                         onSave = { capsViewModel.setCap(item.name, it) },
                         onClear = { capsViewModel.setCap(item.name, null) },
-                        onAuto = { capsViewModel.setAutoCap(item.name) },
                     )
                 }
             }
@@ -111,69 +129,53 @@ private fun CategoryCapRow(
     cap: BigDecimal?,
     onSave: (BigDecimal) -> Unit,
     onClear: () -> Unit,
-    onAuto: () -> Unit,
 ) {
     var capText by remember(name, cap) { mutableStateOf(cap?.toPlainString() ?: "") }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "$emoji  ${categoryDisplayName(name)}",
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
-                value = capText,
-                onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
-                modifier = Modifier.width(132.dp),
-                singleLine = true,
-                label = { Text(stringResource(R.string.category_caps_hint)) },
-                placeholder = { Text(stringResource(R.string.category_caps_hint)) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        capText.trim().toBigDecimalOrNull()?.takeIf { it > BigDecimal.ZERO }
-                            ?.let(onSave)
-                    }
-                ),
-            )
-            if (cap != null) {
-                Spacer(Modifier.width(4.dp))
-                IconButton(onClick = {
-                    capText = ""
-                    onClear()
-                }) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_delete_forever),
-                        contentDescription = stringResource(R.string.category_caps_remove),
-                    )
+        Text(
+            text = "$emoji  ${categoryDisplayName(name)}",
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        OutlinedTextField(
+            value = capText,
+            onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
+            modifier = Modifier.width(132.dp),
+            singleLine = true,
+            label = { Text(stringResource(R.string.category_caps_hint)) },
+            placeholder = { Text(stringResource(R.string.category_caps_hint)) },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    capText.trim().toBigDecimalOrNull()?.takeIf { it > BigDecimal.ZERO }
+                        ?.let(onSave)
                 }
+            ),
+        )
+        if (cap != null) {
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = {
+                capText = ""
+                onClear()
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_delete_forever),
+                    contentDescription = stringResource(R.string.category_caps_remove),
+                )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        AssistChip(
-            onClick = onAuto,
-            label = {
-                Text(
-                    text = stringResource(R.string.category_caps_auto),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                )
-            },
-        )
     }
 }
 
