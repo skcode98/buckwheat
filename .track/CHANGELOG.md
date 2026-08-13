@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-13 (late) — History category pill alignment
+
+`compileDebugKotlin` + `testDebugUnitTest` green; committed `93d649a`, pushed. Category pill in `history/SpentItem.kt` was left-pinned under the amount — now right-aligned (row `Arrangement.End`, `end = 32.dp`) beneath the date; the spend comment stays left-aligned. Applies to History/ViewerHistory/search rows.
+
 ## 2026-08-13 (late) — Multi-period month-over-month trend chart (backlog Tier 1 #4)
 
 `compileDebugKotlin` + full `testDebugUnitTest` green (**244 tests, 0 failures**); committed `e56bf95`, pushed.
