@@ -69,7 +69,7 @@
 | Category Assignment Scheduler | `app/.../data/categories/CategoryAssignmentScheduler.kt` (new 2026-08-13; app-scoped `SupervisorJob() + Dispatchers.Default`, `AtomicBoolean`-coalesced `schedule()`, dirty-flag rescan, `StateFlow isRunning`, re-arm in `finally`) |
 | AI Insight Spend View | `app/.../ai/WindowSpend.kt` (pure `(date, value, category)` view fed to the AI math; moved out of the deleted `interleaved/` package 2026-08-13) |
 | On-Track Alert Scheduler | `app/.../notifications/OnTrackAlertScheduler.kt` (`setWindow`, re-armed by receiver) |
-| Past-Periods Sheets | `app/.../settings/PastPeriodsSheet.kt` (list) + `PeriodDetailSheet.kt` (detail incl. analytics cards) + `ArchivesViewModel.kt` |
+| Past-Periods Sheets | `app/.../settings/PastPeriodsSheet.kt` (list — PR-157-style progress cards: date range + budget/spent + 8dp rest-budget bar + "X% of budget"/"Over by" status, imported keep spent+tag) + `PeriodDetailSheet.kt` (detail incl. analytics cards + spent/rest progress bar) + `ArchivesViewModel.kt` |
 
 --- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |

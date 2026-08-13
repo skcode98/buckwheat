@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-13 (afternoon) — Upstream PR-157 progress cards for past periods; analytics calendar heatmap sync
+
+`compileDebugKotlin` + full `testDebugUnitTest` green for both batches; pushed to `origin master`.
+
+### Analytics calendar — upstream exact heatmap (kept drill-down)
+- **`analytics/SpendsCalendar.kt`**: rewrote to upstream `master`'s exact rendering — all-months scrollable heatmap via `CalendarState.listMonths`, `colorNotGood/colorGood/colorBad` blend through `combineColors`, `CELL_SIZE` grid, `ic_info` hint row. Kept our fork's `onDayClick(day)` day-history drill-down and the order-independent `SET_DAILY_BUDGET`-override per-day aggregation (a budget row stored after a spend row no longer inflates the day).
+- The upstream "1 celebrate" confetti feature was already present identically in our fork (`effects/Confetti.kt`, `ConfettiParticle.kt`, `FillCircleStub.kt`, `AppViewModel.confettiController`, `BottomSheets` render, `RecalcBudget` spawn) — nothing to copy.
+
+### Past periods — PR-157-style progress cards (upstream PR https://github.com/danilkinkin/buckwheat/pull/157)
+- **`settings/PastPeriodsSheet.kt`**: list row upgraded to a full card — date range (titleMedium), budget/spent two-column layout, 8dp `LinearProgressIndicator` (`error` when rest < 0%, `tertiary` when rest < 20%, else `primary`), and a status line "X% of budget" / "Over by <amount>". Imported (CSV month-bucket) periods keep the spent + "Imported" tag layout (no budget → no bar).
+- **`settings/PeriodDetailSheet.kt`**: `SpentAndRestCard` gained the same 8dp progress bar with status-colored rest amount.
+- **`strings.xml`**: added `over_budget_amount` "Over by %1$s".
+
 ## 2026-08-13 — Interleaved budgets removed; async background auto-categorization; history category pills; compact battery chip
 
 Batch built on user direction. **227 tests, 0 failures** (suite count dropped from 290 — the 5 interleaved test suites were deleted with the feature), `compileDebugKotlin` + full `testDebugUnitTest` green.
