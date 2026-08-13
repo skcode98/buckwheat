@@ -72,14 +72,21 @@ fun SpentItem(
             }
         }
         if (categoryLabel != null) {
-            CategoryLabelPill(
-                emoji = categoryLabel.first,
-                name = categoryLabel.second,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 32.dp, top = 4.dp, end = 32.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                CategoryLabelPill(
+                    emoji = categoryLabel.first,
+                    name = categoryLabel.second,
+                )
+            }
         }
         if (transaction.comment.isNotEmpty()) {
             Text(
-                modifier = Modifier.padding( horizontal = 32.dp),
+                modifier = Modifier.padding(horizontal = 32.dp),
                 text = transaction.comment,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colorOnEditor.copy(alpha = 0.7f),
@@ -107,7 +114,7 @@ private fun CategoryLabelPill(
     name: String,
 ) {
     Surface(
-        modifier = Modifier.padding(start = 32.dp, top = 4.dp),
+        modifier = Modifier,
         shape = RoundedCornerShape(50),
         color = colorOnEditor.copy(alpha = 0.08f),
     ) {
