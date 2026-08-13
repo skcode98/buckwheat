@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,14 +21,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.datePicker.CELL_SIZE
+import com.danilkinkin.buckwheat.base.datePicker.model.CalendarState
+import com.danilkinkin.buckwheat.base.datePicker.model.CalendarUiState
 import com.danilkinkin.buckwheat.base.datePicker.model.Week
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -58,8 +57,8 @@ import com.danilkinkin.buckwheat.ui.colorGood
 import com.danilkinkin.buckwheat.ui.colorNotGood
 import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.getWeek
-import com.danilkinkin.buckwheat.util.getNumberWeeks
 import com.danilkinkin.buckwheat.util.harmonize
+import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.isZero
 import com.danilkinkin.buckwheat.util.prettyWeekDay
 import com.danilkinkin.buckwheat.util.prettyYearMonth
@@ -123,17 +122,13 @@ fun SpendsCalendar(
         }.toMutableMap()
     }
 
-    val disabledBefore = startDate.toLocalDate()
-    val periodEnd = (actualFinishDate ?: finishDate).toLocalDate()
-    val disabledAfter = periodEnd.coerceAtMost(LocalDate.now())
-
-    // The heatmap only covers the spend period's months: navigation is clamped to
-    // [period start month, period end month] so it never scrolls into other months.
-    val firstPeriodMonth = YearMonth.from(disabledBefore)
-    val lastPeriodMonth = YearMonth.from(periodEnd)
-    var currentMonth by remember(disabledBefore, periodEnd) {
+    val calendarState by remember {
         mutableStateOf(
-            YearMonth.now().coerceIn(firstPeriodMonth, lastPeriodMonth)
+            CalendarState(
+                context = context,
+                disableBeforeDate = startDate,
+                disableAfterDate = (actualFinishDate ?: finishDate).coerceAtMost(Date()),
+            )
         )
     }
 
@@ -148,98 +143,64 @@ fun SpendsCalendar(
             ),
         )
     ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-            ) {
-                IconButton(
-                    onClick = { currentMonth = currentMonth.minusMonths(1) },
-                    enabled = currentMonth > firstPeriodMonth,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_arrow_back),
-                        contentDescription = "Previous month",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                MonthHeader(
-                    modifier = Modifier.weight(1f),
-                    yearMonth = currentMonth,
-                )
-                IconButton(
-                    onClick = { currentMonth = currentMonth.plusMonths(1) },
-                    enabled = currentMonth < lastPeriodMonth,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_arrow_forward),
-                        contentDescription = "Next month",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-            Row(Modifier.padding(start = 16.dp, end = 16.dp)) {
-                Icon(
-                    modifier = Modifier
-                        .padding(top = 0.5.dp)
-                        .size(14.dp),
-                    painter = painterResource(R.drawable.ic_info),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    contentDescription = null,
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.spends_calendar_hint),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
-                    ),
-                )
-            }
-            Layout(
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+            Icon(
                 modifier = Modifier
-                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                measurePolicy = verticalGridMeasurePolicy(7),
-                content = {
+                    .padding(top = 0.5.dp)
+                    .size(14.dp),
+                painter = painterResource(R.drawable.ic_info),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                contentDescription = null,
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = stringResource(R.string.spends_calendar_hint),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
+                ),
+            )
+        }
+        Layout(
+            modifier = Modifier
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            measurePolicy = verticalGridMeasurePolicy(7),
+            content = {
+                val calendarUiState = calendarState.calendarUiState.value
+
+                calendarState.listMonths.forEach { month ->
+                    MonthHeader(
+                        modifier = Modifier.layoutId("fullWidth"),
+                        yearMonth = month.yearMonth
+                    )
+
                     DaysOfWeek(locale)
 
-                    val weeksCount = currentMonth.getNumberWeeks(context)
-                    val weeks = (0 until weeksCount).map {
-                        Week(number = it, yearMonth = currentMonth)
-                    }
+                    month.weeks.forEach { week ->
+                        val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
+                        val currentDay =
+                            beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
 
-                    weeks.forEach { week ->
-                        val beginningWeek = week.yearMonth.atDay(1)
-                            .plusWeeks(week.number.toLong())
-                        val startOfWeek = beginningWeek
-                            .with(TemporalAdjusters.previousOrSame(getWeek(locale)[0]))
-
-                        val endOfWeek = startOfWeek.plusDays(6)
                         if (
-                            endOfWeek.isAfter(disabledBefore) &&
-                            startOfWeek.isBefore(periodEnd.plusDays(1))
+                            currentDay.plusDays(6).isAfter(calendarUiState.disabledBefore) &&
+                            currentDay.isBefore(calendarUiState.disabledAfter!!.plusDays(1))
                         ) {
-                            WeekRow(
+                            Week(
                                 week = week,
-                                disabledBefore = disabledBefore,
-                                disabledAfter = disabledAfter,
+                                calendarUiState = calendarUiState,
                                 spendingDays = spendingDays,
-                                currentMonth = currentMonth,
                                 onDayClick = onDayClick,
                             )
                         }
                     }
                 }
-            )
-        }
+            }
+        )
     }
 }
 
 @Composable
 internal fun MonthHeader(modifier: Modifier = Modifier, yearMonth: YearMonth) {
-    Row(
-        modifier = modifier.height(CELL_SIZE),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(modifier = modifier.height(CELL_SIZE), verticalAlignment = Alignment.Bottom) {
         Text(
             modifier = Modifier
                 .padding(start = 24.dp)
@@ -265,13 +226,11 @@ internal fun DaysOfWeek(locale: Locale) {
 
 
 @Composable
-internal fun WeekRow(
+internal fun Week(
+    calendarUiState: CalendarUiState,
     week: Week,
-    disabledBefore: LocalDate,
-    disabledAfter: LocalDate,
     spendingDays: Map<LocalDate, SpendingDay>,
-    currentMonth: YearMonth,
-    onDayClick: (LocalDate) -> Unit,
+    onDayClick: (LocalDate) -> Unit = {},
 ) {
     val beginningWeek = week.yearMonth.atDay(1).plusWeeks(week.number.toLong())
 
@@ -279,16 +238,11 @@ internal fun WeekRow(
         val currentDay = beginningWeek.with(TemporalAdjusters.previousOrSame(getWeek()[0]))
             .plusDays(day.toLong())
 
-        val isInMonth = currentDay.month == week.yearMonth.month
-        val isDisabled = currentDay.isBefore(disabledBefore) ||
-            currentDay.isAfter(disabledAfter)
-
-        if (isInMonth) {
+        if (currentDay.month == week.yearMonth.month && !calendarUiState.isDisabledDay(currentDay)) {
             Day(
                 modifier = Modifier,
                 day = currentDay,
                 spendingDays = spendingDays,
-                enabled = !isDisabled,
                 onDayClick = onDayClick,
             )
         } else {
@@ -325,7 +279,6 @@ internal fun Day(
     day: LocalDate,
     spendingDays: Map<LocalDate, SpendingDay>,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
     onDayClick: (LocalDate) -> Unit = {},
 ) {
     val spendingDay = if (spendingDays[day] === null || spendingDays[day]!!.spending.isZero()) {
@@ -336,10 +289,7 @@ internal fun Day(
 
     val harmonizedColor = if (spendingDay !== null) toPalette(
         harmonize(
-            if (
-                spendingDay.budget > BigDecimal.ZERO &&
-                spendingDay.spending <= spendingDay.budget
-            ) {
+            if (spendingDay.spending <= spendingDay.budget) {
                 combineColors(
                     listOf(
                         colorNotGood,
@@ -377,35 +327,31 @@ internal fun Day(
             .widthIn(min = CELL_SIZE)
             .fillMaxWidth()
             .zIndex(if (spendingDay === null) 0f else -percent + 1000f)
-            .then(
-                if (enabled) Modifier.clip(RoundedCornerShape(10.dp)).clickable(
-                    onClick = { onDayClick(day) }
-                ) else Modifier
-            ),
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onDayClick(day) },
         contentAlignment = Alignment.Center
     ) {
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .size(CELL_SIZE - 2.dp)
                 .background(
-                    color = if (enabled) combineColors(
+                    color = combineColors(
                         MaterialTheme.colorScheme.surface,
                         MaterialTheme.colorScheme.surfaceVariant,
                         angle = 0.3f,
-                    ).copy(0.8f)
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(0.3f),
+                    ).copy(0.8f),
                     shape = RoundedCornerShape(10.dp),
                 )
                 .border(
                     width = 2.dp,
-                    color = if (enabled) harmonizedColor.container.copy(
+                    color = harmonizedColor.container.copy(
                         (if (percent < 1f) 0.4f else 1f).coerceAtMost(harmonizedColor.container.alpha)
-                    ) else Color.Transparent,
+                    ),
                     shape = RoundedCornerShape(10.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            if (spendingDay !== null && enabled) {
+            if (spendingDay !== null) {
                 Box(
                     modifier = Modifier
                         .requiredSize(CELL_SIZE * percent)
@@ -430,8 +376,7 @@ internal fun Day(
                     .wrapContentSize(Alignment.Center),
                 text = day.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) harmonizedColor.onContainer
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                color = harmonizedColor.onContainer,
             )
         }
     }
