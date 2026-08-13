@@ -23,6 +23,8 @@ class AiInsightTest {
             CategorySpendInsight("TRANSPORT", BigDecimal("1000"), 16),
         ),
         overspendDays: Int = 2,
+        previousPeriodTotal: String = "8500",
+        dailyBudget: String = "150",
     ) = SpendInsightSummary(
         currencyCode = "INR",
         budget = BigDecimal(budget),
@@ -35,7 +37,14 @@ class AiInsightTest {
         biggestSpend = BigDecimal("2500"),
         biggestSpendComment = "rent",
         overspendDays = overspendDays,
-        previousPeriodTotal = BigDecimal("8500"),
+        previousPeriodTotal = BigDecimal(previousPeriodTotal),
+        dailyBudget = BigDecimal(dailyBudget),
+    )
+
+    private fun spends(): List<WindowSpend> = listOf(
+        WindowSpend(date(2026, 8, 3), BigDecimal("120"), "FOOD"),
+        WindowSpend(date(2026, 8, 4), BigDecimal("2500"), "TRANSPORT"),
+        WindowSpend(date(2026, 8, 5), BigDecimal("60"), "FOOD"),
     )
 
     // --- parseAiInsightReport ---
@@ -151,5 +160,58 @@ class AiInsightTest {
                 BigDecimal.ZERO,
             ),
         )
+    }
+
+    // --- buildOfflineReport ---
+
+    @Test
+    fun `offline report opens with an on-track overview`() {
+        val report = buildOfflineReport(summary(), spends())
+        assertTrue(report.startsWith("You've spent 6000 of a 10000 budget (60%)"))
+        assertTrue(report.contains("leaving 4000"))
+    }
+
+    @Test
+    fun `offline report flags over budget and adds a watch out note`() {
+        val report = buildOfflineReport(summary(spent = "12000"), spends())
+        assertTrue(report.contains("over budget by 2000"))
+        assertTrue(report.contains("Watch out for"))
+    }
+
+    @Test
+    fun `offline report mentions top category and biggest expense`() {
+        val report = buildOfflineReport(summary(), spends())
+        assertTrue(report.contains("FOOD is your biggest category at 3000 (50%)"))
+        assertTrue(report.contains("biggest expense was 2500 (rent)"))
+    }
+
+    @Test
+    fun `offline report mentions overspend days`() {
+        val report = buildOfflineReport(summary(overspendDays = 2), spends())
+        assertTrue(report.contains("2 days exceeded the daily budget"))
+    }
+
+    @Test
+    fun `offline report compares to the previous period`() {
+        val report = buildOfflineReport(summary(previousPeriodTotal = "5000"), spends())
+        assertTrue(report.contains("up 20% versus the previous period"))
+    }
+
+    @Test
+    fun `offline report names the peak spending day`() {
+        val report = buildOfflineReport(summary(), spends())
+        assertTrue(report.contains("peak spending day was 4 Aug 2026"))
+    }
+
+    @Test
+    fun `offline report mentions the spending pace against the daily budget`() {
+        val report = buildOfflineReport(summary(), spends())
+        assertTrue(report.contains("above your 150 daily budget"))
+    }
+
+    @Test
+    fun `offline report handles no spending yet`() {
+        val report = buildOfflineReport(summary(spent = "0"), emptyList())
+        assertTrue(report.contains("No spending yet this period"))
     }
 }

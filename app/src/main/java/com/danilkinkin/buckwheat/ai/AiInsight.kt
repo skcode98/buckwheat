@@ -10,6 +10,7 @@ import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.keyboard.extractModelContent
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.util.roundToDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -50,6 +51,7 @@ data class SpendInsightSummary(
     val biggestSpendComment: String?,
     val overspendDays: Int,
     val previousPeriodTotal: BigDecimal?,
+    val dailyBudget: BigDecimal = BigDecimal.ZERO,
 )
 
 sealed class AiInsightResult {
@@ -119,6 +121,129 @@ internal fun buildAiInsightUserPrompt(summary: SpendInsightSummary): String {
         append("\nCategory breakdown:\n")
         append(categoryLines)
     }
+}
+
+// The offline fallback engine: deterministically builds a report in the exact same shape as the
+// AI output (overview line, "• " bullets, optional "Watch out for:" note and tip) purely from the
+// period's data, so the monthly report always works without a network, an API key or the AI toggle.
+// Pure so it is unit-testable.
+internal fun buildOfflineReport(
+    summary: SpendInsightSummary,
+    spends: List<WindowSpend>,
+): String {
+    val spent = summary.spent
+    val budget = summary.budget
+    val zero = BigDecimal.ZERO
+    if (spent <= zero) {
+        return "No spending yet this period — once your first spend is in the report will " +
+            "show your full month at a glance."
+    }
+
+    val elapsedDays = ChronoUnit.DAYS.between(summary.startDate, summary.today)
+        .toInt()
+        .coerceAtLeast(1)
+    val average = spent.divide(elapsedDays.toBigDecimal(), 2, RoundingMode.HALF_EVEN)
+    val percentUsed = if (budget > zero) {
+        spent.multiply(BigDecimal(100))
+            .divide(budget, 0, RoundingMode.HALF_EVEN)
+            .toInt()
+    } else {
+        0
+    }
+    val remaining = (budget - spent).coerceAtLeast(zero)
+
+    val lines = mutableListOf<String>()
+    lines += when {
+        budget > zero && spent > budget -> {
+            "You've spent ${insightAmount(spent)} of a ${insightAmount(budget)} budget " +
+                "($percentUsed%) and are over budget by ${insightAmount(spent - budget)}."
+        }
+        budget > zero && percentUsed >= 80 -> {
+            "You've spent ${insightAmount(spent)} of a ${insightAmount(budget)} budget " +
+                "($percentUsed%) — running low, with ${insightAmount(remaining)} left."
+        }
+        budget > zero -> {
+            "You've spent ${insightAmount(spent)} of a ${insightAmount(budget)} budget " +
+                "($percentUsed%), leaving ${insightAmount(remaining)}."
+        }
+        else -> "You've spent ${insightAmount(spent)} so far across ${summary.transactionCount} transactions."
+    }
+
+    lines += ""
+    val bullets = mutableListOf<String>()
+
+    summary.categories.maxByOrNull { it.amount }?.let { top ->
+        bullets += "• ${top.name} is your biggest category at ${insightAmount(top.amount)} (${top.percent}%)."
+    }
+
+    if (summary.dailyBudget > zero) {
+        if (average > summary.dailyBudget) {
+            bullets += "• You're spending ${insightAmount(average)}/day, above your " +
+                "${insightAmount(summary.dailyBudget)} daily budget."
+        } else {
+            bullets += "• You're spending ${insightAmount(average)}/day, within your " +
+                "${insightAmount(summary.dailyBudget)} daily budget."
+        }
+    } else {
+        bullets += "• That's ${insightAmount(average)}/day on average."
+    }
+
+    if (summary.overspendDays > 0) {
+        val dayWord = if (summary.overspendDays == 1) "day" else "days"
+        bullets += "• ${summary.overspendDays} $dayWord exceeded the daily budget."
+    }
+
+    val biggest = summary.biggestSpend
+    if (biggest != null && biggest > zero) {
+        val label = summary.biggestSpendComment?.takeIf { it.isNotBlank() } ?: "single expense"
+        bullets += "• The biggest expense was ${insightAmount(biggest)} ($label)."
+    }
+
+    summary.previousPeriodTotal?.let { previous ->
+        if (previous > zero) {
+            val delta = spent.subtract(previous)
+                .divide(previous, 2, RoundingMode.HALF_EVEN)
+                .multiply(BigDecimal(100))
+            val direction = when {
+                delta.signum() > 0 -> "up"
+                delta.signum() < 0 -> "down"
+                else -> "unchanged"
+            }
+            val rounded = delta.abs().setScale(0, RoundingMode.HALF_UP).toInt()
+            bullets += "• That's $direction $rounded% versus the previous period."
+        }
+    }
+
+    val peakDay = spends
+        .groupBy { roundToDay(it.date) }
+        .maxByOrNull { (_, daySpends) ->
+            daySpends.fold(zero) { acc, spend -> acc + spend.value }
+        }
+    if (peakDay != null) {
+        val peakAmount = peakDay.value.fold(zero) { acc, spend -> acc + spend.value }
+        val peakLabel = peakDay.key.toInstant()
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(INSIGHT_DATE_FORMAT)
+        bullets += "• Your peak spending day was $peakLabel at ${insightAmount(peakAmount)}."
+    }
+
+    lines += bullets
+
+    if (budget > zero && spent > budget) {
+        lines += ""
+        lines += "Watch out for: you've crossed the budget — tighten spending for the rest of the period."
+    } else if (budget > zero && percentUsed >= 80) {
+        lines += ""
+        lines += "Watch out for: the budget is nearly gone — make the remaining ${insightAmount(remaining)} last."
+    }
+
+    if (summary.categories.isNotEmpty()) {
+        lines += ""
+        lines += "Tip: a small trim in your biggest category usually stretches the budget furthest."
+    }
+
+    return lines.joinToString("\n")
 }
 
 // Cleans the model's report for display: strips markdown code fences, an echoed "Report:" label

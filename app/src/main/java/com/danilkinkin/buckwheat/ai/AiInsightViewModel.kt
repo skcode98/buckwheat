@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.analytics.findPreviousPeriod
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.categoryTotals
 import com.danilkinkin.buckwheat.di.GetCurrentDateUseCase
@@ -23,9 +24,18 @@ import javax.inject.Inject
 sealed interface AiInsightUiState {
     data object Idle : AiInsightUiState
     data object Loading : AiInsightUiState
-    data class Report(val text: String) : AiInsightUiState
+
+    // The offline engine always produces a report; when AI is configured it tries to upgrade the
+    // narrative in the background (aiLoading) and swaps in the AI text on success.
+    data class Report(
+        val data: MonthOverviewData,
+        val text: String,
+        val isAi: Boolean,
+        val aiFailure: String?,
+        val aiLoading: Boolean,
+    ) : AiInsightUiState
+
     data class Error(val message: String) : AiInsightUiState
-    data object NotConfigured : AiInsightUiState
 }
 
 @HiltViewModel
@@ -38,32 +48,63 @@ class AiInsightViewModel @Inject constructor(
     val state: LiveData<AiInsightUiState> = _state
 
     fun generate() {
-        if (_state.value is AiInsightUiState.Loading) return
+        val current = _state.value
+        if (current is AiInsightUiState.Loading) return
+        if (current is AiInsightUiState.Report && current.aiLoading) return
         viewModelScope.launch {
             _state.value = AiInsightUiState.Loading
-            val outcome = runCatching { generateAiInsight(context, buildSummary()) }
-            _state.value = when (val result = outcome.getOrNull()) {
-                null -> AiInsightUiState.Error(
-                    outcome.exceptionOrNull()?.message ?: "unknown error"
+            val data = runCatching { buildOverviewData() }.getOrNull()
+            if (data == null) {
+                _state.value = AiInsightUiState.Error("Could not load period data")
+                return@launch
+            }
+            val offlineText = buildOfflineReport(
+                summary = data.summary,
+                spends = data.spends.map { WindowSpend(it.date, it.value, it.category) },
+            )
+            val offlineReport = AiInsightUiState.Report(
+                data = data,
+                text = offlineText,
+                isAi = false,
+                aiFailure = null,
+                aiLoading = true,
+            )
+            _state.value = offlineReport
+            val ai = runCatching { generateAiInsight(context, data.summary) }.getOrNull()
+            _state.value = when (ai) {
+                is AiInsightResult.Success -> offlineReport.copy(
+                    text = ai.report,
+                    isAi = true,
+                    aiFailure = null,
+                    aiLoading = false,
                 )
-                is AiInsightResult.Success -> AiInsightUiState.Report(result.report)
-                is AiInsightResult.Failure -> AiInsightUiState.Error(result.message)
-                AiInsightResult.NotConfigured -> AiInsightUiState.NotConfigured
+                is AiInsightResult.Failure -> offlineReport.copy(
+                    aiFailure = ai.message,
+                    aiLoading = false,
+                )
+                AiInsightResult.NotConfigured -> offlineReport.copy(aiLoading = false)
+                null -> offlineReport.copy(
+                    aiFailure = "unknown error",
+                    aiLoading = false,
+                )
             }
         }
     }
 
-    private suspend fun buildSummary(): SpendInsightSummary {
+    private suspend fun buildOverviewData(): MonthOverviewData {
         val today = getCurrentDateUseCase().toLocalDate()
-        val startDate = spendsRepository.getStartPeriodDate().first()
-        val finishDate = (spendsRepository.getFinishPeriodActualDate().first()
+        val startPeriodDate = spendsRepository.getStartPeriodDate().first()
+        val finishPeriodDate = spendsRepository.getFinishPeriodActualDate().first()
             ?: spendsRepository.getFinishPeriodDate().first()
-            ?: getCurrentDateUseCase())
+            ?: getCurrentDateUseCase()
         val spent = spendsRepository.getSpent().first()
         val spends = spendsRepository.getAllSpends().asFlow().first()
+        val transactions = spendsRepository.getAllTransactions().asFlow().first()
         val periods = spendsRepository.getAllBudgetPeriods().asFlow().first()
-        val previousPeriodTotal = findPreviousPeriod(periods, startDate)?.totalSpent
+        val dailyBudget = spendsRepository.getDailyBudget().first()
+        val previousPeriodTotal = findPreviousPeriod(periods, startPeriodDate)?.totalSpent
         val biggest = spends.maxByOrNull { it.value }
+        val currencyCode = spendsRepository.getCurrency().first().value ?: ""
 
         val categories = categoryTotals(spends).map { (key, amount) ->
             CategorySpendInsight(
@@ -82,12 +123,12 @@ class AiInsightViewModel @Inject constructor(
             )
         }
 
-        return SpendInsightSummary(
-            currencyCode = spendsRepository.getCurrency().first().value ?: "",
+        val summary = SpendInsightSummary(
+            currencyCode = currencyCode,
             budget = spendsRepository.getBudget().first(),
             spent = spent,
-            startDate = startDate.toLocalDate(),
-            endDate = finishDate.toLocalDate(),
+            startDate = startPeriodDate.toLocalDate(),
+            endDate = finishPeriodDate.toLocalDate(),
             today = today,
             transactionCount = spends.size,
             categories = categories,
@@ -95,12 +136,23 @@ class AiInsightViewModel @Inject constructor(
             biggestSpendComment = biggest?.comment,
             overspendDays = overspendDayCount(
                 spends = spends.map { WindowSpend(it.date, it.value, it.category) },
-                start = startDate.toLocalDate(),
-                finish = finishDate.toLocalDate(),
+                start = startPeriodDate.toLocalDate(),
+                finish = finishPeriodDate.toLocalDate(),
                 today = today,
-                dailyBudget = spendsRepository.getDailyBudget().first(),
+                dailyBudget = dailyBudget,
             ),
             previousPeriodTotal = previousPeriodTotal,
+            dailyBudget = dailyBudget,
+        )
+
+        return MonthOverviewData(
+            summary = summary,
+            spends = spends,
+            transactions = transactions,
+            periods = periods,
+            startDate = startPeriodDate,
+            finishDate = finishPeriodDate,
+            currency = ExtendCurrency.getInstance(currencyCode.takeIf { it.isNotBlank() }),
         )
     }
 }
