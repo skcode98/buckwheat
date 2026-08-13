@@ -19,11 +19,11 @@
 - **Complexity**: Medium · **Value**: High
 - **Status**: Backlog
 
-### 3. Repeat-last-spend quick action in the Editor ✅ **SHIPPED 2026-08-12**
-- **Files**: `editor/RepeatLastSpend.kt` (pure `lastSpendToRepeat`), `editor/EditorViewModel.kt` (`startRepeatSpend`), `editor/Editor.kt` (AssistChip), `strings.xml`
+### 3. Repeat-last-spend quick action in the Editor ❌ **REMOVED 2026-08-13**
+- **Files**: `editor/RepeatLastSpend.kt`, `EditorViewModel.kt`, `Editor.kt`, `strings.xml`
 - **What**: One-tap re-add of the most recent transaction (amount + comment + category) for frequent small spends (coffee/transport). Prefills the editor's existing commit path; user just confirms.
 - **Complexity**: Small · **Value**: High (fastest daily interaction)
-- **Status**: ✅ SHIPPED 2026-08-12 (committed `10c3693`, pushed). Golden pipeline green, 286 tests.
+- **Status**: ❌ REMOVED 2026-08-13 (committed `9f5383f`, pushed) — user asked to drop it from the editor. All 5 test cases + the string deleted; suite back to 252 green.
 
 ### 4. Multi-period month-over-month trend ✅ **SHIPPED 2026-08-13**
 - **Files**: `analytics/MultiPeriodTrend.kt` (pure `multiPeriodTotals`), `analytics/MultiPeriodTrendCard.kt` (budget-vs-spent bars, tap caption), `analytics/Analytics.kt` (wired after `CompareToLastPeriodCard`)

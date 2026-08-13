@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-13 (late) — Repeat-last-spend quick action removed from the editor
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (**252 tests, 0 failures**); committed `9f5383f`, pushed. User asked to remove the "repeat last" feature from the editor. Deleted `editor/RepeatLastSpend.kt` (pure `lastSpendToRepeat`), `EditorViewModel.startRepeatSpend`, the `AssistChip` in `Editor.kt` (plus the now-unused imports/observes — `periodSpends`, `currency`, `ExtendCurrency`, `numberFormat`, `Text`, `Icon`, `AssistChip`, `Row`, `Alignment`), the `repeat_last_spend` string, and `RepeatLastSpendTest`. Editor layout back to `TaggingToolbar → CategorySelector`. `ic_autorenew` kept (used by CategoryCapsSheet + others). 5 tests removed, backlog item #3 marked removed.
+
 ## 2026-08-13 (late) — Category caps: one "Auto-assign budget" button
 
 `compileDebugKotlin` + full `testDebugUnitTest` green (**257 tests, 0 failures**, 13 new); committed `8af1f8d`, pushed.
