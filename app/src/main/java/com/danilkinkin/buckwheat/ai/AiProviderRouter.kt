@@ -213,7 +213,7 @@ private fun postProvider(
     }
 }
 
-private fun buildRequestBody(
+internal fun buildRequestBody(
     config: AiProviderConfig,
     systemPrompt: String,
     userPrompt: String,
@@ -261,34 +261,61 @@ private fun buildRequestBody(
     }
 }
 
-// Pulls the model reply out of the provider envelope: chat-completions providers answer with
-// choices[0].message.content, Gemini with candidates[0].content.parts[0].text.
-private fun extractProviderText(responseText: String, provider: AiProvider): String =
+// Pulls the model reply out of the provider envelope. Chat-completions providers answer with
+// choices[0].message.content (string or, for multimodal models, an array of {type,text} parts);
+// Gemini with candidates[0].content.parts[] where each part is {text,...}. Missing or malformed
+// fields yield an empty string so the router falls through to the next provider.
+internal fun extractProviderText(responseText: String, provider: AiProvider): String =
     runCatching {
         val json = JSONObject(responseText)
         if (provider == AiProvider.GEMINI) {
-            json.optJSONArray("candidates")
-                ?.optJSONObject(0)
-                ?.optJSONObject("content")
-                ?.optJSONArray("parts")
-                ?.optJSONObject(0)
-                ?.optString("text", "")
+            extractGeminiText(json)
         } else {
             json.optJSONArray("choices")
                 ?.optJSONObject(0)
                 ?.optJSONObject("message")
-                ?.optString("content", "")
+                ?.let { message -> extractMessageContent(message) }
+                .orEmpty()
         }
     }.getOrNull().orEmpty().trim()
+
+private fun extractGeminiText(json: JSONObject): String {
+    val parts =
+        json.optJSONArray("candidates")
+            ?.optJSONObject(0)
+            ?.optJSONObject("content")
+            ?.optJSONArray("parts") ?: return ""
+    return buildString {
+        for (i in 0 until parts.length()) {
+            append(parts.optJSONObject(i)?.optString("text", "").orEmpty())
+        }
+    }
+}
+
+private fun extractMessageContent(message: JSONObject): String {
+    val content = message.opt("content") ?: return ""
+    if (content is JSONArray) {
+        return buildString {
+            for (i in 0 until content.length()) {
+                append(content.optJSONObject(i)?.optString("text", "").orEmpty())
+            }
+        }
+    }
+    return content.toString()
+}
 
 private val CODE_FENCE = Regex("```[\\w]*", RegexOption.IGNORE_CASE)
 private val SCRIPT_TAG =
     Regex("<script\\b[^<]*(?:(?!</script>)<[^<]*)*</script>", RegexOption.IGNORE_CASE)
+// NVIDIA NIM reasoning models (and some Gemini checkpoints) emit hidden thinking inside
+// <think>...</think>; drop it so the app only sees the answer.
+private val THINK_BLOCK = Regex("<think\\b[^>]*>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE)
 
-// Strips markdown fences and stray HTML so test-connection replies stay readable.
-private fun cleanAiOutput(raw: String): String =
+// Strips markdown fences, thinking blocks and stray HTML so test-connection replies stay readable.
+internal fun cleanAiOutput(raw: String): String =
     raw.replace(CODE_FENCE, "")
         .replace(SCRIPT_TAG, "")
+        .replace(THINK_BLOCK, "")
         .replace(Regex("</?html[^>]*>", RegexOption.IGNORE_CASE), "")
         .replace(Regex("</?body[^>]*>", RegexOption.IGNORE_CASE), "")
         .replace(Regex("<!DOCTYPE[^>]*>", RegexOption.IGNORE_CASE), "")

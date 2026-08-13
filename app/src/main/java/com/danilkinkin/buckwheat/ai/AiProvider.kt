@@ -25,7 +25,9 @@ enum class AiProvider(
         id = "groq",
         displayName = "Groq",
         defaultUrl = "https://api.groq.com/openai/v1/chat/completions",
-        defaultModel = "llama-3.3-70b-versatile",
+        // llama-3.3-70b-versatile shut down 2026-08-16 -> openai/gpt-oss-120b (Groq's recommended
+        // replacement, active + fast on LPU).
+        defaultModel = "openai/gpt-oss-120b",
         usesChatCompletions = true,
     ),
     OPENROUTER(
@@ -45,15 +47,19 @@ enum class AiProvider(
     GITHUB(
         id = "github",
         displayName = "GitHub Models",
+        // GitHub Models requires publisher-qualified ids ("openai/gpt-4o-mini"); bare ids 404.
+        // The old models.inference.ai.azure.com endpoint is dead; models.github.ai/inference is
+        // current (OpenAI-compatible, no trailing /v1).
         defaultUrl = "https://models.github.ai/inference/chat/completions",
-        defaultModel = "gpt-4o-mini",
+        defaultModel = "openai/gpt-4o-mini",
         usesChatCompletions = true,
     ),
     NIM(
         id = "nim",
         displayName = "NVIDIA NIM",
         defaultUrl = "https://integrate.api.nvidia.com/v1/chat/completions",
-        defaultModel = "nvidia/llama-3.3-nemotron-super-49b-v1",
+        // v1 deprecated (shutdown 2026-08-25); v1.5 is the current serve.
+        defaultModel = "nvidia/llama-3.3-nemotron-super-49b-v1.5",
         usesChatCompletions = true,
     );
 
