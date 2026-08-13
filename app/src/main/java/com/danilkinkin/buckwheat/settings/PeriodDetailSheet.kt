@@ -29,6 +29,7 @@ import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Date
 
 @Composable
@@ -221,6 +222,17 @@ private fun SpentAndRestCard(
     currency: ExtendCurrency,
 ) {
     val context = LocalContext.current
+    val restBudget = budget - spent
+    val restPercent = if (budget > BigDecimal.ZERO) {
+        restBudget.multiply(BigDecimal(100)).divide(budget, 0, RoundingMode.HALF_UP)
+    } else {
+        BigDecimal.ZERO
+    }
+    val indicatorColor = when {
+        restPercent < BigDecimal.ZERO -> MaterialTheme.colorScheme.error
+        restPercent < BigDecimal(20) -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -241,10 +253,20 @@ private fun SpentAndRestCard(
             Text(
                 text = com.danilkinkin.buckwheat.util.numberFormat(
                     context,
-                    budget - spent,
+                    restBudget,
                     currency = currency,
                 ),
                 style = MaterialTheme.typography.titleMedium,
+                color = indicatorColor,
+            )
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { (spent.toFloat() / budget.toFloat()).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+                color = indicatorColor,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
         }
     }

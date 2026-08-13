@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
@@ -24,6 +25,9 @@ import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
+import com.danilkinkin.buckwheat.util.prettyDate
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 const val PAST_PERIODS_SHEET = "pastPeriods"
 const val PERIOD_DETAIL_SHEET = "periodDetail"
@@ -75,9 +79,10 @@ fun PastPeriodsSheet(
                         .weight(1f)
                         .padding(bottom = navigationBarHeight),
                     contentPadding = PaddingValues(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(periods) { period ->
-                        PastPeriodRow(
+                    items(periods, key = { it.id }) { period ->
+                        PastPeriodCard(
                             period = period,
                             currency = ExtendCurrency.getInstance(period.currencyCode),
                             onClick = {
@@ -93,64 +98,114 @@ fun PastPeriodsSheet(
 }
 
 @Composable
-private fun PastPeriodRow(
+private fun PastPeriodCard(
     period: BudgetPeriod,
     currency: ExtendCurrency,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
 
+    val restBudget = period.budget - period.totalSpent
+    val restPercent = if (period.budget > BigDecimal.ZERO) {
+        restBudget.multiply(BigDecimal(100)).divide(period.budget, 0, RoundingMode.HALF_UP)
+    } else {
+        BigDecimal.ZERO
+    }
+    val indicatorColor = when {
+        restPercent < BigDecimal.ZERO -> MaterialTheme.colorScheme.error
+        restPercent < BigDecimal(20) -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = com.danilkinkin.buckwheat.util.prettyDate(
-                        period.startDate,
-                        pattern = "dd MMM yyyy"
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(
-                        R.string.past_periods_date_range,
-                        com.danilkinkin.buckwheat.util.prettyDate(period.startDate, pattern = "dd MMM"),
-                        com.danilkinkin.buckwheat.util.prettyDate(period.finishDate, pattern = "dd MMM yyyy"),
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = numberFormat(context, period.totalSpent, currency = currency),
-                    style = MaterialTheme.typography.titleMedium,
-                    overflow = TextOverflow.Ellipsis,
-                    softWrap = false,
-                )
-                if (period.isImported) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(
+                    R.string.past_periods_date_range,
+                    prettyDate(period.startDate, showTime = false, forceShowDate = true),
+                    prettyDate(period.finishDate, showTime = false, forceShowDate = true),
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            if (period.isImported) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text = stringResource(R.string.past_periods_imported),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                } else {
                     Text(
-                        text = numberFormat(context, period.budget, currency = currency),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        text = numberFormat(context, period.totalSpent, currency = currency),
+                        style = MaterialTheme.typography.titleMedium,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
                     )
                 }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.whole_budget),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Text(
+                            text = numberFormat(context, period.budget, currency = currency),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(R.string.spent_budget),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Text(
+                            text = numberFormat(context, period.totalSpent, currency = currency),
+                            style = MaterialTheme.typography.bodyLarge,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { (period.totalSpent.toFloat() / period.budget.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                    color = indicatorColor,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = if (restBudget >= BigDecimal.ZERO) {
+                        stringResource(R.string.rest_budget_percent, restPercent.toInt())
+                    } else {
+                        stringResource(
+                            R.string.over_budget_amount,
+                            numberFormat(context, -restBudget, currency = currency),
+                        )
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = indicatorColor,
+                )
             }
         }
     }
