@@ -7,7 +7,7 @@ Give the user a **whole-budget-period AI analysis** inside Analytics: category b
 - **Single card** (`AiInsightCard`) at the very top of the analytics column (above `WholeBudgetCard`), always visible.
 - **No new settings**: reuses the existing `voiceAi*` DataStore keys (API key, provider URL, model) plus the `aiIntelligenceEnabled` master toggle.
 - **No Room migration / no schema change.**
-- **No `runBlocking`**, no Android imports in the pure prompt/parser logic (unit-testable like the interleaved engine).
+- **No `runBlocking`**, no Android imports in the pure prompt/parser logic (unit-testable).
 
 ## Files
 

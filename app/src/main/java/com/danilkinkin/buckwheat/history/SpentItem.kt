@@ -1,8 +1,11 @@
 package com.danilkinkin.buckwheat.history
 
+import android.content.Context
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +15,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
+import com.danilkinkin.buckwheat.data.categories.SpendCategory
+import com.danilkinkin.buckwheat.data.categories.categoryKey
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -26,8 +32,12 @@ fun SpentItem(
     transaction: Transaction,
     currency: ExtendCurrency,
     modifier: Modifier = Modifier,
+    categoryEmojis: Map<String, String> = emptyMap(),
 ) {
     val context = LocalContext.current
+    val categoryLabel = remember(transaction, categoryEmojis) {
+        categoryLabelFor(context, transaction, categoryEmojis)
+    }
     Column(Modifier.padding(bottom = 14.dp)) {
         Row(modifier.fillMaxWidth()) {
             Column(
@@ -61,6 +71,12 @@ fun SpentItem(
                 )
             }
         }
+        if (categoryLabel != null) {
+            CategoryLabelPill(
+                emoji = categoryLabel.first,
+                name = categoryLabel.second,
+            )
+        }
         if (transaction.comment.isNotEmpty()) {
             Text(
                 modifier = Modifier.padding( horizontal = 32.dp),
@@ -68,6 +84,48 @@ fun SpentItem(
                 style = MaterialTheme.typography.bodyMedium,
                 color = colorOnEditor.copy(alpha = 0.7f),
                 softWrap = true,
+            )
+        }
+    }
+}
+
+// The category shown on the history row: the persisted AI category when present, otherwise
+// the offline keyword guess. Custom categories fall back to their saved emoji (or a generic
+// one when none is saved).
+private fun categoryLabelFor(
+    context: Context,
+    transaction: Transaction,
+    categoryEmojis: Map<String, String>,
+): Pair<String, String>? = when (val key = categoryKey(transaction)) {
+    is CategoryKey.BuiltIn -> key.category.emoji to context.getString(key.category.labelRes)
+    is CategoryKey.Custom -> SpendCategory.emojiFor(key.name, categoryEmojis[key.name]) to key.name
+}
+
+@Composable
+private fun CategoryLabelPill(
+    emoji: String,
+    name: String,
+) {
+    Surface(
+        modifier = Modifier.padding(start = 32.dp, top = 4.dp),
+        shape = RoundedCornerShape(50),
+        color = colorOnEditor.copy(alpha = 0.08f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (emoji.isNotBlank()) {
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                text = name,
+                style = MaterialTheme.typography.labelSmall,
+                color = colorOnEditor.copy(alpha = 0.7f),
             )
         }
     }

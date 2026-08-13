@@ -1,6 +1,14 @@
 # Interleaved Budget Categories — Implementation Plan (v2)
 
-> **Status**: PHASE 1 SHIPPED (engine) — revised 2026-08-11 after Feature 9 (category caps) shipped.
+> **STATUS: FEATURE REMOVED — 2026-08-13.** The interleaved budgets feature was deleted
+> from the codebase (engine `interleaved/InterleavedBudget.kt` + pattern miner, analytics
+> `InterleavedBudgetCard`, settings `InterleavedAnchorSheet`, `categorySchedulesStoreKey`
+> + schedules codec/APIs, and all 5 interleaved test suites). `CategoryCapsSheet` is a
+> plain per-period cap editor again (cap + Remove + Auto). This plan is kept as a record
+> of what shipped (Phases 1–6, all green) and why it was removed; do NOT use it as a
+> build guide. See `.track/DECISIONS.md` 2026-08-13 for the rationale.
+
+> **Status (historical)**: PHASE 1 SHIPPED (engine) — revised 2026-08-11 after Feature 9 (category caps) shipped.
 > v2 reconciles this feature with the caps system instead of building a parallel one, which
 > roughly halves the scope and removes all database-migration risk.
 > Phase 6 (data calibration) remains deferred pending your 6-month transaction export.

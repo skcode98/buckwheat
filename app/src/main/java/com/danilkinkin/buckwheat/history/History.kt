@@ -24,6 +24,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
@@ -38,6 +39,7 @@ import com.danilkinkin.buckwheat.di.TUTORIAL_STAGE
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
+import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -70,6 +72,12 @@ fun History(
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+
+    val categoriesViewModel: CategoriesManagementViewModel = hiltViewModel()
+    val allCategories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val categoryEmojis = remember(allCategories) {
+        allCategories.associate { it.name to it.emoji }
+    }
 
     var historyList by remember { mutableStateOf<List<RowEntity>>(emptyList()) }
     val budget = spendsViewModel.budget.observeAsState(initial = BigDecimal.ZERO)
@@ -233,6 +241,7 @@ fun History(
                                     SpentItemActions(
                                         transaction = row.transaction!!,
                                         currency = currency.value,
+                                        categoryEmojis = categoryEmojis,
                                         onEdit = {
                                             editorViewModel.startEditingSpent(row.transaction!!)
                                             onClose()
@@ -264,7 +273,8 @@ fun History(
                         } else {
                             SpentItem(
                                 transaction = row.transaction!!,
-                                currency = currency.value
+                                currency = currency.value,
+                                categoryEmojis = categoryEmojis,
                             )
                         }
                     }

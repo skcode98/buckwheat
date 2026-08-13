@@ -65,14 +65,11 @@
 | Spend Categories Card | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Category Battery Chip | `app/.../analytics/categoriesChart/CategoryBatteryChip.kt` (new 2026-08-12; battery pill for capped categories — fill = used up to cap via `categoryBatteryFraction`, label overlaid via `drawWithContent` + `clipRect`, amber ≥80%, red ≥100%) |
 | Category Caps Test | `app/.../test/.../data/categories/CategoryCapsTest.kt` |
-| Interleaved Budget Engine | `app/.../interleaved/InterleavedBudget.kt` (pure, `windowFor`/`hasRolled`/`windowSpent`/`monthlyEquivalent`/`dailyPace`/`applyCategoryAllowance`/`daysLeftInWindow`/`projectedExhaustionDate`) |
-| Interleaved Budget Test | `app/.../test/.../interleaved/InterleavedBudgetTest.kt` |
-| Interleaved Allowance Test | `app/.../test/.../di/InterleavedAllowanceTest.kt` (Phase 5 daily-allowance overlay) |
-| Pattern Miner Engine | `app/.../interleaved/AnalyzeSpendingPatterns.kt` (pure, `suggestFrequency`/`medianAmount`/`analyzeSpendingPatterns`; write via `SettingsRepository.applyScheduleSuggestions`) |
-| Pattern Miner Test | `app/.../test/.../interleaved/AnalyzeSpendingPatternsTest.kt` |
+| Category Assigner | `app/.../data/categories/CategoryAssigner.kt` (new 2026-08-13; offline-first then AI over transactions + archived_transactions, persisted via DAO `updateCategory`) |
+| Category Assignment Scheduler | `app/.../data/categories/CategoryAssignmentScheduler.kt` (new 2026-08-13; app-scoped `SupervisorJob() + Dispatchers.Default`, `AtomicBoolean`-coalesced `schedule()`, dirty-flag rescan, `StateFlow isRunning`, re-arm in `finally`) |
+| AI Insight Spend View | `app/.../ai/WindowSpend.kt` (pure `(date, value, category)` view fed to the AI math; moved out of the deleted `interleaved/` package 2026-08-13) |
 | On-Track Alert Scheduler | `app/.../notifications/OnTrackAlertScheduler.kt` (`setWindow`, re-armed by receiver) |
 | Past-Periods Sheets | `app/.../settings/PastPeriodsSheet.kt` (list) + `PeriodDetailSheet.kt` (detail incl. analytics cards) + `ArchivesViewModel.kt` |
-| Interleaved Anchor Sheet | `app/.../settings/InterleavedAnchorSheet.kt` (INTERLEAVED_ANCHOR_SHEET, single-day DatePicker for the window anchor) |
 
 --- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
@@ -240,8 +237,7 @@ import androidx.compose.runtime.livedata.observeAsState  // Compose observation
 - `overspendNotifyEnabledStoreKey` — instant overspend notification opt-in (Boolean)
 - `aiIntelligenceEnabledStoreKey` — AI Intelligence master toggle (Boolean; default **on** via `aiIntelligenceEnabled(prefs)` in `SettingsRepository.kt`; `false` disables both voice-AI parsing → `NotConfigured` and AI categorization → empty map, offline fallbacks stand in)
 - `categoryCapsStoreKey` — per-category spending caps, serialized `"name:amount;name:amount"` (String; drops ≤0 amounts; whole settings DataStore file excluded from cloud backup so caps don't survive device transfer)
-- `categoryCapNotifiedStoreKey` — per-category last-announced bucket, serialized `"name:bucket;name:bucket"` or windowed `"name:bucket@windowStartEpochDay"` for interleaved categories (String; bucket 0=none, 1=near/80%, 2=reached/100%; parse via `parseCategoryCapNotifiedWithWindow`; cleared on new budget period except windowed entries, cleared fully when caps/schedules edited)
-- `categorySchedulesStoreKey` — **Phase 2 shipped**: interleaved budget schedules, serialized `"name:frequency:anchorEpochDay;..."` (String; no Room migration — extends caps; engine in `interleaved/InterleavedBudget.kt`; codec in `SettingsRepository.kt`; `setCategoryCapsAndSchedules` writes caps+schedules+notified reset in one edit)
+- `categoryCapNotifiedStoreKey` — per-category last-announced bucket, serialized `"name:bucket;name:bucket"` (String; bucket 0=none, 1=near/80%, 2=reached/100%; parse via `parseCategoryCapNotified`, which tolerates legacy `"name:bucket@windowStartEpochDay"` entries via `substringBefore('@')`; cleared fully on new budget period and whenever caps are edited). NOTE: interleaved schedules were removed 2026-08-13 — `categorySchedulesStoreKey` no longer exists; cap alerts always measure the budget-period total.
 
 ## Glance 1.1.1 per-instance widget facts (verified 2026-08-10 via AAR/sources inspection)
 - Widget Glance state (`PreferencesGlanceStateDefinition`) is keyed purely by `appWidgetId` (`createUniqueRemoteUiName(glanceId.appWidgetId)`), so per-instance values are already isolated — `getAppWidgetState(context, definition, glanceId)` / `updateAppWidgetState(...)` read/write only that widget.

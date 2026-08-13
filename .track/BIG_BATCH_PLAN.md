@@ -1,5 +1,10 @@
 # Big Batch Plan — 5 items (2026-08-11)
 
+> **NOTE (2026-08-13)**: Tasks **C** (interleaved Phase 5 daily-allowance overlay) and **D**
+> (Phase 6 pattern miner) shipped at the time but the **entire interleaved-budgets feature was
+> removed on 2026-08-13** — engine, UI, schedules key, and all interleaved tests. A, B, and E
+> remain shipped and in the codebase. See `.track/DECISIONS.md` 2026-08-13.
+
 Order = low risk first. Each item gets the golden pipeline (`:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`), its own commit + push, and doc updates.
 
 ---

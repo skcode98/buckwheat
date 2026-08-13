@@ -23,20 +23,12 @@ import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
-import com.danilkinkin.buckwheat.data.categories.categorizeSpendsWithAi
+import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.categories.categoryCapBucket
 import com.danilkinkin.buckwheat.data.categories.categoryKey
 import com.danilkinkin.buckwheat.data.categories.highestNewlyReachedCapBucket
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
-import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
-import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
-import com.danilkinkin.buckwheat.interleaved.WindowSpend
-import com.danilkinkin.buckwheat.interleaved.applyCategoryAllowance
-import com.danilkinkin.buckwheat.interleaved.dailyPace
-import com.danilkinkin.buckwheat.interleaved.hasRolled
-import com.danilkinkin.buckwheat.interleaved.windowFor
-import com.danilkinkin.buckwheat.interleaved.windowSpent
 import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
@@ -44,18 +36,14 @@ import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
 import com.danilkinkin.buckwheat.util.toDate
-import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.firstOrNull
 import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.time.LocalDate
 import java.time.YearMonth
 import java.util.Date
 import javax.inject.Inject
@@ -93,6 +81,7 @@ class SpendsRepository @Inject constructor(
     private val savedCategoryDao: SavedCategoryDao,
     private val budgetPeriodDao: BudgetPeriodDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
+    private val categoryAssignmentScheduler: CategoryAssignmentScheduler,
 ) {
     fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
     fun getAllArchivedTransactions(): LiveData<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
@@ -524,7 +513,7 @@ class SpendsRepository @Inject constructor(
                     + "]"
         )
 
-        return applyCategoryAllowance(whatBudgetForDay, interleavedDailyAllowance())
+        return whatBudgetForDay
     }
 
     suspend fun howMuchBudgetRest(): BigDecimal {
@@ -652,7 +641,7 @@ class SpendsRepository @Inject constructor(
                     + "]"
         )
 
-        return applyCategoryAllowance(nextDailyBudget, interleavedDailyAllowance())
+        return nextDailyBudget
     }
 
     // The amount the user actually saved over the elapsed days, i.e. the leftover that
@@ -781,8 +770,14 @@ class SpendsRepository @Inject constructor(
             OverspendingNotifier.notify(context, dailyBudget, spentFromDailyBudget, currency)
         }
 
-        resyncInterleavedNotified()
         checkCategoryCapAlert(newTransaction)
+
+        // Auto-assign a category (offline keywords, then the AI model) to records that have
+        // none. Runs in the background on an application-scoped coroutine so the app never
+        // blocks — the record is already saved by the time the AI provider answers.
+        if (newTransaction.category.isNullOrBlank()) {
+            categoryAssignmentScheduler.schedule()
+        }
     }
 
     suspend fun importTransactions(transactions: List<Transaction>) {
@@ -829,7 +824,7 @@ class SpendsRepository @Inject constructor(
 
         if (currentPeriodStart == null || currentPeriodFinish == null) {
             categorized.forEach { addSpent(it) }
-            persistAiCategories(categorized)
+            categoryAssignmentScheduler.schedule()
             return
         }
 
@@ -842,20 +837,9 @@ class SpendsRepository @Inject constructor(
 
         inPeriod.forEach { addSpent(it) }
         archiveImported(outOfPeriod)
-        persistAiCategories(inPeriod)
-    }
-
-    // Batch-assigns AI categories to imported rows that still have none and saves them to the
-    // transactions table (the provider settings are the same as Voice AI). A no-op when the
-    // AI Intelligence toggle is off or no API key is saved. Only rows actually inserted into
-    // the transactions table should be passed — their uids are required for the update.
-    private suspend fun persistAiCategories(inserted: List<Transaction>) {
-        val candidates = inserted.filter { it.category.isNullOrBlank() }
-        if (candidates.isEmpty()) return
-        val assigned = categorizeSpendsWithAi(context, candidates)
-        assigned.forEach { (uid, category) ->
-            transactionDao.updateCategory(uid, category.name)
-        }
+        // AI categories for the rows keywords couldn't place (both in-period and archived) are
+        // assigned in the background — the import itself returns without waiting on the model.
+        categoryAssignmentScheduler.schedule()
     }
 
     // Rows that fall outside the active budget period are archived into month buckets
@@ -1000,12 +984,10 @@ class SpendsRepository @Inject constructor(
         }
 
         resyncCategoryCapNotified(transactionForRemove)
-        resyncInterleavedNotified()
     }
 
     // Reads a transaction's category the same way the analytics categories card does
-    // (offline keyword fallback), sums the category's spend in its progress source — the
-    // current interleaved window for scheduled categories, else the current budget period —
+    // (offline keyword fallback), sums the category's spend over the current budget period,
     // and posts the 80%/100% cap alert once per newly reached level.
     private suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
         if (newTransaction.type != TransactionType.SPENT) return
@@ -1020,30 +1002,23 @@ class SpendsRepository @Inject constructor(
             context.settingsDataStore.data.first()[categoryCapsStoreKey]
         )
         val cap = caps[categoryName] ?: return
-        val scheduled = parseCategorySchedules(
-            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
-        )[categoryName]
-        val today = getCurrentDateUseCase()
-        val total = categoryProgressTotal(key, categoryName, cap, scheduled, today, start, finish)
+        val total = periodCategoryTotal(start, finish, key)
 
         val newBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotifiedWithWindow(
+        val notified = parseCategoryCapNotified(
             context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
         )
-        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName]?.first ?: 0, newBucket)
+        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
         if (newlyReached == 0) return
 
         val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
             ?: ExtendCurrency.none()
         CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
-        val windowStart = scheduled?.let { windowFor(it.copy(amount = cap), today.toLocalDate())?.first }
-            ?.toEpochDay() ?: Long.MIN_VALUE
-        setCategoryCapNotifiedNow(notified + (categoryName to (newlyReached to windowStart)))
+        setCategoryCapNotifiedNow(notified + (categoryName to newlyReached))
     }
 
-    // Lowers a category's announced cap level when a removal drops the spend back under it
-    // (in the interleaved window for scheduled categories, else the budget period), so a
-    // later crossing announces again (mirrors the overspend flag resync).
+    // Lowers a category's announced cap level when a removal drops the period spend back
+    // under it, so a later crossing announces again (mirrors the overspend flag resync).
     private suspend fun resyncCategoryCapNotified(removed: Transaction) {
         if (removed.type != TransactionType.SPENT) return
         val prefs = context.budgetDataStore.data.first()
@@ -1057,23 +1032,19 @@ class SpendsRepository @Inject constructor(
             context.settingsDataStore.data.first()[categoryCapsStoreKey]
         )
         val cap = caps[categoryName] ?: return
-        val scheduled = parseCategorySchedules(
-            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
-        )[categoryName]
-        val today = getCurrentDateUseCase()
-        val total = categoryProgressTotal(key, categoryName, cap, scheduled, today, start, finish)
+        val total = periodCategoryTotal(start, finish, key)
         val currentBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotifiedWithWindow(
+        val notified = parseCategoryCapNotified(
             context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
         )
-        val storedBucket = notified[categoryName]?.first ?: 0
+        val storedBucket = notified[categoryName] ?: 0
         if (currentBucket >= storedBucket) return
 
         val updated = notified.toMutableMap()
         if (currentBucket == 0) {
             updated.remove(categoryName)
         } else {
-            updated[categoryName] = currentBucket to (notified[categoryName]?.second ?: Long.MIN_VALUE)
+            updated[categoryName] = currentBucket
         }
         setCategoryCapNotifiedNow(updated)
     }
@@ -1083,52 +1054,6 @@ class SpendsRepository @Inject constructor(
         is CategoryKey.Custom -> key.name
     }
 
-    // Scheduled interleaved categories merged with their cap amounts.
-    private suspend fun interleavedCategoriesNow(): Map<String, InterleavedCategory> {
-        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
-        val schedules = parseCategorySchedules(
-            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
-        )
-        return schedules.mapValues { (name, schedule) ->
-            schedule.copy(amount = caps[name] ?: BigDecimal.ZERO)
-        }
-    }
-
-    // Sum of scheduled category budgets normalized to a daily pace (see `dailyPace`). Reserved
-    // out of the recomputed daily budget (whatBudgetForDay/nextDayBudget) so the wallet's daily
-    // counter reflects planned category spend like FOOD; DAILY schedules are per-day caps and
-    // count as-is. Zero when nothing is scheduled, so default users are untouched.
-    private suspend fun interleavedDailyAllowance(): BigDecimal =
-        interleavedCategoriesNow().values
-            .fold(BigDecimal.ZERO) { acc, category -> acc + dailyPace(category) }
-
-    // Spend for a category in its cap progress source: the current interleaved window for
-    // scheduled categories (DAILY schedule = no window -> plain-cap period behavior), else
-    // the main budget period's spend total.
-    private suspend fun categoryProgressTotal(
-        key: CategoryKey,
-        categoryName: String,
-        cap: BigDecimal,
-        scheduled: InterleavedCategory?,
-        today: Date,
-        start: Date,
-        finish: Date,
-    ): BigDecimal {
-        if (scheduled != null) {
-            val window = windowFor(scheduled.copy(amount = cap), today.toLocalDate())
-            if (window != null) {
-                return windowSpent(
-                    transactionDao.getAll().asFlow().first()
-                        .filter { it.type == TransactionType.SPENT }
-                        .map { WindowSpend(it.date, it.value, it.category) },
-                    scheduled.copy(amount = cap),
-                    today.toLocalDate(),
-                )
-            }
-        }
-        return periodCategoryTotal(start, finish, key)
-    }
-
     private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
         transactionDao.getAll().asFlow().first()
             .filter { it.type == TransactionType.SPENT }
@@ -1136,55 +1061,16 @@ class SpendsRepository @Inject constructor(
             .filter { categoryKey(it) == key }
             .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
 
-    // Interleaved windows roll over independently of the main budget period. On every
-    // mutation, reset the announced cap bucket of any scheduled category whose window has
-    // advanced, so the 80%/100% alerts can fire again for the new window.
-    private suspend fun resyncInterleavedNotified() {
-        val schedules = parseCategorySchedules(
-            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
-        )
-        if (schedules.isEmpty()) return
-        val today = getCurrentDateUseCase().toLocalDate()
-        val notified = parseCategoryCapNotifiedWithWindow(
-            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
-        )
-        var changed = false
-        val updated = notified.toMutableMap()
-        interleavedCategoriesNow().values.forEach { category ->
-            if (hasRolled(category, today, updated[category.name]?.second ?: Long.MIN_VALUE)) {
-                updated.remove(category.name)
-                changed = true
-            }
-        }
-        if (changed) setCategoryCapNotifiedNow(updated)
-    }
-
-    // Clears the cap bookkeeping on a new budget period, but keeps windowed (non-DAILY)
-    // scheduled entries — their progress is window-scoped, not period-scoped, so a period
-    // change must not reset a window that hasn't rolled yet. DAILY schedules are plain caps.
+    // New period: reset the announced cap levels so the 80%/100% alerts can fire again
+    // against the fresh period's spend totals.
     private suspend fun clearCategoryCapNotifiedNow() {
-        val schedules = parseCategorySchedules(
-            context.settingsDataStore.data.first()[categorySchedulesStoreKey]
-        )
         context.settingsDataStore.edit {
-            if (schedules.isEmpty()) {
-                it.remove(categoryCapNotifiedStoreKey)
-            } else {
-                val windowed = schedules.filterValues { it.frequency != CategoryFrequency.DAILY }.keys
-                val current = parseCategoryCapNotifiedWithWindow(it[categoryCapNotifiedStoreKey])
-                val kept = current.filterKeys { name -> name in windowed }
-                val serialized = serializeCategoryCapNotifiedWithWindow(kept)
-                if (serialized.isEmpty()) {
-                    it.remove(categoryCapNotifiedStoreKey)
-                } else {
-                    it[categoryCapNotifiedStoreKey] = serialized
-                }
-            }
+            it.remove(categoryCapNotifiedStoreKey)
         }
     }
 
-    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Pair<Int, Long>>) {
-        val serialized = serializeCategoryCapNotifiedWithWindow(notified)
+    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Int>) {
+        val serialized = serializeCategoryCapNotified(notified)
         context.settingsDataStore.edit {
             if (serialized.isEmpty()) {
                 it.remove(categoryCapNotifiedStoreKey)
@@ -1193,52 +1079,4 @@ class SpendsRepository @Inject constructor(
             }
         }
     }
-
-    // Emits per-category progress for every non-DAILY scheduled category inside its current
-    // interleaved window, recomputed on schedule/cap/transaction changes. Drives the
-    // analytics InterleavedBudgetCard.
-    fun getInterleavedProgress(): Flow<List<InterleavedProgress>> {
-        val schedulesFlow: Flow<Map<String, InterleavedCategory>> =
-            context.settingsDataStore.data.map { prefs ->
-                parseCategorySchedules(prefs[categorySchedulesStoreKey])
-                    .mapValues { (name, schedule) ->
-                        schedule.copy(
-                            amount = parseCategoryCaps(prefs[categoryCapsStoreKey])[name]
-                                ?: BigDecimal.ZERO,
-                        )
-                    }
-            }
-        val transactionsFlow: Flow<List<Transaction>> = transactionDao.getAll().asFlow()
-        return combine(schedulesFlow, transactionsFlow) { schedules, transactions ->
-            val today = getCurrentDateUseCase().toLocalDate()
-            val spends = transactions
-                .filter { it.type == TransactionType.SPENT }
-                .map { WindowSpend(it.date, it.value, it.category) }
-            schedules.values
-                .asSequence()
-                .filter { it.frequency != CategoryFrequency.DAILY && it.amount > BigDecimal.ZERO }
-                .mapNotNull { category ->
-                    val window = windowFor(category, today) ?: return@mapNotNull null
-                    InterleavedProgress(
-                        category = category,
-                        spent = windowSpent(spends, category, today),
-                        windowStart = window.first,
-                        windowEnd = window.second,
-                        today = today,
-                    )
-                }
-                .sortedBy { it.category.name }
-                .toList()
-        }
-    }
 }
-
-// Aggregated progress for one scheduled category inside its current interleaved window,
-// ready for the analytics InterleavedBudgetCard.
-data class InterleavedProgress(
-    val category: InterleavedCategory,
-    val spent: BigDecimal,
-    val windowStart: LocalDate,
-    val windowEnd: LocalDate,
-    val today: LocalDate,
-)

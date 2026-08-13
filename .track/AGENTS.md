@@ -115,6 +115,11 @@ com.danilkinkin.buckwheat/
 ├── MainActivity.kt             # Single Activity, LaunchedEffect setup
 ├── CrashLogger.kt              # Uncaught handler → Downloads/buckwheat-crash-*.txt (local only)
 │
+├── ai/
+│   ├── AiInsight.kt           # Pure AI-insight summary model + prompt builders + HTTP
+│   ├── AiInsightViewModel.kt  # @HiltViewModel: AiInsightUiState (Idle/…/NotConfigured)
+│   └── WindowSpend.kt         # Pure (date, value, category) view fed to AI math
+│
 ├── data/
 │   ├── dao/
 │   │   ├── TransactionDao.kt  # CRUD for transactions (+ updateCategory)
@@ -136,7 +141,9 @@ com.danilkinkin.buckwheat/
 │   ├── categories/
 │   │   ├── SpendCategory.kt   # Fixed enum (FOOD…OTHER), keywords, labelRes, emoji
 │   │   ├── SpendCategorizer.kt# offlineClassify + categorizeSpendsWithAi (batches of 60)
-│   │   └── SpendCategoriesViewModel.kt  # Persists AI results only
+│   │   ├── CategoryAssigner.kt            # Offline-first then AI, persisted (transactions + archived)
+│   │   ├── CategoryAssignmentScheduler.kt # App-scoped background runner (coalesced, dirty-flag rescan)
+│   │   └── SpendCategoriesViewModel.kt    # Delegates to CategoryAssignmentScheduler; isCategorizing
 │   ├── AppViewModel.kt         # Sheet stack, snackbars, tutorials
 │   ├── ExtendCurrency.kt       # Currency model
 │   └── SpendsViewModel.kt      # Budget/spend state, streak compute

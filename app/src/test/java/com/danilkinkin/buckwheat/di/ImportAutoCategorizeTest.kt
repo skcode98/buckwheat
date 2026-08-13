@@ -2,6 +2,8 @@ package com.danilkinkin.buckwheat.di
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
+import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
@@ -35,6 +37,7 @@ class ImportAutoCategorizeTest {
             FakeSavedCategoryDao(),
             budgetPeriodDao,
             currentDateUseCase,
+            CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
         )
     }
 

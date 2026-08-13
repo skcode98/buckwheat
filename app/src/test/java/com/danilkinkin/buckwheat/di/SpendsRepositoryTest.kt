@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.budgetDataStore
+import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
+import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.util.toDate
@@ -31,13 +33,15 @@ class SpendsRepositoryTest {
     @Before
     fun init() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        val transactionDao = FakeTransactionDao()
         spendsRepository = SpendsRepository(
             context = context,
-            FakeTransactionDao(),
+            transactionDao,
             FakeSavedTagDao(),
             FakeSavedCategoryDao(),
             budgetPeriodDao,
             currentDateUseCase,
+            CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
         )
     }
 

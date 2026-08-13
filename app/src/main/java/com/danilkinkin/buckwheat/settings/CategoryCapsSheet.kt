@@ -1,7 +1,5 @@
 package com.danilkinkin.buckwheat.settings
 
-import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,60 +41,22 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
-import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
-import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.util.prettyDate
-import com.danilkinkin.buckwheat.util.toDate
 import java.math.BigDecimal
-import java.time.LocalDate
 
 const val CATEGORY_CAPS_SHEET = "categoryCaps"
 
-// A ready-made schedule set applied by one tap. Amounts are starter values the user edits;
-// categories are the built-in stored names so the window math matches what gets persisted.
-private data class CategoryCapTemplate(
-    @StringRes val labelRes: Int,
-    val frequency: CategoryFrequency,
-    val categories: List<String>,
-    val defaultAmount: BigDecimal,
-)
-
-private val categoryCapTemplates = listOf(
-    CategoryCapTemplate(
-        labelRes = R.string.category_caps_template_monthly_essentials,
-        frequency = CategoryFrequency.MONTHLY,
-        categories = listOf("FOOD", "TRANSPORT", "BILLS"),
-        defaultAmount = BigDecimal("5000"),
-    ),
-    CategoryCapTemplate(
-        labelRes = R.string.category_caps_template_quarterly_big_tickets,
-        frequency = CategoryFrequency.QUARTERLY,
-        categories = listOf("HEALTH", "SHOPPING", "ENTERTAINMENT"),
-        defaultAmount = BigDecimal("15000"),
-    ),
-    CategoryCapTemplate(
-        labelRes = R.string.category_caps_template_annual_obligations,
-        frequency = CategoryFrequency.ANNUAL,
-        categories = listOf("TRAVEL", "BILLS"),
-        defaultAmount = BigDecimal("60000"),
-    ),
-)
-
-// Settings sheet for the monthly-style cap per category. Caps apply to the current budget
-// period's spend totals and drive the 80%/100% instant notifications and the progress bars
-// in the analytics categories card. A category with a schedule entry (frequency + anchor)
-// becomes an interleaved budget that rolls over on its own window instead of the period.
+// Settings sheet for the monthly cap per category. Caps apply to the current budget period's
+// spend totals and drive the 80%/100% instant notifications and the battery pill in the
+// analytics categories card. "Auto" seeds a cap with the current budget amount.
 @Composable
 fun CategoryCapsSheet(
-    onEditAnchor: ((name: String, anchorEpochDay: Long) -> Unit)? = null,
     categoriesViewModel: CategoriesManagementViewModel = hiltViewModel(),
     capsViewModel: CategoryCapsViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val categories by categoriesViewModel.allCategories.observeAsState(emptyList())
     val caps by capsViewModel.caps.observeAsState(emptyMap())
-    val schedules by capsViewModel.interleaved.observeAsState(emptyMap())
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -123,32 +82,6 @@ fun CategoryCapsSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-            ) {
-                categoryCapTemplates.forEachIndexed { index, template ->
-                    if (index > 0) Spacer(Modifier.width(8.dp))
-                    AssistChip(
-                        onClick = {
-                            capsViewModel.applyTemplate(
-                                template.frequency,
-                                template.categories,
-                                template.defaultAmount,
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = stringResource(template.labelRes),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -161,13 +94,9 @@ fun CategoryCapsSheet(
                         name = item.name,
                         emoji = SpendCategory.emojiFor(item.name, item.emoji),
                         cap = caps[item.name],
-                        schedule = schedules[item.name],
                         onSave = { capsViewModel.setCap(item.name, it) },
                         onClear = { capsViewModel.setCap(item.name, null) },
-                        onSetInterleaved = { frequency, anchorEpochDay ->
-                            capsViewModel.setInterleaved(item.name, frequency, anchorEpochDay)
-                        },
-                        onEditAnchor = onEditAnchor,
+                        onAuto = { capsViewModel.setAutoCap(item.name) },
                     )
                 }
             }
@@ -176,27 +105,15 @@ fun CategoryCapsSheet(
 }
 
 @Composable
-private fun frequencyLabel(frequency: CategoryFrequency): String = when (frequency) {
-    CategoryFrequency.DAILY -> stringResource(R.string.category_caps_frequency_daily)
-    CategoryFrequency.MONTHLY -> stringResource(R.string.category_caps_frequency_monthly)
-    CategoryFrequency.QUARTERLY -> stringResource(R.string.category_caps_frequency_quarterly)
-    CategoryFrequency.ANNUAL -> stringResource(R.string.category_caps_frequency_annual)
-}
-
-@Composable
 private fun CategoryCapRow(
     name: String,
     emoji: String,
     cap: BigDecimal?,
-    schedule: InterleavedCategory?,
     onSave: (BigDecimal) -> Unit,
     onClear: () -> Unit,
-    onSetInterleaved: (CategoryFrequency, Long) -> Unit,
-    onEditAnchor: ((String, Long) -> Unit)?,
+    onAuto: () -> Unit,
 ) {
     var capText by remember(name, cap) { mutableStateOf(cap?.toPlainString() ?: "") }
-    val frequency = schedule?.frequency ?: CategoryFrequency.DAILY
-    val anchorEpochDay = schedule?.anchorEpochDay ?: LocalDate.now().toEpochDay()
 
     Column(
         modifier = Modifier
@@ -247,43 +164,16 @@ private fun CategoryCapRow(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth()) {
-            CategoryFrequency.entries.forEachIndexed { index, candidate ->
-                if (index > 0) Spacer(Modifier.width(8.dp))
-                FilterChip(
-                    selected = frequency == candidate,
-                    onClick = { onSetInterleaved(candidate, anchorEpochDay) },
-                    label = {
-                        Text(
-                            text = frequencyLabel(candidate),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
+        AssistChip(
+            onClick = onAuto,
+            label = {
+                Text(
+                    text = stringResource(R.string.category_caps_auto),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
                 )
-            }
-        }
-        if (frequency != CategoryFrequency.DAILY) {
-            Spacer(Modifier.height(4.dp))
-            val anchorText = prettyDate(
-                LocalDate.ofEpochDay(anchorEpochDay).toDate(),
-                "dd MMM yyyy",
-                simplifyIfToday = false,
-            )
-            Text(
-                text = stringResource(R.string.category_caps_anchor, anchorText),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .clickable(enabled = onEditAnchor != null) {
-                        onEditAnchor?.invoke(name, anchorEpochDay)
-                    }
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-            )
-        }
+            },
+        )
     }
 }
 

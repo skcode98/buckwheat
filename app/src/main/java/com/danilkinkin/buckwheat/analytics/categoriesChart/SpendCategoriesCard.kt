@@ -184,9 +184,7 @@ fun SpendCategoriesCard(
                         }
                         if (cap != null && cap > BigDecimal.ZERO) {
                             CategoryBatteryChip(
-                                modifier = Modifier
-                                    .padding(4.dp, 4.dp)
-                                    .fillMaxWidth(),
+                                modifier = Modifier.padding(4.dp, 4.dp),
                                 name = category.name,
                                 emoji = category.emoji,
                                 amount = category.amount,

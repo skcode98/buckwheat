@@ -28,6 +28,7 @@ fun SpentItemActions(
     transaction: Transaction,
     currency: ExtendCurrency,
     modifier: Modifier = Modifier,
+    categoryEmojis: Map<String, String> = emptyMap(),
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onCopy: () -> Unit,
@@ -41,6 +42,7 @@ fun SpentItemActions(
         SpentItem(
             transaction = transaction,
             currency = currency,
+            categoryEmojis = categoryEmojis,
         )
         DropdownMenu(
             expanded = actionsMenuExpanded,

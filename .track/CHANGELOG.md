@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-08-13 — Interleaved budgets removed; async background auto-categorization; history category pills; compact battery chip
+
+Batch built on user direction. **227 tests, 0 failures** (suite count dropped from 290 — the 5 interleaved test suites were deleted with the feature), `compileDebugKotlin` + full `testDebugUnitTest` green.
+
+### Interleaved budgets removed entirely (main + tests)
+- **Deleted**: `analytics/InterleavedBudgetCard.kt`, `interleaved/AnalyzeSpendingPatterns.kt`, `interleaved/InterleavedBudget.kt`, `settings/InterleavedAnchorSheet.kt`.
+- **`settings/CategoryCapsSheet.kt`**: per-row frequency `FilterChip`s, anchor caption, quick templates, and the `INTERLEAVED_ANCHOR_SHEET` wiring are gone — each row is now cap amount + Remove cap + **Auto** chip (fills the cap with the current budget amount).
+- **`settings/CategoryCapsViewModel.kt`**: dropped `interleaved` LiveData, `setInterleaved`, `setAnchor`, `applyTemplate`; added `setAutoCap(name)` (reads `budgetDataStore[budgetStoreKey]`, no-op when unset/zero).
+- **`home/BottomSheets.kt`**: `INTERLEAVED_ANCHOR_SHEET` wrapper deleted; `CategoryCapsSheet` composed with no args.
+- **`di/SettingsRepository.kt`**: removed `categorySchedulesStoreKey`, `serialize/parseCategorySchedules`, `getCategorySchedules`, `getInterleavedCategories`, `setCategoryCapsAndSchedules`, `applyScheduleSuggestions`; `parseCategoryCapNotified` tolerant of the legacy `@windowStartEpochDay` suffix (`substringBefore('@')`) so old persisted notified strings still parse.
+- **`di/SpendsRepository.kt`**: removed `interleavedDailyAllowance` + `applyCategoryAllowance` overlay from `whatBudgetForDay`/`nextDayBudget`, `categoryProgressTotal` (window-aware), `resyncInterleavedNotified`, `getInterleavedProgress`, `InterleavedProgress`, window-aware cap-notified codec handling; cap alerts now always measure the **budget period** total.
+- **`data/SpendsViewModel.kt`** / **`analytics/Analytics.kt`**: `interleavedProgress` observation + `InterleavedBudgetCard` removed.
+- **`strings.xml`**: deleted `category_caps_frequency*`, `category_caps_anchor*`, `category_caps_templates*`, `interleaved_*`; added `category_caps_auto` "Auto".
+- **`ai/WindowSpend.kt`** (new): the pure AI-insight spend view moved out of the deleted interleaved package into `ai/` (`(date, value, category)` — minimal view so the AI math never touches Room entities); `AiInsight.kt`/`AiInsightViewModel.kt`/`AiInsightTest.kt` imports updated.
+- **Tests deleted**: `di/InterleavedAllowanceTest`, `di/InterleavedRolloverTest`, `di/InterleavedScheduleCodecTest`, `interleaved/AnalyzeSpendingPatternsTest`, `interleaved/InterleavedBudgetTest` (their production code no longer exists; they broke compilation).
+
+### Async background auto-categorization (offline + AI, off the UI thread)
+- **`data/categories/CategoryAssigner.kt`** (new `@Singleton`): `assignToUncategorized()` = offline keyword pass then AI batch pass over `transactions` **and** `archived_transactions` rows with a blank category, persisted via `TransactionDao.updateCategory` / `BudgetPeriodDao.updateCategory`.
+- **`data/categories/CategoryAssignmentScheduler.kt`** (new `@Singleton`): application-scoped `CoroutineScope(SupervisorJob() + Dispatchers.Default)`, `schedule()` is coalesced via `AtomicBoolean` (no parallel runs), a dirty flag re-scans once more when new rows land mid-run, `StateFlow isRunning`, re-arms in `finally` if work arrived during shutdown. Work survives the triggering screen.
+- **`data/categories/SpendCategoriesViewModel.kt`**: rewritten to delegate to the scheduler and expose `isCategorizing` (`scheduler.isRunning.asLiveData()`); `categorizeUncategorized()` = `scheduler.schedule()`.
+- **`di/SpendsRepository.kt`**: `addSpent` schedules when the new row's category is blank; `importTransactions` schedules instead of the removed inline `persistAiCategories` (offline keyword assignment still happens inline during import).
+- **Tests**: `ImportAutoCategorizeTest`, `SpendsRepositoryTest` construct `CategoryAssigner` + `CategoryAssignmentScheduler` for the new `SpendsRepository` constructor param.
+
+### History category label pill
+- **`history/SpentItem.kt`**: each spend row shows a small rounded pill (emoji + localized category name) under the amount when a category exists. `categoryLabelFor` uses `categoryKey(transaction)` — persisted AI category wins, else the offline keyword guess; custom categories fall back to their saved emoji (`categoryEmojis` map) or a generic one.
+- **`history/History.kt`** / **`history/SpentItemActions.kt`**: `categoryEmojis` threaded from `CategoriesManagementViewModel.allCategories` into `SpentItem` (both plain and actions variants).
+
+### Compact battery pill (Analytics)
+- **`analytics/categoriesChart/CategoryBatteryChip.kt`**: now wraps its content (flows inline with the plain `TagAmount` chips instead of spanning the row), 32dp tall, name capped at `widthIn(max = 120.dp)`; battery body/fill reworked as stacked `Row`s with a `drawWithContent` + `clipRect(right = size.width * fraction)` fill layer, nub tucked into the body's end padding (4dp × 11dp).
+- **`analytics/categoriesChart/SpendCategoriesCard.kt`**: battery chip modifier loses `fillMaxWidth()`.
+
 ## 2026-08-12 — Category budget utilization as battery indicators in Analytics
 
 User request: analytics category caps should read like a **battery** — used budget = filled portion, remaining = the unfilled part, right on the category pill itself, showing the category name, amount used, and used percentage. Golden pipeline green — **290 tests, 0 failures** (289 + 1 new), APK built.

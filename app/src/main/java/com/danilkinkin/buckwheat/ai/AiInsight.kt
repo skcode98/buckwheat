@@ -9,7 +9,6 @@ import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.keyboard.extractModelContent
-import com.danilkinkin.buckwheat.interleaved.WindowSpend
 import com.danilkinkin.buckwheat.settingsDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first

@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-08-13 — Decision: Interleaved budgets removed entirely (engine, UI, tests)
+
+**Decision**: Deleted the interleaved-budgets feature — `interleaved/InterleavedBudget.kt`, `interleaved/AnalyzeSpendingPatterns.kt`, `analytics/InterleavedBudgetCard.kt`, `settings/InterleavedAnchorSheet.kt`, and all 5 interleaved test suites. `CategoryCapsSheet` went back to a plain cap editor (+ Remove cap + **Auto** = seed the cap with the current budget); `whatBudgetForDay`/`nextDayBudget` return plain recomputed values again (no daily-allowance overlay).
+
+**Why**: The feature added window-rollover math, schedules, and a second progress source on top of plain per-period caps, and its Settings/analytics surfaces kept fighting the app's standard UI. With the feature gone, the caps flow is simpler and the codebase loses ~2k lines of schema/codec/rollover complexity. **Backward-compat detail**: `parseCategoryCapNotified` still strips a legacy `@windowStartEpochDay` suffix (`substringBefore('@')`) so pre-removal persisted notified strings keep parsing; the schedules DataStore key is simply never written again.
+
+---
+
+## 2026-08-13 — Decision: Auto-categorization moved off the ViewModel onto an application-scoped background scheduler
+
+**Decision**: New `data/categories/CategoryAssigner.kt` (offline-first then AI, over `transactions` + `archived_transactions`, persisted) + `data/categories/CategoryAssignmentScheduler.kt` (`CoroutineScope(SupervisorJob() + Dispatchers.Default)`, `AtomicBoolean`-coalesced `schedule()`, dirty-flag rescan, `StateFlow isRunning`, re-arm in `finally`). `SpendCategoriesViewModel` now just delegates; `SpendsRepository.addSpent`/`importTransactions` trigger scheduling.
+
+**Why**: The old inline path blocked the import/add caller on the AI provider and died with the screen (ViewModel scope). An application-scoped scheduler means categorization survives navigation, coalesces concurrent triggers, and never blocks the wallet/editor. Coalescing via `AtomicBoolean` keeps it single-runner; the dirty flag + `finally` re-arm guarantee no uncategorized row is stranded when work lands mid-run.
+
+---
+
 ## 2026-08-12 — Decision: Category budget utilization rendered as battery indicators
 
 **Decision**: Replaced the "category chip + thin progress bar underneath" treatment in `SpendCategoriesCard` with a full-width **battery pill** for capped categories — the pill itself is the progress indicator (filled portion = budget used up to the cap, unfilled = remaining), with the category name, amount used, and used percentage overlaid directly on it.

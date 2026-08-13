@@ -11,7 +11,6 @@ import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.categoryTotals
 import com.danilkinkin.buckwheat.di.GetCurrentDateUseCase
 import com.danilkinkin.buckwheat.di.SpendsRepository
-import com.danilkinkin.buckwheat.interleaved.WindowSpend
 import com.danilkinkin.buckwheat.util.toLocalDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext

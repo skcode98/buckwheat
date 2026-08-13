@@ -1,6 +1,6 @@
 package com.danilkinkin.buckwheat.ai
 
-import com.danilkinkin.buckwheat.interleaved.WindowSpend
+import com.danilkinkin.buckwheat.ai.WindowSpend
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

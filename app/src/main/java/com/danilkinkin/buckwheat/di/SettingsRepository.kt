@@ -6,9 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.danilkinkin.buckwheat.interleaved.CategoryFrequency
-import com.danilkinkin.buckwheat.interleaved.InterleavedCategory
-import com.danilkinkin.buckwheat.interleaved.ScheduleSuggestion
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
@@ -16,11 +13,9 @@ import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
-import java.time.LocalDate
 import javax.inject.Inject
 
 val debugStoreKey = booleanPreferencesKey("debug")
@@ -48,7 +43,6 @@ val spendDigestMinuteStoreKey = intPreferencesKey("spendDigestMinute")
 val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotified")
 val categoryCapsStoreKey = stringPreferencesKey("categoryCaps")
 val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
-val categorySchedulesStoreKey = stringPreferencesKey("categorySchedules")
 
 const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
 const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
@@ -99,59 +93,17 @@ fun serializeCategoryCapNotified(notified: Map<String, Int>): String =
         .sortedBy { it.key }
         .joinToString(";") { "${it.key}:${it.value}" }
 
-fun parseCategoryCapNotified(raw: String?): Map<String, Int> =
-    parseCategoryCapNotifiedWithWindow(raw).mapValues { it.value.first }
-
-// Notified entries may additionally carry the interleaved window start they were recorded
-// for: "name:bucket@windowStartEpochDay". Legacy "name:bucket" entries (no "@") default to
-// Long.MIN_VALUE so the first rollover check treats them as recorded in a different window
-// and resets the bucket.
-fun parseCategoryCapNotifiedWithWindow(raw: String?): Map<String, Pair<Int, Long>> {
+// Parses the plain "name:bucket" form and tolerates legacy entries that carry an interleaved
+// window suffix ("name:bucket@windowStartEpochDay" — the "@..." part is ignored).
+fun parseCategoryCapNotified(raw: String?): Map<String, Int> {
     if (raw.isNullOrBlank()) return emptyMap()
     return raw.split(';').mapNotNull { entry ->
         val parts = entry.split(':', limit = 2)
         if (parts.size != 2) return@mapNotNull null
         val name = parts[0].trim()
-        val windowPart = parts[1].trim().split('@')
-        val bucket = windowPart[0].toIntOrNull() ?: return@mapNotNull null
+        val bucket = parts[1].trim().substringBefore('@').toIntOrNull() ?: return@mapNotNull null
         if (name.isBlank() || bucket <= 0) return@mapNotNull null
-        val windowStart = if (windowPart.size == 2) {
-            windowPart[1].toLongOrNull() ?: Long.MIN_VALUE
-        } else {
-            Long.MIN_VALUE
-        }
-        name to (bucket to windowStart)
-    }.toMap()
-}
-
-// Plain buckets serialize without the "@" suffix so they stay backward compatible.
-fun serializeCategoryCapNotifiedWithWindow(notified: Map<String, Pair<Int, Long>>): String =
-    notified.entries
-        .filter { it.value.first > 0 }
-        .sortedBy { it.key }
-        .joinToString(";") { (name, state) ->
-            if (state.second == Long.MIN_VALUE) "$name:${state.first}"
-            else "$name:${state.first}@${state.second}"
-        }
-
-// Interleaved budget schedules, serialized as "name:frequency:anchorEpochDay;...". The
-// amount lives in the caps key; schedule entries only carry frequency + window anchor.
-fun serializeCategorySchedules(schedules: Map<String, InterleavedCategory>): String =
-    schedules.values
-        .sortedBy { it.name }
-        .joinToString(";") { "${it.name}:${it.frequency.name}:${it.anchorEpochDay}" }
-
-fun parseCategorySchedules(raw: String?): Map<String, InterleavedCategory> {
-    if (raw.isNullOrBlank()) return emptyMap()
-    return raw.split(';').mapNotNull { entry ->
-        val parts = entry.split(':')
-        if (parts.size != 3) return@mapNotNull null
-        val name = parts[0].trim()
-        val frequency = runCatching { CategoryFrequency.valueOf(parts[1].trim()) }.getOrNull()
-            ?: return@mapNotNull null
-        val anchorEpochDay = parts[2].trim().toLongOrNull() ?: return@mapNotNull null
-        if (name.isBlank()) return@mapNotNull null
-        name to InterleavedCategory(name, BigDecimal.ZERO, frequency, anchorEpochDay)
+        name to bucket
     }.toMap()
 }
 
@@ -359,45 +311,6 @@ class SettingsRepository @Inject constructor(
     fun getCategoryCaps(): Flow<Map<String, BigDecimal>> =
         context.settingsDataStore.data.map { parseCategoryCaps(it[categoryCapsStoreKey]) }
 
-    // Observe the configured interleaved schedules (empty map when none are set).
-    fun getCategorySchedules(): Flow<Map<String, InterleavedCategory>> =
-        context.settingsDataStore.data.map { parseCategorySchedules(it[categorySchedulesStoreKey]) }
-
-    // Schedules merged with their cap amounts into full interleaved categories. A category
-    // with a schedule entry is an interleaved budget; without one it stays a plain cap.
-    fun getInterleavedCategories(): Flow<Map<String, InterleavedCategory>> {
-        val capsFlow = getCategoryCaps()
-        val schedulesFlow = getCategorySchedules()
-        return combine(capsFlow, schedulesFlow) { caps, schedules ->
-            schedules.mapValues { (name, schedule) ->
-                schedule.copy(amount = caps[name] ?: BigDecimal.ZERO)
-            }
-        }
-    }
-
-    // Persist caps + schedules and reset the notified state in a single edit (per the
-    // single-edit rule). Frequency or anchor edits must re-arm the 80%/100% alerts.
-    suspend fun setCategoryCapsAndSchedules(
-        caps: Map<String, BigDecimal>,
-        schedules: Map<String, InterleavedCategory>,
-    ) {
-        val capsSerialized = serializeCategoryCaps(caps)
-        val schedulesSerialized = serializeCategorySchedules(schedules)
-        context.settingsDataStore.edit {
-            if (capsSerialized.isEmpty()) {
-                it.remove(categoryCapsStoreKey)
-            } else {
-                it[categoryCapsStoreKey] = capsSerialized
-            }
-            if (schedulesSerialized.isEmpty()) {
-                it.remove(categorySchedulesStoreKey)
-            } else {
-                it[categorySchedulesStoreKey] = schedulesSerialized
-            }
-            it.remove(categoryCapNotifiedStoreKey)
-        }
-    }
-
     // Persist the full caps map. Any change re-arms the 80%/100% crossing notifications
     // from the new baseline (the previous announced levels no longer apply).
     suspend fun setCategoryCaps(caps: Map<String, BigDecimal>) {
@@ -410,36 +323,6 @@ class SettingsRepository @Inject constructor(
             }
             it.remove(categoryCapNotifiedStoreKey)
         }
-    }
-
-    // Merge detected recurring patterns (Phase 6 calibration) into the caps+schedules store:
-    // a suggestion seeds the schedule and cap for a category that isn't scheduled yet. Any
-    // existing schedule is kept as-is, so user choices always win over mined suggestions.
-    // Single edit, re-arms the 80%/100% alerts.
-    suspend fun applyScheduleSuggestions(
-        suggestions: List<ScheduleSuggestion>,
-        anchor: LocalDate,
-    ) {
-        if (suggestions.isEmpty()) return
-        val caps = parseCategoryCaps(context.settingsDataStore.data.first()[categoryCapsStoreKey])
-            .toMutableMap()
-        val schedules =
-            parseCategorySchedules(context.settingsDataStore.data.first()[categorySchedulesStoreKey])
-                .toMutableMap()
-        var changed = false
-        suggestions.forEach { suggestion ->
-            if (schedules[suggestion.name] == null) {
-                schedules[suggestion.name] = InterleavedCategory(
-                    name = suggestion.name,
-                    amount = suggestion.amount,
-                    frequency = suggestion.frequency,
-                    anchorEpochDay = anchor.toEpochDay(),
-                )
-                caps[suggestion.name] = suggestion.amount
-                changed = true
-            }
-        }
-        if (changed) setCategoryCapsAndSchedules(caps, schedules)
     }
 
     // Forget every announced cap level, so the alerts can fire again (used on a new period).

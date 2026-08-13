@@ -113,7 +113,7 @@
 
 ### 17. Unify `whatBudgetForDay` (widget vs repository drift)
 - **Files**: `widget/CommonWidgetReceiver.kt:107` (private copy), `di/SpendsRepository.kt:479` (canonical)
-- **What**: The widget receiver holds a simplified inline copy of daily-budget math that can drift (interleaved allowance). Route widgets through the repository so widget rest always matches wallet rest.
+- **What**: The widget receiver holds a simplified inline copy of daily-budget math that can drift. Route widgets through the repository so widget rest always matches wallet rest.
 - **Complexity**: Small–Medium · **Value**: Medium (correctness)
 - **Status**: Backlog
 

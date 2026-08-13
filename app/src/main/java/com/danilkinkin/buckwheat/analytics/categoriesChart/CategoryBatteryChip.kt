@@ -3,12 +3,12 @@ package com.danilkinkin.buckwheat.analytics.categoriesChart
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,10 +36,10 @@ import java.math.BigDecimal
 
 private val batteryAmber = Color(0xFFE6A23C)
 
-// A category budget pill drawn as a battery. The filled portion shows the budget already
-// used (up to the cap) and the unfilled portion shows what remains, so the whole pill reads
-// as a battery indicator. The row overlays the category name, the amount used, and the used
-// percentage; the fill turns amber at 80% and red once the cap is reached.
+// A compact category budget pill drawn as a battery. It wraps its content (like the plain
+// TagAmount chips) so it flows with them instead of spanning the full row. The filled portion
+// shows the budget already used (up to the cap) and the unfilled portion what remains; the
+// fill turns amber at 80% and red once the cap is reached.
 @Composable
 fun CategoryBatteryChip(
     modifier: Modifier = Modifier,
@@ -76,59 +76,62 @@ fun CategoryBatteryChip(
         enabled = onClick != null,
         shape = shape,
         color = Color.Transparent,
-        modifier = modifier.height(36.dp),
+        modifier = modifier.height(32.dp),
     ) {
-        Box(Modifier.fillMaxSize()) {
-            // Battery body (the pill); the nub sticks out on the right, so the body is
-            // inset by the nub width.
+        Box {
+            // Battery body; the track text is drawn first, then a fill layer clipped to the
+            // left `fraction` re-renders the same content in a contrast color.
+            Row(
+                modifier = Modifier
+                    .height(32.dp)
+                    .clip(shape)
+                    .background(baseColor.copy(alpha = 0.15f))
+                    .padding(start = 12.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BatteryTextContent(
+                    textColor = trackTextColor,
+                    emoji = emoji,
+                    name = name,
+                    amount = amountText,
+                    percent = percentLabel,
+                )
+            }
+            // Fill layer covering the left `fraction` of the pill.
             Box(
                 Modifier
-                    .fillMaxSize()
-                    .padding(end = 5.dp),
+                    .matchParentSize()
+                    .drawWithContent {
+                        val drawScope = this
+                        clipRect(right = size.width * fraction) {
+                            drawScope.drawContent()
+                        }
+                    },
             ) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(shape)
-                        .background(baseColor.copy(alpha = 0.15f)),
+                Box(Modifier.matchParentSize().background(fillColor))
+                Row(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .padding(start = 12.dp, end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BatteryTextRow(
-                        textColor = trackTextColor,
+                    BatteryTextContent(
+                        textColor = fillTextColor,
                         emoji = emoji,
                         name = name,
                         amount = amountText,
                         percent = percentLabel,
                     )
-                    // Fill layer: covers the left `fraction` with the fill color and
-                    // re-renders the same text in the fill-contrast color, so the label is
-                    // readable on both the used and the remaining parts of the pill.
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .drawWithContent {
-                                val drawScope = this
-                                clipRect(right = size.width * fraction) {
-                                    drawScope.drawContent()
-                                }
-                            },
-                    ) {
-                        Box(Modifier.matchParentSize().background(fillColor))
-                        BatteryTextRow(
-                            textColor = fillTextColor,
-                            emoji = emoji,
-                            name = name,
-                            amount = amountText,
-                            percent = percentLabel,
-                        )
-                    }
                 }
             }
-            // Battery terminal (nub), colored like the current charge level.
+            // Battery terminal (nub), sitting in the body's end padding and colored like the
+            // current charge level.
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
-                    .width(3.dp)
-                    .height(12.dp)
+                    .padding(end = 4.dp)
+                    .width(4.dp)
+                    .height(11.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(fillColor),
             )
@@ -137,48 +140,42 @@ fun CategoryBatteryChip(
 }
 
 @Composable
-private fun BatteryTextRow(
+private fun RowScope.BatteryTextContent(
     textColor: Color,
     emoji: String,
     name: String,
     amount: String,
     percent: String,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(start = 14.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (emoji.isNotBlank()) {
-            Text(
-                text = emoji,
-                color = textColor,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.width(6.dp))
-        }
+    if (emoji.isNotBlank()) {
         Text(
-            text = name,
+            text = emoji,
             color = textColor,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = amount,
-            color = textColor,
-            softWrap = false,
             style = MaterialTheme.typography.bodyMedium,
         )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = percent,
-            color = textColor,
-            softWrap = false,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        )
+        Spacer(Modifier.width(6.dp))
     }
+    Text(
+        text = name,
+        color = textColor,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.widthIn(max = 120.dp),
+    )
+    Spacer(Modifier.width(8.dp))
+    Text(
+        text = amount,
+        color = textColor,
+        softWrap = false,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Spacer(Modifier.width(8.dp))
+    Text(
+        text = percent,
+        color = textColor,
+        softWrap = false,
+        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+    )
 }
