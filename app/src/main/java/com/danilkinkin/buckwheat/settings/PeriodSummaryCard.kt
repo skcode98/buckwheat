@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,10 +26,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -37,6 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.analytics.dailySpendTotals
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
@@ -59,6 +66,7 @@ import com.danilkinkin.buckwheat.util.toPalette
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
+import java.util.Date
 
 // The single past-period summary card: period dates, budget utilization, totals, biggest/
 // lowest spend, biggest day, no-spend days and the per-category breakdown. Pure rendering of
@@ -78,6 +86,7 @@ fun PeriodSummaryCard(
     summary: PeriodSummary,
     currency: ExtendCurrency,
     categoryEmojis: Map<String, String> = emptyMap(),
+    spends: List<Transaction> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -178,9 +187,12 @@ fun PeriodSummaryCard(
 
             Spacer(Modifier.height(20.dp))
 
-            Text(
-                text = stringResource(R.string.period_summary_highlights),
-                style = MaterialTheme.typography.titleMedium,
+            ExpenditureGraphCard(
+                spends = spends,
+                startDate = summary.startDate,
+                endDate = summary.endDate,
+                budget = summary.budget,
+                currency = currency,
             )
             Spacer(Modifier.height(12.dp))
 
@@ -198,8 +210,7 @@ fun PeriodSummaryCard(
                         prettyDate(it.date, showTime = false, forceShowDate = true)
                     },
                     icon = "↑",
-                    containerColor = toPalette(harmonize(colorMax)).container,
-                    contentColor = toPalette(harmonize(colorMax)).onContainer,
+                    accentColor = toPalette(harmonize(colorMax)).main,
                 )
                 Spacer(Modifier.width(12.dp))
                 val lowest = summary.lowestSpend
@@ -215,8 +226,7 @@ fun PeriodSummaryCard(
                         prettyDate(it.date, showTime = false, forceShowDate = true)
                     },
                     icon = "↓",
-                    containerColor = toPalette(harmonize(colorMin)).container,
-                    contentColor = toPalette(harmonize(colorMin)).onContainer,
+                    accentColor = toPalette(harmonize(colorMin)).main,
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -471,6 +481,7 @@ private fun StatTile(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     icon: String? = null,
+    accentColor: Color? = null,
     caption: String? = null,
 ) {
     Surface(
@@ -489,8 +500,8 @@ private fun StatTile(
                     Surface(
                         modifier = Modifier.size(26.dp),
                         shape = CircleShape,
-                        color = contentColor.copy(alpha = 0.12f),
-                        contentColor = contentColor,
+                        color = accentColor?.copy(alpha = 0.15f) ?: contentColor.copy(alpha = 0.12f),
+                        contentColor = accentColor ?: contentColor,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
@@ -525,6 +536,167 @@ private fun StatTile(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+// The whole-period expenditure in the app's graph style: the total sits on the card while a
+// per-day bar chart fills the background, with the max/min days highlighted in the graph colors
+// and the full budget shown as a reference line + text.
+@Composable
+private fun ExpenditureGraphCard(
+    spends: List<Transaction>,
+    startDate: Date,
+    endDate: Date,
+    budget: BigDecimal,
+    currency: ExtendCurrency,
+) {
+    val context = LocalContext.current
+    val dailyTotals = remember(spends, startDate, endDate) {
+        dailySpendTotals(spends, startDate, endDate)
+    }
+    val totalSpent = remember(dailyTotals) {
+        dailyTotals.fold(BigDecimal.ZERO) { acc, value -> acc + value }
+    }
+    val maxDaily = dailyTotals.maxOrNull() ?: BigDecimal.ZERO
+    val maxIndex = if (maxDaily > BigDecimal.ZERO) dailyTotals.indexOf(maxDaily) else null
+    // Highlight the lowest real spend day, never a zero-spend gap in the month.
+    val lowestSpentDay = dailyTotals.filter { it > BigDecimal.ZERO }.minOrNull()
+    val minIndex = if (lowestSpentDay != null) dailyTotals.indexOf(lowestSpentDay) else null
+
+    val averageDaily = if (dailyTotals.isEmpty()) {
+        BigDecimal.ZERO
+    } else {
+        totalSpent.divide(BigDecimal(dailyTotals.size), 2, RoundingMode.HALF_EVEN)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.period_summary_expenditure),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = numberFormat(context, totalSpent, currency = currency),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            ExpenditureBars(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp),
+                dailyTotals = dailyTotals,
+                maxIndex = maxIndex,
+                minIndex = minIndex,
+                maxColor = toPalette(harmonize(colorMax)).main,
+                minColor = toPalette(harmonize(colorMin)).main,
+                budget = budget,
+                budgetLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (budget > BigDecimal.ZERO) {
+                        stringResource(
+                            R.string.period_summary_budget,
+                            numberFormat(context, budget, currency = currency),
+                        )
+                    } else {
+                        stringResource(R.string.period_summary_no_budget)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.avg_per_day,
+                        numberFormat(context, averageDaily, currency = currency),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpenditureBars(
+    modifier: Modifier = Modifier,
+    dailyTotals: List<BigDecimal>,
+    maxIndex: Int?,
+    minIndex: Int?,
+    maxColor: Color,
+    minColor: Color,
+    budget: BigDecimal,
+    budgetLineColor: Color,
+) {
+    Canvas(modifier = modifier) {
+        if (dailyTotals.isEmpty()) return@Canvas
+
+        val maxDaily = dailyTotals.maxOrNull() ?: BigDecimal.ZERO
+        val slotWidth = size.width / dailyTotals.size
+        val barWidth = slotWidth * 0.6f
+        val barHeightMin = size.height * 0.01f
+
+        dailyTotals.forEachIndexed { index, value ->
+            val fraction = if (maxDaily == BigDecimal.ZERO) {
+                0f
+            } else {
+                value.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
+            }
+            val barHeight = (size.height * fraction).coerceAtLeast(barHeightMin)
+            val color = when (index) {
+                maxIndex -> maxColor
+                minIndex -> minColor
+                else -> combineColors(minColor, maxColor, fraction)
+            }
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(
+                    x = index * slotWidth + (slotWidth - barWidth) / 2f,
+                    y = size.height - barHeight,
+                ),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
+            )
+        }
+
+        // Full-budget reference line, drawn only when it fits inside the chart; the budget amount
+        // is always shown as text under the bars.
+        if (budget > BigDecimal.ZERO && maxDaily > BigDecimal.ZERO && budget <= maxDaily) {
+            val budgetFraction = budget.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
+            val budgetY = size.height * (1f - budgetFraction)
+            drawLine(
+                color = budgetLineColor,
+                start = Offset(0f, budgetY),
+                end = Offset(size.width, budgetY),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)),
+            )
         }
     }
 }
@@ -605,6 +777,43 @@ private fun CategoryRow(
 @Composable
 private fun PreviewSummary() {
     BuckwheatTheme {
+        val previewSpends = listOf(
+            Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("5200"),
+                date = LocalDate.of(2026, 7, 2).toDate(),
+                comment = "rent",
+                category = "BILLS",
+            ),
+            Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("1200"),
+                date = LocalDate.of(2026, 7, 5).toDate(),
+                comment = "groceries",
+                category = "FOOD",
+            ),
+            Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("300"),
+                date = LocalDate.of(2026, 7, 5).toDate(),
+                comment = "bus ticket",
+                category = "TRANSPORT",
+            ),
+            Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("800"),
+                date = LocalDate.of(2026, 7, 20).toDate(),
+                comment = "movie",
+                category = "ENTERTAINMENT",
+            ),
+            Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("200"),
+                date = LocalDate.of(2026, 7, 12).toDate(),
+                comment = "coffee",
+                category = "FOOD",
+            ),
+        )
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
@@ -616,44 +825,9 @@ private fun PreviewSummary() {
                     finishDate = LocalDate.of(2026, 7, 31).toDate(),
                     actualFinishDate = null,
                     budget = BigDecimal("15000"),
-                    spends = listOf(
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = BigDecimal("5200"),
-                            date = LocalDate.of(2026, 7, 2).toDate(),
-                            comment = "rent",
-                            category = "BILLS",
-                        ),
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = BigDecimal("1200"),
-                            date = LocalDate.of(2026, 7, 5).toDate(),
-                            comment = "groceries",
-                            category = "FOOD",
-                        ),
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = BigDecimal("300"),
-                            date = LocalDate.of(2026, 7, 5).toDate(),
-                            comment = "bus ticket",
-                            category = "TRANSPORT",
-                        ),
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = BigDecimal("800"),
-                            date = LocalDate.of(2026, 7, 20).toDate(),
-                            comment = "movie",
-                            category = "ENTERTAINMENT",
-                        ),
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = BigDecimal("200"),
-                            date = LocalDate.of(2026, 7, 12).toDate(),
-                            comment = "coffee",
-                            category = "FOOD",
-                        ),
-                    ),
+                    spends = previewSpends,
                 ),
+                spends = previewSpends,
                 currency = ExtendCurrency.getInstance("INR"),
             )
         }

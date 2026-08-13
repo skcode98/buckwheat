@@ -75,6 +75,7 @@ fun PeriodDetailSheet(
                 val selectedPeriod = period
                 if (selectedPeriod != null) {
                     val spends = transactions.filter { it.type == TransactionType.SPENT }
+                    val summarySpends = spends.map { it.toTransaction() }
                     val currency = ExtendCurrency.getInstance(selectedPeriod.currencyCode)
 
                     item {
@@ -84,8 +85,9 @@ fun PeriodDetailSheet(
                                 finishDate = selectedPeriod.finishDate,
                                 actualFinishDate = selectedPeriod.actualFinishDate,
                                 budget = selectedPeriod.budget,
-                                spends = spends.map { it.toTransaction() },
+                                spends = summarySpends,
                             ),
+                            spends = summarySpends,
                             currency = currency,
                             categoryEmojis = categoryEmojis,
                         )
