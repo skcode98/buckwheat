@@ -324,6 +324,14 @@
   <string name="past_periods_date_range">%1$s — %2$s</string>
   <string name="past_periods_imported">Imported</string>
   <string name="period_detail_title">Period Details</string>
+  <string name="period_summary_card_title">Period summary</string>
+  <string name="period_summary_utilized">%1$s%% of budget used</string>
+  <string name="period_summary_left">Left: %1$s</string>
+  <string name="period_summary_started">Started</string>
+  <string name="period_summary_ended">Ended</string>
+  <string name="period_summary_spends_count">Total spends</string>
+  <string name="period_summary_no_spend_days">Days with no spending</string>
+  <string name="period_summary_biggest_day">Biggest day</string>
   <string name="over_budget_amount">Over by %1$s</string>
   <string name="import_csv">Import from CSV</string>
   <string name="import_csv_success">Transactions imported</string>

@@ -1,10 +1,21 @@
 package com.danilkinkin.buckwheat.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,23 +25,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
-import com.danilkinkin.buckwheat.analytics.MinMaxSpentCard
-import com.danilkinkin.buckwheat.analytics.SpendsCountCard
-import com.danilkinkin.buckwheat.analytics.SpendsTrendCard
-import com.danilkinkin.buckwheat.analytics.SpendsWeekdayCard
-import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
-import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
-import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
 import com.danilkinkin.buckwheat.base.Divider
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
-import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.util.Date
+import com.danilkinkin.buckwheat.util.numberFormat
+import com.danilkinkin.buckwheat.util.prettyDate
 
 @Composable
 fun PeriodDetailSheet(
@@ -41,7 +43,6 @@ fun PeriodDetailSheet(
     val context = LocalContext.current
     val period by archivesViewModel.selectedPeriod.observeAsState(null)
     val transactions by archivesViewModel.selectedPeriodTransactions.observeAsState(emptyList())
-    val periods by archivesViewModel.periods.observeAsState(emptyList())
     val allCategories by categoriesManagementViewModel.allCategories.observeAsState(emptyList())
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
@@ -71,134 +72,24 @@ fun PeriodDetailSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 16.dp),
             ) {
-                if (period != null) {
+                val selectedPeriod = period
+                if (selectedPeriod != null) {
                     val spends = transactions.filter { it.type == TransactionType.SPENT }
-                    val currency = ExtendCurrency.getInstance(period!!.currencyCode)
+                    val currency = ExtendCurrency.getInstance(selectedPeriod.currencyCode)
 
-                    if (!period!!.isImported) {
-                        item {
-                            WholeBudgetCard(
-                                modifier = Modifier.height(IntrinsicSize.Min),
-                                budget = period!!.budget,
-                                currency = currency,
-                                startDate = period!!.startDate,
-                                finishDate = period!!.finishDate,
-                                actualFinishDate = period!!.actualFinishDate,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-
-                        if (spends.isNotEmpty()) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(IntrinsicSize.Min),
-                                ) {
-                                    SpentAndRestCard(
-                                        modifier = Modifier.weight(1f),
-                                        spent = period!!.totalSpent,
-                                        budget = period!!.budget,
-                                        currency = currency,
-                                    )
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    DaysCountCard(
-                                        startDate = period!!.startDate,
-                                        finishDate = period!!.actualFinishDate ?: period!!.finishDate,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(IntrinsicSize.Min),
-                                ) {
-                                    MinMaxSpentCard(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight(),
-                                        isMin = true,
-                                        spends = spends.map { it.toTransaction() },
-                                        currency = currency,
-                                    )
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    MinMaxSpentCard(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight(),
-                                        isMin = false,
-                                        spends = spends.map { it.toTransaction() },
-                                        currency = currency,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-
-                            item {
-                                SpendsCountCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    count = spends.size,
-                                )
-                                Spacer(modifier = Modifier.height(24.dp))
-                            }
-                        }
-                    } else {
-                        item {
-                            Text(
-                                text = stringResource(
-                                    R.string.past_periods_date_range,
-                                    com.danilkinkin.buckwheat.util.prettyDate(period!!.startDate, pattern = "dd MMM"),
-                                    com.danilkinkin.buckwheat.util.prettyDate(period!!.finishDate, pattern = "dd MMM yyyy"),
-                                ),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    if (spends.isNotEmpty()) {
-                        item {
-                            SpendCategoriesCard(
-                                modifier = Modifier.fillMaxWidth(),
+                    item {
+                        PeriodSummaryCard(
+                            summary = buildPeriodSummary(
+                                startDate = selectedPeriod.startDate,
+                                finishDate = selectedPeriod.finishDate,
+                                actualFinishDate = selectedPeriod.actualFinishDate,
+                                budget = selectedPeriod.budget,
                                 spends = spends.map { it.toTransaction() },
-                                currency = currency,
-                                categoryEmojis = categoryEmojis,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                        item {
-                            CategoriesChartCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                spends = spends.map { it.toTransaction() },
-                                currency = currency,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                        item {
-                            SpendsTrendCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                spends = spends.map { it.toTransaction() },
-                                startDate = period!!.startDate,
-                                finishDate = period!!.finishDate,
-                                currency = currency,
-                                periods = periods,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                        item {
-                            SpendsWeekdayCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                spends = spends.map { it.toTransaction() },
-                                startDate = period!!.startDate,
-                                finishDate = period!!.finishDate,
-                                currency = currency,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
+                            ),
+                            currency = currency,
+                            categoryEmojis = categoryEmojis,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
                     items(transactions) { tx ->
@@ -210,91 +101,6 @@ fun PeriodDetailSheet(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SpentAndRestCard(
-    modifier: Modifier = Modifier,
-    spent: BigDecimal,
-    budget: BigDecimal,
-    currency: ExtendCurrency,
-) {
-    val context = LocalContext.current
-    val restBudget = budget - spent
-    val restPercent = if (budget > BigDecimal.ZERO) {
-        restBudget.multiply(BigDecimal(100)).divide(budget, 0, RoundingMode.HALF_UP)
-    } else {
-        BigDecimal.ZERO
-    }
-    val indicatorColor = when {
-        restPercent < BigDecimal.ZERO -> MaterialTheme.colorScheme.error
-        restPercent < BigDecimal(20) -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
-    Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.spent_budget),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            )
-            Text(
-                text = com.danilkinkin.buckwheat.util.numberFormat(context, spent, currency = currency),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.rest_budget),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            )
-            Text(
-                text = com.danilkinkin.buckwheat.util.numberFormat(
-                    context,
-                    restBudget,
-                    currency = currency,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                color = indicatorColor,
-            )
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { (spent.toFloat() / budget.toFloat()).coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp),
-                color = indicatorColor,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DaysCountCard(
-    startDate: Date,
-    finishDate: Date,
-) {
-    val days = com.danilkinkin.buckwheat.util.countDays(finishDate, startDate)
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = days.toString(),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = MaterialTheme.typography.titleLarge.fontSize
-                ),
-            )
-            Text(
-                text = stringResource(R.string.days_left),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            )
         }
     }
 }
@@ -313,7 +119,7 @@ private fun ArchivedTransactionItem(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = com.danilkinkin.buckwheat.util.prettyDate(transaction.date),
+                text = prettyDate(transaction.date),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
@@ -325,7 +131,7 @@ private fun ArchivedTransactionItem(
             }
         }
         Text(
-            text = com.danilkinkin.buckwheat.util.numberFormat(
+            text = numberFormat(
                 context,
                 transaction.value,
                 currency = currency,
