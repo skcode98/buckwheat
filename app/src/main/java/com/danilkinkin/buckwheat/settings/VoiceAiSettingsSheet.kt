@@ -248,7 +248,13 @@ fun VoiceAiSettingsSheet(
                             testResult = testStates[provider],
                             onTest = { runTest(p) },
                             freeModels = freeModels[provider].orEmpty(),
-                            onRefreshFreeModels = { voiceAiSettingsViewModel.refreshFreeModels(p) },
+                            onRefreshFreeModels = {
+                                voiceAiSettingsViewModel.refreshFreeModels(
+                                    p,
+                                    apiKeys[p.id].orEmpty(),
+                                    providerUrls[p.id].orEmpty(),
+                                )
+                            },
                             onMoveUp = if (index > 0) {
                                 { moveProvider(provider, -1) }
                             } else {
@@ -396,6 +402,18 @@ private fun AiProviderCard(
                     expanded = modelDropdownExpanded,
                     onDismissRequest = { modelDropdownExpanded = false },
                 ) {
+                    if (freeModels.isEmpty()) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.ai_provider_no_models),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            },
+                            onClick = {},
+                            enabled = false,
+                        )
+                    }
                     freeModels.forEach { freeModel ->
                         DropdownMenuItem(
                             text = {

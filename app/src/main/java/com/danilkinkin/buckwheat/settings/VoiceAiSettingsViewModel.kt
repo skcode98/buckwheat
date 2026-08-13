@@ -1,21 +1,13 @@
 package com.danilkinkin.buckwheat.settings
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.ai.AiProvider
-import com.danilkinkin.buckwheat.ai.aiApiKeyStoreKey
-import com.danilkinkin.buckwheat.ai.aiProviderUrlStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
-import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -33,18 +25,18 @@ data class FreeModel(
 )
 
 @HiltViewModel
-class VoiceAiSettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
-) : ViewModel() {
+class VoiceAiSettingsViewModel @Inject constructor() : ViewModel() {
     private val _freeModels = MutableLiveData<Map<String, List<FreeModel>>>(emptyMap())
     val freeModels: LiveData<Map<String, List<FreeModel>>> = _freeModels
 
-    // The lists are fetched lazily per provider whenever the user opens a model dropdown, so the
-    // per-provider API key is available and the picks are never stale.
-    fun refreshFreeModels(provider: AiProvider) {
+    // The lists are fetched lazily per provider whenever the user opens a model dropdown, using the
+    // apiKey/providerUrl the sheet is currently editing (not the last-saved values) so the picks
+    // work before Save and reflect any in-progress changes.
+    fun refreshFreeModels(provider: AiProvider, apiKey: String, providerUrl: String) {
         viewModelScope.launch {
             _freeModels.value =
-                (_freeModels.value.orEmpty()) + (provider.id to loadFreeModels(context, provider))
+                (_freeModels.value.orEmpty()) +
+                    (provider.id to loadFreeModels(provider, apiKey, providerUrl))
         }
     }
 }
@@ -55,67 +47,73 @@ class VoiceAiSettingsViewModel @Inject constructor(
  * pricing). The other providers gate their model lists behind the same API key the user already
  * configured and don't publish pricing, so their whole list is offered — those providers run on
  * free/free-tier plans anyway. Gemini has no pricing in its listing either, so it is also offered
- * wholesale. Returns an empty list on any network/parse/auth failure so the sheet falls back to the
- * existing model text field and never hard-crashes on a flaky connection.
+ * wholesale. Blank apiKey/providerUrl fall back to the provider defaults (the sheet already applies
+ * them, this just guards the pure call). Returns an empty list on any network/parse/auth failure so
+ * the sheet falls back to the existing model text field and never hard-crashes on a flaky
+ * connection.
  */
-suspend fun loadFreeModels(context: Context, provider: AiProvider): List<FreeModel> =
-    withContext(Dispatchers.IO) {
-        val prefs = context.settingsDataStore.data.first()
-
-        var apiKey = prefs[aiApiKeyStoreKey(provider)].orEmpty()
-        if (apiKey.isBlank() && provider == AiProvider.OPENROUTER) {
-            apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        }
-        apiKey = apiKey.trim()
-
-        var providerUrl = prefs[aiProviderUrlStoreKey(provider)].orEmpty()
-        if (providerUrl.isBlank() && provider == AiProvider.OPENROUTER) {
-            providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty()
-        }
-
-        // Derive the models-list endpoint from the configured chat URL: chat-completions providers
-        // expose GET <base>/models, Gemini exposes GET <base> directly (the URL already ends in
-        // "/models" once the "{model}:generateContent" action is stripped).
-        val base = when (provider) {
-            AiProvider.GEMINI -> providerUrl
-                .removeSuffix(":generateContent")
-                .substringBefore("{model}")
-                .trimEnd('/')
-            else -> providerUrl.removeSuffix("/chat/completions").trimEnd('/')
-        }
-        if (base.isBlank()) return@withContext emptyList()
-        // Only OpenRouter's listing is public; the rest need the provider's own key.
-        if (provider != AiProvider.OPENROUTER && apiKey.isBlank()) return@withContext emptyList()
-
-        val modelsUrl = if (provider == AiProvider.GEMINI) base else "$base/models"
-        var connection: HttpURLConnection? = null
-        try {
-            val conn = (URL(modelsUrl).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                if (provider == AiProvider.GEMINI) {
-                    setRequestProperty("x-goog-api-key", apiKey)
-                } else if (apiKey.isNotBlank()) {
-                    setRequestProperty("Authorization", "Bearer $apiKey")
-                }
+suspend fun loadFreeModels(
+    provider: AiProvider,
+    apiKey: String,
+    providerUrl: String,
+): List<FreeModel> = withContext(Dispatchers.IO) {
+    val modelsUrl = modelsEndpoint(provider, apiKey, providerUrl)
+        ?: return@withContext emptyList()
+    var connection: HttpURLConnection? = null
+    try {
+        val key = apiKey.trim()
+        val conn = (URL(modelsUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            if (provider == AiProvider.GEMINI) {
+                setRequestProperty("x-goog-api-key", key)
+            } else if (key.isNotBlank()) {
+                setRequestProperty("Authorization", "Bearer $key")
             }
-            connection = conn
+        }
+        connection = conn
 
-            if (conn.responseCode !in 200..299) {
-                Log.d("VoiceAiSettings", "Free models fetch failed: HTTP ${conn.responseCode}")
-                return@withContext emptyList()
-            }
-
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            return@withContext parseFreeModels(provider, body)
-        } catch (e: Exception) {
-            Log.d("VoiceAiSettings", "Free models fetch failed", e)
+        if (conn.responseCode !in 200..299) {
+            Log.d("VoiceAiSettings", "Free models fetch failed: HTTP ${conn.responseCode}")
             return@withContext emptyList()
-        } finally {
-            connection?.disconnect()
         }
+
+        val body = conn.inputStream.bufferedReader().use { it.readText() }
+        return@withContext parseFreeModels(provider, body)
+    } catch (e: Exception) {
+        Log.d("VoiceAiSettings", "Free models fetch failed", e)
+        return@withContext emptyList()
+    } finally {
+        connection?.disconnect()
     }
+}
+
+// Derives the models-list endpoint from the configured chat URL, falling back to the provider
+// default for blank values: chat-completions providers expose GET <base>/models, Gemini exposes
+// GET <base> directly (the URL already ends in "/models" once the "{model}:generateContent" action
+// is stripped). Returns null when the URL is unusable or a non-OpenRouter key is missing (the
+// caller then shows the empty model list). Pure so it is trivially unit-testable.
+internal fun modelsEndpoint(
+    provider: AiProvider,
+    apiKey: String,
+    providerUrl: String,
+): String? {
+    val key = apiKey.trim()
+    val url = providerUrl.trim().ifBlank { provider.defaultUrl }
+
+    val base = when (provider) {
+        AiProvider.GEMINI -> url
+            .removeSuffix(":generateContent")
+            .substringBefore("{model}")
+            .trimEnd('/')
+        else -> url.removeSuffix("/chat/completions").trimEnd('/')
+    }
+    if (base.isBlank()) return null
+    // Only OpenRouter's listing is public; the rest need the provider's own key.
+    if (provider != AiProvider.OPENROUTER && key.isBlank()) return null
+    return if (provider == AiProvider.GEMINI) base else "$base/models"
+}
 
 private fun parseFreeModels(provider: AiProvider, body: String): List<FreeModel> =
     runCatching {
