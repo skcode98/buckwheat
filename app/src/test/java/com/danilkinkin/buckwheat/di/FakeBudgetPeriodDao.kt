@@ -54,6 +54,15 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return archivedTransactions.toList()
     }
 
+    override fun getArchivedUncategorizedCount(): LiveData<Int> {
+        return MutableLiveData(
+            archivedTransactions.count {
+                it.type == com.danilkinkin.buckwheat.data.entities.TransactionType.SPENT &&
+                    it.category.isNullOrBlank()
+            }
+        )
+    }
+
     override fun getAllArchived(): LiveData<List<ArchivedTransaction>> {
         return MutableLiveData(archivedTransactions.toList())
     }

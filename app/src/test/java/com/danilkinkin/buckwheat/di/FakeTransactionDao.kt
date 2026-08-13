@@ -33,6 +33,12 @@ class FakeTransactionDao : TransactionDao {
         return spends.toList()
     }
 
+    override fun getUncategorizedCount(): LiveData<Int> {
+        return MutableLiveData(
+            spends.count { it.type == TransactionType.SPENT && it.category.isNullOrBlank() }
+        )
+    }
+
     override suspend fun insert(vararg transaction: Transaction) {
         spends.addAll(transaction)
     }

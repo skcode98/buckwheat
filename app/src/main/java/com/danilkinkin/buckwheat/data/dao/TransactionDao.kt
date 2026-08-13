@@ -30,6 +30,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     suspend fun getAllNow(): List<Transaction>
 
+    @Query("SELECT COUNT(*) FROM transactions WHERE type = 'SPENT' AND (category IS NULL OR category = '')")
+    fun getUncategorizedCount(): LiveData<Int>
+
     @Insert
     suspend fun insert(vararg transaction: Transaction)
 

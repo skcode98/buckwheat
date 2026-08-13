@@ -35,6 +35,9 @@ interface BudgetPeriodDao {
     @Query("SELECT * FROM archived_transactions")
     suspend fun getAllArchivedNow(): List<ArchivedTransaction>
 
+    @Query("SELECT COUNT(*) FROM archived_transactions WHERE type = 'SPENT' AND (category IS NULL OR category = '')")
+    fun getArchivedUncategorizedCount(): LiveData<Int>
+
     @Query("SELECT * FROM archived_transactions ORDER BY date DESC")
     fun getAllArchived(): LiveData<List<ArchivedTransaction>>
 

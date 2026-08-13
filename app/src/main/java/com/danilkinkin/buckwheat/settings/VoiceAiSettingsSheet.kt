@@ -4,8 +4,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -13,11 +16,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +45,7 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
 import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
 import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
@@ -48,6 +54,8 @@ import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.ui.colorGood
+import com.danilkinkin.buckwheat.util.combineColors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -107,6 +115,7 @@ fun VoiceAiSettingsSheet(
                     .padding(bottom = navigationBarHeight)
             ) {
                 AiIntelligenceSetting()
+                CategoryAutoAssignSetting()
                 Text(
                     text = stringResource(R.string.voice_ai_optional),
                     style = MaterialTheme.typography.titleSmall,
@@ -228,5 +237,107 @@ fun VoiceAiSettingsSheet(
 private fun PreviewDefault() {
     BuckwheatTheme {
         VoiceAiSettingsSheet()
+    }
+}
+
+// Manual trigger for the shared background categorization pass: offline keywords first, then AI
+// for anything still uncategorized. Already-categorized spends are skipped (see CategoryAssigner).
+// The pass runs on an application-scoped coroutine so it keeps going after this sheet closes.
+@Composable
+private fun CategoryAutoAssignSetting(
+    spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel(),
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val isCategorizing by spendCategoriesViewModel.isCategorizing.observeAsState(false)
+    val uncategorizedCount by spendCategoriesViewModel.uncategorizedCount.observeAsState(0)
+
+    val iconTint = contentColorFor(
+        combineColors(
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.surfaceVariant,
+            angle = 0.3F,
+        )
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(64.dp)
+                    .padding(end = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_label),
+                    tint = iconTint,
+                    contentDescription = null,
+                )
+            }
+            Text(
+                text = stringResource(R.string.category_auto_run_title),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = {
+                    spendCategoriesViewModel.categorizeUncategorized()
+                    coroutineScope.launch {
+                        appViewModel.showSnackbar(context.getString(R.string.category_auto_started))
+                    }
+                },
+                enabled = !isCategorizing,
+            ) {
+                Text(
+                    text = if (isCategorizing) {
+                        stringResource(R.string.category_auto_running)
+                    } else {
+                        stringResource(R.string.category_auto_run)
+                    }
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.category_auto_run_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(start = 80.dp, end = 8.dp, bottom = 8.dp),
+        )
+        when {
+            isCategorizing -> {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 80.dp, end = 8.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            uncategorizedCount > 0 -> {
+                Text(
+                    text = stringResource(R.string.category_auto_pending, uncategorizedCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(start = 80.dp, end = 8.dp, bottom = 8.dp),
+                )
+            }
+            else -> {
+                Text(
+                    text = stringResource(R.string.category_auto_all_done),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorGood,
+                    modifier = Modifier.padding(start = 80.dp, end = 8.dp, bottom = 8.dp),
+                )
+            }
+        }
     }
 }

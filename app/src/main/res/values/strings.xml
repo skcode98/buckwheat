@@ -267,6 +267,13 @@
   <string name="category_auto">Auto</string>
   <string name="repeat_last_spend">Repeat last: %1$s %2$s</string>
   <string name="categories_refining">Refining with AI…</string>
+  <string name="category_auto_run_title">Auto-categorize spends</string>
+  <string name="category_auto_run_description">Assigns a category to every spend that doesn\'t have one — offline keywords first, then AI in the background. Spends already categorized are skipped.</string>
+  <string name="category_auto_run">Categorize</string>
+  <string name="category_auto_running">Categorizing…</string>
+  <string name="category_auto_all_done">All spends categorized</string>
+  <string name="category_auto_pending">%1$d spends need a category</string>
+  <string name="category_auto_started">Categorization started in the background</string>
   <string name="spends_calendar_hint">Chart show how much you spent every day relative to your daily budget</string>
   <string name="monthly_trend_title">Monthly trend</string>
   <string name="weekday_breakdown_title">Spend by day of week</string>
