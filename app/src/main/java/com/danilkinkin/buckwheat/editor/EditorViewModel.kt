@@ -46,21 +46,6 @@ class EditorViewModel @Inject constructor(
         stage.value = EditStage.CREATING_SPENT
     }
 
-    // Prefill the editor with a previous transaction so the user can re-add it with one more
-    // tap (the "repeat last spend" quick action). Uses today's date by default; the user can
-    // still change it via the date pill before committing.
-    fun startRepeatSpend(transaction: Transaction) {
-        currentSpent = transaction.value
-        currentDate = Date()
-        currentComment.value = transaction.comment
-        rawSpentValue.value = tryConvertStringToNumber(transaction.value.toString()).join(third = false)
-        currentCategory.value = transaction.category
-
-        editedTransaction = null
-        mode.value = EditMode.ADD
-        stage.value = EditStage.EDIT_SPENT
-    }
-
     fun modifyEditingSpent(value: BigDecimal) {
         currentSpent = value
 

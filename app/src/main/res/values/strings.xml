@@ -284,7 +284,6 @@
   <string name="category_travel">Travel</string>
   <string name="category_other">Other</string>
   <string name="category_auto">Auto</string>
-  <string name="repeat_last_spend">Repeat last: %1$s %2$s</string>
   <string name="categories_refining">Refining with AI…</string>
   <string name="category_auto_run_title">Auto-categorize spends</string>
   <string name="category_auto_run_description">Assigns a category to every spend that doesn\'t have one — offline keywords first, then AI in the background. Spends already categorized are skipped.</string>
