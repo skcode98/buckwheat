@@ -1,7 +1,6 @@
 package com.danilkinkin.buckwheat.editor.category
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,21 +56,17 @@ fun CategorySelector(
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .height(36.dp)
+                .clip(CircleShape)
+                .clickable {
+                    appViewModel.openSheet(PathState(CATEGORY_SELECTOR_SHEET))
+                },
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .height(36.dp)
-                    .clip(CircleShape)
-                    .clickable {
-                        appViewModel.openSheet(PathState(CATEGORY_SELECTOR_SHEET))
-                    },
-            ) {
             Row(
                 modifier = Modifier.padding(start = 12.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -99,7 +94,6 @@ fun CategorySelector(
                     painter = painterResource(R.drawable.ic_arrow_down),
                     contentDescription = null,
                 )
-            }
             }
         }
     }
