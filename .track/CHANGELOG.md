@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-13 (late) — Editor: category pill left + tag row right + 8dp gap
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (**264 tests, 0 failures**); committed `f0539ee`, pushed. User clarification after the right-align fix: category dropdown should stay LEFT, tag row should be RIGHT, and there must be at least ~1–2 mm of separation between the category pill and the tag row. `editor/category/CategorySelector.kt` reverted to its left-aligned pill (plain Surface in the padded Box, no Arrangement wrapper). `editor/tagging/TaggingToolbar.kt` stays right-aligned (`Arrangement.End`) — the previous session's End→Start revert undone. `editor/Editor.kt` gained `Spacer(Modifier.height(8.dp))` (~2mm) between `TaggingToolbar` and `CategorySelector`.
+
 ## 2026-08-13 (late) — Editor: category pill aligned with tag row
 
 `compileDebugKotlin` + full `testDebugUnitTest` green (**264 tests, 0 failures**); committed (see log), pushed. User: "the space between the tag row and category dropdown in editor is alignment issue". The tag row (`editor/tagging/TaggingToolbar.kt`) and the date/time pills (`editor/dateTimeEdit/DateTimeEditPill.kt`) are right-aligned (`Arrangement.End`), but the collapsed category pill (`editor/category/CategorySelector.kt`) was left-aligned inside its 24dp-padded Box — leaving an awkward gap between the tag row and the category pill. Fixed by wrapping the pill in a `Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End)` so it right-aligns with the tag row. Spotless auto-format applied.
