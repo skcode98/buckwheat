@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.data.categories
 
 import java.math.BigDecimal
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -143,8 +142,31 @@ class CategoryAutoAssignTest {
         assertEquals(BigDecimal("15000.00"), sum(caps))
         assertTrue(caps.keys.contains(SpendCategory.FOOD.name))
         assertTrue(caps.keys.contains(SpendCategory.HEALTH.name))
-        // No spend history -> no cap from the proportional split.
-        assertFalse(caps.keys.contains("SHOPPING"))
+        // No spend history -> category still receives the mean requirement share so the
+        // Auto-assign button never leaves a category empty.
+        assertTrue(caps.keys.contains("SHOPPING"))
+        // FOOD 6000 of 10666.67 requirement -> 8437.50; SHOPPING gets the mean (2666.67) share.
+        assertEquals(BigDecimal("8437.50"), caps[SpendCategory.FOOD.name])
+        assertEquals(BigDecimal("3750.00"), caps["SHOPPING"])
+    }
+
+    @Test
+    fun autoAssignGivesNoHistoryCategoriesTheMeanShare() {
+        val caps = autoAssignCategoryCaps(
+            budget = BigDecimal("15000"),
+            categories = listOf("FOOD", "TRANSPORT", "SHOPPING"),
+            periods = listOf(
+                listOf(builtIn(SpendCategory.FOOD, "6000"), builtIn(SpendCategory.TRANSPORT, "2000")),
+            ),
+        )
+
+        assertEquals(BigDecimal("15000.00"), sum(caps))
+        assertEquals(BigDecimal("7500.00"), caps[SpendCategory.FOOD.name])
+        // SHOPPING has no history -> gets the mean of the existing averages (4000 of 12000);
+        // 1/3 at scale 8 rounds to 0.33333333 so the floored share is 4999.99 and the last
+        // category absorbs the 0.01 remainder.
+        assertEquals(BigDecimal("2500.01"), caps[SpendCategory.TRANSPORT.name])
+        assertEquals(BigDecimal("4999.99"), caps["SHOPPING"])
     }
 
     @Test
@@ -169,5 +191,44 @@ class CategoryAutoAssignTest {
             emptyMap<String, BigDecimal>(),
             autoAssignCategoryCaps(BigDecimal("100"), emptyList(), emptyList()),
         )
+    }
+
+    @Test
+    fun requirementPeriodsPrefersArchivedOverPartialCurrent() {
+        val current = listOf(builtIn(SpendCategory.FOOD, "800"))
+        val archived = listOf(
+            listOf(builtIn(SpendCategory.FOOD, "6000")),
+            listOf(builtIn(SpendCategory.FOOD, "6000")),
+        )
+
+        assertEquals(archived, requirementPeriods(current, archived))
+    }
+
+    @Test
+    fun requirementPeriodsFallsBackToCurrentWhenNoArchived() {
+        val current = listOf(builtIn(SpendCategory.FOOD, "800"))
+
+        assertEquals(listOf(current), requirementPeriods(current, emptyList()))
+        assertTrue(requirementPeriods(emptyList(), emptyList()).isEmpty())
+    }
+
+    @Test
+    fun requirementPeriodsNeverDilutesWithPartialMonth() {
+        // Partial current month (10/30 days) must not halve FOOD's requirement when a full
+        // archived month exists: 6000, not (6000 + 2000)/2.
+        val caps = autoAssignCategoryCaps(
+            budget = BigDecimal("15000"),
+            categories = listOf("FOOD", "TRANSPORT"),
+            periods = requirementPeriods(
+                currentPeriod = listOf(builtIn(SpendCategory.FOOD, "2000")),
+                archivedPeriods = listOf(
+                    listOf(builtIn(SpendCategory.FOOD, "6000"), builtIn(SpendCategory.TRANSPORT, "3000")),
+                ),
+            ),
+        )
+
+        assertEquals(BigDecimal("15000.00"), sum(caps))
+        assertEquals(BigDecimal("10000.00"), caps[SpendCategory.FOOD.name])
+        assertEquals(BigDecimal("5000.00"), caps[SpendCategory.TRANSPORT.name])
     }
 }

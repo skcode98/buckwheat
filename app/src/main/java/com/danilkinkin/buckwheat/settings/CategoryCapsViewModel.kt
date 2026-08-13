@@ -9,6 +9,7 @@ import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.autoAssignCategoryCaps
 import com.danilkinkin.buckwheat.data.categories.categoryTotals
+import com.danilkinkin.buckwheat.data.categories.requirementPeriods
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
@@ -47,9 +48,10 @@ class CategoryCapsViewModel @Inject constructor(
     }
 
     // Divides the current budget across all categories by their typical monthly spend
-    // (averaged over the current period + archived periods); with no history yet the budget
-    // is split evenly. Replaces every cap so the user starts from the allocation and can
-    // reassign per category afterwards.
+    // (averaged over completed periods; the current period is only used when there is no
+    // archived history so a half-finished month never dilutes the requirement); categories
+    // with no history get the mean requirement so every category receives a cap. Replaces
+    // every cap so the user starts from the allocation and can reassign per category.
     fun autoAssignBudget(categories: List<String>) {
         viewModelScope.launch {
             val prefs = context.budgetDataStore.data.first()
@@ -66,16 +68,18 @@ class CategoryCapsViewModel @Inject constructor(
                         (!tx.date.before(start) && !tx.date.after(finish))
                 }
 
-            val periods = mutableListOf<List<Pair<CategoryKey, BigDecimal>>>()
-            periods += categoryTotals(currentSpends)
-            budgetPeriodDao.getAllArchivedNow()
+            val archived = budgetPeriodDao.getAllArchivedNow()
                 .filter { it.type == TransactionType.SPENT }
                 .groupBy { it.periodId }
                 .values
-                .forEach { group -> periods += categoryTotals(group.map { it.toTransaction() }) }
+                .map { group -> categoryTotals(group.map { it.toTransaction() }) }
 
             settingsRepository.setCategoryCaps(
-                autoAssignCategoryCaps(budget, categories, periods)
+                autoAssignCategoryCaps(
+                    budget = budget,
+                    categories = categories,
+                    periods = requirementPeriods(categoryTotals(currentSpends), archived),
+                )
             )
         }
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-13 (late) — Category cap auto-assign FIXED: every category gets a cap + completed periods only
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**292 tests, 0 failures**); committed + pushed. User: "the category cap auto assignment have issues i think as its not correctly assign the amount and divided correctly according to category". Review found two real bugs in `data/categories/CategoryAutoAssign.kt` + `settings/CategoryCapsViewModel.kt`:
+
+- **Bug 1 — categories with no spend history got NO cap.** `autoAssignCategoryCaps` → `allocateBudgetByRequirement` only divided the budget among categories present in the history averages, so any new/quiet category showed an empty cap field while the button promises a split "across all categories". **Fix**: `autoAssignCategoryCaps` now treats a no-history category as having the **mean requirement** (average of the existing per-category averages, scale 4 HALF_UP) so every category receives a cap and the caps still sum exactly to the budget (existing floor + last-absorbs-remainder math unchanged). `evenlySplitBudget` still used when there is no history at all.
+- **Bug 2 — the partial current period diluted the monthly requirement.** `autoAssignBudget` fed `[current-partial totals] + archived periods` into `averageCategorySpend`, so e.g. 10 days into a 30-day month counted as a full month and understated every category's share. **Fix**: new pure `requirementPeriods(currentPeriod, archivedPeriods)` — completed (archived) periods are the requirement basis whenever any exist; the current period is only used when there is no archived history (proportions are scale-invariant, so the fallback split stays sensible). `CategoryCapsViewModel.autoAssignBudget` now calls it.
+- **Tests**: updated `autoAssignUsesHistoryWhenPresent` (SHOPPING now gets a cap — the old assertion encoded the bug) + 3 new cases (no-history mean share incl. exact floor/remainder values 4999.99/2500.01, archived-over-current preference, partial-month non-dilution) → 17 CategoryAutoAssignTest cases. NOTE: `0.33333333 × 15000 = 4999.99995` floors to `4999.99` and the last sorted category absorbs the cent.
+
 ## 2026-08-13 (late) — AI provider/model audit: live defaults + hardened request/response parsing
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**288 tests, 0 failures**); committed + pushed. User: "Make sure the input and output to all the models and providers should match to our requirement". Web-audited every provider's current API and fixed what was dead or mismatched, and made the router tolerant of real-world envelope variants.

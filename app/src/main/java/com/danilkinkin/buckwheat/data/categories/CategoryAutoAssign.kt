@@ -91,9 +91,10 @@ fun allocateBudgetByRequirement(
 }
 
 // The full new caps map for the Auto-assign button. Each category gets its share of `budget`
-// proportional to its typical monthly spend; with no spend history yet the budget is split
-// evenly. The result replaces the existing caps so the user starts from the allocation and
-// can reassign per category.
+// proportional to its typical monthly spend; a category with no spend history is treated as
+// having the mean requirement so every category still receives a cap (nothing is left empty),
+// and with no spend history at all the budget is split evenly. The result replaces the
+// existing caps so the user starts from the allocation and can reassign per category.
 fun autoAssignCategoryCaps(
     budget: BigDecimal,
     categories: List<String>,
@@ -101,9 +102,27 @@ fun autoAssignCategoryCaps(
 ): Map<String, BigDecimal> {
     if (budget <= BigDecimal.ZERO || categories.isEmpty()) return emptyMap()
     val averages = averageCategorySpend(periods)
-    return if (averages.isEmpty()) {
-        evenlySplitBudget(budget, categories)
-    } else {
-        allocateBudgetByRequirement(budget, averages)
+    if (averages.isEmpty()) return evenlySplitBudget(budget, categories)
+
+    val fallbackAverage = averages.values
+        .fold(BigDecimal.ZERO) { acc, value -> acc + value }
+        .divide(averages.size.toBigDecimal(), 4, RoundingMode.HALF_UP)
+    val effective = categories.distinct().sorted().associateWith { name ->
+        averages[name] ?: fallbackAverage
     }
+    return allocateBudgetByRequirement(budget, effective)
 }
+
+// The requirement basis for the Auto-assign button: completed (archived) periods only when any
+// exist, so a half-finished current month never dilutes the monthly requirement; the current
+// (possibly partial) period is only used as the basis when there is no completed history yet.
+// Pure so it is trivially unit-testable.
+fun requirementPeriods(
+    currentPeriod: List<Pair<CategoryKey, BigDecimal>>,
+    archivedPeriods: List<List<Pair<CategoryKey, BigDecimal>>>,
+): List<List<Pair<CategoryKey, BigDecimal>>> =
+    if (archivedPeriods.isNotEmpty()) {
+        archivedPeriods
+    } else {
+        listOf(currentPeriod).filter { it.isNotEmpty() }
+    }
