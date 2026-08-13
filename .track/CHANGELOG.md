@@ -2,7 +2,7 @@
 
 ## 2026-08-13 (late) — Multi-period month-over-month trend chart (backlog Tier 1 #4)
 
-`compileDebugKotlin` + full `testDebugUnitTest` green (**244 tests, 0 failures**); commit + push following.
+`compileDebugKotlin` + full `testDebugUnitTest` green (**244 tests, 0 failures**); committed `e56bf95`, pushed.
 
 - **Pure engine**: new `analytics/MultiPeriodTrend.kt` — `MultiPeriodPoint(label, spent, budget, isCurrent)` + `multiPeriodTotals(periods, currentBudget, currentSpent, currentStart)` combining archived `BudgetPeriod`s (oldest-first, skipping periods with zero spent AND zero budget) with the in-progress current period as the final point. Labels are "MMM" ("Aug"); when the span crosses calendar years they include the year ("Aug '26") so points stay unambiguous.
 - **Chart card**: new `analytics/MultiPeriodTrendCard.kt` — header shows total spent across all shown periods, a legend ("Spent" green / "Budget" muted ghost bar), per-slot Canvas bars with a muted budget bar behind the colored spent bar (green within budget, amber ≥80%, red over), period labels underneath (current period bold + primary), and a tap caption "{label} · ₹X of ₹Y (N% of budget)" / "… over budget by ₹Z" / "₹X" for imported buckets.
