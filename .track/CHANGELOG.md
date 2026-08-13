@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-13 (late) — Manual "Auto-categorize spends" button in AI settings
+
+`compileDebugKotlin` + full `testDebugUnitTest` green; committed `a9e5e01`, pushed.
+
+- **`settings/VoiceAiSettingsSheet.kt`**: new `CategoryAutoAssignSetting` row under the AI Intelligence master toggle — `ic_label` icon, "Auto-categorize spends" title, a **Categorize** button that triggers the shared background categorization pass (`SpendCategoriesViewModel.categorizeUncategorized()` → `CategoryAssignmentScheduler.schedule()` → `CategoryAssigner.assignToUncategorized()`). Runs offline keywords first, then the AI model, **skips spends that already have a category** (active `transactions` + `archived_transactions`), all on an application-scoped background coroutine so it survives the sheet closing. Button is disabled while a pass is running (label switches to "Categorizing…" + indeterminate `LinearProgressIndicator`); status line below shows "All spends categorized" (green) or "N spends need a category".
+- **`data/dao/TransactionDao.kt`** / **`data/dao/BudgetPeriodDao.kt`**: new reactive `getUncategorizedCount()` / `getArchivedUncategorizedCount()` (`SELECT COUNT(*) ... WHERE type = 'SPENT' AND (category IS NULL OR category = '')`) so the status is always live.
+- **`data/categories/SpendCategoriesViewModel.kt`**: injected both DAOs, `uncategorizedCount` = `MediatorLiveData` summing the two reactive counts.
+- **`strings.xml`**: `category_auto_run_title/description/run/running/all_done/pending/started`.
+- **Tests**: `FakeTransactionDao`/`FakeBudgetPeriodDao` implement the new count queries.
+
 ## 2026-08-13 (afternoon) — Upstream PR-157 progress cards for past periods; analytics calendar heatmap sync
 
 `compileDebugKotlin` + full `testDebugUnitTest` green for both batches; pushed to `origin master`.
