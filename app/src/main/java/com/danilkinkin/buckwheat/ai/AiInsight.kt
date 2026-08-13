@@ -1,33 +1,13 @@
 package com.danilkinkin.buckwheat.ai
 
 import android.content.Context
-import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
-import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
-import com.danilkinkin.buckwheat.di.aiIntelligenceEnabled
-import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
-import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
-import com.danilkinkin.buckwheat.keyboard.extractModelContent
-import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.roundToDay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-
-private const val CONNECT_TIMEOUT_MS = 10_000
-private const val READ_TIMEOUT_MS = 20_000
 
 // One category's share of the period spend, as fed to the AI report.
 data class CategorySpendInsight(
@@ -282,80 +262,26 @@ internal fun overspendDayCount(
         .count { (_, values) -> values.fold(BigDecimal.ZERO) { acc, value -> acc + value } > dailyBudget }
 }
 
-// Generates an AI spending analysis for the current period. Network access is bounded (10s
-// connect / 20s read), the socket is always disconnected, and failures carry a human-readable
-// reason. When the AI Intelligence master toggle is off or no API key is saved the caller sees
-// NotConfigured and renders the setup hint instead.
+// Generates an AI spending analysis for the current period through the shared provider router
+// (which tries the configured providers in fallback order with bounded timeouts). When the AI
+// Intelligence master toggle is off or no valid provider key is saved the caller sees
+// NotConfigured and renders the setup hint instead; failures carry a human-readable reason.
 suspend fun generateAiInsight(
     context: Context,
     summary: SpendInsightSummary,
-): AiInsightResult = withContext(Dispatchers.IO) {
-    val prefs = context.settingsDataStore.data.first()
-    val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-    if (!aiIntelligenceEnabled(prefs) || apiKey.isBlank()) {
-        return@withContext AiInsightResult.NotConfigured
-    }
-
-    val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
-        DEFAULT_VOICE_AI_PROVIDER_URL
-    }
-    val model = normalizeVoiceAiModel(prefs[voiceAiModelStoreKey])
-        ?.takeIf { it.isNotBlank() }
-        ?: DEFAULT_VOICE_AI_MODEL
-
-    var connection: HttpURLConnection? = null
-    try {
-        val requestBody = JSONObject()
-            .put("model", model)
-            .put("temperature", 0)
-            .put(
-                "messages",
-                JSONArray()
-                    .put(
-                        JSONObject()
-                            .put("role", "system")
-                            .put("content", buildAiInsightSystemPrompt())
-                    )
-                    .put(
-                        JSONObject()
-                            .put("role", "user")
-                            .put("content", buildAiInsightUserPrompt(summary))
-                    )
-            )
-            .toString()
-
-        val url = URL(providerUrl)
-        val conn = url.openConnection() as HttpURLConnection
-        connection = conn
-        conn.requestMethod = "POST"
-        conn.connectTimeout = CONNECT_TIMEOUT_MS
-        conn.readTimeout = READ_TIMEOUT_MS
-        conn.setRequestProperty("Content-Type", "application/json")
-        conn.setRequestProperty("Authorization", "Bearer $apiKey")
-        conn.doOutput = true
-
-        OutputStreamWriter(conn.outputStream).use { writer ->
-            writer.write(requestBody)
-            writer.flush()
-        }
-
-        if (conn.responseCode !in 200..299) {
-            val errorBody = runCatching {
-                conn.errorStream?.bufferedReader()?.use { it.readText() }
-            }.getOrNull().orEmpty().trim().take(200)
-            val suffix = if (errorBody.isNotEmpty()) " — $errorBody" else ""
-            return@withContext AiInsightResult.Failure("HTTP ${conn.responseCode}$suffix")
-        }
-
-        val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-        val report = parseAiInsightReport(extractModelContent(responseText))
+): AiInsightResult = when (val result = callAi(
+    context = context,
+    systemPrompt = buildAiInsightSystemPrompt(),
+    userPrompt = buildAiInsightUserPrompt(summary),
+)) {
+    is AiRouterResult.Success -> {
+        val report = parseAiInsightReport(result.text)
         if (report.isEmpty()) {
-            return@withContext AiInsightResult.Failure("response contained no analysis")
+            AiInsightResult.Failure("response contained no analysis")
+        } else {
+            AiInsightResult.Success(report)
         }
-        AiInsightResult.Success(report)
-    } catch (e: Exception) {
-        AiInsightResult.Failure(e.message ?: e.javaClass.simpleName)
-    } finally {
-        connection?.disconnect()
     }
+    is AiRouterResult.Failure -> AiInsightResult.Failure(result.message)
+    AiRouterResult.NotConfigured -> AiInsightResult.NotConfigured
 }

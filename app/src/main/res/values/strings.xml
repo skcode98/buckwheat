@@ -70,6 +70,15 @@
   <string name="voice_ai_test_success">Connected — %1$s</string>
   <string name="voice_ai_test_failed">Connection failed: %1$s</string>
   <string name="voice_ai_invalid_url">Provider URL must start with http:// or https://</string>
+  <string name="ai_engine_title">AI engine</string>
+  <string name="ai_providers_title">Providers (first that responds wins)</string>
+  <string name="ai_provider_key_not_set">Key not set</string>
+  <string name="ai_provider_key_valid">Key looks valid</string>
+  <string name="ai_provider_key_invalid">Key looks invalid</string>
+  <string name="ai_provider_invalid_key_hint">Fix the API keys before saving</string>
+  <string name="ai_provider_invalid_url_hint">Provider URLs must start with http:// or https://</string>
+  <string name="ai_provider_move_up">Move provider up in fallback order</string>
+  <string name="ai_provider_move_down">Move provider down in fallback order</string>
   <string name="daily_reminder_title">Daily budget reminder</string>
   <string name="daily_reminder_time">Reminder time</string>
   <string name="daily_reminder_schedule_format">Every day at %1$s</string>

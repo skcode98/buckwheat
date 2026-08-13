@@ -122,8 +122,9 @@ class BackupRepository @Inject constructor(
 private fun Preferences.asBackupMap(): Map<String, BackupValue> {
     val result = LinkedHashMap<String, BackupValue>()
     asMap().forEach { (key, value) ->
-        // Never persist the Voice-AI API key into a backup file (plaintext secret).
-        if (key.name == voiceAiApiKeyStoreKey.name) return@forEach
+        // Never persist AI API keys into a backup file (plaintext secrets). Covers both the
+        // legacy voiceAiApiKey key and every per-provider "ai.<provider>.apiKey" key.
+        if (key.name == voiceAiApiKeyStoreKey.name || key.name.endsWith(".apiKey")) return@forEach
         when (value) {
             is Boolean -> result[key.name] = BackupValue.Bool(value)
             is Int -> result[key.name] = BackupValue.IntValue(value)

@@ -2,31 +2,17 @@ package com.danilkinkin.buckwheat.data.categories
 
 import android.content.Context
 import android.util.Log
+import com.danilkinkin.buckwheat.ai.AiRouterResult
+import com.danilkinkin.buckwheat.ai.callAi
 import com.danilkinkin.buckwheat.data.entities.Transaction
-import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_MODEL
-import com.danilkinkin.buckwheat.di.DEFAULT_VOICE_AI_PROVIDER_URL
-import com.danilkinkin.buckwheat.di.aiIntelligenceEnabled
-import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
-import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.keyboard.extractJsonContent
 import com.danilkinkin.buckwheat.keyboard.extractModelContent
-import com.danilkinkin.buckwheat.settingsDataStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.math.BigDecimal
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
 import java.util.regex.Pattern
 
 private const val CATEGORY_BATCH_SIZE = 60
-private const val CATEGORY_CONNECT_TIMEOUT_MS = 10_000
-private const val CATEGORY_READ_TIMEOUT_MS = 20_000
 
 // Whole-word keyword match so a short keyword like "eat" never matches "great". Built once
 // and immutable so it is safe to share across threads.
@@ -96,114 +82,47 @@ fun categoryTotals(spends: List<Transaction>): List<Pair<CategoryKey, BigDecimal
 fun transactionMatchesCategory(transaction: Transaction, key: CategoryKey): Boolean =
     categoryKey(transaction) == key
 
-// Batch-assigns categories to uncategorized spends via the configured OpenAI-compatible
-// provider (the same settings as Voice AI). Returns an empty map when the AI Intelligence
-// master toggle is off, no API key is saved, the call fails, or nothing could be parsed —
-// the offline keyword classifier then stands in.
+// Batch-assigns categories to uncategorized spends through the shared provider router (same
+// engine as Voice AI and the monthly insight). Returns an empty map when the AI Intelligence
+// master toggle is off, no valid provider key is saved, the call fails, or nothing could be
+// parsed — the offline keyword classifier then stands in.
 suspend fun categorizeSpendsWithAi(
     context: Context,
     spends: List<Transaction>,
 ): Map<Int, SpendCategory> {
     if (spends.isEmpty()) return emptyMap()
 
-    return withContext(Dispatchers.IO) {
-        val prefs = context.settingsDataStore.data.first()
-        val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
-        if (!aiIntelligenceEnabled(prefs) || apiKey.isBlank()) {
-            return@withContext emptyMap()
+    val categoryKeys = SpendCategory.entries.joinToString(", ") { it.name }
+    val result = mutableMapOf<Int, SpendCategory>()
+
+    spends.chunked(CATEGORY_BATCH_SIZE).forEach { batch ->
+        val records = batch.mapIndexed { index, transaction ->
+            val amount = transaction.value.stripTrailingZeros().toPlainString()
+            "\"$index\": \"${transaction.comment.trim().ifEmpty { "no comment" }} ($amount)\""
+        }.joinToString(separator = "\n")
+        val prompt =
+            "You divide spending records into exactly one of the predefined categories " +
+                "$categoryKeys. Reply with ONLY one JSON object mapping each record index to its " +
+                "category, like {\"0\":\"FOOD\",\"1\":\"TRANSPORT\"}. Every index must appear " +
+                "exactly once and only these category names are allowed.\n\nRecords:\n{$records}"
+
+        when (val ai = callAi(context = context, systemPrompt = prompt, userPrompt = "")) {
+            is AiRouterResult.Success -> {
+                // Remap the model's local record index back to the transaction uid so the caller
+                // can persist the assignment. Records the model skipped fall back to the offline
+                // classifier.
+                parseCategoryResponse(ai.text).forEach { (index, category) ->
+                    batch.getOrNull(index)?.let { result[it.uid] = category }
+                }
+            }
+            is AiRouterResult.Failure -> {
+                Log.d("SpendCategorizer", "AI categorize failed: ${ai.message}")
+            }
+            AiRouterResult.NotConfigured -> Unit
         }
-
-        val providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty().ifBlank {
-            DEFAULT_VOICE_AI_PROVIDER_URL
-        }
-        val model = normalizeVoiceAiModel(prefs[voiceAiModelStoreKey])
-            ?.takeIf { it.isNotBlank() }
-            ?: DEFAULT_VOICE_AI_MODEL
-
-        val categoryKeys = SpendCategory.entries.joinToString(", ") { it.name }
-        val result = mutableMapOf<Int, SpendCategory>()
-
-        spends.chunked(CATEGORY_BATCH_SIZE).forEach { batch ->
-            val assigned = categorizeBatch(
-                providerUrl = providerUrl,
-                apiKey = apiKey,
-                model = model,
-                batch = batch,
-                categoryKeys = categoryKeys,
-            )
-            result.putAll(assigned)
-        }
-
-        result
-    }
-}
-
-private suspend fun categorizeBatch(
-    providerUrl: String,
-    apiKey: String,
-    model: String,
-    batch: List<Transaction>,
-    categoryKeys: String,
-): Map<Int, SpendCategory> = withContext(Dispatchers.IO) {
-    val records = batch.mapIndexed { index, transaction ->
-        val amount = transaction.value.stripTrailingZeros().toPlainString()
-        "\"$index\": \"${transaction.comment.trim().ifEmpty { "no comment" }} ($amount)\""
-    }.joinToString(separator = "\n")
-
-    val prompt =
-        "You divide spending records into exactly one of the predefined categories " +
-            "$categoryKeys. Reply with ONLY one JSON object mapping each record index to its " +
-            "category, like {\"0\":\"FOOD\",\"1\":\"TRANSPORT\"}. Every index must appear " +
-            "exactly once and only these category names are allowed.\n\nRecords:\n{$records}"
-
-    val requestBody = JSONObject()
-        .put("model", model)
-        .put("temperature", 0)
-        .put(
-            "messages",
-            org.json.JSONArray()
-                .put(JSONObject().put("role", "system").put("content", prompt)),
-        )
-
-    val response = runCatching {
-        postCategoryRequest(providerUrl, apiKey, requestBody.toString())
-    }.getOrElse { error ->
-        Log.d("SpendCategorizer", "AI categorize request failed", error)
-        return@withContext emptyMap()
     }
 
-    // Remap the model's local record index back to the transaction uid so the caller can
-    // persist the assignment. Records the model skipped fall back to the offline classifier.
-    parseCategoryResponse(response).mapNotNull { (index, category) ->
-        batch.getOrNull(index)?.let { it.uid to category }
-    }.toMap()
-}
-
-private fun postCategoryRequest(providerUrl: String, apiKey: String, body: String): String {
-    var connection: HttpURLConnection? = null
-    try {
-        connection = URL(providerUrl).openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.connectTimeout = CATEGORY_CONNECT_TIMEOUT_MS
-        connection.readTimeout = CATEGORY_READ_TIMEOUT_MS
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.setRequestProperty("Authorization", "Bearer $apiKey")
-        connection.doOutput = true
-
-        OutputStreamWriter(connection.outputStream).use { it.write(body) }
-
-        val responseCode = connection.responseCode
-        if (responseCode !in 200..299) {
-            val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                ?.take(200).orEmpty()
-            Log.d("SpendCategorizer", "AI categorize HTTP $responseCode — $errorBody")
-            return ""
-        }
-
-        return connection.inputStream.bufferedReader().use { it.readText() }
-    } finally {
-        connection?.disconnect()
-    }
+    return result
 }
 
 // Parses the model reply (plain JSON or wrapped in a chat-completions envelope) into a
