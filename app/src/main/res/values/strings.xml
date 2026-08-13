@@ -123,6 +123,12 @@
   <string name="compare_title">vs previous period</string>
   <string name="compare_this_period">This period</string>
   <string name="compare_previous_period">Previous period</string>
+  <string name="month_over_month_title">Month-over-month trend</string>
+  <string name="month_over_month_spent">Spent</string>
+  <string name="month_over_month_budget">Budget</string>
+  <string name="month_over_month_point">%1$s · %2$s of %3$s (%4$d%% of budget)</string>
+  <string name="month_over_month_point_over">%1$s · %2$s, over budget by %3$s</string>
+  <string name="month_over_month_point_plain">%1$s · %2$s</string>
   <string name="voice_ai_error_prefix">Voice AI error: </string>
   <string name="voice_input">Voice input</string>
   <string name="voice_listening">Listening…</string>

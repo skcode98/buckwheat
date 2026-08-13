@@ -25,11 +25,11 @@
 - **Complexity**: Small · **Value**: High (fastest daily interaction)
 - **Status**: ✅ SHIPPED 2026-08-12 (committed `10c3693`, pushed). Golden pipeline green, 286 tests.
 
-### 4. Multi-period month-over-month trend
-- **Files**: `analytics/` (new `MultiPeriodTrendCard`), `data/dao/BudgetPeriodDao.kt` (monthly-totals aggregate)
+### 4. Multi-period month-over-month trend ✅ **SHIPPED 2026-08-13**
+- **Files**: `analytics/MultiPeriodTrend.kt` (pure `multiPeriodTotals`), `analytics/MultiPeriodTrendCard.kt` (budget-vs-spent bars, tap caption), `analytics/Analytics.kt` (wired after `CompareToLastPeriodCard`)
 - **What**: All analytics are current-period (plus one previous-period compare). Archived data has no cross-period chart. Add a bar/line across all past periods.
 - **Complexity**: Medium · **Value**: High
-- **Status**: Backlog
+- **Status**: ✅ Implemented — golden pipeline green, **244 tests, 0 failures**. Note: no `BudgetPeriodDao` aggregate was needed — `BudgetPeriod.totalSpent` already stores each month's total; the card reads already-observed analytics state.
 
 ### 5. App lock (PIN and/or biometric)
 - **Files**: new `lock/` package, `MainActivity.kt`, `AppViewModel.kt`, `settings/Settings.kt`

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-13 (late) — Multi-period month-over-month trend chart (backlog Tier 1 #4)
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (**244 tests, 0 failures**); commit + push following.
+
+- **Pure engine**: new `analytics/MultiPeriodTrend.kt` — `MultiPeriodPoint(label, spent, budget, isCurrent)` + `multiPeriodTotals(periods, currentBudget, currentSpent, currentStart)` combining archived `BudgetPeriod`s (oldest-first, skipping periods with zero spent AND zero budget) with the in-progress current period as the final point. Labels are "MMM" ("Aug"); when the span crosses calendar years they include the year ("Aug '26") so points stay unambiguous.
+- **Chart card**: new `analytics/MultiPeriodTrendCard.kt` — header shows total spent across all shown periods, a legend ("Spent" green / "Budget" muted ghost bar), per-slot Canvas bars with a muted budget bar behind the colored spent bar (green within budget, amber ≥80%, red over), period labels underneath (current period bold + primary), and a tap caption "{label} · ₹X of ₹Y (N% of budget)" / "… over budget by ₹Z" / "₹X" for imported buckets.
+- **Wiring**: `Analytics.kt` renders the card after `CompareToLastPeriodCard` when at least two periods with data exist — data already observed (`budgetPeriods`, `wholeBudget`, `currentSpent`, `startPeriodDate`), no new DAO aggregate needed (the backlog's original "monthly-totals aggregate" guess was unnecessary — `BudgetPeriod.totalSpent` already carries the month total).
+- **Strings**: `month_over_month_title/spent/budget/point/point_over/point_plain` (EN).
+- **Tests**: `analytics/MultiPeriodTrendTest.kt` (9 cases): chronological order, oldest-first sort, zero-period skip, budget-only archived kept, current omitted when empty, multi-year labels, single-year labels, empty list, imported buckets included.
+
 ## 2026-08-13 (late) — Monthly report: offline engine + full month overview with charts (AI optional)
 
 `compileDebugKotlin` + full `testDebugUnitTest` green (AiInsightTest 10 → 18); committed `b18c1be`, pushed.
