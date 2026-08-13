@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-13 (late) — Monthly report: offline engine + full month overview with charts (AI optional)
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (AiInsightTest 10 → 18); committed `b18c1be`, pushed.
+
+- **Offline engine**: new pure `buildOfflineReport(summary, spends)` in `ai/AiInsight.kt` derives the report narrative in the exact same shape as the AI output (overview line, "• " bullets, "Watch out for:" note, tip) from period data: budget/spent/% used, average/day vs daily budget, top category, biggest expense, overspending days, previous-period delta, peak spending day. `SpendInsightSummary` gained `dailyBudget`.
+- **AI-first fallback**: `AiInsightViewModel.generate()` now builds `MonthOverviewData` (summary + period spends/transactions/periods/dates/currency), shows the offline narrative instantly with `aiLoading=true`, then calls `generateAiInsight` in the background — `Success` swaps in the AI text (badge "AI report"), `Failure`/`NotConfigured` keep the offline text with the reason surfaced. `NotConfigured`/error-only report states removed.
+- **Full overview UI**: `AiInsightSheet` auto-generates on open and renders a budget-status summary card (Budget/Spent/Left, %-used 8dp progress bar, On track / "N% of budget used" / "Over budget by ₹X" status) plus the existing analytics chart images (`SpendsTrendCard`, `SpendCategoriesCard`, `CategoriesChartCard`, `SpendsWeekdayCard`, `SpendsCalendar` heatmap with day drill-down to `VIEWER_HISTORY_SHEET`), then the narrative card with an AI/Offline badge + "Improving with AI…" / AI-failure caption. Title/description strings renamed "AI Insight" → "Monthly report".
+- **Gotcha**: `prettyDate` is `@Composable` (uses `LocalConfiguration`/`stringResource`) — the offline engine formats the peak day with the deterministic `INSIGHT_DATE_FORMAT` instead.
+
 ## 2026-08-13 (late) — Manual "Auto-categorize spends" button in AI settings
 
 `compileDebugKotlin` + full `testDebugUnitTest` green; committed `a9e5e01`, pushed.
