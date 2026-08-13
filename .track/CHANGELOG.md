@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-13 (late) — Category caps: one "Auto-assign budget" button
+
+`compileDebugKotlin` + full `testDebugUnitTest` green (**257 tests, 0 failures**, 13 new); committed `8af1f8d`, pushed.
+
+- **Common button replaces the per-row Auto chip**: `CategoryCapsSheet` gained a full-width "Auto-assign budget" button (ic_autorenew) + hint under the description; the per-row Auto chip (which just seeded one category with the full budget) was removed, so `setAutoCap` is gone from the VM.
+- **Pure engine** `data/categories/CategoryAutoAssign.kt`: `averageCategorySpend` (per-category average per period; periods with no spend are excluded so a quiet month never dilutes the requirement; `CategoryKey` built-in/custom both keyed by name, sorted), `allocateBudgetByRequirement` (proportional split — shares floored to 2dp, the last category absorbs the remainder so caps sum exactly to the budget; uses FLOOR not HALF_UP so the sum can never overshoot into a negative remainder), `evenlySplitBudget` (fallback when there is no history yet), and `autoAssignCategoryCaps` orchestrator that replaces the whole caps map so the user starts from the allocation and reassigns per category.
+- **`CategoryCapsViewModel`**: now injects `TransactionDao` + `BudgetPeriodDao`; `autoAssignBudget(categories)` reads the budget + period dates from `budgetDataStore`, builds per-period `categoryTotals` (current-period SPENT filtered by dates + archived SPENT grouped by `periodId` via `toTransaction()`), and writes the allocation via `setCategoryCaps` (which also resets the notified buckets).
+- **Strings**: `category_caps_auto_assign` + `category_caps_auto_assign_hint`; deleted now-unused `category_caps_auto`.
+- **Tests**: `data/categories/CategoryAutoAssignTest.kt` (13 cases) — averaging across periods, quiet-period exclusion, custom categories, even split exact-sum + sorted keys + rounding absorption, proportional split exact-sum, empty-input guards, orchestrator history/no-history paths. Gotcha: `assertEquals` on `BigDecimal` is scale-sensitive (sum of 2dp caps = `15000.00`, not `15000`).
+
 ## 2026-08-13 (late) — History category pill alignment
 
 `compileDebugKotlin` + `testDebugUnitTest` green; committed `93d649a`, pushed. Category pill in `history/SpentItem.kt` was left-pinned under the amount — now right-aligned (row `Arrangement.End`, `end = 32.dp`) beneath the date; the spend comment stays left-aligned. Applies to History/ViewerHistory/search rows.
