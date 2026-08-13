@@ -1,42 +1,61 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.danilkinkin.buckwheat.R
-import com.danilkinkin.buckwheat.base.Divider
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.ui.colorBad
+import com.danilkinkin.buckwheat.ui.colorGood
+import com.danilkinkin.buckwheat.ui.colorMax
+import com.danilkinkin.buckwheat.ui.colorMin
+import com.danilkinkin.buckwheat.ui.colorNotGood
+import com.danilkinkin.buckwheat.util.HarmonizedColorPalette
 import com.danilkinkin.buckwheat.util.combineColors
+import com.danilkinkin.buckwheat.util.harmonize
+import com.danilkinkin.buckwheat.util.harmonizeWithColor
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toPalette
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
@@ -44,6 +63,16 @@ import java.time.LocalDate
 // The single past-period summary card: period dates, budget utilization, totals, biggest/
 // lowest spend, biggest day, no-spend days and the per-category breakdown. Pure rendering of
 // a PeriodSummary, no business logic here.
+private val categoryColors = listOf(
+    Color(0xFFF86BAE),
+    Color(0xFFAB96FF),
+    Color(0xFF5FC7E7),
+    Color(0xFF75E584),
+    Color(0xFFFFD386),
+    Color(0xFFEF7564),
+    Color(0xFFF36FFF),
+)
+
 @Composable
 fun PeriodSummaryCard(
     summary: PeriodSummary,
@@ -54,12 +83,27 @@ fun PeriodSummaryCard(
     val context = LocalContext.current
 
     val restBudget = summary.budget - summary.totalSpent
-    val indicatorColor = when {
-        restBudget < BigDecimal.ZERO -> MaterialTheme.colorScheme.error
-        summary.budget > BigDecimal.ZERO &&
-            restBudget.multiply(BigDecimal(100)).divide(summary.budget, 0, RoundingMode.HALF_UP)
-            < BigDecimal(20) -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
+    val utilization = if (summary.budget > BigDecimal.ZERO) {
+        (summary.totalSpent.toFloat() / summary.budget.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val heroPalette = if (summary.budget > BigDecimal.ZERO) {
+        toPalette(
+            harmonize(
+                combineColors(
+                    listOf(colorBad, colorNotGood, colorGood),
+                    utilization,
+                )
+            )
+        )
+    } else {
+        toPalette(
+            harmonize(
+                designColor = MaterialTheme.colorScheme.primary,
+                sourceColor = MaterialTheme.colorScheme.primary,
+            )
+        )
     }
 
     Card(
@@ -74,68 +118,314 @@ fun PeriodSummaryCard(
         ),
     ) {
         Column(Modifier.padding(20.dp)) {
-            Text(
-                text = stringResource(R.string.period_summary_card_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(
-                    R.string.past_periods_date_range,
-                    prettyDate(summary.startDate, showTime = false, forceShowDate = true),
-                    prettyDate(summary.endDate, showTime = false, forceShowDate = true),
-                ),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            HeaderRow(summary = summary)
+
+            Spacer(Modifier.height(20.dp))
+
+            HeroBlock(
+                summary = summary,
+                currency = currency,
+                heroPalette = heroPalette,
             )
 
             Spacer(Modifier.height(20.dp))
 
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.spent_budget),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            Text(
+                text = stringResource(R.string.period_summary_overview),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Row(Modifier.fillMaxWidth()) {
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_started),
+                    value = prettyDate(summary.startDate, showTime = false, forceShowDate = true),
+                    icon = "📅",
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.width(12.dp))
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_ended),
+                    value = prettyDate(summary.endDate, showTime = false, forceShowDate = true),
+                    icon = "🏁",
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth()) {
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_spends_count),
+                    value = summary.spendsCount.toString(),
+                    icon = "🧾",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Spacer(Modifier.width(12.dp))
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_no_spend_days),
+                    value = summary.noSpendDays.toString(),
+                    icon = "🚫",
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                text = stringResource(R.string.period_summary_highlights),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            Row(Modifier.fillMaxWidth()) {
+                val biggest = summary.biggestSpend
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.max_spent),
+                    value = if (biggest != null) {
+                        numberFormat(context, biggest.amount, currency = currency)
+                    } else {
+                        "-"
+                    },
+                    caption = biggest?.let {
+                        prettyDate(it.date, showTime = false, forceShowDate = true)
+                    },
+                    icon = "↑",
+                    containerColor = toPalette(harmonize(colorMax)).container,
+                    contentColor = toPalette(harmonize(colorMax)).onContainer,
+                )
+                Spacer(Modifier.width(12.dp))
+                val lowest = summary.lowestSpend
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.min_spent),
+                    value = if (lowest != null) {
+                        numberFormat(context, lowest.amount, currency = currency)
+                    } else {
+                        "-"
+                    },
+                    caption = lowest?.let {
+                        prettyDate(it.date, showTime = false, forceShowDate = true)
+                    },
+                    icon = "↓",
+                    containerColor = toPalette(harmonize(colorMin)).container,
+                    contentColor = toPalette(harmonize(colorMin)).onContainer,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            val biggestDay = summary.biggestDay
+            StatTile(
+                modifier = Modifier.fillMaxWidth(),
+                label = stringResource(R.string.period_summary_biggest_day),
+                value = if (biggestDay != null) {
+                    numberFormat(context, biggestDay.total, currency = currency)
+                } else {
+                    "-"
+                },
+                caption = biggestDay?.let {
+                    prettyDate(
+                        it.date.toDate(),
+                        showTime = false,
+                        forceShowDate = true,
+                        shortMonth = true,
                     )
+                },
+                icon = "🏆",
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+
+            if (summary.categories.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+
+                Text(
+                    text = stringResource(R.string.categories_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                summary.categories.forEach { category ->
+                    val (name, emoji) = when (val key = category.key) {
+                        is CategoryKey.BuiltIn -> Pair(
+                            stringResource(key.category.labelRes),
+                            key.category.emoji,
+                        )
+                        is CategoryKey.Custom -> Pair(
+                            key.name,
+                            SpendCategory.emojiFor(key.name, categoryEmojis[key.name]),
+                        )
+                    }
+                    val palette = when (val key = category.key) {
+                        is CategoryKey.BuiltIn -> toPalette(
+                            harmonizeWithColor(
+                                categoryColors[key.category.ordinal % categoryColors.size],
+                                MaterialTheme.colorScheme.primary,
+                            )
+                        )
+                        is CategoryKey.Custom -> toPalette(
+                            harmonizeWithColor(
+                                categoryColors[
+                                    Math.floorMod(key.name.hashCode(), categoryColors.size)
+                                ],
+                                MaterialTheme.colorScheme.primary,
+                            )
+                        )
+                    }
+                    CategoryRow(
+                        name = name,
+                        emoji = emoji,
+                        amount = numberFormat(context, category.total, currency = currency),
+                        fraction = if (summary.totalSpent > BigDecimal.ZERO) {
+                            (category.total.toFloat() / summary.totalSpent.toFloat()).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        },
+                        palette = palette,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeaderRow(summary: PeriodSummary) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.period_summary_card_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_calendar),
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        text = numberFormat(context, summary.totalSpent, currency = currency),
-                        style = MaterialTheme.typography.headlineSmall,
+                        text = stringResource(
+                            R.string.past_periods_date_range,
+                            prettyDate(summary.startDate, showTime = false, forceShowDate = true),
+                            prettyDate(summary.endDate, showTime = false, forceShowDate = true),
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (summary.budget > BigDecimal.ZERO) {
-                    Column(horizontalAlignment = Alignment.End) {
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Surface(
+            modifier = Modifier.size(48.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            contentColor = MaterialTheme.colorScheme.primary,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_analytics),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroBlock(
+    summary: PeriodSummary,
+    currency: ExtendCurrency,
+    heroPalette: HarmonizedColorPalette,
+) {
+    val context = LocalContext.current
+    val hasBudget = summary.budget > BigDecimal.ZERO
+    val restBudget = summary.budget - summary.totalSpent
+    val percentText = if (summary.spentPercent != null) {
+        "${summary.spentPercent}%"
+    } else {
+        "-"
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = heroPalette.container,
+        contentColor = heroPalette.onContainer,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.spent_budget),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = heroPalette.onContainer.copy(alpha = 0.6f),
+                    )
+                    Text(
+                        text = numberFormat(context, summary.totalSpent, currency = currency),
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Surface(
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                    color = heroPalette.main,
+                    contentColor = heroPalette.onMain,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = stringResource(R.string.whole_budget),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                        Text(
-                            text = numberFormat(context, summary.budget, currency = currency),
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            text = percentText,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontSize = if (percentText.length > 3) 12.sp else 16.sp,
                         )
                     }
                 }
             }
 
-            if (summary.budget > BigDecimal.ZERO) {
-                Spacer(Modifier.height(12.dp))
+            if (hasBudget) {
+                Spacer(Modifier.height(14.dp))
                 LinearProgressIndicator(
                     progress = {
                         (summary.totalSpent.toFloat() / summary.budget.toFloat()).coerceIn(0f, 1f)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp),
-                    color = indicatorColor,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = heroPalette.main,
+                    trackColor = heroPalette.onContainer.copy(alpha = 0.15f),
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Text(
                         text = if (summary.spentPercent != null) {
                             stringResource(R.string.period_summary_utilized, summary.spentPercent)
@@ -143,7 +433,7 @@ fun PeriodSummaryCard(
                             "-"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = indicatorColor,
+                        color = heroPalette.onContainer.copy(alpha = 0.8f),
                     )
                     Text(
                         text = if (restBudget >= BigDecimal.ZERO) {
@@ -158,155 +448,152 @@ fun PeriodSummaryCard(
                             )
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        color = heroPalette.onContainer.copy(alpha = 0.6f),
                     )
                 }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Divider()
-
-            Spacer(Modifier.height(16.dp))
-            StatRow(
-                label = stringResource(R.string.period_summary_started),
-                value = prettyDate(summary.startDate, showTime = false, forceShowDate = true),
-                valueColor = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(12.dp))
-            StatRow(
-                label = stringResource(R.string.period_summary_ended),
-                value = prettyDate(summary.endDate, showTime = false, forceShowDate = true),
-                valueColor = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(12.dp))
-            StatRow(
-                label = stringResource(R.string.period_summary_spends_count),
-                value = summary.spendsCount.toString(),
-                valueColor = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(12.dp))
-            StatRow(
-                label = stringResource(R.string.period_summary_no_spend_days),
-                value = summary.noSpendDays.toString(),
-                valueColor = MaterialTheme.colorScheme.onSurface,
-            )
-
-            Spacer(Modifier.height(16.dp))
-            Divider()
-
-            Spacer(Modifier.height(16.dp))
-            val biggest = summary.biggestSpend
-            StatRow(
-                label = stringResource(R.string.max_spent),
-                value = if (biggest != null) {
-                    numberFormat(context, biggest.amount, currency = currency)
-                } else {
-                    "-"
-                },
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                caption = biggest?.let {
-                    prettyDate(it.date, showTime = false, forceShowDate = true)
-                },
-            )
-            Spacer(Modifier.height(12.dp))
-            val lowest = summary.lowestSpend
-            StatRow(
-                label = stringResource(R.string.min_spent),
-                value = if (lowest != null) {
-                    numberFormat(context, lowest.amount, currency = currency)
-                } else {
-                    "-"
-                },
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                caption = lowest?.let {
-                    prettyDate(it.date, showTime = false, forceShowDate = true)
-                },
-            )
-            Spacer(Modifier.height(12.dp))
-            val biggestDay = summary.biggestDay
-            StatRow(
-                label = stringResource(R.string.period_summary_biggest_day),
-                value = if (biggestDay != null) {
-                    numberFormat(context, biggestDay.total, currency = currency)
-                } else {
-                    "-"
-                },
-                valueColor = MaterialTheme.colorScheme.onSurface,
-                caption = biggestDay?.let {
-                    prettyDate(
-                        it.date.toDate(),
-                        showTime = false,
-                        forceShowDate = true,
-                        shortMonth = true,
-                    )
-                },
-            )
-
-            if (summary.categories.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Divider()
-
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.categories_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+            } else {
                 Spacer(Modifier.height(8.dp))
-                summary.categories.forEach { category ->
-                    val (name, emoji) = when (val key = category.key) {
-                        is CategoryKey.BuiltIn -> Pair(
-                            stringResource(key.category.labelRes),
-                            key.category.emoji,
-                        )
-                        is CategoryKey.Custom -> Pair(
-                            key.name,
-                            SpendCategory.emojiFor(key.name, categoryEmojis[key.name]),
-                        )
-                    }
-                    StatRow(
-                        label = "$emoji $name",
-                        value = numberFormat(context, category.total, currency = currency),
-                        valueColor = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
+                Text(
+                    text = stringResource(R.string.period_summary_no_budget),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = heroPalette.onContainer.copy(alpha = 0.6f),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StatRow(
+private fun StatTile(
     label: String,
     value: String,
-    valueColor: Color,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    icon: String? = null,
     caption: String? = null,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        contentColor = contentColor,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.weight(1f),
-        )
-        Column(horizontalAlignment = Alignment.End) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Surface(
+                        modifier = Modifier.size(26.dp),
+                        shape = CircleShape,
+                        color = contentColor.copy(alpha = 0.12f),
+                        contentColor = contentColor,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = icon,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor.copy(alpha = 0.6f),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleMedium,
-                color = valueColor,
+                style = MaterialTheme.typography.titleLarge,
+                color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (caption != null) {
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = caption,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    color = contentColor.copy(alpha = 0.5f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryRow(
+    name: String,
+    emoji: String,
+    amount: String,
+    fraction: Float,
+    palette: HarmonizedColorPalette,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape,
+            color = palette.container,
+            contentColor = palette.onContainer,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = amount,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(50))
+                        .background(palette.main),
                 )
             }
         }
@@ -357,6 +644,13 @@ private fun PreviewSummary() {
                             date = LocalDate.of(2026, 7, 20).toDate(),
                             comment = "movie",
                             category = "ENTERTAINMENT",
+                        ),
+                        Transaction(
+                            type = TransactionType.SPENT,
+                            value = BigDecimal("200"),
+                            date = LocalDate.of(2026, 7, 12).toDate(),
+                            comment = "coffee",
+                            category = "FOOD",
                         ),
                     ),
                 ),
