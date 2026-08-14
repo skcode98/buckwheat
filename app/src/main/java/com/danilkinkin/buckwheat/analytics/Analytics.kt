@@ -262,27 +262,6 @@ fun Analytics(
                                 currency = currency,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            val multiPeriodPoints = remember(
-                                budgetPeriods,
-                                wholeBudget,
-                                currentSpent,
-                                startPeriodDate,
-                            ) {
-                                multiPeriodTotals(
-                                    periods = budgetPeriods,
-                                    currentBudget = wholeBudget,
-                                    currentSpent = currentSpent,
-                                    currentStart = startPeriodDate,
-                                )
-                            }
-                            if (multiPeriodPoints.size >= 2) {
-                                MultiPeriodTrendCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    points = multiPeriodPoints,
-                                    currency = currency,
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
                         }
                     }
                 }

@@ -33,12 +33,14 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.ai.AiInsightUiState
 import com.danilkinkin.buckwheat.ai.AiInsightViewModel
 import com.danilkinkin.buckwheat.ai.SpendInsightSummary
+import com.danilkinkin.buckwheat.analytics.MultiPeriodTrendCard
 import com.danilkinkin.buckwheat.analytics.SpendsCalendar
 import com.danilkinkin.buckwheat.analytics.SpendsTrendCard
 import com.danilkinkin.buckwheat.analytics.SpendsWeekdayCard
 import com.danilkinkin.buckwheat.analytics.VIEWER_HISTORY_SHEET
 import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoriesChartCard
 import com.danilkinkin.buckwheat.analytics.categoriesChart.SpendCategoriesCard
+import com.danilkinkin.buckwheat.analytics.multiPeriodTotals
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -166,6 +168,27 @@ private fun MonthReportBody(
             periods = data.periods,
         )
         Spacer(Modifier.height(16.dp))
+        val multiPeriodPoints = remember(
+            data.periods,
+            data.summary.budget,
+            data.summary.spent,
+            data.startDate,
+        ) {
+            multiPeriodTotals(
+                periods = data.periods,
+                currentBudget = data.summary.budget,
+                currentSpent = data.summary.spent,
+                currentStart = data.startDate,
+            )
+        }
+        if (multiPeriodPoints.size >= 2) {
+            MultiPeriodTrendCard(
+                modifier = Modifier.fillMaxWidth(),
+                points = multiPeriodPoints,
+                currency = data.currency,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
         SpendCategoriesCard(
             modifier = Modifier.fillMaxWidth(),
             spends = data.spends,
