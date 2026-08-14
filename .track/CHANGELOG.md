@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-14 — Month-over-month trend: total amount kept on one line
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `7b220b2`, pushed. User: "month over month trend in monthly report the amount text is going on next row, feels like broken adjust the alignment". In `analytics/MultiPeriodTrendCard.kt` the header row split the card 50/50 (weight(1f) amount column / weight(0.5f) spacer / weight(1f) legend) and rendered the total with `displayMedium` — the large amount wrapped to a second line. Fix mirrors `SpendsTrendCard`'s proven header: the amount column keeps `weight(1f)` (full remaining width) with `fontSize = MaterialTheme.typography.titleLarge.fontSize` + `maxLines = 1` + `TextOverflow.Ellipsis`; the Spent/Budget legend column is now wrap-content `horizontalAlignment = Alignment.End` (was a half-width weighted column). Also added `maxLines = 1`/ellipsis to the tapped-month caption so it can't wrap either.
+
 ## 2026-08-14 — Monthly trend: smooth area-line chart everywhere (matches the period-summary graph)
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `4af14dc`, pushed. User: "the Monthly trend every where should use the arealine graph with smooth curve and clickable all line with label on it with colour and fade colour like min spend max spend graph". `analytics/SpendsTrendCard.kt` (single composable used in BOTH Analytics and the Monthly report, so one change covers everywhere): the per-day bars (`SpendsTrendBars`) are replaced by a **smooth area-line chart** (`SpendsTrendAreaChart`) styled exactly like the period-summary graph:
