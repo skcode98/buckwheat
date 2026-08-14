@@ -52,6 +52,26 @@ class AiBackendTest {
     }
 
     @Test
+    fun `normalizes v1 provider urls without duplicating the path`() {
+        assertEquals(
+            "https://example.com/v1/chat/completions",
+            chatCompletionsUrl("https://example.com/v1"),
+        )
+        assertEquals(
+            "https://example.com/v1/models",
+            modelsEndpoint("https://example.com/v1"),
+        )
+        assertEquals(
+            "https://example.com/api/v1/chat/completions",
+            chatCompletionsUrl("https://example.com/api/v1"),
+        )
+        assertEquals(
+            "https://example.com/api/v1/models",
+            modelsEndpoint("https://example.com/api/v1"),
+        )
+    }
+
+    @Test
     fun `resolve config requires url key and model`() {
         val prefs = preferencesOf(
             voiceAiProviderUrlStoreKey to " https://example.com ",

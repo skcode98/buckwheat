@@ -54,23 +54,25 @@ fun resolveAiBackendConfig(prefs: Preferences): AiBackendConfig? {
 // Derives the chat-completions URL from the configured base URL. A URL that already ends in
 // "/chat/completions" is used as-is; anything else is treated as a base and gets the standard
 // "/v1/chat/completions" suffix appended. Pure so it is unit-testable.
-fun chatCompletionsUrl(raw: String): String {
+private fun aiProviderBaseUrl(raw: String): String {
     val trimmed = raw.trim().trimEnd('/')
-    if (trimmed.endsWith("/chat/completions")) return trimmed
-    return "$trimmed/v1/chat/completions"
+    return when {
+        trimmed.endsWith("/chat/completions") -> trimmed.removeSuffix("/chat/completions")
+        trimmed.endsWith("/models") -> trimmed.removeSuffix("/models")
+        trimmed.endsWith("/v1") -> trimmed
+        else -> "$trimmed/v1"
+    }
 }
+
+// Derives the chat-completions URL from the configured base URL. A URL that already ends in
+// "/chat/completions" is used as-is; anything else is treated as a base and gets the standard
+// "/v1/chat/completions" suffix appended. Pure so it is unit-testable.
+fun chatCompletionsUrl(raw: String): String = "${aiProviderBaseUrl(raw)}/chat/completions"
 
 // Derives the models-listing URL from the configured base URL. Already a "/models" URL stays
 // as-is, a chat-completions URL gets its suffix swapped for "/models", and a plain base gets
 // the standard "/v1/models" suffix. Pure so it is unit-testable.
-fun modelsEndpoint(raw: String): String {
-    val trimmed = raw.trim().trimEnd('/')
-    if (trimmed.endsWith("/models")) return trimmed
-    if (trimmed.endsWith("/chat/completions")) {
-        return trimmed.removeSuffix("/chat/completions") + "/models"
-    }
-    return "$trimmed/v1/models"
-}
+fun modelsEndpoint(raw: String): String = "${aiProviderBaseUrl(raw)}/models"
 
 // Runs one prompt through the configured single backend. When the AI Intelligence master toggle
 // is off or no valid backend is configured the caller gets NotConfigured and uses its offline
