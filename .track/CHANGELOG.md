@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-14 — Monthly trend: smooth area-line chart everywhere (matches the period-summary graph)
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `4af14dc`, pushed. User: "the Monthly trend every where should use the arealine graph with smooth curve and clickable all line with label on it with colour and fade colour like min spend max spend graph". `analytics/SpendsTrendCard.kt` (single composable used in BOTH Analytics and the Monthly report, so one change covers everywhere): the per-day bars (`SpendsTrendBars`) are replaced by a **smooth area-line chart** (`SpendsTrendAreaChart`) styled exactly like the period-summary graph:
+
+- **Smooth curve**: new pure `smoothPath(points)` helper draws a Catmull-Rom → cubic Bézier path that passes through every daily point (2dp `Stroke` in `MaterialTheme.colorScheme.primary`).
+- **Fade fill**: vertical-gradient area under the curve (`Brush.verticalGradient`, lineColor@0.25 → @0.02) closed down to the baseline.
+- **Coloured markers**: max day gets a `colorMax` ring marker and the lowest real-spend day a `colorMin` one (card-color ring + filled dot, zero-spend gaps never the "min") — identical to the period-summary chart.
+- **Clickable all along the line**: existing `pointerInput` + `detectTapGestures` slot-mapping kept; tapping any x highlights that point (vertical guide + filled dot) and shows the "date · amount" label under the chart. Dashed avg/day reference line retained.
+- `barColors` blend + `combineColors`/`CornerRadius`/`Size` imports removed; `cardColor` (ring fill) hoisted as a param (`surfaceContainerLow` = the M3 Card default container).
+
 ## 2026-08-14 — Past-period detail card: interactive area-line chart + compact 3×2 stat grid
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `ae67459`, pushed. User: "back to period card details... in half card I wanted the graph in background show the month spend history and point the min max point with interactive graph when click it shows details of day on label, and text over graph for other details; remaining half in small state card with proper designing. give 4 samples..." — chose **Option D top half** (area line chart, gradient under the line, min/max markers, tap any point → day label) + **Option A bottom half** (3×2 stat grid). Reworked `settings/PeriodSummaryCard.kt` (rendered inside `settings/PeriodDetailSheet.kt`):
