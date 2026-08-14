@@ -46,39 +46,63 @@ class VoiceAiSettingsViewModel @Inject constructor() : ViewModel() {
 // API key the user configured. Blank apiKey/providerUrl short-circuit to an empty list. Returns
 // an empty list on any network/parse/auth failure so the sheet falls back to the existing model
 // text field and never hard-crashes on a flaky connection.
+val DEFAULT_MODEL_PRESETS = listOf(
+    FreeModel("fast", "Fast (Groq Llama-3.3-70b)", "Alias", 0L),
+    FreeModel("free", "Free (OpenRouter Llama-3.3-70b)", "Alias", 0L),
+    FreeModel("latest", "Latest (Gemini 2.5 Flash)", "Alias", 0L),
+    FreeModel("gemini/gemini-2.5-flash", "gemini-2.5-flash", "gemini", 0L),
+    FreeModel("groq/llama-3.3-70b-versatile", "llama-3.3-70b-versatile", "groq", 0L),
+    FreeModel("openrouter/meta-llama/llama-3.3-70b-instruction:free", "llama-3.3-70b-instruction:free", "openrouter", 0L),
+)
+
+// Fetches the models the configured backend exposes, in real time, so the user can pick from a
+// dropdown instead of guessing ids. The backend's /v1/models listing is gated behind the same
+// API key the user configured. Blank apiKey/providerUrl short-circuit to default presets. Returns
+// presets on any network/parse/auth failure so the dropdown is always populated.
 suspend fun loadFreeModels(
     apiKey: String,
     providerUrl: String,
 ): List<FreeModel> = withContext(Dispatchers.IO) {
     val key = apiKey.trim()
-    if (key.isBlank() || providerUrl.isBlank()) return@withContext emptyList()
+    val url = providerUrl.trim()
+    if (url.isBlank()) return@withContext DEFAULT_MODEL_PRESETS
 
-    val modelsUrl = modelsEndpoint(providerUrl)
-        ?: return@withContext emptyList()
+    val modelsUrl = modelsEndpoint(url)
     var connection: HttpURLConnection? = null
     try {
         val conn = (URL(modelsUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
-            setRequestProperty("Authorization", "Bearer $key")
-            setRequestProperty("X-API-Key", key)
+            if (key.isNotBlank()) {
+                setRequestProperty("Authorization", "Bearer $key")
+                setRequestProperty("X-API-Key", key)
+            }
         }
         connection = conn
 
-        if (conn.responseCode !in 200..299) {
+        if (conn.responseCode in 200..299) {
+            val body = conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            val fetched = parseFreeModels(body)
+            if (fetched.isNotEmpty()) {
+                val aliases = listOf(
+                    FreeModel("fast", "Fast (Groq Llama-3.3-70b)", "Alias", 0L),
+                    FreeModel("free", "Free (OpenRouter Llama-3.3-70b)", "Alias", 0L),
+                    FreeModel("latest", "Latest (Gemini 2.5 Flash)", "Alias", 0L),
+                )
+                val existingIds = fetched.mapTo(HashSet()) { it.id }
+                val newAliases = aliases.filter { it.id !in existingIds }
+                return@withContext newAliases + fetched
+            }
+        } else {
             Log.d("VoiceAiSettings", "Models fetch failed: HTTP ${conn.responseCode}")
-            return@withContext emptyList()
         }
-
-        val body = conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-        return@withContext parseFreeModels(body)
     } catch (e: Exception) {
         Log.d("VoiceAiSettings", "Models fetch failed", e)
-        return@withContext emptyList()
     } finally {
         connection?.disconnect()
     }
+    return@withContext DEFAULT_MODEL_PRESETS
 }
 
 private fun parseFreeModels(body: String): List<FreeModel> =

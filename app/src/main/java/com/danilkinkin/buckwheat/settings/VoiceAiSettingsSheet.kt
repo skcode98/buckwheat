@@ -89,6 +89,7 @@ fun VoiceAiSettingsSheet(
         apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
         providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty()
         model = prefs[voiceAiModelStoreKey].orEmpty()
+        voiceAiSettingsViewModel.refreshFreeModels(apiKey, providerUrl)
     }
 
     fun runTest() {
@@ -96,13 +97,17 @@ fun VoiceAiSettingsSheet(
         testing = true
         testResult = null
         coroutineScope.launch {
-            testResult = testAiConnection(
+            val result = testAiConnection(
                 AiBackendConfig(
                     url = providerUrl.trim(),
                     apiKey = apiKey.trim(),
                     model = model.trim(),
                 )
             )
+            testResult = result
+            if (result is AiRouterResult.Success) {
+                voiceAiSettingsViewModel.refreshFreeModels(apiKey.trim(), providerUrl.trim())
+            }
             testing = false
         }
     }
@@ -284,17 +289,11 @@ private fun AiBackendCard(
                     label = { Text(stringResource(R.string.voice_ai_model)) },
                     singleLine = true,
                     trailingIcon = {
-                        IconButton(onClick = {
-                            modelDropdownExpanded = !modelDropdownExpanded
-                            if (modelDropdownExpanded) onRefreshFreeModels()
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_down),
-                                contentDescription = stringResource(R.string.voice_ai_fetch_models),
-                            )
-                        }
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
                     },
-                    modifier = Modifier.menuAnchor(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
                 )
                 ExposedDropdownMenu(
                     expanded = modelDropdownExpanded,
