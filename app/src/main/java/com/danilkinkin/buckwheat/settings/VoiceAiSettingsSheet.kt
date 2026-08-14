@@ -17,10 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,7 +28,6 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,9 +50,7 @@ import com.danilkinkin.buckwheat.ai.AiRouterResult
 import com.danilkinkin.buckwheat.ai.testAiConnection
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
-import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
-import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
 import com.danilkinkin.buckwheat.keyboard.isValidAiProviderUrl
 import com.danilkinkin.buckwheat.settingsDataStore
@@ -69,11 +62,9 @@ import kotlinx.coroutines.launch
 
 const val VOICE_AI_SETTINGS_SHEET = "voiceAiSettings"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceAiSettingsSheet(
     appViewModel: AppViewModel = hiltViewModel(),
-    voiceAiSettingsViewModel: VoiceAiSettingsViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val context = LocalContext.current
@@ -81,7 +72,6 @@ fun VoiceAiSettingsSheet(
 
     var apiKey by rememberSaveable { mutableStateOf("") }
     var providerUrl by rememberSaveable { mutableStateOf("") }
-    var model by rememberSaveable { mutableStateOf("") }
     var testResult by remember { mutableStateOf<AiRouterResult?>(null) }
     var testing by remember { mutableStateOf(false) }
 
@@ -89,8 +79,6 @@ fun VoiceAiSettingsSheet(
         val prefs = context.settingsDataStore.data.first()
         apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
         providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty()
-        model = prefs[voiceAiModelStoreKey].orEmpty()
-        voiceAiSettingsViewModel.refreshFreeModels(apiKey, providerUrl)
     }
 
     fun runTest() {
@@ -98,17 +86,13 @@ fun VoiceAiSettingsSheet(
         testing = true
         testResult = null
         coroutineScope.launch {
-            val result = testAiConnection(
+            testResult = testAiConnection(
                 AiBackendConfig(
                     url = providerUrl.trim(),
                     apiKey = apiKey.trim(),
-                    model = model.trim(),
+                    model = "",
                 )
             )
-            testResult = result
-            if (result is AiRouterResult.Success) {
-                voiceAiSettingsViewModel.refreshFreeModels(apiKey.trim(), providerUrl.trim())
-            }
             testing = false
         }
     }
@@ -117,7 +101,6 @@ fun VoiceAiSettingsSheet(
         coroutineScope.launch {
             val url = providerUrl.trim()
             val key = apiKey.trim()
-            val savedModel = model.trim()
             if (url.isNotBlank() && !isValidAiProviderUrl(url)) {
                 appViewModel.showSnackbar(
                     context.getString(R.string.voice_ai_invalid_url)
@@ -135,17 +118,10 @@ fun VoiceAiSettingsSheet(
                 } else {
                     prefs[voiceAiProviderUrlStoreKey] = url
                 }
-                if (savedModel.isBlank()) {
-                    prefs.remove(voiceAiModelStoreKey)
-                } else {
-                    prefs[voiceAiModelStoreKey] = savedModel
-                }
             }
             appViewModel.showSnackbar(context.getString(R.string.voice_ai_saved))
         }
     }
-
-    val freeModels by voiceAiSettingsViewModel.freeModels.observeAsState(emptyList())
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -180,20 +156,11 @@ fun VoiceAiSettingsSheet(
                 AiBackendCard(
                     apiKey = apiKey,
                     providerUrl = providerUrl,
-                    model = model,
                     onApiKeyChange = { apiKey = it },
                     onProviderUrlChange = { providerUrl = it },
-                    onModelChange = { model = it },
                     isTesting = testing,
                     testResult = testResult,
                     onTest = { runTest() },
-                    freeModels = freeModels,
-                    onRefreshFreeModels = {
-                        voiceAiSettingsViewModel.refreshFreeModels(
-                            apiKey.trim(),
-                            providerUrl.trim(),
-                        )
-                    },
                 )
                 Button(
                     onClick = { save() },
@@ -212,23 +179,16 @@ fun VoiceAiSettingsSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AiBackendCard(
     apiKey: String,
     providerUrl: String,
-    model: String,
     onApiKeyChange: (String) -> Unit,
     onProviderUrlChange: (String) -> Unit,
-    onModelChange: (String) -> Unit,
     isTesting: Boolean,
     testResult: AiRouterResult?,
     onTest: () -> Unit,
-    freeModels: List<FreeModel>,
-    onRefreshFreeModels: () -> Unit,
 ) {
-    var modelDropdownExpanded by remember { mutableStateOf(false) }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,66 +232,6 @@ private fun AiBackendCard(
                     .fillMaxWidth()
                     .padding(top = 8.dp),
             )
-            ExposedDropdownMenuBox(
-                expanded = modelDropdownExpanded,
-                onExpandedChange = {
-                    modelDropdownExpanded = !modelDropdownExpanded
-                    // Real-time refresh of the backend's model list whenever the user opens
-                    // the dropdown, so the picks are never stale.
-                    if (modelDropdownExpanded) onRefreshFreeModels()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-            ) {
-                OutlinedTextField(
-                    value = model,
-                    onValueChange = onModelChange,
-                    label = { Text(stringResource(R.string.voice_ai_model)) },
-                    singleLine = true,
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(),
-                )
-                ExposedDropdownMenu(
-                    expanded = modelDropdownExpanded,
-                    onDismissRequest = { modelDropdownExpanded = false },
-                ) {
-                    if (freeModels.isEmpty()) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.ai_provider_no_models),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            },
-                            onClick = {},
-                            enabled = false,
-                        )
-                    }
-                    freeModels.forEach { freeModel ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(freeModel.name)
-                                    Text(
-                                        text = freeModel.id,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                                    )
-                                }
-                            },
-                            onClick = {
-                                onModelChange(freeModel.id)
-                                modelDropdownExpanded = false
-                            },
-                        )
-                    }
-                }
-            }
             when (val result = testResult) {
                 is AiRouterResult.Success -> Text(
                     text = stringResource(R.string.voice_ai_test_success, result.text),
