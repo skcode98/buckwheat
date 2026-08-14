@@ -31,7 +31,6 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,19 +49,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
-import com.danilkinkin.buckwheat.ai.AiProvider
-import com.danilkinkin.buckwheat.ai.AiProviderConfig
+import com.danilkinkin.buckwheat.ai.AiBackendConfig
 import com.danilkinkin.buckwheat.ai.AiRouterResult
-import com.danilkinkin.buckwheat.ai.aiApiKeyStoreKey
-import com.danilkinkin.buckwheat.ai.aiModelStoreKey
-import com.danilkinkin.buckwheat.ai.aiProviderOrderStoreKey
-import com.danilkinkin.buckwheat.ai.aiProviderUrlStoreKey
-import com.danilkinkin.buckwheat.ai.resolveProviderOrder
-import com.danilkinkin.buckwheat.ai.testProviderConnection
+import com.danilkinkin.buckwheat.ai.testAiConnection
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.categories.SpendCategoriesViewModel
-import com.danilkinkin.buckwheat.di.normalizeVoiceAiModel
 import com.danilkinkin.buckwheat.di.voiceAiApiKeyStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiModelStoreKey
 import com.danilkinkin.buckwheat.di.voiceAiProviderUrlStoreKey
@@ -86,121 +78,68 @@ fun VoiceAiSettingsSheet(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    var apiKeys by rememberSaveable { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var providerUrls by rememberSaveable { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var models by rememberSaveable { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var testStates by remember { mutableStateOf<Map<String, AiRouterResult>>(emptyMap()) }
-    var testingProvider by remember { mutableStateOf<String?>(null) }
-    var providerOrder by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    var apiKey by rememberSaveable { mutableStateOf("") }
+    var providerUrl by rememberSaveable { mutableStateOf("") }
+    var model by rememberSaveable { mutableStateOf("") }
+    var testResult by remember { mutableStateOf<AiRouterResult?>(null) }
+    var testing by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val prefs = context.settingsDataStore.data.first()
-        providerOrder = resolveProviderOrder(prefs).map { it.id }
-        apiKeys = AiProvider.FALLBACK_ORDER.associate { provider ->
-            var key = prefs[aiApiKeyStoreKey(provider)].orEmpty()
-            if (key.isBlank() && provider == AiProvider.OPENROUTER) {
-                key = prefs[voiceAiApiKeyStoreKey].orEmpty()
-            }
-            provider.id to key
-        }
-        providerUrls = AiProvider.FALLBACK_ORDER.associate { provider ->
-            var url = prefs[aiProviderUrlStoreKey(provider)].orEmpty()
-            if (url.isBlank() && provider == AiProvider.OPENROUTER) {
-                url = prefs[voiceAiProviderUrlStoreKey].orEmpty()
-            }
-            provider.id to url.trim().ifBlank { provider.defaultUrl }
-        }
-        models = AiProvider.FALLBACK_ORDER.associate { provider ->
-            var model = prefs[aiModelStoreKey(provider)].orEmpty()
-            if (model.isBlank() && provider == AiProvider.OPENROUTER) {
-                model = normalizeVoiceAiModel(prefs[voiceAiModelStoreKey]) ?: ""
-            }
-            provider.id to model.trim().ifBlank { provider.defaultModel }
-        }
+        apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty()
+        providerUrl = prefs[voiceAiProviderUrlStoreKey].orEmpty()
+        model = prefs[voiceAiModelStoreKey].orEmpty()
     }
 
-    fun runTest(provider: AiProvider) {
-        if (testingProvider != null) return
-        testingProvider = provider.id
-        testStates = testStates - provider.id
+    fun runTest() {
+        if (testing) return
+        testing = true
+        testResult = null
         coroutineScope.launch {
-            testStates = testStates + (
-                provider.id to testProviderConnection(
-                    AiProviderConfig(
-                        provider = provider,
-                        apiKey = apiKeys[provider.id].orEmpty(),
-                        url = providerUrls[provider.id].orEmpty(),
-                        model = models[provider.id].orEmpty(),
-                    )
+            testResult = testAiConnection(
+                AiBackendConfig(
+                    url = providerUrl.trim(),
+                    apiKey = apiKey.trim(),
+                    model = model.trim(),
                 )
             )
-            testingProvider = null
+            testing = false
         }
     }
 
-    fun moveProvider(id: String, delta: Int) {
-        val index = providerOrder.indexOf(id)
-        if (index < 0) return
-        val newIndex = index + delta
-        if (newIndex !in providerOrder.indices) return
-        providerOrder = providerOrder.toMutableList().apply {
-            removeAt(index)
-            add(newIndex, id)
-        }
-    }
-
-    fun saveAll() {
+    fun save() {
         coroutineScope.launch {
-            for (provider in AiProvider.FALLBACK_ORDER) {
-                val key = apiKeys[provider.id].orEmpty()
-                if (key.isNotBlank() && !provider.isValidKey(key)) {
-                    appViewModel.showSnackbar(
-                        context.getString(R.string.ai_provider_invalid_key_hint)
-                    )
-                    return@launch
-                }
-            }
-            for (provider in AiProvider.FALLBACK_ORDER) {
-                val url = providerUrls[provider.id].orEmpty()
-                if (url.isNotBlank() && !isValidAiProviderUrl(url)) {
-                    appViewModel.showSnackbar(
-                        context.getString(R.string.ai_provider_invalid_url_hint)
-                    )
-                    return@launch
-                }
+            val url = providerUrl.trim()
+            val key = apiKey.trim()
+            val savedModel = model.trim()
+            if (url.isNotBlank() && !isValidAiProviderUrl(url)) {
+                appViewModel.showSnackbar(
+                    context.getString(R.string.voice_ai_invalid_url)
+                )
+                return@launch
             }
             context.settingsDataStore.edit { prefs ->
-                for (provider in AiProvider.FALLBACK_ORDER) {
-                    val key = apiKeys[provider.id].orEmpty()
-                    if (key.isBlank()) {
-                        prefs.remove(aiApiKeyStoreKey(provider))
-                    } else {
-                        prefs[aiApiKeyStoreKey(provider)] = key.trim()
-                    }
-                    val url = providerUrls[provider.id].orEmpty().trim()
-                    if (url.isBlank() || url == provider.defaultUrl) {
-                        prefs.remove(aiProviderUrlStoreKey(provider))
-                    } else {
-                        prefs[aiProviderUrlStoreKey(provider)] = url
-                    }
-                    val model = models[provider.id].orEmpty().trim()
-                    if (model.isBlank() || model == provider.defaultModel) {
-                        prefs.remove(aiModelStoreKey(provider))
-                    } else {
-                        prefs[aiModelStoreKey(provider)] = model
-                    }
-                }
-                if (providerOrder == AiProvider.FALLBACK_ORDER.map { it.id }) {
-                    prefs.remove(aiProviderOrderStoreKey())
+                if (key.isBlank()) {
+                    prefs.remove(voiceAiApiKeyStoreKey)
                 } else {
-                    prefs[aiProviderOrderStoreKey()] = providerOrder.joinToString(",")
+                    prefs[voiceAiApiKeyStoreKey] = key
+                }
+                if (url.isBlank()) {
+                    prefs.remove(voiceAiProviderUrlStoreKey)
+                } else {
+                    prefs[voiceAiProviderUrlStoreKey] = url
+                }
+                if (savedModel.isBlank()) {
+                    prefs.remove(voiceAiModelStoreKey)
+                } else {
+                    prefs[voiceAiModelStoreKey] = savedModel
                 }
             }
             appViewModel.showSnackbar(context.getString(R.string.voice_ai_saved))
         }
     }
 
-    val freeModels by voiceAiSettingsViewModel.freeModels.observeAsState(emptyMap())
+    val freeModels by voiceAiSettingsViewModel.freeModels.observeAsState(emptyList())
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -228,48 +167,30 @@ fun VoiceAiSettingsSheet(
                 AiIntelligenceSetting()
                 CategoryAutoAssignSetting()
                 Text(
-                    text = stringResource(R.string.ai_providers_title),
+                    text = stringResource(R.string.ai_backend_title),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
                 )
-                for (provider in providerOrder) {
-                    val p = AiProvider.values().firstOrNull { it.id == provider } ?: continue
-                    key(provider) {
-                        val index = providerOrder.indexOf(provider)
-                        AiProviderCard(
-                            provider = p,
-                            apiKey = apiKeys[provider].orEmpty(),
-                            providerUrl = providerUrls[provider].orEmpty(),
-                            model = models[provider].orEmpty(),
-                            onApiKeyChange = { apiKeys = apiKeys + (provider to it) },
-                            onProviderUrlChange = { providerUrls = providerUrls + (provider to it) },
-                            onModelChange = { models = models + (provider to it) },
-                            isTesting = testingProvider == provider,
-                            testResult = testStates[provider],
-                            onTest = { runTest(p) },
-                            freeModels = freeModels[provider].orEmpty(),
-                            onRefreshFreeModels = {
-                                voiceAiSettingsViewModel.refreshFreeModels(
-                                    p,
-                                    apiKeys[p.id].orEmpty(),
-                                    providerUrls[p.id].orEmpty(),
-                                )
-                            },
-                            onMoveUp = if (index > 0) {
-                                { moveProvider(provider, -1) }
-                            } else {
-                                null
-                            },
-                            onMoveDown = if (index < providerOrder.lastIndex) {
-                                { moveProvider(provider, 1) }
-                            } else {
-                                null
-                            },
+                AiBackendCard(
+                    apiKey = apiKey,
+                    providerUrl = providerUrl,
+                    model = model,
+                    onApiKeyChange = { apiKey = it },
+                    onProviderUrlChange = { providerUrl = it },
+                    onModelChange = { model = it },
+                    isTesting = testing,
+                    testResult = testResult,
+                    onTest = { runTest() },
+                    freeModels = freeModels,
+                    onRefreshFreeModels = {
+                        voiceAiSettingsViewModel.refreshFreeModels(
+                            apiKey.trim(),
+                            providerUrl.trim(),
                         )
-                    }
-                }
+                    },
+                )
                 Button(
-                    onClick = { saveAll() },
+                    onClick = { save() },
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
                 ) {
                     Text(stringResource(R.string.save_api_key))
@@ -287,8 +208,7 @@ fun VoiceAiSettingsSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AiProviderCard(
-    provider: AiProvider,
+private fun AiBackendCard(
     apiKey: String,
     providerUrl: String,
     model: String,
@@ -300,15 +220,8 @@ private fun AiProviderCard(
     onTest: () -> Unit,
     freeModels: List<FreeModel>,
     onRefreshFreeModels: () -> Unit,
-    onMoveUp: (() -> Unit)?,
-    onMoveDown: (() -> Unit)?,
 ) {
     var modelDropdownExpanded by remember { mutableStateOf(false) }
-    val keyStatus = when {
-        apiKey.isBlank() -> Triple(R.string.ai_provider_key_not_set, MaterialTheme.colorScheme.onSurface.copy(0.6f), false)
-        provider.isValidKey(apiKey) -> Triple(R.string.ai_provider_key_valid, colorGood, false)
-        else -> Triple(R.string.ai_provider_key_invalid, MaterialTheme.colorScheme.error, true)
-    }
 
     Card(
         modifier = Modifier
@@ -319,13 +232,13 @@ private fun AiProviderCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = provider.displayName,
+                        text = stringResource(R.string.ai_backend_connection),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = stringResource(keyStatus.first),
+                        text = stringResource(R.string.ai_backend_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = keyStatus.second,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                 }
                 AiTestDot(
@@ -333,37 +246,22 @@ private fun AiProviderCard(
                     testResult = testResult,
                     onTest = onTest,
                 )
-                if (onMoveUp != null) {
-                    IconButton(onClick = onMoveUp) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_up),
-                            contentDescription = stringResource(R.string.ai_provider_move_up),
-                        )
-                    }
-                }
-                if (onMoveDown != null) {
-                    IconButton(onClick = onMoveDown) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_down),
-                            contentDescription = stringResource(R.string.ai_provider_move_down),
-                        )
-                    }
-                }
             }
             OutlinedTextField(
-                value = apiKey,
-                onValueChange = onApiKeyChange,
-                label = { Text(stringResource(R.string.voice_ai_api_key)) },
-                isError = keyStatus.third,
+                value = providerUrl,
+                onValueChange = onProviderUrlChange,
+                label = { Text(stringResource(R.string.voice_ai_provider_url)) },
+                placeholder = { Text("https://…") },
+                singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
             )
             OutlinedTextField(
-                value = providerUrl,
-                onValueChange = onProviderUrlChange,
-                label = { Text(stringResource(R.string.voice_ai_provider_url)) },
-                placeholder = { Text(provider.defaultUrl) },
+                value = apiKey,
+                onValueChange = onApiKeyChange,
+                label = { Text(stringResource(R.string.voice_ai_api_key)) },
+                singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
@@ -372,7 +270,7 @@ private fun AiProviderCard(
                 expanded = modelDropdownExpanded,
                 onExpandedChange = {
                     modelDropdownExpanded = !modelDropdownExpanded
-                    // Real-time refresh of the provider's free-model list whenever the user opens
+                    // Real-time refresh of the backend's model list whenever the user opens
                     // the dropdown, so the picks are never stale.
                     if (modelDropdownExpanded) onRefreshFreeModels()
                 },
@@ -384,7 +282,7 @@ private fun AiProviderCard(
                     value = model,
                     onValueChange = onModelChange,
                     label = { Text(stringResource(R.string.voice_ai_model)) },
-                    placeholder = { Text(provider.defaultModel) },
+                    singleLine = true,
                     trailingIcon = {
                         IconButton(onClick = {
                             modelDropdownExpanded = !modelDropdownExpanded
@@ -455,7 +353,7 @@ private fun AiProviderCard(
 }
 
 // The connection test as a tiny check-circle button: untested shows a plain check, during the test
-// a small spinner, and after a run a solid 8dp dot — green when the provider answered, red when it
+// a small spinner, and after a run a solid 8dp dot — green when the backend answered, red when it
 // failed. The underlying test never throws, so the dot just stays neutral if nothing is configured.
 @Composable
 private fun AiTestDot(

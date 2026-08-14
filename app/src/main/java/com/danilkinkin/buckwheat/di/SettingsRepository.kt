@@ -44,25 +44,15 @@ val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotifie
 val categoryCapsStoreKey = stringPreferencesKey("categoryCaps")
 val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
 
-const val DEFAULT_VOICE_AI_PROVIDER_URL = "https://openrouter.ai/api/v1/chat/completions"
-const val DEFAULT_VOICE_AI_MODEL = "openai/gpt-oss-20b:free"
-
-// Master gate for every AI-powered feature. Defaults to enabled; a saved `false` turns AI off
-// app-wide (voice parsing and spend categorization then use their offline fallbacks).
-fun aiIntelligenceEnabled(prefs: Preferences): Boolean = prefs[aiIntelligenceEnabledStoreKey] ?: true
-
 const val RECURRING_ALERT_DEFAULT_HOUR = 9
 const val RECURRING_ALERT_DEFAULT_MINUTE = 0
 
 const val SPEND_DIGEST_DEFAULT_HOUR = 20
 const val SPEND_DIGEST_DEFAULT_MINUTE = 0
 
-private const val LEGACY_VOICE_AI_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
-
-// The legacy default was a 550B ultra model whose free tier is heavily rate-limited (HTTP 429).
-// Map it to the current default so already-saved settings upgrade automatically.
-fun normalizeVoiceAiModel(saved: String?): String? =
-    if (saved == LEGACY_VOICE_AI_MODEL) DEFAULT_VOICE_AI_MODEL else saved
+// Master gate for every AI-powered feature. Defaults to enabled; a saved `false` turns AI off
+// app-wide (voice parsing and spend categorization then use their offline fallbacks).
+fun aiIntelligenceEnabled(prefs: Preferences): Boolean = prefs[aiIntelligenceEnabledStoreKey] ?: true
 
 // Category spend caps, serialized as "name:amount;name:amount". Caps are period-scoped:
 // progress is measured against the current budget period's spend totals (the same numbers
@@ -130,10 +120,10 @@ class SettingsRepository @Inject constructor(
         it[voiceAiApiKeyStoreKey] ?: ""
     }
     fun getVoiceAiProviderUrl() = context.settingsDataStore.data.map {
-        it[voiceAiProviderUrlStoreKey] ?: DEFAULT_VOICE_AI_PROVIDER_URL
+        it[voiceAiProviderUrlStoreKey] ?: ""
     }
     fun getVoiceAiModel() = context.settingsDataStore.data.map {
-        normalizeVoiceAiModel(it[voiceAiModelStoreKey]) ?: DEFAULT_VOICE_AI_MODEL
+        it[voiceAiModelStoreKey] ?: ""
     }
     fun getVoiceWidgetDesign() = context.settingsDataStore.data.map {
         runCatching {
