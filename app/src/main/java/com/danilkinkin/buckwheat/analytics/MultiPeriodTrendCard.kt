@@ -24,10 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -45,6 +47,7 @@ import com.danilkinkin.buckwheat.ui.colorNotGood
 import com.danilkinkin.buckwheat.util.harmonize
 import com.danilkinkin.buckwheat.util.isZero
 import com.danilkinkin.buckwheat.util.numberFormat
+import com.danilkinkin.buckwheat.util.smoothPath
 import com.danilkinkin.buckwheat.util.toPalette
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -64,10 +67,8 @@ fun MultiPeriodTrendCard(
     }
     var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
 
-    val goodColor = toPalette(harmonize(colorGood)).main
-    val notGoodColor = toPalette(harmonize(colorNotGood)).main
-    val badColor = toPalette(harmonize(colorBad)).main
-    val budgetBarColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+    val lineColor = MaterialTheme.colorScheme.primary
+    val budgetLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     Card(
         modifier = modifier,
@@ -99,31 +100,29 @@ fun MultiPeriodTrendCard(
                 Column(horizontalAlignment = Alignment.End) {
                     LegendItem(
                         text = stringResource(R.string.month_over_month_spent),
-                        color = goodColor,
+                        color = lineColor,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     LegendItem(
                         text = stringResource(R.string.month_over_month_budget),
-                        color = budgetBarColor,
+                        color = budgetLineColor,
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            MultiPeriodBars(
+            MultiPeriodTrendChart(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp),
                 points = points,
                 maxValue = maxValue,
-                goodColor = goodColor,
-                notGoodColor = notGoodColor,
-                badColor = badColor,
-                budgetBarColor = budgetBarColor,
+                lineColor = lineColor,
+                budgetLineColor = budgetLineColor,
+                surfaceColor = MaterialTheme.colorScheme.surface,
                 selectedIndex = selectedIndex,
-                highlightColor = MaterialTheme.colorScheme.primary,
-                onBarTap = { index -> selectedIndex = index },
+                onPointTap = { selectedIndex = it },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -206,18 +205,20 @@ private fun LegendItem(text: String, color: Color) {
 }
 
 @Composable
-private fun MultiPeriodBars(
+private fun MultiPeriodTrendChart(
     modifier: Modifier = Modifier,
     points: List<MultiPeriodPoint>,
     maxValue: BigDecimal,
-    goodColor: Color,
-    notGoodColor: Color,
-    badColor: Color,
-    budgetBarColor: Color,
+    lineColor: Color,
+    budgetLineColor: Color,
+    surfaceColor: Color,
     selectedIndex: Int?,
-    highlightColor: Color,
-    onBarTap: (Int) -> Unit,
+    onPointTap: (Int) -> Unit,
 ) {
+    val goodColor = toPalette(harmonize(colorGood)).main
+    val notGoodColor = toPalette(harmonize(colorNotGood)).main
+    val badColor = toPalette(harmonize(colorBad)).main
+
     Canvas(
         modifier = modifier
             .clipToBounds()
@@ -227,7 +228,7 @@ private fun MultiPeriodBars(
                         val index = (offset.x / (size.width / points.size))
                             .toInt()
                             .coerceIn(0, points.size - 1)
-                        onBarTap(index)
+                        onPointTap(index)
                     }
                 }
             }
@@ -235,50 +236,80 @@ private fun MultiPeriodBars(
         if (points.isEmpty()) return@Canvas
 
         val slotWidth = size.width / points.size
-        val barWidth = slotWidth * 0.5f
-        val barHeightMin = size.height * 0.01f
 
+        fun yFor(value: BigDecimal): Float {
+            val fraction = if (maxValue.isZero()) {
+                0f
+            } else {
+                value.divide(maxValue, 4, RoundingMode.HALF_EVEN).toFloat()
+            }
+            return size.height * (1f - fraction)
+        }
+
+        val spentPoints = points.mapIndexed { index, point ->
+            Offset((index + 0.5f) * slotWidth, yFor(point.spent))
+        }
+        val budgetPoints = points.mapIndexed { index, point ->
+            Offset((index + 0.5f) * slotWidth, yFor(point.budget))
+        }
+
+        val spentPath = smoothPath(spentPoints)
+        val budgetPath = smoothPath(budgetPoints)
+
+        // Gradient area under the spent line.
+        val areaPath = Path().apply {
+            addPath(spentPath)
+            lineTo((points.size - 0.5f) * slotWidth, size.height)
+            lineTo(slotWidth / 2f, size.height)
+            close()
+        }
+        drawPath(
+            path = areaPath,
+            brush = Brush.verticalGradient(
+                0f to lineColor.copy(alpha = 0.25f),
+                1f to lineColor.copy(alpha = 0.02f),
+            ),
+        )
+
+        // Budget reference line (dashed).
+        drawPath(
+            path = budgetPath,
+            color = budgetLineColor,
+            style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))),
+        )
+
+        // Spent trend line (smooth).
+        drawPath(
+            path = spentPath,
+            color = lineColor,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+
+        // Dots for each period.
         points.forEachIndexed { index, point ->
-            val spentFraction = if (maxValue.isZero()) {
-                0f
-            } else {
-                point.spent.divide(maxValue, 4, RoundingMode.HALF_EVEN).toFloat()
+            val center = spentPoints[index]
+            val dotColor = when {
+                point.budget <= BigDecimal.ZERO -> goodColor
+                point.spent > point.budget -> badColor
+                point.spent >= point.budget * BigDecimal("0.8") -> notGoodColor
+                else -> goodColor
             }
-            val budgetFraction = if (maxValue.isZero()) {
-                0f
-            } else {
-                point.budget.divide(maxValue, 4, RoundingMode.HALF_EVEN).toFloat()
-            }
-            val spentHeight = (size.height * spentFraction).coerceAtLeast(barHeightMin)
-            val budgetHeight = (size.height * budgetFraction).coerceAtLeast(barHeightMin)
-            val left = index * slotWidth + (slotWidth - barWidth) / 2f
-            val cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            drawCircle(color = surfaceColor, radius = 6.dp.toPx(), center = center)
+            drawCircle(color = dotColor, radius = 4.dp.toPx(), center = center)
+        }
 
-            if (budgetFraction > 0f) {
-                drawRoundRect(
-                    color = budgetBarColor,
-                    topLeft = Offset(left, size.height - budgetHeight),
-                    size = Size(barWidth, budgetHeight),
-                    cornerRadius = cornerRadius,
-                )
-            }
-
-            val spentColor = if (index == selectedIndex) {
-                highlightColor
-            } else {
-                when {
-                    point.budget <= BigDecimal.ZERO -> goodColor
-                    point.spent > point.budget -> badColor
-                    point.spent >= point.budget * BigDecimal("0.8") -> notGoodColor
-                    else -> goodColor
-                }
-            }
-            drawRoundRect(
-                color = spentColor,
-                topLeft = Offset(left, size.height - spentHeight),
-                size = Size(barWidth, spentHeight),
-                cornerRadius = cornerRadius,
+        // Tapped point gets a guide line + highlight.
+        val selected = selectedIndex
+        if (selected != null && selected in points.indices) {
+            val center = spentPoints[selected]
+            drawLine(
+                color = lineColor.copy(alpha = 0.25f),
+                start = Offset(center.x, size.height),
+                end = Offset(center.x, 0f),
+                strokeWidth = 1.dp.toPx(),
             )
+            drawCircle(color = surfaceColor, radius = 8.dp.toPx(), center = center)
+            drawCircle(color = lineColor, radius = 5.dp.toPx(), center = center)
         }
     }
 }

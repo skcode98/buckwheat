@@ -49,6 +49,7 @@ import com.danilkinkin.buckwheat.util.isZero
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.roundToDay
+import com.danilkinkin.buckwheat.util.smoothPath
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toPalette
@@ -351,34 +352,6 @@ private fun SpendsTrendAreaChart(
             drawCircle(color = lineColor, radius = 6.dp.toPx(), center = center)
         }
     }
-}
-
-// Builds a smooth path through the given points using Catmull-Rom interpolation converted
-// to cubic Bézier segments, so the curve passes through every point.
-private fun smoothPath(points: List<Offset>): Path {
-    val path = Path()
-    if (points.isEmpty()) return path
-
-    path.moveTo(points[0].x, points[0].y)
-    if (points.size == 1) return path
-
-    for (i in 0 until points.size - 1) {
-        val p0 = points[(i - 1).coerceAtLeast(0)]
-        val p1 = points[i]
-        val p2 = points[i + 1]
-        val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
-
-        val c1 = Offset(
-            x = p1.x + (p2.x - p0.x) / 6f,
-            y = p1.y + (p2.y - p0.y) / 6f,
-        )
-        val c2 = Offset(
-            x = p2.x - (p3.x - p1.x) / 6f,
-            y = p2.y - (p3.y - p1.y) / 6f,
-        )
-        path.cubicTo(c1.x, c1.y, c2.x, c2.y, p2.x, p2.y)
-    }
-    return path
 }
 
 private fun formatDeltaPercent(deltaPercent: BigDecimal): String {

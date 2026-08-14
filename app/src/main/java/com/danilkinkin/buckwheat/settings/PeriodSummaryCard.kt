@@ -68,6 +68,7 @@ import com.danilkinkin.buckwheat.util.harmonize
 import com.danilkinkin.buckwheat.util.harmonizeWithColor
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
+import com.danilkinkin.buckwheat.util.smoothPath
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toPalette
@@ -721,14 +722,17 @@ private fun ExpenditureAreaChart(
             drawCircle(color = color, radius = 5.dp.toPx(), center = center)
         }
 
-        // Gradient area under the trend line.
+        // Smooth curve points.
+        val curvePoints = dailyTotals.mapIndexed { index, value ->
+            Offset((index + 0.5f) * slotWidth, yFor(value))
+        }
+        val curvePath = smoothPath(curvePoints)
+
+        // Gradient area under the smooth curve.
         val areaPath = Path().apply {
-            val firstX = slotWidth / 2f
-            moveTo(firstX, chartBottom)
-            dailyTotals.forEachIndexed { index, value ->
-                lineTo((index + 0.5f) * slotWidth, yFor(value))
-            }
+            addPath(curvePath)
             lineTo((dailyTotals.size - 0.5f) * slotWidth, chartBottom)
+            lineTo(slotWidth / 2f, chartBottom)
             close()
         }
         drawPath(
@@ -741,16 +745,9 @@ private fun ExpenditureAreaChart(
             ),
         )
 
-        // Trend line.
-        val linePath = Path().apply {
-            dailyTotals.forEachIndexed { index, value ->
-                val x = (index + 0.5f) * slotWidth
-                val y = yFor(value)
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-            }
-        }
+        // Smooth trend line.
         drawPath(
-            path = linePath,
+            path = curvePath,
             color = lineColor,
             style = Stroke(width = 2.dp.toPx()),
         )
