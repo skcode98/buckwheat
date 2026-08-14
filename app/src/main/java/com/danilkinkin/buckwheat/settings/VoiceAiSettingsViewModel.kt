@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 
 private const val CONNECT_TIMEOUT_MS = 10_000
@@ -69,7 +70,7 @@ suspend fun loadFreeModels(
             return@withContext emptyList()
         }
 
-        val body = conn.inputStream.bufferedReader().use { it.readText() }
+        val body = conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
         return@withContext parseFreeModels(body)
     } catch (e: Exception) {
         Log.d("VoiceAiSettings", "Models fetch failed", e)
