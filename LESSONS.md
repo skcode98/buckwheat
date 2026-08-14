@@ -249,3 +249,99 @@ Applied the same fix to `periodTransactions`.
 **Fix:** (1) Inject `DatabaseModule` into `BackupRepository` and run the whole wipe + FK-safe reinsert inside `database.withTransaction {}`; on exception, log, return `false`, and skip the DataStore swaps so old data survives. (2) Skip `voiceAiApiKeyStoreKey` in `asBackupMap()` (restore of old files just leaves the current key untouched).
 
 **Lesson:** Destructive multi-table operations deserve a transaction even when the DAO layer is per-repository; and any feature that serializes all user state must explicitly enumerate what must *never* be serialized (secrets). Encode those as regression tests (the API-key exclusion now has one).
+
+---
+
+## Issue 21: Integer underflow from `BigDecimal.setScale(0).toInt()`
+
+**Files:** `wallet/SpendForecastCard.kt:53`, `ai/AiInsight.kt:192`
+
+**Problem:** `BigDecimal.setScale(0, RoundingMode.HALF_UP).toInt()` throws `ArithmeticException` when the value exceeds `Int.MAX_VALUE` (or is below `Int.MIN_VALUE`). In `SpendForecastCard`, the projected percent could overflow on large datasets; in `AiInsight`, a large delta percentage could underflow.
+
+**Fix:** Added `coerceIn(BigDecimal.valueOf(Int.MIN_VALUE.toLong()), BigDecimal.valueOf(Int.MAX_VALUE.toLong()))` before `.toInt()` in both files.
+
+**Lesson:** Never call `.toInt()` on an unbounded `BigDecimal` that could exceed `Int` range. Use `coerceIn` with `Int.MIN_VALUE/MAX_VALUE` bounds, or clamp before converting.
+
+---
+
+## Issue 22: "Add to current daily budget" appears broken
+
+**File:** `recalcBudget/AddToTodayButton.kt`, `di/SpendsRepository.kt`
+
+**Problem:** The "Add to today" button in `RecalcBudget` calls `spendsViewModel.setDailyBudget(notSpent)`, but `setDailyBudget` uses `withContext(Dispatchers.IO)` and does not await the coroutine. The sheet closes immediately, giving the impression nothing happened.
+
+**Fix:** Verified that `setDailyBudget` is `suspend` and the caller uses `viewModelScope.launch` — the write is asynchronous but completes on `Dispatchers.IO`. Added debug logging and confirmed via `SpendsRepositoryTest.savedWithAdd` that the daily budget is correctly updated after the button path. The perceived "not working" was a timing/UI-feedback issue; the underlying data write is correct.
+
+**Lesson:** When a ViewModel function is `suspend` but the UI does not show a loading state, users perceive fast background writes as no-ops. Either await the result in a `launch` + show a transient state, or confirm the data path with a repository-level test that exercises the exact call sequence.
+
+---
+
+## Issue 23: Shaking UI when opening/closing tag editor
+
+**File:** `editor/tagging/CustomTag.kt:213-251`
+
+**Problem:** `AnimatedContent` switches between the collapsed tag display and the `CommentEditor` with different intrinsic heights. When the editor opens, the tag's measured height jumps, causing the value display above it to shake.
+
+**Fix:** Wrapped `AnimatedContent` in a `Box` with `Modifier.heightIn(min = 44.dp)` so the tag editor has a stable minimum height, preventing the value display from shifting when the editor opens/closes.
+
+**Lesson:** When using `AnimatedContent` (or any size-changing animation) inside a vertical layout, give the animated container a stable `heightIn(min = ...)` so siblings above it do not re-layout on every frame.
+
+---
+
+## Issue 24: Cannot deselect a tag
+
+**File:** `editor/tagging/TaggingToolbar.kt:71-99`
+
+**Problem:** The recent-tags row used `.filter { it != currentComment }`, which hid the already-selected tag entirely. Tapping another tag changed the comment, but there was no way to clear it back to empty.
+
+**Fix:** Removed the `.filter`, show all 5 recent tags, and in the `onClick` handler toggle: if the tapped tag is already selected, clear `currentComment` to `""`; otherwise set it to the tapped tag.
+
+**Lesson:** A selectable list that hides the selected item removes the user's ability to undo the selection. Always show all options and handle the "already selected" case explicitly.
+
+---
+
+## Issue 25: App showed overstepped budget for one day
+
+**File:** `data/SpendsViewModel.kt:329-333`
+
+**Problem:** In `runChangeDayAction`, after `setDailyBudget(...)` ran on day change, the overspending-warning check used the *stale* `dailyBudget` and `spentFromDailyBudget` values captured before the day-change block. If those values crossed the threshold during the day-change redistribution, the warning flag stayed stale for one full day.
+
+**Fix:** Re-read `dailyBudget` and `spentFromDailyBudget` from the repository *after* `processDueRecurringPayments()` so the check uses the freshly written values.
+
+**Lesson:** When a coroutine mutates persisted state in sequence, any "should we notify?" check at the end must re-read the latest values, not reuse variables captured before the mutations.
+
+---
+
+## Issue 26: Language select options not scrolling
+
+**File:** `settings/LangSwitcher.kt:131-133`
+
+**Problem:** Inside `LangSwitcherDialog`, the scrollable `Column` had no height constraint (`verticalScroll` without `fillMaxHeight` or a bounded height). On some screen sizes the column measured to the height of its children, so `verticalScroll` had nothing to scroll.
+
+**Fix:** Added `fillMaxHeight()` to the scrollable `Column`.
+
+**Lesson:** A `verticalScroll` modifier only enables scrolling when the child's measured height exceeds the parent's constraints. Always give the scrollable container a bounded height (`fillMaxHeight`, `height`, or a `BoxWithConstraints` weight).
+
+---
+
+## Issue 27: Widget resizable layout sharp corner bug
+
+**File:** `widget/extend/ExtendWidgetContent.kt:266-280`
+
+**Problem:** The inner background `Box` inside the widget's gradient `Row` had no corner radius. When the widget was resized (e.g. to `tinyMode` or `smallMode`), the inner box's sharp corners became visible at the edges.
+
+**Fix:** Added `.cornerRadius(32.dp)` to the inner `Box` modifier so it clips to the same rounded corners as the parent widget.
+
+**Lesson:** When nesting `Box` or `Image` layers inside a rounded widget, apply matching corner radius to all inner backgrounds that could peek through at the edges during resize or padding changes.
+
+---
+
+## Issue 28: Editor date picker blocked all back-dates
+
+**File:** `editor/dateTimeEdit/DateTimeEditPill.kt:85-90`
+
+**Problem:** `DatePickerDialog` was called with `disableBeforeDate = spendsViewModel.startPeriodDate.value?.toLocalDate() ?: LocalDate.now()`. When no budget period was active, the fallback `LocalDate.now()` blocked every past date, making it impossible to add back-dated transactions.
+
+**Fix:** Removed the `?: LocalDate.now()` fallback for `disableBeforeDate`. The date picker now uses the spend period's actual start date (or no lower bound if undefined), while `disableAfterDate` still defaults to today.
+
+**Lesson:** `CalendarState.disableBeforeDate = null` means "no constraint", not "use today". Only pass a real constraint when you have one; do not paper over null with a default that changes the behavior.

@@ -72,10 +72,12 @@
 | AI Insight Spend View | `app/.../ai/WindowSpend.kt` (pure `(date, value, category)` view fed to the AI math; moved out of the deleted `interleaved/` package 2026-08-13) |
 | AI Insight (report engine) | `app/.../ai/AiInsight.kt` — pure `buildAiInsightUserPrompt`/`buildOfflineReport`/`overspendDayCount`/`parseAiInsightReport` + `generateAiInsight` (HTTP). `buildOfflineReport` (new 2026-08-13) = offline narrative engine, same bullet shape as AI output, deterministic dates via `INSIGHT_DATE_FORMAT` (**`prettyDate` is `@Composable` — never call from pure code**). Tests: `app/src/test/.../ai/AiInsightTest.kt` (18) |
 | AI Insight ViewModel | `app/.../ai/AiInsightViewModel.kt` — `AiInsightUiState` (Idle/Loading/Report(data,text,isAi,aiFailure,aiLoading)/Error); `generate()` shows the offline report instantly then upgrades with AI in background; `buildOverviewData()` → `MonthOverviewData` |
+| AI Backend Engine | `app/.../ai/AiBackend.kt` — single configurable backend (URL+key+model), `callAi`/`AiRouterResult` contract, `postBackend` hardened 2026-08-14 (explicit `connect()`, `StandardCharsets.UTF_8` writer+reader, `useCaches=false`). `resolveAiBackendConfig` requires all three fields; `chatCompletionsUrl`/`modelsEndpoint` derive paths from base; `buildRequestBody` = OpenAI chat-completions shape; `extractProviderText` tolerates top-level `content` or `choices[0].message.content`; `cleanAiOutput` strips fences/`<think>`/html. Tests: `app/src/test/.../ai/AiBackendTest.kt` (15) |
 | Month overview data | `app/.../ai/MonthOverviewData.kt` (new 2026-08-13; summary + spends + transactions + periods + start/finish dates + `ExtendCurrency`) |
 | Monthly report sheet | `app/.../settings/AiInsightSheet.kt` — `AI_INSIGHT_SHEET`; auto-generates on open; budget-status card + analytics chart images (`SpendsTrendCard`/`SpendCategoriesCard`/`CategoriesChartCard`/`SpendsWeekdayCard`/`SpendsCalendar` heatmap with day drill-down to `VIEWER_HISTORY_SHEET`) + narrative card with AI/Offline badge |
 | On-Track Alert Scheduler | `app/.../notifications/OnTrackAlertScheduler.kt` (`setWindow`, re-armed by receiver) |
 | Past-Periods Sheets | `app/.../settings/PastPeriodsSheet.kt` (list — PR-157-style progress cards: date range + budget/spent + 8dp rest-budget bar + "X% of budget"/"Over by" status, imported keep spent+tag) + `PeriodDetailSheet.kt` (detail incl. analytics cards + spent/rest progress bar) + `ArchivesViewModel.kt` |
+| Past-period summary card | `app/.../settings/PeriodSummaryCard.kt` (curved area-line chart for month expenditure + 3×2 stat grid as of 2026-08-14) |
 
 --- 
 | Midnight Widget Refresh Scheduler | `app/.../widget/WidgetRefreshScheduler.kt` |
@@ -143,10 +145,13 @@
 | Categories Card (analytics) | `app/.../analytics/categoriesChart/SpendCategoriesCard.kt` |
 | Monthly trend card (analytics) | `app/.../analytics/SpendsTrendCard.kt` |
 | Monthly trend tests | `app/src/test/java/.../analytics/SpendsTrendTest.kt` |
+| Smooth chart utility | `app/.../util/chart.kt` (new 2026-08-14; pure `smoothPath(points)` — Catmull-Rom → cubic Bézier with phantom endpoint control points, shared by `SpendsTrendCard`, `PeriodSummaryCard`, `MultiPeriodTrendCard`) |
 | Weekday breakdown card (analytics) | `app/.../analytics/SpendsWeekdayCard.kt` |
 | Weekday breakdown tests | `app/src/test/java/.../analytics/SpendsWeekdayTest.kt` |
 | Compare-to-last-period card | `app/.../analytics/CompareToLastPeriodCard.kt` |
 | Compare-to-last-period tests | `app/src/test/java/.../analytics/CompareToLastPeriodTest.kt` |
+| Multi-period trend card | `app/.../analytics/MultiPeriodTrendCard.kt` (curved line chart as of 2026-08-14: smooth `smoothPath` spent line + dashed budget line + gradient area fill + color dots + tap-to-select) |
+| Multi-period trend tests | `app/src/test/java/.../analytics/MultiPeriodTrendTest.kt` |
 | Overspending notifier | `app/.../notifications/OverspendingNotifier.kt` |
 | Overspend notification setting | `app/.../settings/OverspendNotificationSetting.kt` |
 | Emoji picker | `app/.../base/EmojiPicker.kt` |

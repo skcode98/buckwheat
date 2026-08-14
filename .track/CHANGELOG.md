@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-08-14 — AI backend: harden HttpURLConnection for Android (explicit connect, UTF-8, no-cache)
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**285 tests, 0 failures**); uncommitted. While debugging why monthly report, analytics auto-categories, and voice-AI all fell back to offline after the single-backend migration (`7e0d0f8`), identified three `HttpURLConnection` pitfalls in `ai/AiBackend.kt` `postBackend`: missing explicit `connect()` (some Android versions delay it past the write), `OutputStreamWriter`/`bufferedReader()` using platform-default charset instead of UTF-8 (garbles non-ASCII spend comments on devices whose default is not UTF-8), and no `useCaches = false` (stale cached POST responses). Fixed all three in one place — every AI call path (`callAi` → `attemptBackend` → `postBackend`) benefits. Request body and both success/error streams now explicitly use `StandardCharsets.UTF_8`. No API change, no new headers, no signature changes.
+
+## 2026-08-14 — Analytics charts: smooth curved lines everywhere + bug-fix batch (#165 #158 #152 #151 #148 #147 #145)
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed + pushed. User asked for curved line graphs in the monthly spend trend, past-period detail card, and monthly report — and to fix 7 reported bugs.
+
+### Curved line charts
+- **New shared utility** `util/chart.kt`: pure `smoothPath(points)` — Catmull-Rom → cubic Bézier with phantom endpoint control points so the curve looks natural at the start and end.
+- **`analytics/SpendsTrendCard.kt`**: replaced the old inline `smoothPath` with the shared utility; boundary handling improved.
+- **`settings/PeriodSummaryCard.kt`**: `ExpenditureAreaChart` now builds `curvePoints` and feeds them through `smoothPath` — both the gradient area fill and the 2dp trend line follow the same smooth curve.
+- **`analytics/MultiPeriodTrendCard.kt`**: replaced the bar chart with a smooth curved line chart — spent line (primary, 2dp stroke) + gradient area fill, dashed budget reference line, color-coded dots (green/amber/red by budget status), tap-to-select with guide line and highlight. Legend updated to "Spent" / "Budget". Removed old `MultiPeriodBars` composable.
+
+### Bug fixes
+- **#165 Integer underflow** (`wallet/SpendForecastCard.kt`, `ai/AiInsight.kt`): added `coerceIn(Int.MIN_VALUE..Int.MAX_VALUE)` before `.toInt()` on `BigDecimal.setScale(0)` results.
+- **#148 Overstepped budget flash** (`data/SpendsViewModel.kt`): the overspending-warning check used stale `dailyBudget`/`spentFromDailyBudget` captured before `setDailyBudget()` on day change. Fixed by re-reading both values after `processDueRecurringPayments()`.
+- **#151 Cannot deselect tag** (`editor/tagging/TaggingToolbar.kt`): removed `.filter { it != currentComment }` so all recent tags are visible; tapping a selected tag now clears the comment.
+- **#147 Language select not scrolling** (`settings/LangSwitcher.kt`): added `fillMaxHeight()` to the scrollable `Column` inside `LangSwitcherDialog`.
+- **#145 Widget sharp corner** (`widget/extend/ExtendWidgetContent.kt`): added `.cornerRadius(32.dp)` to the inner background `Box` so it matches the parent widget's rounded corners on resize.
+- **#152 Shaking UI** (`editor/tagging/CustomTag.kt`): wrapped `AnimatedContent` in `Box(heightIn(min = 44.dp))` so the tag editor has a stable minimum height.
+- **Editor back-date support** (`editor/dateTimeEdit/DateTimeEditPill.kt`): removed the `?: LocalDate.now()` fallback for `disableBeforeDate` — users can now pick dates back to the period start (or any past date when no period is defined). Future dates remain blocked.
+
+---
+
 ## 2026-08-14 — AI engine: single configurable backend (URL + key + model), multi-provider router removed
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**284 tests, 0 failures**); committed `7e0d0f8`, pushed. User asked to "archive our ai model provider in ai setting and only use this custom solution" (`skcode98/homaie-ai-backend`, hosted at `https://homaie-ai-backend.onrender.com`) — and confirmed: move the old multi-provider code to a backup branch, then make the backend fully user-replaceable ("keep empty no where mention homie url or name, just make sure all api will work if i provide url model and apikey"). Backup branch `backup/ai-multi-provider-2026-08-14` created at the pre-change HEAD and pushed (frozen snapshot of the AiProvider router for rollback). Then on `master`:

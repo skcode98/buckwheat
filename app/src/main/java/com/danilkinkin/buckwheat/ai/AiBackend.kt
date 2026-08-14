@@ -18,6 +18,7 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 
 private const val AI_CONNECT_TIMEOUT_MS = 10_000
 private const val AI_READ_TIMEOUT_MS = 30_000
@@ -159,19 +160,21 @@ private fun postBackend(
         conn.requestMethod = "POST"
         conn.connectTimeout = AI_CONNECT_TIMEOUT_MS
         conn.readTimeout = AI_READ_TIMEOUT_MS
-        conn.setRequestProperty("Content-Type", "application/json")
+        conn.useCaches = false
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         conn.setRequestProperty("Authorization", "Bearer ${config.apiKey}")
         conn.setRequestProperty("X-API-Key", config.apiKey)
         conn.doOutput = true
+        conn.connect()
 
-        OutputStreamWriter(conn.outputStream).use { writer ->
+        OutputStreamWriter(conn.outputStream, StandardCharsets.UTF_8).use { writer ->
             writer.write(buildRequestBody(config, systemPrompt, userPrompt))
             writer.flush()
         }
 
         val code = conn.responseCode
         if (code in 200..299) {
-            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+            val responseText = conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             val text = extractProviderText(responseText)
             return if (text.isBlank()) {
                 BackendAttempt(null, "empty reply")
@@ -181,7 +184,7 @@ private fun postBackend(
         }
 
         val errorBody = runCatching {
-            conn.errorStream?.bufferedReader()?.use { it.readText() }
+            conn.errorStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
         }.getOrNull().orEmpty().trim().take(200)
         val suffix = if (errorBody.isNotEmpty()) " — $errorBody" else ""
         val backoffMs = if (code == 429) {
