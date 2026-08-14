@@ -41,7 +41,9 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.util.NumberDisplayConfig
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 const val CATEGORY_CAPS_SHEET = "categoryCaps"
 
@@ -130,7 +132,12 @@ private fun CategoryCapRow(
     onSave: (BigDecimal) -> Unit,
     onClear: () -> Unit,
 ) {
-    var capText by remember(name, cap) { mutableStateOf(cap?.toPlainString() ?: "") }
+    val capDisplay = cap
+        ?.takeIf { NumberDisplayConfig.roundValues }
+        ?.setScale(0, RoundingMode.HALF_EVEN)
+        ?.toPlainString()
+        ?: cap?.toPlainString()
+    var capText by remember(name, cap) { mutableStateOf(capDisplay ?: "") }
 
     Row(
         modifier = Modifier
