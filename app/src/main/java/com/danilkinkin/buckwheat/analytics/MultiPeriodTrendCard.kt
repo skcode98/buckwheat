@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.danilkinkin.buckwheat.R
@@ -76,7 +78,10 @@ fun MultiPeriodTrendCard(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            Row(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.month_over_month_title),
@@ -86,10 +91,12 @@ fun MultiPeriodTrendCard(
                     Text(
                         text = numberFormat(context, totalSpent, currency),
                         style = MaterialTheme.typography.displayMedium,
+                        fontSize = MaterialTheme.typography.titleLarge.fontSize,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(modifier = Modifier.weight(0.5f))
-                Column(Modifier.weight(1f)) {
+                Column(horizontalAlignment = Alignment.End) {
                     LegendItem(
                         text = stringResource(R.string.month_over_month_spent),
                         color = goodColor,
@@ -172,6 +179,8 @@ fun MultiPeriodTrendCard(
                     text = text,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
