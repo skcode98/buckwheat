@@ -352,6 +352,8 @@
   <string name="period_summary_no_budget">No budget</string>
   <string name="period_summary_expenditure">Month expenditure</string>
   <string name="period_summary_budget">Budget: %1$s</string>
+  <string name="period_summary_avg_day">Avg per day</string>
+  <string name="period_summary_tap_hint">Tap the chart for day details</string>
   <string name="over_budget_amount">Over by %1$s</string>
   <string name="import_csv">Import from CSV</string>
   <string name="import_csv_success">Transactions imported</string>

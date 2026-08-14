@@ -3,6 +3,7 @@ package com.danilkinkin.buckwheat.settings
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,15 +27,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -57,11 +63,13 @@ import com.danilkinkin.buckwheat.ui.colorMin
 import com.danilkinkin.buckwheat.ui.colorNotGood
 import com.danilkinkin.buckwheat.util.HarmonizedColorPalette
 import com.danilkinkin.buckwheat.util.combineColors
+import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.harmonize
 import com.danilkinkin.buckwheat.util.harmonizeWithColor
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toPalette
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -139,54 +147,6 @@ fun PeriodSummaryCard(
 
             Spacer(Modifier.height(20.dp))
 
-            Text(
-                text = stringResource(R.string.period_summary_overview),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Row(Modifier.fillMaxWidth()) {
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.period_summary_started),
-                    value = prettyDate(summary.startDate, showTime = false, forceShowDate = true),
-                    icon = "📅",
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                Spacer(Modifier.width(12.dp))
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.period_summary_ended),
-                    value = prettyDate(summary.endDate, showTime = false, forceShowDate = true),
-                    icon = "🏁",
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth()) {
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.period_summary_spends_count),
-                    value = summary.spendsCount.toString(),
-                    icon = "🧾",
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Spacer(Modifier.width(12.dp))
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.period_summary_no_spend_days),
-                    value = summary.noSpendDays.toString(),
-                    icon = "🚫",
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-
             ExpenditureGraphCard(
                 spends = spends,
                 startDate = summary.startDate,
@@ -194,63 +154,96 @@ fun PeriodSummaryCard(
                 budget = summary.budget,
                 currency = currency,
             )
+
             Spacer(Modifier.height(12.dp))
 
-            Row(Modifier.fillMaxWidth()) {
-                val biggest = summary.biggestSpend
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.max_spent),
-                    value = if (biggest != null) {
-                        numberFormat(context, biggest.amount, currency = currency)
-                    } else {
-                        "-"
-                    },
-                    caption = biggest?.let {
-                        prettyDate(it.date, showTime = false, forceShowDate = true)
-                    },
-                    icon = "↑",
-                    accentColor = toPalette(harmonize(colorMax)).main,
-                )
-                Spacer(Modifier.width(12.dp))
-                val lowest = summary.lowestSpend
-                StatTile(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(R.string.min_spent),
-                    value = if (lowest != null) {
-                        numberFormat(context, lowest.amount, currency = currency)
-                    } else {
-                        "-"
-                    },
-                    caption = lowest?.let {
-                        prettyDate(it.date, showTime = false, forceShowDate = true)
-                    },
-                    icon = "↓",
-                    accentColor = toPalette(harmonize(colorMin)).main,
-                )
+            val totalDays = countDays(summary.endDate, summary.startDate).coerceAtLeast(0)
+            val avgDaily = if (totalDays > 0) {
+                summary.totalSpent.divide(BigDecimal(totalDays), 2, RoundingMode.HALF_EVEN)
+            } else {
+                BigDecimal.ZERO
             }
-            Spacer(Modifier.height(12.dp))
-            val biggestDay = summary.biggestDay
-            StatTile(
-                modifier = Modifier.fillMaxWidth(),
-                label = stringResource(R.string.period_summary_biggest_day),
-                value = if (biggestDay != null) {
-                    numberFormat(context, biggestDay.total, currency = currency)
-                } else {
-                    "-"
-                },
-                caption = biggestDay?.let {
-                    prettyDate(
-                        it.date.toDate(),
+
+            Row(Modifier.fillMaxWidth()) {
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_started),
+                    value = prettyDate(
+                        summary.startDate,
                         showTime = false,
                         forceShowDate = true,
                         shortMonth = true,
-                    )
-                },
-                icon = "🏆",
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            )
+                    ),
+                    icon = "📅",
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.width(8.dp))
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_ended),
+                    value = prettyDate(
+                        summary.endDate,
+                        showTime = false,
+                        forceShowDate = true,
+                        shortMonth = true,
+                    ),
+                    icon = "🏁",
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Spacer(Modifier.width(8.dp))
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_spends_count),
+                    value = summary.spendsCount.toString(),
+                    icon = "🧾",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth()) {
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_no_spend_days),
+                    value = summary.noSpendDays.toString(),
+                    icon = "🚫",
+                )
+                Spacer(Modifier.width(8.dp))
+                val biggestDay = summary.biggestDay
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_biggest_day),
+                    value = if (biggestDay != null) {
+                        numberFormat(context, biggestDay.total, currency = currency)
+                    } else {
+                        "-"
+                    },
+                    caption = biggestDay?.let {
+                        prettyDate(
+                            it.date.toDate(),
+                            showTime = false,
+                            forceShowDate = true,
+                            shortMonth = true,
+                        )
+                    },
+                    icon = "🏆",
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Spacer(Modifier.width(8.dp))
+                MiniStatTile(
+                    modifier = Modifier.weight(1f),
+                    label = stringResource(R.string.period_summary_avg_day),
+                    value = if (totalDays > 0) {
+                        numberFormat(context, avgDaily, currency = currency)
+                    } else {
+                        "-"
+                    },
+                    icon = "📊",
+                )
+            }
 
             if (summary.categories.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
@@ -474,7 +467,7 @@ private fun HeroBlock(
 }
 
 @Composable
-private fun StatTile(
+private fun MiniStatTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -493,12 +486,12 @@ private fun StatTile(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Surface(
-                        modifier = Modifier.size(26.dp),
+                        modifier = Modifier.size(22.dp),
                         shape = CircleShape,
                         color = accentColor?.copy(alpha = 0.15f) ?: contentColor.copy(alpha = 0.12f),
                         contentColor = accentColor ?: contentColor,
@@ -506,22 +499,24 @@ private fun StatTile(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = icon,
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                 }
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = contentColor.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -540,9 +535,9 @@ private fun StatTile(
     }
 }
 
-// The whole-period expenditure in the app's graph style: the total sits on the card while a
-// per-day bar chart fills the background, with the max/min days highlighted in the graph colors
-// and the full budget shown as a reference line + text.
+// The whole-period expenditure as an interactive area-line chart: the trend line + gradient
+// area fill the card as the background, the max/min days get colored markers, tapping a point
+// reveals that day's total, and the title/budget/avg text is overlaid on top.
 @Composable
 private fun ExpenditureGraphCard(
     spends: List<Transaction>,
@@ -558,138 +553,211 @@ private fun ExpenditureGraphCard(
     val totalSpent = remember(dailyTotals) {
         dailyTotals.fold(BigDecimal.ZERO) { acc, value -> acc + value }
     }
-    val maxDaily = dailyTotals.maxOrNull() ?: BigDecimal.ZERO
-    val maxIndex = if (maxDaily > BigDecimal.ZERO) dailyTotals.indexOf(maxDaily) else null
-    // Highlight the lowest real spend day, never a zero-spend gap in the month.
-    val lowestSpentDay = dailyTotals.filter { it > BigDecimal.ZERO }.minOrNull()
-    val minIndex = if (lowestSpentDay != null) dailyTotals.indexOf(lowestSpentDay) else null
-
     val averageDaily = if (dailyTotals.isEmpty()) {
         BigDecimal.ZERO
     } else {
         totalSpent.divide(BigDecimal(dailyTotals.size), 2, RoundingMode.HALF_EVEN)
     }
 
+    var selectedDay by remember { mutableStateOf<Int?>(null) }
+
+    val lineColor = MaterialTheme.colorScheme.primary
+    val maxColor = toPalette(harmonize(colorMax)).main
+    val minColor = toPalette(harmonize(colorMin)).main
+
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(210.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+        Box {
+            ExpenditureAreaChart(
+                modifier = Modifier.matchParentSize(),
+                dailyTotals = dailyTotals,
+                selectedDay = selectedDay,
+                maxColor = maxColor,
+                minColor = minColor,
+                lineColor = lineColor,
+                cardColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                budget = budget,
+                budgetLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                onDayTap = { selectedDay = it },
+            )
+
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
             ) {
-                Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text = stringResource(R.string.period_summary_expenditure),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = numberFormat(context, totalSpent, currency = currency),
                         style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
 
-            Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.weight(1f))
 
-            ExpenditureBars(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp),
-                dailyTotals = dailyTotals,
-                maxIndex = maxIndex,
-                minIndex = minIndex,
-                maxColor = toPalette(harmonize(colorMax)).main,
-                minColor = toPalette(harmonize(colorMin)).main,
-                budget = budget,
-                budgetLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            )
+                val day = selectedDay
+                if (day != null && day in dailyTotals.indices) {
+                    val detailDate = remember(startDate, day) {
+                        startDate.toLocalDate().plusDays(day.toLong()).toDate()
+                    }
+                    Text(
+                        text = "${prettyDate(detailDate, showTime = false, forceShowDate = true, shortMonth = true)} · ${numberFormat(context, dailyTotals[day], currency)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = lineColor,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.period_summary_tap_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                }
 
-            Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (budget > BigDecimal.ZERO) {
-                        stringResource(
-                            R.string.period_summary_budget,
-                            numberFormat(context, budget, currency = currency),
-                        )
-                    } else {
-                        stringResource(R.string.period_summary_no_budget)
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(
-                        R.string.avg_per_day,
-                        numberFormat(context, averageDaily, currency = currency),
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (budget > BigDecimal.ZERO) {
+                            stringResource(
+                                R.string.period_summary_budget,
+                                numberFormat(context, budget, currency = currency),
+                            )
+                        } else {
+                            stringResource(R.string.period_summary_no_budget)
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.avg_per_day,
+                            numberFormat(context, averageDaily, currency = currency),
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
 }
 
+// Draws the whole-period trend as an area-line chart. The line + gradient fill are confined
+// to a middle band so the overlaid title/footer text stays readable; the max and min (real
+// spend) days get colored ring markers and a tap anywhere on the chart selects a day.
 @Composable
-private fun ExpenditureBars(
+private fun ExpenditureAreaChart(
     modifier: Modifier = Modifier,
     dailyTotals: List<BigDecimal>,
-    maxIndex: Int?,
-    minIndex: Int?,
+    selectedDay: Int?,
     maxColor: Color,
     minColor: Color,
+    lineColor: Color,
+    cardColor: Color,
     budget: BigDecimal,
     budgetLineColor: Color,
+    onDayTap: (Int) -> Unit,
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier
+            .pointerInput(dailyTotals.size) {
+                detectTapGestures { offset ->
+                    if (dailyTotals.isNotEmpty()) {
+                        val index = (offset.x / (size.width / dailyTotals.size))
+                            .toInt()
+                            .coerceIn(0, dailyTotals.size - 1)
+                        onDayTap(index)
+                    }
+                }
+            }
+    ) {
         if (dailyTotals.isEmpty()) return@Canvas
 
-        val maxDaily = dailyTotals.maxOrNull() ?: BigDecimal.ZERO
+        val topInset = 56.dp.toPx()
+        val bottomInset = 64.dp.toPx()
+        val chartBottom = size.height - bottomInset
+        val chartHeight = (size.height - topInset - bottomInset).coerceAtLeast(0f)
         val slotWidth = size.width / dailyTotals.size
-        val barWidth = slotWidth * 0.6f
-        val barHeightMin = size.height * 0.01f
+        val maxDaily = dailyTotals.maxOrNull() ?: BigDecimal.ZERO
+        val maxIndex = if (maxDaily > BigDecimal.ZERO) dailyTotals.indexOf(maxDaily) else null
+        // Highlight the lowest real spend day, never a zero-spend gap in the month.
+        val lowestSpentDay = dailyTotals.filter { it > BigDecimal.ZERO }.minOrNull()
+        val minIndex = if (lowestSpentDay != null) dailyTotals.indexOf(lowestSpentDay) else null
 
-        dailyTotals.forEachIndexed { index, value ->
+        fun yFor(value: BigDecimal): Float {
             val fraction = if (maxDaily == BigDecimal.ZERO) {
                 0f
             } else {
                 value.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
             }
-            val barHeight = (size.height * fraction).coerceAtLeast(barHeightMin)
-            val color = when (index) {
-                maxIndex -> maxColor
-                minIndex -> minColor
-                else -> combineColors(minColor, maxColor, fraction)
-            }
-            drawRoundRect(
-                color = color,
-                topLeft = Offset(
-                    x = index * slotWidth + (slotWidth - barWidth) / 2f,
-                    y = size.height - barHeight,
-                ),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-            )
+            return chartBottom - chartHeight * fraction
         }
 
-        // Full-budget reference line, drawn only when it fits inside the chart; the budget amount
-        // is always shown as text under the bars.
+        fun drawMarker(index: Int?, color: Color) {
+            if (index == null) return
+            val center = Offset((index + 0.5f) * slotWidth, yFor(dailyTotals[index]))
+            drawCircle(color = cardColor, radius = 8.dp.toPx(), center = center)
+            drawCircle(color = color, radius = 5.dp.toPx(), center = center)
+        }
+
+        // Gradient area under the trend line.
+        val areaPath = Path().apply {
+            val firstX = slotWidth / 2f
+            moveTo(firstX, chartBottom)
+            dailyTotals.forEachIndexed { index, value ->
+                lineTo((index + 0.5f) * slotWidth, yFor(value))
+            }
+            lineTo((dailyTotals.size - 0.5f) * slotWidth, chartBottom)
+            close()
+        }
+        drawPath(
+            path = areaPath,
+            brush = Brush.verticalGradient(
+                0f to lineColor.copy(alpha = 0.28f),
+                1f to lineColor.copy(alpha = 0.02f),
+                startY = topInset,
+                endY = chartBottom,
+            ),
+        )
+
+        // Trend line.
+        val linePath = Path().apply {
+            dailyTotals.forEachIndexed { index, value ->
+                val x = (index + 0.5f) * slotWidth
+                val y = yFor(value)
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+        }
+        drawPath(
+            path = linePath,
+            color = lineColor,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+
+        // Full-budget reference line, drawn only when it fits inside the chart.
         if (budget > BigDecimal.ZERO && maxDaily > BigDecimal.ZERO && budget <= maxDaily) {
-            val budgetFraction = budget.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
-            val budgetY = size.height * (1f - budgetFraction)
+            val budgetY = yFor(budget)
             drawLine(
                 color = budgetLineColor,
                 start = Offset(0f, budgetY),
@@ -697,6 +765,24 @@ private fun ExpenditureBars(
                 strokeWidth = 1.dp.toPx(),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)),
             )
+        }
+
+        drawMarker(maxIndex, maxColor)
+        drawMarker(minIndex, minColor)
+
+        // Tapped day gets a guide line + a filled highlight point on top.
+        val selected = selectedDay
+        if (selected != null && selected in dailyTotals.indices) {
+            val cx = (selected + 0.5f) * slotWidth
+            val cy = yFor(dailyTotals[selected])
+            drawLine(
+                color = lineColor.copy(alpha = 0.25f),
+                start = Offset(cx, chartBottom),
+                end = Offset(cx, topInset),
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawCircle(color = cardColor, radius = 9.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(color = lineColor, radius = 6.dp.toPx(), center = Offset(cx, cy))
         }
     }
 }
