@@ -116,6 +116,7 @@ com.danilkinkin.buckwheat/
 ├── CrashLogger.kt              # Uncaught handler → Downloads/buckwheat-crash-*.txt (local only)
 │
 ├── ai/
+│   ├── AiBackend.kt           # Single AI backend engine (URL+key+model, chat-completions HTTP)
 │   ├── AiInsight.kt           # Pure AI-insight summary model + prompt builders + HTTP
 │   ├── AiInsightViewModel.kt  # @HiltViewModel: AiInsightUiState (Idle/…/NotConfigured)
 │   └── WindowSpend.kt         # Pure (date, value, category) view fed to AI math
