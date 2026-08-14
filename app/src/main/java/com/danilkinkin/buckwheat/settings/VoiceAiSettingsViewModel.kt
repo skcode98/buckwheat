@@ -22,6 +22,7 @@ private const val READ_TIMEOUT_MS = 20_000
 data class FreeModel(
     val id: String,
     val name: String,
+    val provider: String?,
     val contextLength: Long,
 )
 
@@ -89,29 +90,48 @@ private fun parseFreeModels(body: String): List<FreeModel> =
             buildList {
                 for (i in 0 until data.length()) {
                     val m = data.optJSONObject(i) ?: continue
-                    val id = m.optString("id")
-                    if (id.isBlank()) continue
+                    // OpenAI-style: {"id":"..."} or {"name":"..."}
+                    val id = m.optString("id").takeIf { it.isNotBlank() }
+                        ?: m.optString("name").takeIf { it.isNotBlank() }
+                        ?: continue
                     add(
                         FreeModel(
                             id = id,
                             name = m.optString("name", id),
+                            provider = null,
                             contextLength = m.optLong("context_window", 0L),
                         )
                     )
                 }
             }
         } else {
-            // HomAIe-style listing: {"models":[{"id":...}]}
+            // HomAIe-style listing: {"models":[{"provider":"...","name":"..."}]}
             val models = json.optJSONArray("models") ?: return@runCatching emptyList()
             buildList {
                 for (i in 0 until models.length()) {
                     val m = models.optJSONObject(i) ?: continue
-                    val id = m.optString("id")
-                    if (id.isBlank()) continue
+                    // HomAIe uses "name" as the model identifier (no "id" field).
+                    // Also tolerate OpenAI-style {"models":[{"id":"..."}]} for other backends.
+                    val id = m.optString("id").takeIf { it.isNotBlank() }
+                        ?: m.optString("name").takeIf { it.isNotBlank() }
+                        ?: continue
+                    val name = m.optString("name", id)
+                    val provider = m.optString("provider").takeIf { it.isNotBlank() }
+                    // HomAIe accepts three forms for "model": a bare name, an alias, or
+                    // `provider/name`. Bare names can be ambiguous when the same model is
+                    // served by more than one provider, so we prefer the disambiguated form
+                    // when the backend hands us a provider. The dropdown still shows the
+                    // short name; only the saved id carries the prefix.
+                    val composedId = if (provider != null && !id.contains('/') && !looksLikeAlias(id)) {
+                        "$provider/$name"
+                    } else {
+                        id
+                    }
                     add(
                         FreeModel(
-                            id = id,
-                            name = m.optString("name", id),
+                            id = composedId,
+                            name = name,
+                            provider = provider,
                             contextLength = m.optLong("context_window", 0L),
                         )
                     )
@@ -119,3 +139,8 @@ private fun parseFreeModels(body: String): List<FreeModel> =
             }
         }
     }.getOrNull().orEmpty()
+
+// Heuristic: very short ids made of letters/digits are treated as aliases (e.g. "fast",
+// "cheap", "gpt-4o-mini") so we don't prepend a provider prefix and break the alias.
+private fun looksLikeAlias(id: String): Boolean =
+    id.length <= 12 && id.all { it.isLetterOrDigit() || it == '-' || it == '_' }

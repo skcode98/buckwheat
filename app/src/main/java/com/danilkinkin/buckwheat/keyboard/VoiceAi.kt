@@ -83,17 +83,35 @@ internal fun extractJsonArrayOrObject(raw: String): String? {
 }
 
 // Returns the actual model reply from a chat-completions envelope
-// (choices[0].message.content). If the response is not an envelope, returns it unchanged so
-// the offline parser / JSON extractor can still work on the raw text.
+// (choices[0].message.content). Falls back to a top-level "content" string (HomAIe envelope),
+// then to the raw text so the offline parser / JSON extractor can still work on it.
+//
+// `optString` returns "null" for JSON null and "{}" / "[...]" for non-string values, so we
+// inspect the field by type instead. Anything we can't read comes back as "" and the caller
+// falls through.
 internal fun extractModelContent(responseText: String): String {
-    return runCatching {
-        JSONObject(responseText)
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content", "")
-            ?.trim()
-    }.getOrNull().orEmpty().ifEmpty { responseText }
+    val json = runCatching { JSONObject(responseText) }.getOrNull() ?: return responseText
+    val topLevel = json.opt("content")
+    if (topLevel is String && topLevel.isNotEmpty()) return topLevel.trim()
+    val choicesContent = json.optJSONArray("choices")
+        ?.optJSONObject(0)
+        ?.optJSONObject("message")
+        ?.let { message -> readContentField(message.opt("content")) }
+        .orEmpty()
+        .trim()
+    return choicesContent.ifEmpty { responseText }
+}
+
+private fun readContentField(value: Any?): String = when (value) {
+    null -> ""
+    JSONObject.NULL -> ""
+    is String -> value
+    is org.json.JSONArray -> buildString {
+        for (i in 0 until value.length()) {
+            append(value.optJSONObject(i)?.optString("text", "").orEmpty())
+        }
+    }
+    else -> ""
 }
 
 // Reads a field from a JSON object regardless of key casing, since text-only models often

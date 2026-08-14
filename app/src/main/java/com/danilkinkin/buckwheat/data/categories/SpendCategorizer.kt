@@ -100,13 +100,14 @@ suspend fun categorizeSpendsWithAi(
             val amount = transaction.value.stripTrailingZeros().toPlainString()
             "\"$index\": \"${transaction.comment.trim().ifEmpty { "no comment" }} ($amount)\""
         }.joinToString(separator = "\n")
-        val prompt =
+        val systemPrompt =
             "You divide spending records into exactly one of the predefined categories " +
                 "$categoryKeys. Reply with ONLY one JSON object mapping each record index to its " +
                 "category, like {\"0\":\"FOOD\",\"1\":\"TRANSPORT\"}. Every index must appear " +
-                "exactly once and only these category names are allowed.\n\nRecords:\n{$records}"
+                "exactly once and only these category names are allowed."
+        val userPrompt = "Records:\n{$records}"
 
-        when (val ai = callAi(context = context, systemPrompt = prompt, userPrompt = "")) {
+        when (val ai = callAi(context = context, systemPrompt = systemPrompt, userPrompt = userPrompt)) {
             is AiRouterResult.Success -> {
                 // Remap the model's local record index back to the transaction uid so the caller
                 // can persist the assignment. Records the model skipped fall back to the offline

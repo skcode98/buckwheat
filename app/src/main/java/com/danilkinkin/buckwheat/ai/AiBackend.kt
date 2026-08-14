@@ -41,14 +41,14 @@ sealed class AiRouterResult {
     object NotConfigured : AiRouterResult()
 }
 
-// Resolves the single backend configuration from a DataStore snapshot. All three fields are
-// required — the model is not defaulted anywhere, so the user always controls what runs.
+// Resolves the single backend configuration from a DataStore snapshot. URL and API key are
+// required; model is optional (when blank, the service provider uses its default model).
 // Pure so it is unit-testable.
 fun resolveAiBackendConfig(prefs: Preferences): AiBackendConfig? {
     val url = prefs[voiceAiProviderUrlStoreKey].orEmpty().trim()
     val apiKey = prefs[voiceAiApiKeyStoreKey].orEmpty().trim()
     val model = prefs[voiceAiModelStoreKey].orEmpty().trim()
-    if (url.isBlank() || apiKey.isBlank() || model.isBlank()) return null
+    if (url.isBlank() || apiKey.isBlank()) return null
     return AiBackendConfig(url, apiKey, model)
 }
 
@@ -176,11 +176,14 @@ private fun postBackend(
         if (code in 200..299) {
             val responseText = conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
             val text = extractProviderText(responseText)
-            return if (text.isBlank()) {
-                BackendAttempt(null, "empty reply")
-            } else {
-                BackendAttempt(text, null)
+            if (text.isBlank()) {
+                Log.d(
+                    "AiBackend",
+                    "empty reply (HTTP $code): ${responseText.take(200)}",
+                )
+                return BackendAttempt(null, "empty reply")
             }
+            return BackendAttempt(text, null)
         }
 
         val errorBody = runCatching {
@@ -223,8 +226,11 @@ internal fun buildRequestBody(
     if (user.isNotEmpty()) {
         messages.put(JSONObject().put("role", "user").put("content", user))
     }
-    return JSONObject()
-        .put("model", config.model)
+    val json = JSONObject()
+    if (config.model.isNotBlank()) {
+        json.put("model", config.model)
+    }
+    return json
         .put("temperature", 0)
         .put("max_tokens", AI_MAX_TOKENS)
         .put("messages", messages)
@@ -235,28 +241,36 @@ internal fun buildRequestBody(
 // "content" string; OpenAI-compatible chat-completions services answer with
 // choices[0].message.content (string or, for multimodal models, an array of {type,text} parts).
 // Missing or malformed fields yield an empty string.
-internal fun extractProviderText(responseText: String): String =
-    runCatching {
-        val json = JSONObject(responseText)
-        json.optString("content", "").trim().ifEmpty {
-            json.optJSONArray("choices")
-                ?.optJSONObject(0)
-                ?.optJSONObject("message")
-                ?.let { message -> extractMessageContent(message) }
-                .orEmpty()
-        }
-    }.getOrNull().orEmpty().trim()
+//
+// `content` may also be a JSON null, a JSON array of text parts (multimodal-style), or an
+// arbitrary object — optString misreports all of these as literal "null" / "{}" / "[...]",
+// which downstream parsers happily accept as garbage answers. We look the field up by type
+// instead so each shape returns the right thing.
+internal fun extractProviderText(responseText: String): String {
+    val json = runCatching { JSONObject(responseText) }.getOrNull() ?: return ""
+    val direct = readContentField(json.opt("content")).trim()
+    if (direct.isNotEmpty()) return direct
+    val choicesContent = json.optJSONArray("choices")
+        ?.optJSONObject(0)
+        ?.optJSONObject("message")
+        ?.let { message -> readContentField(message.opt("content")) }
+        .orEmpty()
+    return choicesContent.trim()
+}
 
-private fun extractMessageContent(message: JSONObject): String {
-    val content = message.opt("content") ?: return ""
-    if (content is JSONArray) {
-        return buildString {
-            for (i in 0 until content.length()) {
-                append(content.optJSONObject(i)?.optString("text", "").orEmpty())
-            }
+// Reads a "content" field that may be a String, a JSONArray of text parts, JSON null, or
+// something we don't recognize. Anything we can't interpret comes back as the empty string so
+// the caller can fall through to the next envelope shape.
+private fun readContentField(value: Any?): String = when (value) {
+    null -> ""
+    JSONObject.NULL -> ""
+    is String -> value
+    is JSONArray -> buildString {
+        for (i in 0 until value.length()) {
+            append(value.optJSONObject(i)?.optString("text", "").orEmpty())
         }
     }
-    return content.toString()
+    else -> ""
 }
 
 private val CODE_FENCE = Regex("```[\\w]*", RegexOption.IGNORE_CASE)

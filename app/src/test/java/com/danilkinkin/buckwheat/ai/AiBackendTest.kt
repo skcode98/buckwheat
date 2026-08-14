@@ -72,7 +72,7 @@ class AiBackendTest {
     }
 
     @Test
-    fun `resolve config requires url key and model`() {
+    fun `resolve config allows optional model when url and key are present`() {
         val prefs = preferencesOf(
             voiceAiProviderUrlStoreKey to " https://example.com ",
             voiceAiApiKeyStoreKey to " key ",
@@ -82,24 +82,25 @@ class AiBackendTest {
         assertEquals("https://example.com", resolved?.url)
         assertEquals("key", resolved?.apiKey)
         assertEquals("model", resolved?.model)
+
+        val withoutModel = resolveAiBackendConfig(
+            preferencesOf(
+                voiceAiProviderUrlStoreKey to "https://example.com",
+                voiceAiApiKeyStoreKey to "key",
+            )
+        )
+        assertEquals("https://example.com", withoutModel?.url)
+        assertEquals("key", withoutModel?.apiKey)
+        assertEquals("", withoutModel?.model)
     }
 
     @Test
-    fun `resolve config returns null when any field is blank`() {
+    fun `resolve config returns null when url or key is blank`() {
         assertNull(resolveAiBackendConfig(preferencesOf()))
         assertNull(
             resolveAiBackendConfig(
                 preferencesOf(
                     voiceAiProviderUrlStoreKey to "https://example.com",
-                    voiceAiApiKeyStoreKey to "key",
-                )
-            )
-        )
-        assertNull(
-            resolveAiBackendConfig(
-                preferencesOf(
-                    voiceAiProviderUrlStoreKey to "https://example.com",
-                    voiceAiModelStoreKey to "model",
                 )
             )
         )
@@ -107,7 +108,6 @@ class AiBackendTest {
             resolveAiBackendConfig(
                 preferencesOf(
                     voiceAiApiKeyStoreKey to "key",
-                    voiceAiModelStoreKey to "model",
                 )
             )
         )
@@ -127,6 +127,14 @@ class AiBackendTest {
         assertEquals("You are a helper", messages.getJSONObject(0).getString("content"))
         assertEquals("user", messages.getJSONObject(1).getString("role"))
         assertEquals("Tell the date", messages.getJSONObject(1).getString("content"))
+    }
+
+    @Test
+    fun `request omits model field when model is blank`() {
+        val body = JSONObject(
+            buildRequestBody(config(""), "You are a helper", "Tell the date")
+        )
+        assertFalse(body.has("model"))
     }
 
     @Test
@@ -179,6 +187,31 @@ class AiBackendTest {
         assertEquals("", extractProviderText("""{"choices":[]}"""))
         assertEquals("", extractProviderText("""{"choices":[{"message":{}}]}"""))
         assertEquals("", extractProviderText("""{"choices":[{"message":{"content":""}}]}"""))
+    }
+
+    @Test
+    fun `top-level content null does not produce the literal string null`() {
+        // JSONObject.optString("content", "") would return "null" here, which the downstream
+        // parsers would happily accept as an answer. We want an empty string instead.
+        assertEquals("", extractProviderText("""{"content":null,"requestId":"req_x"}"""))
+    }
+
+    @Test
+    fun `top-level content as an object is ignored`() {
+        // optString would return "{}" — the same trap as null. Skip it.
+        assertEquals("", extractProviderText("""{"content":{},"requestId":"req_x"}"""))
+    }
+
+    @Test
+    fun `top-level content as a text array is joined`() {
+        val response = """{"content":[{"type":"text","text":"hello"},{"type":"image_url"},{"type":"text","text":" world"}]}"""
+        assertEquals("hello world", extractProviderText(response))
+    }
+
+    @Test
+    fun `choices message content null is treated as empty`() {
+        val response = """{"choices":[{"message":{"role":"assistant","content":null}}]}"""
+        assertEquals("", extractProviderText(response))
     }
 
     @Test
