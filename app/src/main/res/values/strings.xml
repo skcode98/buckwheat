@@ -334,6 +334,7 @@
   <string name="past_periods_date_range">%1$s — %2$s</string>
   <string name="past_periods_imported">Imported</string>
   <string name="period_detail_title">Period Details</string>
+  <string name="period_dates_updated">Period dates updated</string>
   <string name="period_summary_card_title">Period summary</string>
   <string name="period_summary_utilized">%1$s%% of budget used</string>
   <string name="period_summary_left">Left: %1$s</string>

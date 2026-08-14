@@ -4,12 +4,15 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.switchMap
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.Date
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ArchivesViewModel @Inject constructor(
@@ -39,5 +42,9 @@ class ArchivesViewModel @Inject constructor(
 
     val selectedPeriodTransactions: LiveData<List<ArchivedTransaction>> = _selectedPeriodId.switchMap { id ->
         if (id != null) budgetPeriodDao.getTransactionsForPeriod(id) else MutableLiveData(emptyList())
+    }
+
+    fun updatePeriodDates(periodId: Int, startDate: Date, finishDate: Date) = viewModelScope.launch {
+        budgetPeriodDao.updateDates(periodId, startDate, finishDate)
     }
 }

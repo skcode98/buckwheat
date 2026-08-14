@@ -33,6 +33,8 @@ const val FINISH_DATE_SELECTOR_SHEET = "finishDateSelector"
 fun FinishDateSelector(
     selectDate: Date? = null,
     selectStartDate: Date? = null,
+    disableBeforeDate: Date? = null,
+    disableAfterDate: Date? = null,
     onBackPressed: () -> Unit,
     onApply: (startDate: Date, finishDate: Date) -> Unit,
 ) {
@@ -45,12 +47,8 @@ fun FinishDateSelector(
                 context,
                 selectionMode = CalendarSelectionMode.RANGE,
                 selectDate = selectDate,
-                // Keep the picker to just the current and next month: the start is
-                // floored at the 1st of the current month and the finish is capped at
-                // the last day of next month, so the calendar renders exactly two months
-                // (without an upper bound it spanned up to Dec 31 of year + 2).
-                disableBeforeDate = LocalDate.now().withDayOfMonth(1).toDate(),
-                disableAfterDate = LocalDate.now().plusMonths(1).withDayOfMonth(1).minusDays(1).toDate(),
+                disableBeforeDate = disableBeforeDate ?: LocalDate.now().withDayOfMonth(1).toDate(),
+                disableAfterDate = disableAfterDate ?: LocalDate.now().plusMonths(1).withDayOfMonth(1).minusDays(1).toDate(),
             )
         }
 

@@ -5,6 +5,7 @@ import androidx.room.*
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import java.math.BigDecimal
+import java.util.Date
 
 @Dao
 interface BudgetPeriodDao {
@@ -43,6 +44,9 @@ interface BudgetPeriodDao {
 
     @Query("UPDATE budget_periods SET total_spent = :totalSpent WHERE id = :periodId")
     suspend fun updateTotalSpent(periodId: Int, totalSpent: BigDecimal)
+
+    @Query("UPDATE budget_periods SET start_date = :startDate, finish_date = :finishDate WHERE id = :id")
+    suspend fun updateDates(id: Int, startDate: Date, finishDate: Date)
 
     @Query("UPDATE archived_transactions SET category = :category WHERE uid = :uid")
     suspend fun updateCategory(uid: Int, category: String?)

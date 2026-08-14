@@ -3,6 +3,7 @@ package com.danilkinkin.buckwheat.settings
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,6 +96,7 @@ fun PeriodSummaryCard(
     categoryEmojis: Map<String, String> = emptyMap(),
     spends: List<Transaction> = emptyList(),
     modifier: Modifier = Modifier,
+    onEditDates: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -120,11 +122,11 @@ fun PeriodSummaryCard(
         modifier = modifier,
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFEEEEEE),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
     ) {
         Column(Modifier.padding(16.dp)) {
-            SummaryHeader(summary = summary)
+            SummaryHeader(summary = summary, onEditDates = onEditDates)
 
             Spacer(Modifier.height(16.dp))
 
@@ -161,7 +163,7 @@ fun PeriodSummaryCard(
                 Text(
                     text = stringResource(R.string.categories_title),
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF1C1B1F),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(12.dp))
                 summary.categories.forEachIndexed { index, category ->
@@ -194,7 +196,7 @@ fun PeriodSummaryCard(
 }
 
 @Composable
-private fun SummaryHeader(summary: PeriodSummary) {
+private fun SummaryHeader(summary: PeriodSummary, onEditDates: () -> Unit) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -203,13 +205,14 @@ private fun SummaryHeader(summary: PeriodSummary) {
             Text(
                 text = stringResource(R.string.period_summary_card_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = Color(0xFF1C1B1F),
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(Modifier.height(8.dp))
             Surface(
+                modifier = Modifier.clickable(onClick = onEditDates),
                 shape = RoundedCornerShape(50),
-                color = Color(0xFFE0E0E0),
-                contentColor = Color(0xFF1C1B1F),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
                 Row(
                     Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -231,25 +234,11 @@ private fun SummaryHeader(summary: PeriodSummary) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                }
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        IconButton(
-            onClick = {},
-            modifier = Modifier.size(40.dp),
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = CircleShape,
-                color = Color(0xFFD6D6D6),
-                contentColor = Color(0xFF1C1B1F),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
+                    Spacer(Modifier.width(4.dp))
                     Icon(
-                        painter = painterResource(R.drawable.ic_settings),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        painter = painterResource(R.drawable.ic_edit),
+                        contentDescription = stringResource(R.string.change_date),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
@@ -273,7 +262,7 @@ private fun SpentBanner(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFFFFF),
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
         Row(
@@ -286,13 +275,13 @@ private fun SpentBanner(
                 Text(
                     text = stringResource(R.string.spent_budget),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF757575),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = numberFormat(context, summary.totalSpent, currency = currency),
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color(0xFF1C1B1F),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -302,28 +291,42 @@ private fun SpentBanner(
                     Text(
                         text = stringResource(R.string.period_summary_utilized, percent),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF757575),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                 } else {
                     Text(
                         text = stringResource(R.string.period_summary_no_budget),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF757575),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                 }
             }
             Spacer(Modifier.width(16.dp))
-            CircularProgressIndicator(
-                progress = utilization,
+            Box(
                 modifier = Modifier.size(56.dp),
-                color = if (hasBudget && summary.spentPercent != null && summary.spentPercent > 100) {
-                    Color(0xFFFF8A80)
-                } else {
-                    Color(0xFFFFB74D)
-                },
-                trackColor = Color(0xFFE0E0E0),
-                strokeWidth = 4.dp,
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    progress = utilization,
+                    modifier = Modifier.fillMaxSize(),
+                    color = if (hasBudget && summary.spentPercent != null && summary.spentPercent > 100) {
+                        colorBad
+                    } else {
+                        colorNotGood
+                    },
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    strokeWidth = 4.dp,
+                )
+                Text(
+                    text = if (hasBudget && summary.spentPercent != null) {
+                        "${summary.spentPercent}%"
+                    } else {
+                        "-"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -352,7 +355,7 @@ private fun ExpenditureChartCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFFFFF),
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -363,14 +366,14 @@ private fun ExpenditureChartCard(
                 Text(
                     text = stringResource(R.string.period_summary_expenditure),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF757575),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.weight(1f),
                 )
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = numberFormat(context, totalSpent, currency = currency),
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF1C1B1F),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -382,7 +385,7 @@ private fun ExpenditureChartCard(
                                 prettyDate(peakDayDate, showTime = false, forceShowDate = true, shortMonth = true),
                             ),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF1C1B1F),
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -397,7 +400,7 @@ private fun ExpenditureChartCard(
                     .fillMaxWidth()
                     .height(100.dp),
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFF5F5F5),
+                color = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 ExpenditureAreaChart(
                     modifier = Modifier.fillMaxSize(),
@@ -406,7 +409,7 @@ private fun ExpenditureChartCard(
                     maxColor = toPalette(harmonize(colorMax)).main,
                     minColor = toPalette(harmonize(colorMin)).main,
                     lineColor = MaterialTheme.colorScheme.primary,
-                    cardColor = Color(0xFFF5F5F5),
+                    cardColor = MaterialTheme.colorScheme.surfaceVariant,
                     budget = budget,
                     budgetLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     onDayTap = { selectedDay = it },
@@ -435,14 +438,14 @@ private fun ExpenditureChartCard(
                         Text(
                             text = stringResource(R.string.period_summary_tap_hint),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF757575),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
                     if (budget > BigDecimal.ZERO) {
                         Text(
-                            text = stringResource(R.string.period_summary_no_budget),
+                            text = stringResource(R.string.period_summary_budget),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF1C1B1F),
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         )
                     }
@@ -453,7 +456,7 @@ private fun ExpenditureChartCard(
                         numberFormat(context, avgDaily, currency = currency),
                     ),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF757575),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
             }
         }
@@ -549,7 +552,7 @@ private fun MetricTile(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFFFFF),
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
         Column(
@@ -566,7 +569,7 @@ private fun MetricTile(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF757575),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -575,7 +578,7 @@ private fun MetricTile(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF1C1B1F),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -584,7 +587,7 @@ private fun MetricTile(
                 Text(
                     text = caption,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF757575),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -610,8 +613,8 @@ private fun CategoryRow(
         Surface(
             modifier = Modifier.size(36.dp),
             shape = CircleShape,
-            color = Color(0xFFFFFFFF),
-            contentColor = Color(0xFF1C1B1F),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
@@ -630,7 +633,7 @@ private fun CategoryRow(
                 Text(
                     text = name,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF1C1B1F),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -639,7 +642,7 @@ private fun CategoryRow(
                 Text(
                     text = amount,
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFF1C1B1F),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -652,7 +655,7 @@ private fun CategoryRow(
                     .height(8.dp)
                     .clip(RoundedCornerShape(50)),
                 color = color,
-                trackColor = Color(0xFFE0E0E0),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
         }
     }
@@ -712,7 +715,7 @@ private fun ExpenditureAreaChart(
         fun drawMarker(index: Int?, color: Color) {
             if (index == null) return
             val center = Offset((index + 0.5f) * slotWidth, yFor(dailyTotals[index]))
-            drawCircle(color = cardColor, radius = 6.dp.toPx(), center = center)
+            drawCircle(color = lineColor.copy(alpha = 0.15f), radius = 6.dp.toPx(), center = center)
             drawCircle(color = color, radius = 3.dp.toPx(), center = center)
         }
 
@@ -732,8 +735,8 @@ private fun ExpenditureAreaChart(
         drawPath(
             path = areaPath,
             brush = Brush.verticalGradient(
-                0f to lineColor.copy(alpha = 0.28f),
-                1f to lineColor.copy(alpha = 0.02f),
+                0f to lineColor.copy(alpha = 0.35f),
+                1f to lineColor.copy(alpha = 0.06f),
                 startY = topInset,
                 endY = chartBottom,
             ),
@@ -772,7 +775,7 @@ private fun ExpenditureAreaChart(
                 end = Offset(cx, topInset),
                 strokeWidth = 1.dp.toPx(),
             )
-            drawCircle(color = cardColor, radius = 8.dp.toPx(), center = Offset(cx, cy))
+            drawCircle(color = lineColor.copy(alpha = 0.15f), radius = 8.dp.toPx(), center = Offset(cx, cy))
             drawCircle(color = lineColor, radius = 5.dp.toPx(), center = Offset(cx, cy))
         }
     }

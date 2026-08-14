@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,20 +29,27 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.Divider
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
+import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
+import com.danilkinkin.buckwheat.wallet.FINISH_DATE_SELECTOR_SHEET
+import java.util.Date
+import kotlinx.coroutines.launch
 
 @Composable
 fun PeriodDetailSheet(
+    appViewModel: AppViewModel = hiltViewModel(),
     archivesViewModel: ArchivesViewModel = hiltViewModel(),
     categoriesManagementViewModel: CategoriesManagementViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val period by archivesViewModel.selectedPeriod.observeAsState(null)
     val transactions by archivesViewModel.selectedPeriodTransactions.observeAsState(emptyList())
     val allCategories by categoriesManagementViewModel.allCategories.observeAsState(emptyList())
@@ -56,7 +64,7 @@ fun PeriodDetailSheet(
 
     Surface(
         modifier = Modifier.padding(top = localBottomSheetScrollState.topPadding),
-        color = Color(0xFFF5F5F5),
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column {
             Box(
@@ -94,6 +102,34 @@ fun PeriodDetailSheet(
                             spends = summarySpends,
                             currency = currency,
                             categoryEmojis = categoryEmojis,
+                            onEditDates = {
+                                appViewModel.openSheet(
+                                    PathState(
+                                        name = FINISH_DATE_SELECTOR_SHEET,
+                                        args = mapOf(
+                                            "initialStartDate" to selectedPeriod.startDate,
+                                            "initialDate" to selectedPeriod.finishDate,
+                                            "disableBeforeDate" to null,
+                                            "disableAfterDate" to null,
+                                        ),
+                                        callback = { result ->
+                                            if (!result.containsKey("finishDate")) return@PathState
+                                            val finishDate = result["finishDate"] as Date
+                                            val startDate = result["startDate"] as Date
+                                            coroutineScope.launch {
+                                                archivesViewModel.updatePeriodDates(
+                                                    selectedPeriod.id,
+                                                    startDate,
+                                                    finishDate,
+                                                )
+                                                appViewModel.showSnackbar(
+                                                    context.getString(R.string.period_dates_updated)
+                                                )
+                                            }
+                                        }
+                                    )
+                                )
+                            },
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
