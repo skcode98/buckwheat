@@ -20,11 +20,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +43,6 @@ import com.danilkinkin.buckwheat.ui.colorBad
 import com.danilkinkin.buckwheat.ui.colorGood
 import com.danilkinkin.buckwheat.ui.colorMax
 import com.danilkinkin.buckwheat.ui.colorMin
-import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.harmonize
 import com.danilkinkin.buckwheat.util.isZero
@@ -146,29 +146,22 @@ fun SpendsTrendCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            val maxColor = toPalette(harmonize(colorMax))
-            val minColor = toPalette(harmonize(colorMin))
-            val barColors = remember(dailyTotals, maxDaily, maxColor, minColor) {
-                dailyTotals.map { value ->
-                    val fraction = if (maxDaily.isZero()) {
-                        0f
-                    } else {
-                        value.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
-                    }
-                    combineColors(minColor.main, maxColor.main, fraction)
-                }
-            }
+            val lineColor = MaterialTheme.colorScheme.primary
+            val maxColor = toPalette(harmonize(colorMax)).main
+            val minColor = toPalette(harmonize(colorMin)).main
 
-            SpendsTrendBars(
+            SpendsTrendAreaChart(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp),
                 dailyTotals = dailyTotals,
                 maxDaily = maxDaily,
-                barColors = barColors,
                 averageDaily = averageDaily,
                 selectedDay = selectedDay,
-                highlightColor = maxColor.main,
+                lineColor = lineColor,
+                maxColor = maxColor,
+                minColor = minColor,
+                cardColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 averageLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 onDayTap = { selectedDay = it },
             )
@@ -249,14 +242,16 @@ fun SpendsTrendCard(
 }
 
 @Composable
-private fun SpendsTrendBars(
+private fun SpendsTrendAreaChart(
     modifier: Modifier = Modifier,
     dailyTotals: List<BigDecimal>,
     maxDaily: BigDecimal,
-    barColors: List<Color>,
     averageDaily: BigDecimal,
     selectedDay: Int?,
-    highlightColor: Color,
+    lineColor: Color,
+    maxColor: Color,
+    minColor: Color,
+    cardColor: Color,
     averageLineColor: Color,
     onDayTap: (Int) -> Unit,
 ) {
@@ -277,31 +272,52 @@ private fun SpendsTrendBars(
         if (dailyTotals.isEmpty()) return@Canvas
 
         val slotWidth = size.width / dailyTotals.size
-        val barWidth = slotWidth * 0.6f
-        val barHeightMin = size.height * 0.01f
+        val maxIndex = if (maxDaily.isZero()) null else dailyTotals.indexOf(maxDaily)
+        val lowestSpentDay = dailyTotals.filter { it > BigDecimal.ZERO }.minOrNull()
+        val minIndex = if (lowestSpentDay != null) dailyTotals.indexOf(lowestSpentDay) else null
 
-        dailyTotals.forEachIndexed { index, value ->
+        fun yFor(value: BigDecimal): Float {
             val fraction = if (maxDaily.isZero()) {
                 0f
             } else {
                 value.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
             }
-            val barHeight = (size.height * fraction).coerceAtLeast(barHeightMin)
-
-            drawRoundRect(
-                color = if (index == selectedDay) highlightColor else barColors[index],
-                topLeft = Offset(
-                    x = index * slotWidth + (slotWidth - barWidth) / 2f,
-                    y = size.height - barHeight,
-                ),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-            )
+            return size.height * (1f - fraction)
         }
 
+        fun pointAt(index: Int): Offset = Offset(
+            x = (index + 0.5f) * slotWidth,
+            y = yFor(dailyTotals[index]),
+        )
+
+        val points = dailyTotals.indices.map { pointAt(it) }
+        val topPath = smoothPath(points)
+
+        // Gradient area fill under the smooth line.
+        val areaPath = Path().apply {
+            addPath(topPath)
+            lineTo((dailyTotals.size - 0.5f) * slotWidth, size.height)
+            lineTo(slotWidth / 2f, size.height)
+            close()
+        }
+        drawPath(
+            path = areaPath,
+            brush = Brush.verticalGradient(
+                0f to lineColor.copy(alpha = 0.25f),
+                1f to lineColor.copy(alpha = 0.02f),
+            ),
+        )
+
+        // Smooth trend line.
+        drawPath(
+            path = topPath,
+            color = lineColor,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+
+        // Average reference line.
         if (!maxDaily.isZero() && averageDaily > BigDecimal.ZERO) {
-            val avgFraction = averageDaily.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
-            val avgY = size.height * (1f - avgFraction)
+            val avgY = yFor(averageDaily)
             drawLine(
                 color = averageLineColor,
                 start = Offset(0f, avgY),
@@ -310,7 +326,59 @@ private fun SpendsTrendBars(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)),
             )
         }
+
+        fun drawMarker(index: Int?, color: Color) {
+            if (index == null) return
+            val center = pointAt(index)
+            drawCircle(color = cardColor, radius = 8.dp.toPx(), center = center)
+            drawCircle(color = color, radius = 5.dp.toPx(), center = center)
+        }
+
+        drawMarker(maxIndex, maxColor)
+        drawMarker(minIndex, minColor)
+
+        // Tapped day gets a guide line + a filled highlight point on top.
+        val selected = selectedDay
+        if (selected != null && selected in dailyTotals.indices) {
+            val center = pointAt(selected)
+            drawLine(
+                color = lineColor.copy(alpha = 0.25f),
+                start = Offset(center.x, size.height),
+                end = Offset(center.x, 0f),
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawCircle(color = cardColor, radius = 9.dp.toPx(), center = center)
+            drawCircle(color = lineColor, radius = 6.dp.toPx(), center = center)
+        }
     }
+}
+
+// Builds a smooth path through the given points using Catmull-Rom interpolation converted
+// to cubic Bézier segments, so the curve passes through every point.
+private fun smoothPath(points: List<Offset>): Path {
+    val path = Path()
+    if (points.isEmpty()) return path
+
+    path.moveTo(points[0].x, points[0].y)
+    if (points.size == 1) return path
+
+    for (i in 0 until points.size - 1) {
+        val p0 = points[(i - 1).coerceAtLeast(0)]
+        val p1 = points[i]
+        val p2 = points[i + 1]
+        val p3 = points[(i + 2).coerceAtMost(points.size - 1)]
+
+        val c1 = Offset(
+            x = p1.x + (p2.x - p0.x) / 6f,
+            y = p1.y + (p2.y - p0.y) / 6f,
+        )
+        val c2 = Offset(
+            x = p2.x - (p3.x - p1.x) / 6f,
+            y = p2.y - (p3.y - p1.y) / 6f,
+        )
+        path.cubicTo(c1.x, c1.y, c2.x, c2.y, p2.x, p2.y)
+    }
+    return path
 }
 
 private fun formatDeltaPercent(deltaPercent: BigDecimal): String {
