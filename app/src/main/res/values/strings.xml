@@ -346,6 +346,7 @@
   <string name="period_summary_highlights">Highlights</string>
   <string name="period_summary_no_budget">No budget</string>
   <string name="period_summary_expenditure">Month expenditure</string>
+  <string name="period_summary_peak_spend">Peak Spend: %1$s on %2$s</string>
   <string name="period_summary_budget">Budget: %1$s</string>
   <string name="period_summary_avg_day">Avg per day</string>
   <string name="period_summary_tap_hint">Tap the chart for day details</string>
