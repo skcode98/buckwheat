@@ -273,7 +273,8 @@ fun ExtendWidgetContent() {
                                             ExtendWidget.tinyMode -> 48.dp
                                             else -> 16.dp
                                         }
-                                    ),
+                                    )
+                                    .cornerRadius(32.dp),
                             ) {
 
                             }

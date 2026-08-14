@@ -189,7 +189,9 @@ internal fun buildOfflineReport(
                 delta.signum() < 0 -> "down"
                 else -> "unchanged"
             }
-            val rounded = delta.abs().setScale(0, RoundingMode.HALF_UP).toInt()
+            val rounded = delta.abs().setScale(0, RoundingMode.HALF_UP)
+                .coerceIn(java.math.BigDecimal.valueOf(Int.MIN_VALUE.toLong()), java.math.BigDecimal.valueOf(Int.MAX_VALUE.toLong()))
+                .toInt()
             bullets += "• That's $direction $rounded% versus the previous period."
         }
     }

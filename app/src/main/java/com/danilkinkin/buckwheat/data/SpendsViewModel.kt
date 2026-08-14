@@ -326,8 +326,11 @@ class SpendsViewModel @Inject constructor(
 
                 processDueRecurringPayments()
 
+                val newDailyBudget = spendsRepository.getDailyBudget().first()
+                val newSpentFromDailyBudget = spendsRepository.getSpentFromDailyBudget().first()
+
                 // Bug fix: hide the overspending warning again once today is back under budget
-                if (dailyBudget - spentFromDailyBudget > BigDecimal.ZERO) {
+                if (newDailyBudget - newSpentFromDailyBudget > BigDecimal.ZERO) {
                     hideOverspendingWarn(false)
                 }
             }

@@ -68,7 +68,8 @@ fun TaggingToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
-            tags.take(5).reversed().filter { it != currentComment }.forEach { tag ->
+            tags.take(5).reversed().forEach { tag ->
+                val isSelected = tag == currentComment
                 AnimatedVisibility(
                     visible = showAddComment,
                     enter = fadeIn(
@@ -95,7 +96,11 @@ fun TaggingToolbar(
                     ) { with(localDensity) { 30.dp.toPx().toInt() } },
                 ) {
                     Tag(value = tag, onClick = {
-                        editorViewModel.currentComment.value = tag
+                        if (isSelected) {
+                            editorViewModel.currentComment.value = ""
+                        } else {
+                            editorViewModel.currentComment.value = tag
+                        }
                     })
                 }
             }

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -130,6 +131,7 @@ fun LangSwitcherDialog(onClose: () -> Unit) {
             }
             Column(
                 modifier = Modifier
+                    .fillMaxHeight()
                     .verticalScroll(scrollState).padding(bottom = navigationBarHeight),
             ) {
                 CheckedRow(

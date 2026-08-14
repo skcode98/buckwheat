@@ -50,7 +50,9 @@ fun SpendForecastCard(
             Text(
                 text = stringResource(
                     R.string.forecast_projected,
-                    forecast.projectedPercent.setScale(0, java.math.RoundingMode.HALF_UP).toInt(),
+                    forecast.projectedPercent.setScale(0, java.math.RoundingMode.HALF_UP)
+                        .coerceIn(java.math.BigDecimal.valueOf(Int.MIN_VALUE.toLong()), java.math.BigDecimal.valueOf(Int.MAX_VALUE.toLong()))
+                        .toInt(),
                     numberFormat(context, forecast.projectedTotal, currency),
                     prettyDate(finishDate, pattern = "dd MMM"),
                 ),

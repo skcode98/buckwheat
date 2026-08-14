@@ -210,42 +210,41 @@ fun CustomTag(
                         Spacer(Modifier.width(8.dp))
                     }
                 }
-                AnimatedContent(
-                    label = "openCloseTaggingEditor",
-                    targetState = isEdit,
-                    transitionSpec = {
-                        (fadeIn(
-                            tween(durationMillis = 250)
-                        ) togetherWith fadeOut(
-                            tween(durationMillis = 250)
-                        )).using(
-                            SizeTransform(clip = false)
-                        )
-                    }
-                ) { targetIsEdit ->
-                    if (this.transition.currentState == this.transition.targetState && targetIsEdit) {
-                        renderPopup = true
-                    }
+                Box(modifier = Modifier.heightIn(min = 44.dp)) {
+                    AnimatedContent(
+                        label = "openCloseTaggingEditor",
+                        targetState = isEdit,
+                        transitionSpec = {
+                            (fadeIn(
+                                tween(durationMillis = 250)
+                            ) togetherWith fadeOut(
+                                tween(durationMillis = 250)
+                            )).using(
+                                SizeTransform(clip = false)
+                            )
+                        }
+                    ) { targetIsEdit ->
+                        if (this.transition.currentState == this.transition.targetState && targetIsEdit) {
+                            renderPopup = true
+                        }
 
-                    if (targetIsEdit) {
-                        CommentEditor(
-                            value = value,
-                            onChange = {
-                                value = it
-                                // Keep the ViewModel in sync so that committing via the
-                                // number pad (without pressing the tag editor's own apply
-                                // button) does not silently drop the typed comment.
-                                editorViewModel.currentComment.value = it.text
-                            },
-                            onApply = { close() }
-                        )
-                    } else if (!onlyIcon || value.text.isNotEmpty()) {
-                        Text(
-                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp, end = 16.dp),
-                            text = value.text.ifEmpty { stringResource(R.string.add_comment) },
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        if (targetIsEdit) {
+                            CommentEditor(
+                                value = value,
+                                onChange = {
+                                    value = it
+                                    editorViewModel.currentComment.value = it.text
+                                },
+                                onApply = { close() }
+                            )
+                        } else if (!onlyIcon || value.text.isNotEmpty()) {
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp, end = 16.dp),
+                                text = value.text.ifEmpty { stringResource(R.string.add_comment) },
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
