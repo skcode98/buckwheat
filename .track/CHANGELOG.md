@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-14 (early) — Month-over-month trend card moved from Analytics to the Monthly report
+
+`spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `bd4b354`, pushed. User: "move month over month trend from analytics to monthly report". Removed the `MultiPeriodTrendCard` usage (and its `multiPeriodTotals` point-building) from `analytics/Analytics.kt` (it sat after `CompareToLastPeriodCard`). The card now renders inside the monthly report (`settings/AiInsightSheet.kt` `MonthReportBody`), placed right after the current-month `SpendsTrendCard` and before the category cards. It reuses `data.periods` + `data.summary.budget`/`data.summary.spent` + `data.startDate` from the report's existing `MonthOverviewData` — nothing new was fetched, and the pure `multiPeriodTotals` + `MultiPeriodTrendCard` composable + `MultiPeriodTrendTest` (9 cases) all stay in `analytics/` untouched (the report already imports its chart composables from there). Card still only renders when ≥2 periods have data.
+
 ## 2026-08-14 (early) — Past-period summary: whole-period expenditure graph + on-style min/max tiles
 
 `spotlessApply` + full `testDebugUnitTest` + `assembleDebug` green (**297 tests, 0 failures**); committed `446dfd4`, pushed. User: "period detailed card in past period is good i like it, but the colour used a bit of the style with the app; for min max use the same bg graph style way; also month expenditure in graph style — graph in bg and text on it; first have a graph for the whole period and highlight on max min and full budget text; keep some cards as they are". Reworked `settings/PeriodSummaryCard.kt` (rendered inside `settings/PeriodDetailSheet.kt`):
