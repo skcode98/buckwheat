@@ -11,6 +11,10 @@
 local.properties
 .java-version
 
+# Signing secrets (NEVER commit)
+keystore.properties
+/keystore/
+
 # Auto-managed session state (opencode compaction fix plugin)
 .track/.session-state.json
 

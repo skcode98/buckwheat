@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,6 +7,16 @@ plugins {
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.0"
 }
+
+// Release signing credentials. Kept out of the repo (see .gitignore): if keystore.properties
+// is missing, release builds fall back to the debug key so local/test builds still work.
+val keystoreProperties =
+    Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.exists()) {
+            load(file.inputStream())
+        }
+    }
 
 android {
     compileSdk = 36
@@ -30,7 +42,17 @@ android {
 
         getByName("release") {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (keystoreProperties.isNotEmpty()) {
+                    signingConfigs.create("release") {
+                        storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                        storePassword = keystoreProperties["storePassword"] as String
+                        keyAlias = keystoreProperties["keyAlias"] as String
+                        keyPassword = keystoreProperties["keyPassword"] as String
+                    }
+                } else {
+                    signingConfigs.getByName("debug")
+                }
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
