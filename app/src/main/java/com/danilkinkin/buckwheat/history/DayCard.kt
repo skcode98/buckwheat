@@ -106,7 +106,6 @@ fun DayCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
                         .padding(start = 16.dp, end = 12.dp),
                 ) {
                     TimelineRail(
