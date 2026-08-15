@@ -3,7 +3,6 @@ package com.danilkinkin.buckwheat.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -34,16 +33,7 @@ import java.util.Date
 import javax.inject.Inject
 
 
-@Composable
-fun Color.toColorProvider(): ColorProvider {
-    return try {
-        val constructor = ColorProvider::class.java.getDeclaredConstructor(Color::class.java)
-        constructor.isAccessible = true
-        constructor.newInstance(this)
-    } catch (e: Exception) {
-        LocalContentColor.current
-    }
-}
+fun Color.toColorProvider(): ColorProvider = ColorProvider(color = this)
 
 val LocalContentColor = compositionLocalOf<ColorProvider> { throw Error("No set") }
 val LocalAccentColor = compositionLocalOf<ColorProvider> { throw Error("No set") }
