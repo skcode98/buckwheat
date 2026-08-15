@@ -2,7 +2,7 @@
 
 ## 2026-08-15 — History screen redesigned as rounded per-day cards with category-timeline rows (merged design B + C)
 
-User chose the merged redesign: each day in History is a **rounded card** (design B) whose rows use the **category-timeline** look (design C). Uncommitted (joins the existing uncommitted chart-fix + editor/dao/docs set).
+User chose the merged redesign: each day in History is a **rounded card** (design B) whose rows use the **category-timeline** look (design C). Committed `a0883e2`, pushed (batched with the chart-fix + editor/dao/docs work).
 
 - **`history/ListAnimation.kt`** — `RowEntityType { DayDivider, Spent, DayTotal }` replaced by a single day-card `RowEntity(key, contentHash?, day, transactions, firstTransactionIndex, dayTotal?)`. The key is the day's date (`"day-$day"`), so a whole day card animates in/out as one item while a single-edit content-hash update keeps the card in place (no exit animation).
 - **`history/History.kt`** — `composeHistoryRows` (now `internal`) groups entries by `entry.date.toLocalDate()` into one card per date, sorted ascending then `reversed()` (newest day first; transactions inside a day stay oldest-first — list order preserved). Computes each card's `firstTransactionIndex` (running transaction count across ALL days in ascending-date order, feeds the tutorial), `dayTotal`, and a `contentHash` covering every transaction in the day. Render block delegates to `DayCard`.
