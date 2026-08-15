@@ -142,7 +142,7 @@ internal fun TimelineRowContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 10.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
