@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-08-15 — Decision: History redesigned as rounded per-day cards whose rows use the category-timeline layout (merged design B + C); animate by DAY, not by row
+
+**Decision**: Rebuilt the History list as one **rounded card per day** (design B) whose rows use the **category-timeline** look (design C): `RowEntity` in `history/ListAnimation.kt` went from one entity per transaction/divider to **one per day** — `RowEntity(key, contentHash?, day, transactions, firstTransactionIndex, dayTotal?)` keyed by the day's date (`"day-$day"`). `composeHistoryRows` groups entries by `entry.date.toLocalDate()` ascending then `reversed()` (newest day first; transactions inside a day stay oldest-first), computes `firstTransactionIndex` in ascending-date order, `dayTotal`, and a `contentHash` covering every transaction in the day. New `DayCard.kt` (22dp rounded card in `DayCardContainerColor` = `combineColors(surface, surfaceVariant, 0.3f)`, header + per-row `TimelineRail` and `SwipeRowSheet`) and `TimelineRow.kt` (`categoryLabelFor`, `timelinePaletteFor` mirroring the analytics `baseColors`→`harmonizeWithColor`→`toPalette` mapping). Deleted `SpentItem.kt`/`HistoryDateDivider.kt`/`TotalPerDay.kt`; `SpentItemActions.kt` preserved tap-edit + long-press copy/edit/delete, now rendering `TimelineRowContent`.
+
+**Why**: The user explicitly chose the merged B+C concept, and day-card keying is the structurally right animation unit — a whole day animates in/out as one item while a single edit keeps its card in place via the existing content-hash check (no per-row reordering churn, no regression risk to the `ListAnimation` crash fixes). Keeping `firstTransactionIndex` ascending makes tutorial/scroll math independent of the reversed display order. Colors reuses the analytics category mapping so the same category is drawn identically everywhere.
+
+**Outcome**: Rewritten `ListAnimationTest` (4) + new `HistoryRowsTest` (6; grouping/filter/hash/archived-in-search). Golden pipeline green: **305 tests, 0 failures** (299 → 305). See LESSONS.md Issue 32.
+
+---
+
+## 2026-08-15 — Decision: fix chart clipping at the shared `smoothPath` primitive + add a plotting band to the trend charts
+
+**Decision**: Fixed "the graph look like start from lower ... the bottom or up part is cut" across the three smooth area-line charts (`SpendsTrendCard`, `MultiPeriodTrendCard`, `PeriodSummaryCard.ExpenditureAreaChart`) with two coordinated changes:
+1. **`smoothPath` clamps control-point y into the data's `[minY, maxY]`** (curve math extracted to pure `internal smoothSegments`). Catmull-Rom control points overshoot the data extent by up to `neighborDelta/6` (a two-equal-high-days plateau pushed the curve ~16dp above the top on the 96dp charts) — because a cubic Bézier lies inside the convex hull of its control points, clamping c1.y/c2.y guarantees the entire curve stays in-band. This fixed `ExpenditureAreaChart`, which already had 8dp insets but still poked above the card.
+2. **`SpendsTrendAreaChart` + `MultiPeriodTrendChart` plot inside a band** (`topInset = 12.dp`, `bottomInset = 6.dp`). Previously they mapped the max to `y = 0` (top edge) and zero to `y = size.height` (bottom edge), so the peak marker ring (6–8dp) and the line were half-clipped and zero-dots clipped at the bottom.
+
+**Why**: Fixing the shared `smoothPath` protects every caller (all three charts use it, and the clamping is lossless for data fidelity), while the inset band gives the markers real headroom — the clamp alone can't save a marker whose center sits on the edge. This mirrors the codebase's "fix in the shared primitive + pure function + regression test" pattern (`SmoothPathTest`, 4 cases).
+
+---
+
+## 2026-08-15 — Decision: guard the shared donut chart against empty items instead of patching each caller
+
+**Decision**: Fixed the "Monthly report crashes on a period with no spend records" bug at the shared primitive: `DonutChart` now early-returns on empty `items`, and the per-item angle math was extracted into a pure `internal donutItemAngles(items)` (empty → `emptyList()`, zero-total → equal `360/n` slices, tiny slices padded to the 28° minimum with redistribution). The two empty-data callers were then made visually correct: `CategoriesChartCard` routes empty `tags` to its existing "We can't split your spends by categories" branch, and `SpendCategoriesCard` renders the donut only when categories exist (its "not enough data" text is now reachable).
+
+**Why**: The crash came from `reduce` on an empty list inside `DonutChart`, which is fed by several data-driven callers. Guarding the primitive protects every current and future caller in one place, while extracting the math keeps the empty/zero-total edge cases unit-testable (5 new `DonutChartTest` cases) — matching the codebase's "pure function + regression test" pattern.
+
+---
+
+## 2026-08-15 — Decision: AI model is optional (blank = provider default); model dropdown removed from settings sheet
+
+**Decision**: `6e9a23a` made the model field optional in `AiBackendConfig`/`resolveAiBackendConfig` (blank model is simply omitted from the chat-completions body so the service provider picks its default). `10aa493` then removed the model state, dropdown, and `VoiceAiSettingsViewModel` dependency from `VoiceAiSettingsSheet.kt` — the settings sheet now manages only provider URL + API key. `loadFreeModels`/`DEFAULT_MODEL_PRESETS`/`VoiceAiSettingsViewModel` remain in the codebase but are no longer called from the sheet.
+
+**Why**: The single-backend migration (`7e0d0f8`) made the backend fully user-supplied and routing/deduping is the backend's job. A model dropdown that fetched `/v1/models` and could break the whole sheet for a misconfigured URL added friction; the backend defaults to a sensible model when none is sent, so the UI no longer needs to guess model ids. The test connection uses `model = ""` to validate URL + key only.
+
+---
+
 ## 2026-08-13 — Decision: Interleaved budgets removed entirely (engine, UI, tests)
 
 **Decision**: Deleted the interleaved-budgets feature — `interleaved/InterleavedBudget.kt`, `interleaved/AnalyzeSpendingPatterns.kt`, `analytics/InterleavedBudgetCard.kt`, `settings/InterleavedAnchorSheet.kt`, and all 5 interleaved test suites. `CategoryCapsSheet` went back to a plain cap editor (+ Remove cap + **Auto** = seed the cap with the current budget); `whatBudgetForDay`/`nextDayBudget` return plain recomputed values again (no daily-allowance overlay).
@@ -124,6 +160,8 @@
 ## 2026-08-09 — Decision: Voice AI default model → `openai/gpt-oss-20b:free`, defaults centralized
 
 **Why**: Live OpenRouter listing showed the old `nvidia/nemotron-3-ultra-550b-a55b:free` is rate-limited (HTTP 429) → surfaced as "wrong parse / no AI". Centralizing defaults + `normalizeVoiceAiModel` auto-upgrades already-saved settings on-device without a sheet visit.
+
+> **SUPERSEDED 2026-08-14**: the multi-provider engine + `normalizeVoiceAiModel`/`DEFAULT_VOICE_AI_*` were removed by the single-backend migration (`7e0d0f8`); since `6e9a23a` the model is **optional** (blank = service-provider default, no app-side default), and the settings sheet no longer edits it (`10aa493`).
 
 ---
 

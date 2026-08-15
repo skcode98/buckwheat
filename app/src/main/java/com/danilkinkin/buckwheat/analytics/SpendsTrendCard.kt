@@ -272,6 +272,10 @@ private fun SpendsTrendAreaChart(
     ) {
         if (dailyTotals.isEmpty()) return@Canvas
 
+        val topInset = 12.dp.toPx()
+        val bottomInset = 6.dp.toPx()
+        val chartBottom = size.height - bottomInset
+        val chartHeight = (size.height - topInset - bottomInset).coerceAtLeast(0f)
         val slotWidth = size.width / dailyTotals.size
         val maxIndex = if (maxDaily.isZero()) null else dailyTotals.indexOf(maxDaily)
         val lowestSpentDay = dailyTotals.filter { it > BigDecimal.ZERO }.minOrNull()
@@ -283,7 +287,7 @@ private fun SpendsTrendAreaChart(
             } else {
                 value.divide(maxDaily, 4, RoundingMode.HALF_EVEN).toFloat()
             }
-            return size.height * (1f - fraction)
+            return chartBottom - chartHeight * fraction
         }
 
         fun pointAt(index: Int): Offset = Offset(
@@ -297,8 +301,8 @@ private fun SpendsTrendAreaChart(
         // Gradient area fill under the smooth line.
         val areaPath = Path().apply {
             addPath(topPath)
-            lineTo((dailyTotals.size - 0.5f) * slotWidth, size.height)
-            lineTo(slotWidth / 2f, size.height)
+            lineTo((dailyTotals.size - 0.5f) * slotWidth, chartBottom)
+            lineTo(slotWidth / 2f, chartBottom)
             close()
         }
         drawPath(
@@ -306,6 +310,8 @@ private fun SpendsTrendAreaChart(
             brush = Brush.verticalGradient(
                 0f to lineColor.copy(alpha = 0.25f),
                 1f to lineColor.copy(alpha = 0.02f),
+                startY = topInset,
+                endY = chartBottom,
             ),
         )
 
@@ -344,8 +350,8 @@ private fun SpendsTrendAreaChart(
             val center = pointAt(selected)
             drawLine(
                 color = lineColor.copy(alpha = 0.25f),
-                start = Offset(center.x, size.height),
-                end = Offset(center.x, 0f),
+                start = Offset(center.x, chartBottom),
+                end = Offset(center.x, topInset),
                 strokeWidth = 1.dp.toPx(),
             )
             drawCircle(color = cardColor, radius = 9.dp.toPx(), center = center)

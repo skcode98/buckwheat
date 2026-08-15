@@ -159,7 +159,7 @@ fun CategoriesChartCard(
             ),
         )
     ) {
-        if (tags.size == 1 && tags.first().name == labelWithoutTag) {
+        if (tags.isEmpty() || (tags.size == 1 && tags.first().name == labelWithoutTag)) {
             Box {
                 Column(
                     modifier = Modifier

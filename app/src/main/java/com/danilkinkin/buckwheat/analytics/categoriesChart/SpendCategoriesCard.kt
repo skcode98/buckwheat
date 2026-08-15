@@ -148,12 +148,14 @@ fun SpendCategoriesCard(
                 Spacer(Modifier.height(8.dp))
             }
             Spacer(Modifier.height(8.dp))
-            DonutChart(
-                modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .size(64.dp),
-                items = categories.map { it.second },
-            )
+            if (categories.isNotEmpty()) {
+                DonutChart(
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .size(64.dp),
+                    items = categories.map { it.second },
+                )
+            }
             if (categories.isEmpty()) {
                 Box(Modifier.padding(vertical = 8.dp)) {
                     Text(

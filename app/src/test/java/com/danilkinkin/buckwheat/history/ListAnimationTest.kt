@@ -1,11 +1,14 @@
 package com.danilkinkin.buckwheat.history
 
 import androidx.compose.animation.core.MutableTransitionState
+import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.util.Date
 
 /**
  * Regression tests for the history list animation (ListAnimation.kt).
@@ -16,20 +19,35 @@ import java.time.LocalDate
  * out - and the old dispatch then read `newList[position + i]` out of bounds
  * (IndexOutOfBoundsException when searching or editing a record's date).
  *
+ * With the day-card model each `RowEntity` is one full day, so a single in-place edit
+ * updates the whole card without an animation while whole days animate in/out by key.
  * The LazyColumn in [animatedItemsIndexed] is keyed by a per-instance [AnimatedItem.id]
- * so a moved row never produces two items with the same key.
+ * so a moved card never produces two items with the same key.
  */
 class ListAnimationTest {
 
-    private fun row(type: RowEntityType, key: String, hash: String = key) =
-        RowEntity(
-            type = type,
-            key = key,
-            contentHash = hash,
-            day = LocalDate.of(2026, 8, 5),
-            transaction = null,
-            dayTotal = null,
-        )
+    private var nextUid = 1
+
+    private fun tx(comment: String): Transaction =
+        Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(10),
+            date = Date(1780000000000 + nextUid * 1000L),
+            comment = comment,
+        ).also { it.uid = nextUid++ }
+
+    private fun row(
+        key: String,
+        hash: String = key,
+        vararg transactions: Transaction,
+    ): RowEntity = RowEntity(
+        key = key,
+        contentHash = hash,
+        day = LocalDate.of(2026, 8, 5),
+        transactions = transactions.toList(),
+        firstTransactionIndex = 0,
+        dayTotal = transactions.sumOf { it.value },
+    )
 
     /**
      * Simulates the composite construction performed by `updateAnimatedItemsState` and
@@ -61,7 +79,7 @@ class ListAnimationTest {
                 oldIndexOfComposite.add(oldIndex)
             } else {
                 val animated = AnimatedItem(
-                    visibility = androidx.compose.animation.core.MutableTransitionState(false),
+                    visibility = MutableTransitionState(false),
                     row,
                 )
                 animated.visibility.targetState = true
@@ -85,31 +103,26 @@ class ListAnimationTest {
     }
 
     @Test
-    fun movedRowKeepsItsInstanceAndMovesIntoPlace() {
-        // Old list: a single day with two spends.
-        val oldRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-50.00-a-1780000000000"),
-            row(RowEntityType.Spent, "spent-2", "spent-2-30.00-b-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-80.00"),
-        )
-        val oldList = oldRows.map { AnimatedItem(MutableTransitionState(true), it) }
+    fun transactionMovedToAnotherDayUpdatesBothDayCardsInPlace() {
+        // Old list: one day with two spends.
+        val tx1 = tx("coffee")
+        val tx2 = tx("lunch")
+        val oldList = listOf(
+            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
+        ).map { AnimatedItem(MutableTransitionState(true), it) }
 
-        // New list: spent-2 moved to another day (date edit) - the row keeps its key.
+        // New list: tx2 was moved to the next day (date edit) - both day cards keep their keys.
         val newRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-06"),
-            row(RowEntityType.Spent, "spent-2", "spent-2-30.00-b-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-06", "total-2026-08-06-30.00"),
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-50.00-a-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-50.00"),
+            row("day-2026-08-06", "day-2026-08-06-b", tx2),
+            row("day-2026-08-05", "day-2026-08-05-a", tx1),
         )
 
         val composite = simulateDispatch(oldList, newRows)
 
-        // A moved row is reused (no duplicate, no spurious exit animation) and the final
+        // The day cards are reused (no duplicate, no spurious exit animation) and the final
         // live rows match newList exactly.
-        assertEquals(1, composite.count { it.item.key == "spent-2" && it.visibility.targetState })
+        assertEquals(1, composite.count { it.item.key == "day-2026-08-05" && it.visibility.targetState })
+        assertEquals(1, composite.count { it.item.key == "day-2026-08-06" && it.visibility.targetState })
         val live = composite.filter { it.visibility.targetState }.map { it.item.key }
         assertEquals(newRows.map { it.key }, live)
         val ids = composite.map { it.id }
@@ -119,23 +132,18 @@ class ListAnimationTest {
     @Test
     fun searchFilteringThatDropsWholeDaysKeepsUniqueIds() {
         // Two days, three spends.
-        val oldRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-06"),
-            row(RowEntityType.Spent, "spent-3", "spent-3-10.00-x-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-06", "total-2026-08-06-10.00"),
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-50.00-a-1780000000000"),
-            row(RowEntityType.Spent, "spent-2", "spent-2-30.00-b-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-80.00"),
-        )
-        val oldList = oldRows.map { AnimatedItem(MutableTransitionState(true), it) }
+        val tx3 = tx("bus")
+        val tx1 = tx("coffee")
+        val tx2 = tx("lunch")
+        val oldList = listOf(
+            row("day-2026-08-06", "day-2026-08-06-x", tx3),
+            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
+        ).map { AnimatedItem(MutableTransitionState(true), it) }
 
-        // A search query that only matches spent-3: day of 05 Aug disappears entirely and
-        // the surviving rows keep their keys but shift positions.
+        // A search query that only matches tx3: the 05 Aug day disappears entirely and the
+        // surviving card keeps its key.
         val newRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-06"),
-            row(RowEntityType.Spent, "spent-3", "spent-3-10.00-x-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-06", "total-2026-08-06-10.00"),
+            row("day-2026-08-06", "day-2026-08-06-x", tx3),
         )
 
         val composite = simulateDispatch(oldList, newRows)
@@ -143,77 +151,70 @@ class ListAnimationTest {
         val ids = composite.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
 
-        // The whole 05 Aug day animates out; its rows must still be present during the
-        // exit window (they are what the exit animation plays on).
-        assertTrue(composite.any { it.item.key == "header-2026-08-05" && !it.visibility.targetState })
+        // The whole 05 Aug card animates out; it must still be present during the exit window.
+        assertTrue(composite.any { it.item.key == "day-2026-08-05" && !it.visibility.targetState })
         val live = composite.filter { it.visibility.targetState }.map { it.item.key }
         assertEquals(newRows.map { it.key }, live)
     }
 
     @Test
-    fun contentEditUpdatesInPlaceWithoutDuplicatingTheRow() {
-        val oldRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-50.00-a-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-50.00"),
-        )
-        val oldList = oldRows.map { AnimatedItem(MutableTransitionState(true), it) }
+    fun contentEditUpdatesInPlaceWithoutDuplicatingTheDay() {
+        val tx1 = tx("coffee")
+        val oldList = listOf(
+            row("day-2026-08-05", "day-2026-08-05-50.00", tx1),
+        ).map { AnimatedItem(MutableTransitionState(true), it) }
 
         // Same day, same key, only the value changed (e.g. editing the amount in place).
+        val edited = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal(90),
+            date = tx1.date,
+            comment = tx1.comment,
+        ).also { it.uid = tx1.uid }
         val newRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-90.00-a-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-90.00"),
+            row("day-2026-08-05", "day-2026-08-05-90.00", edited),
         )
 
         val composite = simulateDispatch(oldList, newRows)
 
-        // In-place update must not remove+reinsert: the spent-1 instance is reused.
-        assertEquals(1, composite.count { it.item.key == "spent-1" })
-        assertEquals(1, composite.count { it.item.key == "total-2026-08-05" })
+        // In-place update must not remove+reinsert: the day-card instance is reused.
+        assertEquals(1, composite.count { it.item.key == "day-2026-08-05" })
         assertEquals(newRows.size, composite.size)
+        assertEquals(BigDecimal(90), composite.first { it.item.key == "day-2026-08-05" }.item.dayTotal)
         val ids = composite.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
     }
 
     @Test
     fun lingeringRowsFromPreviousFrameDoNotReadPastNewList() {
-        // Frame 1 leaves rows animating out: search dropped the 05 Aug day. The composite
-        // therefore holds 7 items (4 live + 3 lingering) while the next keystroke produces
-        // a newList of only 4 rows.
+        // Frame 1 leaves a day animating out: search dropped the 05 Aug day. The composite
+        // therefore holds 2 items (1 live + 1 lingering) while the next keystroke produces
+        // a newList of only 1 row.
+        val tx3 = tx("bus")
+        val tx1 = tx("coffee")
+        val tx2 = tx("lunch")
         val liveRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-06", "header-2026-08-06-b"),
-            row(RowEntityType.Spent, "spent-3", "spent-3-10.00-x-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-06", "total-2026-08-06-b-10.00"),
+            row("day-2026-08-06", "day-2026-08-06-b", tx3),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
         val lingeringRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-05"),
-            row(RowEntityType.Spent, "spent-1", "spent-1-50.00-a-1780000000000"),
-            row(RowEntityType.Spent, "spent-2", "spent-2-30.00-b-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-80.00"),
+            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
         lingeringRows.forEach { it.visibility.targetState = false }
         val oldList = liveRows + lingeringRows
 
-        // Next keystroke: the query matches spent-2 as well, so the 05 Aug day comes back.
+        // Next keystroke: the query narrows further, so the 05 Aug day stays dropped and the
+        // surviving card's hash changes. Must not throw; previously this read
+        // newList[position + i] with a composite-space position past newList.size.
         val newRows = listOf(
-            row(RowEntityType.DayDivider, "header-2026-08-06", "header-2026-08-06-bu"),
-            row(RowEntityType.Spent, "spent-3", "spent-3-10.00-x-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-06", "total-2026-08-06-bu-10.00"),
-            row(RowEntityType.DayDivider, "header-2026-08-05", "header-2026-08-05-bu"),
-            row(RowEntityType.Spent, "spent-2", "spent-2-30.00-b-1780000000000"),
-            row(RowEntityType.DayTotal, "total-2026-08-05", "total-2026-08-05-bu-30.00"),
+            row("day-2026-08-06", "day-2026-08-06-bu", tx3),
         )
 
-        // Must not throw; previously this read newList[position + i] with a composite-space
-        // position past newList.size.
         val composite = simulateDispatch(oldList, newRows)
 
         val live = composite.filter { it.visibility.targetState }.map { it.item.key }
         assertEquals(newRows.map { it.key }, live)
-        assertTrue(composite.any { it.item.key == "spent-1" && !it.visibility.targetState })
+        assertTrue(composite.any { it.item.key == "day-2026-08-05" && !it.visibility.targetState })
         val ids = composite.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
     }
 }
-

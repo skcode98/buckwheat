@@ -6,6 +6,7 @@ import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import java.math.BigDecimal
+import java.util.Date
 
 class FakeBudgetPeriodDao : BudgetPeriodDao {
     private val periods = mutableListOf<BudgetPeriod>()
@@ -71,6 +72,15 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         val index = periods.indexOfFirst { it.id == periodId }
         if (index >= 0) {
             periods[index] = periods[index].copy(totalSpent = totalSpent).also { it.id = periodId }
+        }
+    }
+
+    override suspend fun updateDates(id: Int, startDate: Date, finishDate: Date) {
+        val index = periods.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            periods[index] = periods[index]
+                .copy(startDate = startDate, finishDate = finishDate)
+                .also { it.id = id }
         }
     }
 

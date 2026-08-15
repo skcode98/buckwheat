@@ -127,7 +127,7 @@ com.danilkinkin.buckwheat/
 │   │   ├── StorageDao.kt      # Key-value storage (legacy)
 │   │   ├── SavedTagDao.kt     # Persistent tags
 │   │   ├── SavedCategoryDao.kt# Persistent custom categories (unique name index)
-│   │   ├── BudgetPeriodDao.kt # Periods + archived periods + archived transactions
+│   │   ├── BudgetPeriodDao.kt # Periods + archived periods + archived transactions (+ updateDates for period-detail date editing)
 │   │   ├── RecurringDao.kt    # Recurring templates
 │   │   └── SavingsGoalDao.kt  # Savings goals
 │   ├── entities/
@@ -198,7 +198,7 @@ com.danilkinkin.buckwheat/
 │   ├── Total.kt                # Total spend display
 │   ├── DaysLeftCard.kt
 │   ├── EditButton.kt
-│   ├── FinishDateSelector.kt
+│   ├── FinishDateSelector.kt # Calendar range picker (+ optional disableBefore/AfterDate bounds since 15e6e24, reused by period-detail date editing)
 │   ├── FinishEarlyConfirm.kt
 │   ├── DefaultRecalcBudgetChooser.kt
 │   ├── CurrencyEditor.kt
@@ -207,14 +207,14 @@ com.danilkinkin.buckwheat/
 │   └── rememberExportCSV.kt    # CSV export launcher
 │
 ├── history/
-│   ├── History.kt              # Transaction history list
-│   ├── Spent.kt                # Spend item row
-│   ├── SpentItem.kt            # Animated spend item
-│   ├── SwipeActions.kt         # Swipe-to-delete/undo
-│   ├── TotalPerDay.kt
-│   ├── HistoryDateDivider.kt
+│   ├── History.kt              # Transaction history list (day grouping since 2026-08-15 redesign)
+│   ├── DayCard.kt              # Rounded per-day card (22dp, DayCardContainerColor) + header + SwipeRowSheet
+│   ├── TimelineRow.kt          # categoryLabelFor / timelinePaletteFor / TimelineRail / TimelineRowContent
+│   ├── Spent.kt                # Spend item row (composable primitive)
+│   ├── SpentItemActions.kt     # Tap-edit + long-press copy/edit/delete menu
+│   ├── SwipeActions.kt         # Swipe-to-edit/delete
 │   ├── NoSpends.kt
-│   └── ListAnimation.kt
+│   └── ListAnimation.kt        # RowEntity = ONE per-day card keyed "day-<date>"; content-hash in-place updates
 │
 ├── analytics/
 │   ├── Analytics.kt            # Analytics sheet (LaunchedEffect → categories)
@@ -250,6 +250,7 @@ com.danilkinkin.buckwheat/
 │   ├── LangSwitcher.kt
 │   ├── About.kt
 │   ├── TryWidget.kt
+│   ├── PastPeriodsSheet.kt + ArchivesViewModel.kt # Past periods list + selected-period/transactions + updatePeriodDates (since 15e6e24)
 │   ├── GoalsSheet.kt + GoalsViewModel.kt
 │   ├── RecurringPaymentsSheet.kt + RecurringPaymentsViewModel.kt
 │   ├── TagsManagementSheet.kt + TagsManagementViewModel.kt
@@ -257,7 +258,8 @@ com.danilkinkin.buckwheat/
 │   ├── BackupRestoreSetting.kt + BackupRestoreViewModel.kt
 │   ├── DailyBudgetReminderSetting.kt
 │   ├── OverspendNotificationSetting.kt
-│   └── VoiceAiSettingsSheet.kt # API key / provider URL / model (shared with categories)
+│   ├── VoiceAiSettingsViewModel.kt # loadFreeModels/DEFAULT_MODEL_PRESETS (not called by the sheet since 10aa493)
+│   └── VoiceAiSettingsSheet.kt # API key + provider URL only (model optional/blank since 6e9a23a; dropdown removed 10aa493), shared with categories
 │
 ├── onboarding/
 │   ├── Onboarding.kt           # First-launch walkthrough
@@ -341,6 +343,11 @@ com.danilkinkin.buckwheat/
 | `testDebugUnitTest` (Robolectric) still sees old string values after editing `strings.xml` | The Gradle build cache / aapt2 link step (`processDebugResources`) can stay UP-TO-DATE on a resource edit. Fix: delete `app\build\intermediates\linked_resources_binary_format` (+ optionally the incremental merge dir) and rerun with `--no-build-cache` |
 | Compiler session files under `.kotlin/sessions/*.salive` | Never stage/commit them — `git restore --staged` before committing; they're transient build artifacts |
 | `spotlessCheck` reports UP-TO-DATE right after adding new files | Force a format pass with `spotlessApply` on new/changed files, then `spotlessCheck` |
+| New DAO method added without updating the test fakes | `assembleDebug` still compiles but `testDebugUnitTest` fails with "not abstract and does not implement abstract member". Grep `src/test` for classes implementing the DAO and add the override in the same change |
+| Editing the date picker's disable bounds but the picker still won't show past dates | A date picker blocks dates through TWO independent paths: the `disabledBefore`/`disabledAfter` bounds AND the rendered month range (`CalendarState.listMonths` starts at `disableBeforeDate ?: calendarStartDate`). If the calendar starts at the current month, earlier months are not even rendered. When a "fixed" date bug is re-reported, re-read the whole chain (`CalendarState` → `CalendarUiState.isDisabledDay` → rendered months) instead of patching the same line (LESSONS.md Issue 28) |
+| `reduce { }` / `.first()` on a data-driven list that can be empty (e.g. a chart fed period spends) | `reduce` throws `UnsupportedOperationException` on empty input — only `fold(initial)`/`firstOrNull()`/`maxByOrNull()` are empty-safe. Audit every chart/aggregation for the empty-list path, guard inside the shared chart primitive (e.g. `DonutChart` early-return), and extract the math into a pure function so the empty case is regression-tested (LESSONS.md Issue 30) |
+| Smooth `Canvas` line/area chart clips the peak at the top/bottom edge | Map the data's min/max to an INNER band (`topInset` ≥ max marker radius + margin, plus a bottom inset), never to `y=0`/`size.height` — otherwise the peak marker ring and line get half-clipped. ALSO: Catmull-Rom curves (`smoothPath`) overshoot their control points by up to `neighborDelta/6` (a two-equal-high-days plateau pushes the curve ~chartHeight/6 above the top), so a fixed inset alone is insufficient — clamp the control-point y into the data's `[minY, maxY]` (a cubic Bézier lives inside its control-point hull) (LESSONS.md Issue 31) |
+| Re-architecting an animated `LazyColumn` list (e.g. History rows → day cards) but forgetting the animation unit | Make the animation unit the GROUP that animates as one (the DAY), not the inner row: `ListAnimation.RowEntity` is now one entity per day keyed `"day-<date>"` with a `contentHash` over every transaction in the day — whole days enter/exit while a single edit updates the card in place. Keep per-item index math (`firstTransactionIndex`) computed in ascending order so it's independent of the reversed display order. When merging list redesigns, extract grouping + hashing into `internal` functions so the behavior stays unit-testable (LESSONS.md Issue 32) |
 
 ---
 

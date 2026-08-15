@@ -10,15 +10,16 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import java.math.BigDecimal
 import java.time.LocalDate
 
-enum class RowEntityType { DayDivider, Spent, DayTotal }
-
+// One rendered list entry: a full day card with its transactions and the day total.
+// The key is the day's date so editing a transaction updates the card in place while a
+// day that appears or disappears animates in/out as a whole.
 data class RowEntity(
-    val type: RowEntityType,
     val key: String,
     var contentHash: String? = null,
     val day: LocalDate,
-    val transaction: Transaction?,
-    var dayTotal: BigDecimal?,
+    val transactions: List<Transaction>,
+    val firstTransactionIndex: Int = 0,
+    var dayTotal: BigDecimal? = null,
 )
 
 @Suppress("UpdateTransitionLabel", "TransitionPropertiesLabel")

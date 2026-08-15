@@ -338,10 +338,72 @@ Applied the same fix to `periodTransactions`.
 
 ## Issue 28: Editor date picker blocked all back-dates
 
-**File:** `editor/dateTimeEdit/DateTimeEditPill.kt:85-90`
+**Files:** `editor/dateTimeEdit/DateTimeEditPill.kt` / `base/datePicker/model/CalendarState.kt`
 
-**Problem:** `DatePickerDialog` was called with `disableBeforeDate = spendsViewModel.startPeriodDate.value?.toLocalDate() ?: LocalDate.now()`. When no budget period was active, the fallback `LocalDate.now()` blocked every past date, making it impossible to add back-dated transactions.
+**Problem:** Users could not back-date a new spend entry in the editor. First reported (and thought fixed) after commit `eb3c2b1` removed a `?: LocalDate.now()` fallback on `disableBeforeDate` — but the symptom came back. The REAL regression was commit `657800f` ("restrict spend editor date picker to budget period"), which made two changes that together break back-dating even when `disableBeforeDate` is `null`:
+1. It re-added `disableBeforeDate = spendsViewModel.startPeriodDate.value?.toLocalDate()`. Any active budget period starting on/near today blocks every earlier date (`isDisabledDay` in `CalendarUiState`).
+2. It reverted `CalendarState.calendarStartDate` from `LocalDate.now().minusYears(1).withDayOfMonth(1)` back to `LocalDate.now().withDayOfMonth(1)`. `CalendarState` builds `listMonths` starting from `disableBeforeDate ?: calendarStartDate`, so with `disableBeforeDate = null` the calendar did not even RENDER past months — there was nothing to scroll to.
 
-**Fix:** Removed the `?: LocalDate.now()` fallback for `disableBeforeDate`. The date picker now uses the spend period's actual start date (or no lower bound if undefined), while `disableAfterDate` still defaults to today.
+This reversed the intended "past-day entries" behavior from `5a48234`.
 
-**Lesson:** `CalendarState.disableBeforeDate = null` means "no constraint", not "use today". Only pass a real constraint when you have one; do not paper over null with a default that changes the behavior.
+**Fix (2026-08-15):** In `DateTimeEditPill`, drop the budget-period constraint entirely for the editor: only `disableAfterDate = LocalDate.now()` remains (no future dates), past dates fully selectable. In `CalendarState`, restore `calendarStartDate` to one year back so prior months render when no `disableBeforeDate` is passed (callers that pass explicit bounds — `SpendsCalendar`, `FinishDateSelector` — are unaffected). Removed the now-unused `SpendsViewModel` param/import from the pill.
+
+**Lesson:** A date picker blocks dates through TWO independent paths: the `disabledBefore`/`disabledAfter` bounds AND the rendered month range (`listMonths` start). Fixing one path while the other still starts at the current month leaves the bug half-alive. When a "fixed" bug is re-reported, re-read the whole constraint chain (`CalendarState` → `CalendarUiState.isDisabledDay` → rendered month range) instead of patching the same line again. `CalendarState.disableBeforeDate = null` means "no constraint", not "use today" — do not paper over null with a default that changes behavior.
+
+---
+
+## Issue 29: Test fake classes must mirror new DAO methods or `testDebugUnitTest` compilation fails
+
+**Files:** `data/dao/BudgetPeriodDao.kt` / `test/.../di/FakeBudgetPeriodDao.kt`
+
+**Problem:** Commit `15e6e24` added `BudgetPeriodDao.updateDates(id, startDate, finishDate)` to support period-detail date editing, but the fake `FakeBudgetPeriodDao` (used by repository/VM tests) was never given the override. `:app:compileDebugUnitTestKotlin` failed with "Class 'FakeBudgetPeriodDao' is not abstract and does not implement abstract member: updateDates". The main source (`assembleDebug`) compiled fine — the break was invisible until the unit-test compile ran.
+
+**Fix:** Implemented `updateDates` on the fake to mirror Room semantics (`periods[index] = period.copy(startDate, finishDate)` with the id preserved).
+
+**Lesson:** Any DAO interface change must be applied to every fake implementation in `src/test` at the same time. When a build fails at `compileDebugUnitTestKotlin` with "not abstract and does not implement abstract member", grep the test sources for classes implementing that interface and add the missing overrides before committing.
+
+---
+
+## Issue 30: Monthly report crashes on a spend period with no records
+
+**Files:** `analytics/categoriesChart/DonutChart.kt` (root cause), `SpendCategoriesCard.kt`, `CategoriesChart.kt`
+
+**Problem:** With no spend records in the period, opening the Monthly report crashed. The root cause was `DonutChart.kt`'s `val total = items.map { it.amount }.reduce { acc, next -> acc + next }` — `reduce` on an empty list throws `UnsupportedOperationException`. Two cards in `MonthReportBody` (`settings/AiInsightSheet.kt`) pass empty lists to `DonutChart` when the period has no spends: `SpendCategoriesCard` called it unconditionally (its "not enough data" text was unreachable because the crash happened first) and `CategoriesChartCard`'s else-branch passed the empty `tags`. Every other report card already handled the empty case (`SpendsTrendCard`/`SpendsWeekdayCard`/`MultiPeriodTrendCard` guard `isEmpty()`, `SpendsCalendar` maps over an empty map, `buildOfflineReport` returns a friendly "No spending yet" text).
+
+**Fix:** (1) `DonutChart` now returns early on empty items, and the angle math was extracted into a pure `donutItemAngles(items)` (also guards a zero-total divide-by-zero by falling back to equal slices) so it is unit-testable. (2) `CategoriesChartCard` routes empty `tags` to its existing "We can't split your spends by categories" branch. (3) `SpendCategoriesCard` renders the donut only when categories exist, so the empty case shows just the no-data text. New `DonutChartTest` (5 cases: empty → empty, zero-total equal slices, single item, proportional split, tiny-slice padding/redistribution).
+
+**Lesson:** Kotlin collection `reduce`/`fold`-without-initial-value crashes on empty input — only `fold(initial)` and `firstOrNull`/`maxByOrNull` are empty-safe. When a "works with data" composable is fed data-driven lists, audit EVERY chart/aggregation for the empty-list path; guard inside the shared chart primitive (here `DonutChart`) so all callers are protected at once, and extract the math into a pure function so the empty case is regression-tested.
+
+---
+
+## Issue 31: Trend/area charts clip the peak at the top (no vertical padding)
+
+**Files:** `util/chart.kt` (`smoothPath`), `analytics/SpendsTrendCard.kt` (`SpendsTrendAreaChart`), `analytics/MultiPeriodTrendCard.kt` (`MultiPeriodTrendChart`), `settings/PeriodSummaryCard.kt` (`ExpenditureAreaChart`)
+
+**Problem:** User: "the monthly trend graph in analytics and monthly trend graph in monthly report also past period spend graph card ... the padding is not correct, the graph look like start from lower like the bottom or up part is cut". All three area-line charts had the same two defects:
+1. **No vertical insets**: `SpendsTrendAreaChart` and `MultiPeriodTrendChart` mapped the max value to `y = 0` (the canvas top edge) and zero to `y = size.height` (the bottom edge), so the max marker (a 6–8dp ring) and the smooth line's peak sat exactly on the edge and were half-clipped; zero-value dots/points were clipped at the bottom.
+2. **Catmull-Rom overshoot**: `smoothPath`'s control points `c1.y = p1.y + (p2.y − p0.y)/6` and `c2.y = p2.y − (p3.y − p1.y)/6` can push the curve **beyond** the data's vertical extent — a flat plateau of two equal high days makes both control points overshoot the top by up to ~chartHeight/6 (~16dp on the 96dp trend charts). Even `ExpenditureAreaChart`, which already had 8dp insets, still got its curve poking above the card top.
+
+**Fix:**
+- `smoothPath` now clamps `c1.y`/`c2.y` into the data points' `[minY, maxY]` range (`smoothSegments` extracted as a pure `internal` function returning the clamped control points, so the invariant is unit-testable). Because a cubic Bézier is a convex combination of its 4 control points, clamping the control points' y keeps the ENTIRE curve inside the data's vertical extent — no clipping, no misrepresenting the max.
+- `SpendsTrendAreaChart` + `MultiPeriodTrendChart` gained a plotting band: `topInset = 12.dp`, `bottomInset = 6.dp`, `yFor` maps into `[topInset, size.height − bottomInset]`, the gradient fill and selected-day guide line span the band instead of the full canvas.
+
+**Lesson:** When drawing a smooth line/area chart in a `Canvas`, the data's max/min must map to an INNER band (with at least marker-radius + a margin of headroom), not to the canvas edges — otherwise markers and the curve get clipped. And Catmull-Rom/`smoothPath` style curves overshoot their control points by up to `neighborDelta/6`; a fixed inset is not enough on its own — clamp the curve's control points to the data's y-extent (Bézier curves stay inside their control-point hull, so this is lossless for data fidelity).
+
+---
+
+## Issue 32: History list rebuilt as rounded per-day cards (merged design B + C)
+
+**Files:** `history/History.kt` (`composeHistoryRows`), `history/ListAnimation.kt` (`RowEntity`), `history/DayCard.kt` (new), `history/TimelineRow.kt` (new), `history/SpentItemActions.kt`; deleted `history/SpentItem.kt`, `history/HistoryDateDivider.kt`, `history/TotalPerDay.kt`
+
+**Problem:** The History screen was a flat list of separate spend rows with per-day "Day total" separators. The user picked a merged design: each day becomes a **rounded card** (design B) whose rows use the **category-timeline** look (design C) — an emoji category dot with a vertical connector rail, comment + "category · time" subtitle, right-aligned amount.
+
+**Fix (key structural decision — animate by DAY, not by row):**
+- `RowEntity` (in `ListAnimation.kt`) went from one entity per transaction/divider to **one entity per DAY**: `RowEntity(key, contentHash?, day, transactions, firstTransactionIndex, dayTotal?)`. The key is `"day-$day"` (the card's date), so a whole day card animates in/out as one item while a single edit keeps its card in place.
+- `composeHistoryRows` (now `internal`) groups entries by `entry.date.toLocalDate()`, sorts the day keys ascending, then maps + `reversed()` — **newest day first, transactions inside a day stay oldest-first** (same list order as before). It computes each card's `firstTransactionIndex` (the running transaction count across ALL days in ascending-date order — used for the tutorial `showTutorial(firstTransactionIndex + index)`), the `dayTotal`, and a `contentHash` that covers every transaction in the day (`"day-$day-" + joinToString("|") { it.contentHash }`).
+- `ListAnimation.updateAnimatedItemsState` keeps its content-hash in-place update (a changed day updates its card without an exit animation) and its key-based composite build (inserts positioned in the coordinate space of the previous composite, so lingering rows from a cancelled exit animation never read `newList[position + i]` out of bounds).
+- New `DayCard.kt`: `RoundedCornerShape(22.dp)` `Surface` in a new tinted `DayCardContainerColor` (`combineColors(surface, surfaceVariant, 0.3f)` — visible against the default background in both themes). `DayCardHeader` = weekday + today/date label left, "Day total:" + amount right, `HorizontalDivider` below. Each transaction renders a `TimelineRail` (emoji dot + vertical connector; `isLast` shortens the rail) next to `TimelineRowContent`.
+- New `TimelineRow.kt`: `categoryLabelFor` (built-in → `DEFAULT_EMOJI` + label res; custom → `SpendCategory.emojiFor` + stored name), `timelinePaletteFor` (category color via the same `baseColors`→`harmonizeWithColor`→`toPalette` mapping the analytics categories chart uses; OTHER → neutral primary; custom categories hash to a palette color), `TimelineRail`, `TimelineRowContent`.
+- Row behavior preserved: tap → edit, long-press → copy/edit/delete `DropdownMenu` (`SpentItemActions.kt`, now renders `TimelineRowContent`), per-row `SwipeActions` start-edit/end-delete with a new `SwipeRowSheet` reveal that matches the card tint + corner rounding (replaces the old inline reveal box).
+
+**Lesson:** When merging a "card per day" list redesign onto an animated `LazyColumn`, make the animation unit the DAY (`RowEntity` keyed by date), not the transaction. Day-card keying gives whole-day enter/exit animations for free AND keeps single-edit updates in place via the existing content-hash check — no per-row reordering churn. Keep `firstTransactionIndex` computed in ascending-date order so tutorial/scroll math is independent of the reversed display order, and extract every new rendering helper (`categoryLabelFor`, `timelinePaletteFor`) to `internal`/top-level functions so the grouping + hashing logic stays unit-testable (`HistoryRowsTest`, rewritten `ListAnimationTest`).

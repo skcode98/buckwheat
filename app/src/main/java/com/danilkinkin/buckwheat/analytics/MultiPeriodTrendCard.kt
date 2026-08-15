@@ -235,6 +235,10 @@ private fun MultiPeriodTrendChart(
     ) {
         if (points.isEmpty()) return@Canvas
 
+        val topInset = 12.dp.toPx()
+        val bottomInset = 6.dp.toPx()
+        val chartBottom = size.height - bottomInset
+        val chartHeight = (size.height - topInset - bottomInset).coerceAtLeast(0f)
         val slotWidth = size.width / points.size
 
         fun yFor(value: BigDecimal): Float {
@@ -243,7 +247,7 @@ private fun MultiPeriodTrendChart(
             } else {
                 value.divide(maxValue, 4, RoundingMode.HALF_EVEN).toFloat()
             }
-            return size.height * (1f - fraction)
+            return chartBottom - chartHeight * fraction
         }
 
         val spentPoints = points.mapIndexed { index, point ->
@@ -259,8 +263,8 @@ private fun MultiPeriodTrendChart(
         // Gradient area under the spent line.
         val areaPath = Path().apply {
             addPath(spentPath)
-            lineTo((points.size - 0.5f) * slotWidth, size.height)
-            lineTo(slotWidth / 2f, size.height)
+            lineTo((points.size - 0.5f) * slotWidth, chartBottom)
+            lineTo(slotWidth / 2f, chartBottom)
             close()
         }
         drawPath(
@@ -268,6 +272,8 @@ private fun MultiPeriodTrendChart(
             brush = Brush.verticalGradient(
                 0f to lineColor.copy(alpha = 0.25f),
                 1f to lineColor.copy(alpha = 0.02f),
+                startY = topInset,
+                endY = chartBottom,
             ),
         )
 
@@ -304,8 +310,8 @@ private fun MultiPeriodTrendChart(
             val center = spentPoints[selected]
             drawLine(
                 color = lineColor.copy(alpha = 0.25f),
-                start = Offset(center.x, size.height),
-                end = Offset(center.x, 0f),
+                start = Offset(center.x, chartBottom),
+                end = Offset(center.x, topInset),
                 strokeWidth = 1.dp.toPx(),
             )
             drawCircle(color = surfaceColor, radius = 8.dp.toPx(), center = center)
