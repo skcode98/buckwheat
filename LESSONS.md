@@ -350,6 +350,8 @@ This reversed the intended "past-day entries" behavior from `5a48234`.
 
 **Lesson:** A date picker blocks dates through TWO independent paths: the `disabledBefore`/`disabledAfter` bounds AND the rendered month range (`listMonths` start). Fixing one path while the other still starts at the current month leaves the bug half-alive. When a "fixed" bug is re-reported, re-read the whole constraint chain (`CalendarState` → `CalendarUiState.isDisabledDay` → rendered month range) instead of patching the same line again. `CalendarState.disableBeforeDate = null` means "no constraint", not "use today" — do not paper over null with a default that changes behavior.
 
+**Amendment (2026-08-16):** The editor floor was deliberately re-added by the user's explicit request, but with a DIFFERENT spec than the reverted `657800f`: enable only `startPeriodDate → today` (not `startPeriodDate → period end`) and render only `startPeriodDate → finishPeriodDate` months. The one-year-back default when no period exists is preserved (`calendarStartDate` untouched this time). `CalendarState` gained separate `showBeforeDate`/`showAfterDate` params (default = disable bounds) so the displayed month range can differ from the enabled range.
+
 ---
 
 ## Issue 29: Test fake classes must mirror new DAO methods or `testDebugUnitTest` compilation fails
@@ -407,3 +409,53 @@ This reversed the intended "past-day entries" behavior from `5a48234`.
 - Row behavior preserved: tap → edit, long-press → copy/edit/delete `DropdownMenu` (`SpentItemActions.kt`, now renders `TimelineRowContent`), per-row `SwipeActions` start-edit/end-delete with a new `SwipeRowSheet` reveal that matches the card tint + corner rounding (replaces the old inline reveal box).
 
 **Lesson:** When merging a "card per day" list redesign onto an animated `LazyColumn`, make the animation unit the DAY (`RowEntity` keyed by date), not the transaction. Day-card keying gives whole-day enter/exit animations for free AND keeps single-edit updates in place via the existing content-hash check — no per-row reordering churn. Keep `firstTransactionIndex` computed in ascending-date order so tutorial/scroll math is independent of the reversed display order, and extract every new rendering helper (`categoryLabelFor`, `timelinePaletteFor`) to `internal`/top-level functions so the grouping + hashing logic stays unit-testable (`HistoryRowsTest`, rewritten `ListAnimationTest`).
+
+---
+
+## Issue 33: Glance 1.1.1 category-widget build gotchas (battery pill bitmaps, ellipsized text, vector preview colors)
+
+**Files:** `app/.../widget/category/CategoryWidget.kt`, `res/drawable/category_app_widget_preview.xml`, `res/xml/category_app_widget_provider.xml`, `res/layout/category_app_widget_preview.xml`
+
+**Problem:** Building the "Buckwheat categories" Glance widget hit four compile/asset blockers. Glance 1.1.1 has NO Canvas/path composables (as established for the voice widget), so the battery pills are full-width `Image`s fed by bitmaps — and three more assumptions were wrong:
+1. The preview drawable referenced `@color/onSurfaceVariant`, which does NOT exist (`colors.xml` has only `primary`/`surface`/`onSurface`) → aapt2 compile failure. Hardcode `#66000000` in the vector.
+2. `TextStyle.color` in Glance expects a `ColorProvider`, not a Compose `Color` → `.toColorProvider()`.
+3. `TextUtils.ellipsize` needs an `android.text.TextPaint`, not a `Paint`.
+4. PowerShell's case-insensitive `-replace` mangled `secondaryColor`/`trackTextColor` named args and a brace/line-join at `CategoryWidget.kt:347` broke — after any PowerShell edit, re-read the changed region before building.
+
+**Lesson:** Glance widgets are bitmap world: verify every drawable color reference exists, call `.toColorProvider()` on Glance `TextStyle.color`, use `TextUtils.ellipsize` with a `TextPaint`, and never use PowerShell `-replace` (case-insensitive) on Kotlin identifiers — `spotlessApply`/`git diff` after edits. (Widget E2E on-device remains the authoritative render check — see CACHE.md.)
+
+---
+
+## Issue 34: History crashes on swipe — "Asking for intrinsic measurements of SubcomposeLayout layouts is not supported"
+
+**Files:** `history/DayCard.kt` (the transaction `Row` + `SwipeRowSheet`), `history/SwipeActions.kt` (`BoxWithConstraints`)
+
+**Problem:** User: "there are some issue with history page, when swipe down it break app". Crash log `Downloads/buckwheat-crash-20260815-181642.txt`:
+```
+java.lang.IllegalStateException: Asking for intrinsic measurements of SubcomposeLayout layouts is not supported
+  at androidx.compose.ui.node.LayoutNode$NoIntrinsicsMeasurePolicy.minIntrinsicHeight(LayoutNode.kt:690)
+  at ... MeasurePassDelegate.minIntrinsicHeight ...
+  at ... BoxMeasurePolicy.measure-3p2s80s(Box.kt:145)
+  at ... DefaultIntrinsicMeasurable.measure ... (Layout.kt:320)
+```
+Introduced by the day-card redesign `a0883e2`: each transaction row is `Row(Modifier.height(IntrinsicSize.Min)) { TimelineRail(...); Box(Modifier.weight(1f)) { SwipeActions(...) { ... } } }`. `SwipeActions` is built on `BoxWithConstraints` (a `SubcomposeLayout`). An `IntrinsicSize.Min` row runs an intrinsic-measurement pass and asks every child for `minIntrinsicHeight`; SubcomposeLayouts cannot answer (`NoIntrinsicsMeasurePolicy`) and throw. The old pre-redesign code had `SwipeActions` as the direct LazyColumn item root and only used `IntrinsicSize.Min` around the plain `SpentItemActions` reveal content — so it never intrinsic-measured the SubcomposeLayout, which is why the swipe worked before.
+
+**Fix:** Removed `.height(IntrinsicSize.Min)` from the transaction `Row` in `DayCard.kt`. Layout is identical: `TimelineRail` and the weighted `Box` are both wrap-content, so the row sizes to the tallest child either way. The `IntrinsicSize.Min` inside `SwipeRowSheet` wraps only a `Surface` + plain `SpentItemActions` (no SubcomposeLayouts) and was kept.
+
+**Lesson:** Never place a `SubcomposeLayout`-based composable (`BoxWithConstraints`, `LazyColumn` content, `AnimatedVisibility`, etc.) inside an `IntrinsicSize.Min`/`IntrinsicSize.Max` parent — the intrinsic-measure pass asks it for intrinsic sizes it cannot compute and Compose throws. `IntrinsicSize.*` is only safe around plain leaf composables. The exception message itself suggests adding a size modifier to the component (which removes the need for the intrinsic pass).
+
+---
+
+## Issue 35: Widget "Can't show content" — Glance `ColorProvider` is an interface, not a reflectable class
+
+**Files:** `widget/CommonWidgetReceiver.kt` (`Color.toColorProvider`), all widget composables that call it
+
+**Problem:** The categories widget showed "Can't show content" on-device while the other widgets worked. `Color.toColorProvider()` was:
+```kotlin
+ColorProvider::class.java.getDeclaredConstructor(Color::class.java)
+```
+i.e. reflection assuming `ColorProvider` has a public constructor. In Glance 1.1.1 `androidx.glance.unit.ColorProvider` is an **interface**; the public API is the top-level factory `fun ColorProvider(color: Color): ColorProvider`. So `getDeclaredConstructor` ALWAYS threw `NoSuchMethodException`. The `catch (e: Exception)` silently fell back to `LocalContentColor.current`, whose default composition-local value is `{ throw Error("No set") }` — and a `catch (e: Exception)` does NOT catch `Error`. Any widget that did not provide `LocalContentColor` aborted at composition → Glance's "Can't show content" fallback. The category widget was the only widget NOT providing `LocalContentColor` (voice/minimal/extend do), so only it failed — the others were silently using the wrong fallback color all along.
+
+**Fix:** `fun Color.toColorProvider(): ColorProvider = ColorProvider(color = this)` — use the public top-level factory; no reflection, no composable needed (the `@Composable` annotation existed only to read the composition-local fallback).
+
+**Lesson:** In Glance, when the docs/source show a top-level function with the same name as a class (`ColorProvider(color)`, `dp(value)`), the "class" may be an interface with no constructor — reflection will not work and fails silently under `catch (e: Exception)`. Two follow-on rules: (1) `catch (e: Exception)` will NOT catch `Error`s — if a fallback value can throw (a composition-local default that throws), the catch gives false confidence; (2) a widget-level failure isolated to ONE widget points at something that widget does NOT provide that the others do (here: `LocalContentColor`), so diff the widget compositions before hunting the shared code. Verified with Glance 1.1.1 sources extracted to `C:\Users\suraj\AppData\Local\Temp\opencode\glance-src` / `glance-appwidget-src`; E2E on-emulator confirmed the category widget renders after the fix.

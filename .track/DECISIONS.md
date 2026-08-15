@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-08-16 — Decision: re-add the editor date-picker period floor per the user's exact spec, decoupling "shown months" from "enabled days"
+
+**Decision**: The editor's spend date picker (`DateTimeEditPill` → `DatePickerDialog` → `CalendarState`) now passes `disableBeforeDate = startPeriodDate`, `disableAfterDate = LocalDate.now()`, `showBeforeDate = startPeriodDate`, `showAfterDate = finishPeriodDate`. `CalendarState` gained `showBeforeDate`/`showAfterDate` (defaulting to the disable bounds) so the rendered month range (`listMonths`) and the enabled-day bounds (`disabledBefore`/`disabledAfter`) can differ.
+
+**Why**: User: "the date selector display for year in editor when adding the new spend its should only show the spend period and only enable the spend start till today". This deliberately re-adds the period floor that was removed on 2026-08-15 (LESSONS Issue 28) — but the 2026-08-15 revert removed the floor because the old version (a) used `disableAfterDate = period end` (enabling dates after today) and (b) reverted `calendarStartDate` to the current month, so with no period the picker rendered no past months. This implementation avoids both regressions: enable range is explicitly `start → today` (not period end), the shown range is exactly the period, and `calendarStartDate` (one year back) is untouched, so a null period keeps the "no constraint" behavior. The two paths are kept in sync (shown range ⊇ enabled range) so there is no "rendered but unreachable" or "reachable but not rendered" state.
+
+**Outcome**: Golden pipeline green — `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **321 tests, 0 failures, 33 suites**. Committed `fb6b619`, pushed. See LESSONS Issue 28 (amendment) + Issue 35.
+
+---
+
+## 2026-08-15 — Decision: fix the History swipe crash at the `IntrinsicSize.Min` wrapper rather than changing the swipe composable
+
+**Decision**: Removed `Modifier.height(IntrinsicSize.Min)` from the per-transaction `Row` in `history/DayCard.kt`. The row's weighted `Box` contains `SwipeActions`, which is built on `BoxWithConstraints` (a `SubcomposeLayout`) — an `IntrinsicSize.Min` row forces an intrinsic measurement pass, and SubcomposeLayouts throw `IllegalStateException: Asking for intrinsic measurements of SubcomposeLayout layouts is not supported` (crash log `Downloads/buckwheat-crash-20260815-181642.txt`). The `IntrinsicSize.Min` inside `SwipeRowSheet` (wraps only a `Surface` + plain `SpentItemActions`) was kept.
+
+**Why**: The crash is a property of asking a SubcomposeLayout for intrinsic sizes — the correct fix is to stop asking, not to rework `SwipeActions` (which is old, proven code). The wrapper is also a no-op visually: `TimelineRail` and the weighted `Box` are both wrap-content, so the row sizes identically without the intrinsic hint. This matches the codebase's "fix in the right layer, keep the shared primitive intact" pattern.
+
+**Outcome**: Golden pipeline green — `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **321 tests, 0 failures, 33 suites**. On-device swipe E2E was skipped at the user's request (no emulator this run); verification = crash-stack analysis + old-vs-new structure comparison + green unit tests. See LESSONS.md Issue 34.
+
+---
+
 ## 2026-08-15 — Decision: History redesigned as rounded per-day cards whose rows use the category-timeline layout (merged design B + C); animate by DAY, not by row
 
 **Decision**: Rebuilt the History list as one **rounded card per day** (design B) whose rows use the **category-timeline** look (design C): `RowEntity` in `history/ListAnimation.kt` went from one entity per transaction/divider to **one per day** — `RowEntity(key, contentHash?, day, transactions, firstTransactionIndex, dayTotal?)` keyed by the day's date (`"day-$day"`). `composeHistoryRows` groups entries by `entry.date.toLocalDate()` ascending then `reversed()` (newest day first; transactions inside a day stay oldest-first), computes `firstTransactionIndex` in ascending-date order, `dayTotal`, and a `contentHash` covering every transaction in the day. New `DayCard.kt` (22dp rounded card in `DayCardContainerColor` = `combineColors(surface, surfaceVariant, 0.3f)`, header + per-row `TimelineRail` and `SwipeRowSheet`) and `TimelineRow.kt` (`categoryLabelFor`, `timelinePaletteFor` mirroring the analytics `baseColors`→`harmonizeWithColor`→`toPalette` mapping). Deleted `SpentItem.kt`/`HistoryDateDivider.kt`/`TotalPerDay.kt`; `SpentItemActions.kt` preserved tap-edit + long-press copy/edit/delete, now rendering `TimelineRowContent`.
