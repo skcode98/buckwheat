@@ -28,6 +28,8 @@ fun DatePickerDialog(
     initDate: LocalDate = LocalDate.now(),
     disableBeforeDate: LocalDate? = null,
     disableAfterDate: LocalDate? = null,
+    showBeforeDate: LocalDate? = disableBeforeDate,
+    showAfterDate: LocalDate? = disableAfterDate,
     onSelect: (date: LocalDate) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -40,6 +42,8 @@ fun DatePickerDialog(
             selectDate = initDate.toDate(),
             disableBeforeDate = disableBeforeDate?.toDate(),
             disableAfterDate = disableAfterDate?.toDate(),
+            showBeforeDate = showBeforeDate?.toDate(),
+            showAfterDate = showAfterDate?.toDate(),
         )
     }
 

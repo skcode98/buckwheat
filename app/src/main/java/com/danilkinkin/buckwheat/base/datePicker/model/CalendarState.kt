@@ -15,6 +15,8 @@ class CalendarState(
     selectDate: Date? = null,
     disableBeforeDate: Date? = null,
     disableAfterDate: Date? = null,
+    showBeforeDate: Date? = disableBeforeDate,
+    showAfterDate: Date? = disableAfterDate,
 ) {
 
     val calendarUiState = mutableStateOf(
@@ -32,13 +34,13 @@ class CalendarState(
         .withMonth(12).withDayOfMonth(31)
 
     private val periodBetweenCalendarStartEnd: Period = Period.between(
-        disableBeforeDate?.toLocalDate()?.withDayOfMonth(1) ?: calendarStartDate,
-        disableAfterDate?.toLocalDate()?.withDayOfMonth(28) ?: calendarEndDate
+        showBeforeDate?.toLocalDate()?.withDayOfMonth(1) ?: calendarStartDate,
+        showAfterDate?.toLocalDate()?.withDayOfMonth(28) ?: calendarEndDate
     )
 
     init {
         val tempListMonths = mutableListOf<Month>()
-        var startYearMonth = YearMonth.from(disableBeforeDate?.toLocalDate()?.withDayOfMonth(1) ?: calendarStartDate)
+        var startYearMonth = YearMonth.from(showBeforeDate?.toLocalDate()?.withDayOfMonth(1) ?: calendarStartDate)
 
         for (numberMonth in 0..periodBetweenCalendarStartEnd.toTotalMonths()) {
             val numberWeeks = startYearMonth.getNumberWeeks(context)
