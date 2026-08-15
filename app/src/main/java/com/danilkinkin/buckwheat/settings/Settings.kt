@@ -94,6 +94,7 @@ fun Settings(
                     },
                 )
                 VoiceWidgetDesignSetting(appViewModel = appViewModel)
+                CategoryWidgetDesignSetting(appViewModel = appViewModel)
                 TryWidget(onTried = {
                     onTriedWidget()
                 })

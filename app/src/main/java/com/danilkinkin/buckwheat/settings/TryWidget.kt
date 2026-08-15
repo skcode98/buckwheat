@@ -35,6 +35,7 @@ import com.danilkinkin.buckwheat.base.ButtonRow
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.PathState
+import com.danilkinkin.buckwheat.widget.category.CategoryWidgetReceiver
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
@@ -118,6 +119,18 @@ fun TryWidgetDialog() {
                         onClick = {
                             appWidgetManager.requestPinAppWidget(
                                 ComponentName(context, VoiceWidgetReceiver::class.java),
+                                null,
+                                null
+                            )
+                        },
+                    )
+
+                    WidgetRow(
+                        preview = painterResource(R.drawable.category_app_widget_preview),
+                        description = stringResource(R.string.app_widget_category_name),
+                        onClick = {
+                            appWidgetManager.requestPinAppWidget(
+                                ComponentName(context, CategoryWidgetReceiver::class.java),
                                 null,
                                 null
                             )

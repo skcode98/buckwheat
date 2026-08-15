@@ -10,6 +10,7 @@ import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.widget.category.CategoryWidgetDesign
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetDesign
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ val voiceAiProviderUrlStoreKey = stringPreferencesKey("voiceAiProviderUrl")
 val voiceAiModelStoreKey = stringPreferencesKey("voiceAiModel")
 val aiIntelligenceEnabledStoreKey = booleanPreferencesKey("aiIntelligenceEnabled")
 val voiceWidgetDesignStoreKey = stringPreferencesKey("voiceWidgetDesign")
+val categoryWidgetDesignStoreKey = stringPreferencesKey("categoryWidgetDesign")
 val roundValuesStoreKey = booleanPreferencesKey("roundValues")
 val reminderEnabledStoreKey = booleanPreferencesKey("reminderEnabled")
 val reminderHourStoreKey = intPreferencesKey("reminderHour")
@@ -129,6 +131,11 @@ class SettingsRepository @Inject constructor(
         runCatching {
             VoiceWidgetDesign.valueOf(it[voiceWidgetDesignStoreKey] ?: "")
         }.getOrDefault(VoiceWidgetDesign.PERCENT)
+    }
+    fun getCategoryWidgetDesign() = context.settingsDataStore.data.map {
+        runCatching {
+            CategoryWidgetDesign.valueOf(it[categoryWidgetDesignStoreKey] ?: "")
+        }.getOrDefault(CategoryWidgetDesign.BATTERY)
     }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->

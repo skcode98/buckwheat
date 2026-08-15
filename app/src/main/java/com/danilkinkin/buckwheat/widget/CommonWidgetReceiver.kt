@@ -14,9 +14,14 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.unit.ColorProvider
 import androidx.lifecycle.asFlow
 import com.danilkinkin.buckwheat.analytics.dailySpendTotals
+import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.*
+import com.danilkinkin.buckwheat.widget.category.categoryWidgetPills
+import com.danilkinkin.buckwheat.widget.category.categoryWidgetRows
+import com.danilkinkin.buckwheat.widget.category.effectiveCategoryWidgetDesign
+import com.danilkinkin.buckwheat.widget.category.serializeCategoryWidgetPills
 import com.danilkinkin.buckwheat.widget.voice.effectiveVoiceWidgetDesign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +74,18 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         val voiceFeedbackTextPreferenceKey = stringPreferencesKey("voice-feedback-text-key")
         val voiceDesignPreferenceKey = stringPreferencesKey("voice-design-key")
         val voiceDesignOverridePreferenceKey = stringPreferencesKey("voice-design-override-key")
+
+        // Category widget: JSON-serialized category pills (name|emoji|used|cap|color|special),
+        // a "total;percent-of-budget" header, and the effective (resolved override + global)
+        // design.
+        val categoryRowsPreferenceKey = stringPreferencesKey("category-rows-key")
+        val categoryHeaderPreferenceKey = stringPreferencesKey("category-header-key")
+        val categoryDesignPreferenceKey = stringPreferencesKey("category-design-key")
+        val categoryDesignOverridePreferenceKey = stringPreferencesKey("category-design-override-key")
+
+        // Longest pill list ever serialized into state: the huge size renders every capped
+        // category plus top-N uncapped, and anything beyond this cap would only bloat state.
+        const val CATEGORY_WIDGET_MAX_PILLS = 12
 
         fun requestUpdateData(context: Context, receiverClass: Class<*>) {
             val intent = Intent(context, receiverClass)
@@ -136,6 +153,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             val currency = databaseRepository.getCurrency().first()
             val startPeriodDate = databaseRepository.getStartPeriodDate().first()
             val widgetDesign = settingsRepository.getVoiceWidgetDesign().first()
+            val categoryWidgetDesign = settingsRepository.getCategoryWidgetDesign().first()
 
             val finishDateReached = finishDate !== null && finishDate.time <= Date().time
             val earlyFinishDateReached =
@@ -204,6 +222,40 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                     finishDate = today,
                 )
 
+                // Category widget rows: the same period spends the analytics categories card
+                // shows, aggregated per category with their configured caps, resolved to
+                // render-ready pills and capped so tiny widgets don't get over-long state.
+                val categorySpends = databaseRepository
+                    .getSpendsInRange(startPeriodDate, finishDate)
+                    .asFlow()
+                    .first()
+                val categoryCaps = settingsRepository.getCategoryCaps().first()
+                val categoryPills = categoryWidgetPills(
+                    rows = categoryWidgetRows(
+                        spends = categorySpends,
+                        caps = categoryCaps,
+                        maxRows = CATEGORY_WIDGET_MAX_PILLS,
+                    ),
+                    displayName = { key ->
+                        when (key) {
+                            is CategoryKey.BuiltIn -> context.getString(key.category.labelRes)
+                            is CategoryKey.Custom -> key.name
+                        }
+                    },
+                )
+                val categoryTotal = categoryPills.fold(BigDecimal.ZERO) { acc, pill ->
+                    acc + pill.used
+                }
+                val categoryPercent = if (budget > BigDecimal.ZERO) {
+                    categoryTotal
+                        .multiply(BigDecimal(100))
+                        .divide(budget, 0, RoundingMode.FLOOR)
+                        .toInt()
+                        .coerceIn(0, 100)
+                } else {
+                    0
+                }
+
                 glanceIds.forEach { glanceId ->
                     updateAppWidgetState(
                         context = context,
@@ -229,6 +281,14 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                                 this[voiceDesignPreferenceKey] = effectiveVoiceWidgetDesign(
                                     overrideName = this[voiceDesignOverridePreferenceKey],
                                     globalName = widgetDesign.name,
+                                )
+                                this[categoryRowsPreferenceKey] =
+                                    serializeCategoryWidgetPills(categoryPills)
+                                this[categoryHeaderPreferenceKey] =
+                                    "${categoryTotal.toPlainString()};$categoryPercent"
+                                this[categoryDesignPreferenceKey] = effectiveCategoryWidgetDesign(
+                                    overrideName = this[categoryDesignOverridePreferenceKey],
+                                    globalName = categoryWidgetDesign.name,
                                 )
                             }
                     }

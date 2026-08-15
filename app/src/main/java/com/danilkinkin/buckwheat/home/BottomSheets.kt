@@ -265,6 +265,16 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = SETTINGS_CHANGE_CATEGORY_WIDGET_DESIGN_SHEET,
+    ) { state ->
+        CategoryWidgetDesignSettingDialog(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(
         name = TAGS_MANAGEMENT_SHEET,
     ) { state ->
         TagsManagementSheet()

@@ -17,6 +17,7 @@ import com.danilkinkin.buckwheat.util.NumberDisplayConfig
 import com.danilkinkin.buckwheat.widget.extend.ExtendWidgetReceiver
 import com.danilkinkin.buckwheat.widget.minimal.MinimalWidgetReceiver
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
+import com.danilkinkin.buckwheat.widget.category.CategoryWidgetReceiver
 import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
@@ -67,6 +68,7 @@ class Application : Application(), Configuration.Provider {
                 ExtendWidgetReceiver.requestUpdateData(activity.applicationContext)
                 MinimalWidgetReceiver.requestUpdateData(activity.applicationContext)
                 VoiceWidgetReceiver.requestUpdateData(activity.applicationContext)
+                CategoryWidgetReceiver.requestUpdateData(activity.applicationContext)
             }
 
             override fun onActivityStopped(activity: Activity) {
