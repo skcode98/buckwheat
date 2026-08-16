@@ -1,6 +1,15 @@
 # Changelog
 
-## 2026-08-16 — History tab: day-card redesign REVERTED back to the earlier flat-list design; only the extra row spacing kept (committed `b581ab1`, pushed)
+## 2026-08-16 — Categories widget: explicit background = Android theme background color (committed `c98bf74`, pushed)
+
+User: "the category widget does not have bg, use android theme as bg colour make sure our category colour not mess with it". The category widget relied only on `GlanceModifier.appWidgetBackground()` (the launcher-provided default, which renders nothing visible on many hosts) — so the widget looked transparent and the pills floated on the wallpaper. Fix in `widget/category/CategoryWidget.kt`:
+- Resolved the Android/Material theme background via `GlanceTheme.colors.background.getColor(context)` (the same theme Glance derives for all widgets — light/dark aware).
+- Replaced `.appWidgetBackground()` with `.background(backgroundColor)` on the root `Column` (kept `.cornerRadius(16.dp)` — rounds the view on Android S+, same pattern as the extend widget's `.cornerRadius().background(...)`).
+- Category colors already can't clash with it: header text uses `onSurface`/`onSurfaceVariant`, pills use `toPaletteWithTheme(harmonizeWithColor(...))` palettes (night-aware) at 10–15% alpha tracks, and the fill is the palette main / amber / `error` — all chosen for the theme background.
+
+Golden pipeline green: `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites**.
+
+---
 
 User: "you have simplified the history tab too much, i like earlier design i just wanted bit space there only". The 2026-08-15 day-card redesign (`a0883e2`) was a big visual change bundled into the same commit as unrelated fixes (chart padding, donut empty-crash, editor back-dating). The user only wanted "a bit of space" between records, so the redesign was **surgically reverted** — only the History pieces of `a0883e2` were rewound to `a0883e2^`; every non-History fix stayed in place:
 

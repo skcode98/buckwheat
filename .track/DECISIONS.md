@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-08-16 — Decision: categories widget background = the Android theme's `background` color, painted with `GlanceModifier.background(...)`
+
+**Decision**: In `widget/category/CategoryWidget.kt`, resolve `backgroundColor = GlanceTheme.colors.background.getColor(context)` and replace `GlanceModifier.appWidgetBackground()` on the root `Column` with `.background(backgroundColor)` (kept `.cornerRadius(16.dp)`).
+
+**Why**: User: "the category widget does not have bg, use android theme as bg colour make sure our category colour not mess with it". `appWidgetBackground()` paints the launcher-provided default background, which renders as nothing visible on many hosts → the widget looked transparent and the pills floated on the wallpaper. `GlanceTheme.colors.background` is the Material/Android theme background color that Glance already resolves for every widget (light/dark aware), so it is literally "the Android theme as bg". Category colors can't clash: header text uses `onSurface`/`onSurfaceVariant`, pill tracks are `toPaletteWithTheme` night-aware palette mains at 10–15% alpha, and fills are palette main / amber / `error` — all picked for a theme background. Same `.cornerRadius().background(...)` combo the extend widget already uses.
+
+**Outcome**: Golden pipeline green — `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites**. Committed `c98bf74`, pushed.
+
+---
+
 ## 2026-08-16 — Decision: revert the History day-card redesign back to the earlier flat-list design, keeping only the extra row spacing
 
 **Decision**: Surgically reverted the History pieces of the `a0883e2` redesign (committed `b581ab1`): restored `history/SpentItem.kt`, `history/HistoryDateDivider.kt`, `history/TotalPerDay.kt` and rewound `History.kt`, `ListAnimation.kt`, `SpentItemActions.kt`, `ListAnimationTest.kt` to their `a0883e2^` state; deleted the redesign-only `DayCard.kt`, `TimelineRow.kt`, `HistoryRowsTest.kt`. Re-applied the user's actual request on the restored design: `SpentItem` bottom padding `14.dp` → `18.dp`. Every non-History fix bundled in `a0883e2` (chart padding, donut empty-crash, editor back-dating) was left untouched.
