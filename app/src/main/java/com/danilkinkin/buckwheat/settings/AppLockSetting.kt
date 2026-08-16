@@ -148,6 +148,10 @@ fun AppLockSetting() {
                                 }
                                 val cipher = Cipher.getInstance(AppLockBiometricKey.TRANSFORMATION)
                                 val activity = context as? FragmentActivity
+                                if (activity == null) {
+                                    biometricEnabled = false
+                                    return@launch
+                                }
                                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
                                     .setTitle(context.getString(R.string.app_lock_biometric_prompt_title))
                                     .setSubtitle(context.getString(R.string.app_lock_biometric_prompt_subtitle))
@@ -160,7 +164,7 @@ fun AppLockSetting() {
                                     )
                                     .build()
                                 val biometricPrompt = BiometricPrompt(
-                                    activity!!,
+                                    activity,
                                     ContextCompat.getMainExecutor(activity),
                                     object : BiometricPrompt.AuthenticationCallback() {
                                         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
