@@ -59,16 +59,24 @@ object AppLockBiometricKey {
         }
     }
 
+    // Encrypts a fresh random unlock secret using an already-initialized cipher. Returns
+    // (base64Iv, base64Ciphertext) or null if encryption fails.
+    fun encryptSecret(cipher: Cipher): Pair<String, String>? {
+        return runCatching {
+            val secret = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
+            val ciphertext = cipher.doFinal(secret)
+            Base64.encodeToString(cipher.iv, Base64.NO_WRAP) to
+                Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+        }.getOrNull()
+    }
+
     // Encrypts a fresh random unlock secret. Returns (base64Iv, base64Ciphertext) or null if
     // the key could not be created/used.
     fun encryptSecret(): Pair<String, String>? {
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getKey() ?: error("biometric key missing"))
-            val secret = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
-            val ciphertext = cipher.doFinal(secret)
-            Base64.encodeToString(cipher.iv, Base64.NO_WRAP) to
-                Base64.encodeToString(ciphertext, Base64.NO_WRAP)
+            encryptSecret(cipher)
         }.getOrNull()
     }
 

@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.settings
 
 import android.os.Build
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.edit
+import androidx.fragment.app.FragmentActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.TextRow
 import com.danilkinkin.buckwheat.di.appLockBiometricEnabledStoreKey
@@ -55,6 +58,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.biometric.BiometricPrompt.PromptInfo
+import androidx.biometric.BiometricPrompt.CryptoObject
 
 private enum class AppLockDialog { SETUP, MENU, CHANGE, REMOVE }
 
@@ -135,23 +140,56 @@ fun AppLockSetting() {
                 checked = biometricEnabled,
                 onCheckedChange = { enabled ->
                     if (enabled) {
-                        // Enabling biometric unlock first creates a Keystore key bound to a
-                        // biometric authentication, then stores a random unlock secret encrypted
-                        // under that key. Unlock later requires the OS to release the key, so a
-                        // tampered build cannot fake a successful fingerprint.
                         coroutineScope.launch {
-                            val pair = withContext(Dispatchers.IO) {
-                                AppLockBiometricKey.createKey()
-                                AppLockBiometricKey.encryptSecret()
-                            }
-                            if (pair != null) {
-                                context.settingsDataStore.edit {
-                                    it[appLockBiometricEnabledStoreKey] = true
-                                    it[appLockBiometricIvStoreKey] = pair.first
-                                    it[appLockBiometricSecretStoreKey] = pair.second
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    AppLockBiometricKey.createKey()
                                 }
-                                biometricEnabled = true
-                            } else {
+                                val cipher = Cipher.getInstance(AppLockBiometricKey.TRANSFORMATION)
+                                val activity = context as? FragmentActivity
+                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                    .setTitle(context.getString(R.string.app_lock_biometric_prompt_title))
+                                    .setSubtitle(context.getString(R.string.app_lock_biometric_prompt_subtitle))
+                                    .setAllowedAuthenticators(
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            BiometricManager.Authenticators.BIOMETRIC_STRONG
+                                        } else {
+                                            BiometricManager.Authenticators.BIOMETRIC_WEAK
+                                        }
+                                    )
+                                    .build()
+                                val biometricPrompt = BiometricPrompt(
+                                    activity!!,
+                                    ContextCompat.getMainExecutor(activity),
+                                    object : BiometricPrompt.AuthenticationCallback() {
+                                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                            val authCipher = result.cryptoObject?.cipher
+                                            if (authCipher != null) {
+                                                val pair = AppLockBiometricKey.encryptSecret(authCipher)
+                                                if (pair != null) {
+                                                    coroutineScope.launch {
+                                                        context.settingsDataStore.edit {
+                                                            it[appLockBiometricEnabledStoreKey] = true
+                                                            it[appLockBiometricIvStoreKey] = pair.first
+                                                            it[appLockBiometricSecretStoreKey] = pair.second
+                                                        }
+                                                        biometricEnabled = true
+                                                    }
+                                                } else {
+                                                    biometricEnabled = false
+                                                }
+                                            } else {
+                                                biometricEnabled = false
+                                            }
+                                        }
+
+                                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                            biometricEnabled = false
+                                        }
+                                    },
+                                )
+                                biometricPrompt.authenticate(promptInfo, CryptoObject(cipher))
+                            } catch (e: Exception) {
                                 biometricEnabled = false
                             }
                         }
