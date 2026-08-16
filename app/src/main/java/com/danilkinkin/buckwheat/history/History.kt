@@ -1,6 +1,9 @@
 package com.danilkinkin.buckwheat.history
 
-import androidx.compose.foundation.layout.*import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
