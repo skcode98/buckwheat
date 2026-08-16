@@ -247,7 +247,11 @@ internal fun buildRequestBody(
 // which downstream parsers happily accept as garbage answers. We look the field up by type
 // instead so each shape returns the right thing.
 internal fun extractProviderText(responseText: String): String {
-    val json = runCatching { JSONObject(responseText) }.getOrNull() ?: return ""
+    val json = runCatching { JSONObject(responseText) }.getOrNull()
+    if (json == null) {
+        Log.d("AiBackend", "unexpected envelope: ${responseText.take(200)}")
+        return ""
+    }
     val direct = readContentField(json.opt("content")).trim()
     if (direct.isNotEmpty()) return direct
     val choicesContent = json.optJSONArray("choices")
@@ -255,7 +259,9 @@ internal fun extractProviderText(responseText: String): String {
         ?.optJSONObject("message")
         ?.let { message -> readContentField(message.opt("content")) }
         .orEmpty()
-    return choicesContent.trim()
+    if (choicesContent.isNotEmpty()) return choicesContent.trim()
+    Log.d("AiBackend", "unexpected envelope: ${responseText.take(200)}")
+    return ""
 }
 
 // Reads a "content" field that may be a String, a JSONArray of text parts, JSON null, or

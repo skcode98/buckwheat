@@ -31,12 +31,15 @@ class VoiceAiSettingsViewModel @Inject constructor() : ViewModel() {
     private val _freeModels = MutableLiveData<List<FreeModel>>(emptyList())
     val freeModels: LiveData<List<FreeModel>> = _freeModels
 
-    // The list is fetched lazily whenever the user opens the model dropdown, using the
-    // apiKey/providerUrl the sheet is currently editing (not the last-saved values) so the
-    // picks work before Save and reflect any in-progress changes.
+    private val _modelsError = MutableLiveData<String?>(null)
+    val modelsError: LiveData<String?> = _modelsError
+
     fun refreshFreeModels(apiKey: String, providerUrl: String) {
         viewModelScope.launch {
-            _freeModels.value = loadFreeModels(apiKey, providerUrl)
+            _modelsError.value = null
+            val (models, error) = loadFreeModels(apiKey, providerUrl)
+            _freeModels.value = models
+            _modelsError.value = error
         }
     }
 }
@@ -62,10 +65,10 @@ val DEFAULT_MODEL_PRESETS = listOf(
 suspend fun loadFreeModels(
     apiKey: String,
     providerUrl: String,
-): List<FreeModel> = withContext(Dispatchers.IO) {
+): Pair<List<FreeModel>, String?> = withContext(Dispatchers.IO) {
     val key = apiKey.trim()
     val url = providerUrl.trim()
-    if (url.isBlank()) return@withContext DEFAULT_MODEL_PRESETS
+    if (url.isBlank()) return@withContext Pair(DEFAULT_MODEL_PRESETS, null)
 
     val modelsUrl = modelsEndpoint(url)
     var connection: HttpURLConnection? = null
@@ -92,17 +95,19 @@ suspend fun loadFreeModels(
                 )
                 val existingIds = fetched.mapTo(HashSet()) { it.id }
                 val newAliases = aliases.filter { it.id !in existingIds }
-                return@withContext newAliases + fetched
+                return@withContext Pair(newAliases + fetched, null)
             }
         } else {
             Log.d("VoiceAiSettings", "Models fetch failed: HTTP ${conn.responseCode}")
+            return@withContext Pair(DEFAULT_MODEL_PRESETS, "HTTP ${conn.responseCode}")
         }
     } catch (e: Exception) {
         Log.d("VoiceAiSettings", "Models fetch failed", e)
+        return@withContext Pair(DEFAULT_MODEL_PRESETS, e.localizedMessage ?: "unknown error")
     } finally {
         connection?.disconnect()
     }
-    return@withContext DEFAULT_MODEL_PRESETS
+    return@withContext Pair(DEFAULT_MODEL_PRESETS, null)
 }
 
 private fun parseFreeModels(body: String): List<FreeModel> =
