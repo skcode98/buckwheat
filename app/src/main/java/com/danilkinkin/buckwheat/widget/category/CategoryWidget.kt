@@ -29,8 +29,8 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.background
 import androidx.glance.appwidget.provideContent
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -139,6 +139,7 @@ fun CategoryWidgetContent() {
     val primaryColor = GlanceTheme.colors.primary.getColor(context)
     val contentColor = GlanceTheme.colors.onSurface.getColor(context)
     val secondaryColor = GlanceTheme.colors.onSurfaceVariant.getColor(context)
+    val backgroundColor = GlanceTheme.colors.background.getColor(context)
     val isNight = (context.resources.configuration.uiMode and
         Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     val paletteColors = baseColors.map { base ->
@@ -157,7 +158,7 @@ fun CategoryWidgetContent() {
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .appWidgetBackground()
+            .background(backgroundColor)
             .cornerRadius(16.dp)
             .padding(8.dp)
             .clickable(actionStartActivity(intent)),
