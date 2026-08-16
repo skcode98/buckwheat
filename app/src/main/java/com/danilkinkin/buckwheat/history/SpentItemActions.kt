@@ -13,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.danilkinkin.buckwheat.R
@@ -35,19 +34,15 @@ fun SpentItemActions(
     onCopy: () -> Unit,
 ) {
     var actionsMenuExpanded by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val category = remember(transaction, categoryEmojis) {
-        categoryLabelFor(context, transaction, categoryEmojis)
-    }
 
     Box(modifier.combinedClickable(
         onClick = onEdit,
         onLongClick = { actionsMenuExpanded = true },
     )) {
-        TimelineRowContent(
+        SpentItem(
             transaction = transaction,
             currency = currency,
-            category = category,
+            categoryEmojis = categoryEmojis,
         )
         DropdownMenu(
             expanded = actionsMenuExpanded,
