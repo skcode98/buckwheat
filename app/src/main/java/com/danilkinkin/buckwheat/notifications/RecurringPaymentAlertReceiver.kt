@@ -93,7 +93,7 @@ class RecurringPaymentAlertReceiver : BroadcastReceiver() {
             .build()
 
         val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
         notificationManager.notify(RecurringPaymentAlertScheduler.NOTIFICATION_ID, notification)
     }
 

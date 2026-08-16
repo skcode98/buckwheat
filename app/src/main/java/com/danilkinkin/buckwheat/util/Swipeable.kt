@@ -133,8 +133,8 @@ open class SwipeableState<T>(
         if (oldAnchors.isEmpty()) {
             // If this is the first time that we receive anchors, then we need to initialise
             // the state so we snap to the offset associated to the initial value.
-            minBound = newAnchors.keys.minOrNull()!!
-            maxBound = newAnchors.keys.maxOrNull()!!
+            minBound = requireNotNull(newAnchors.keys.minOrNull()) { "newAnchors must not be empty" }
+            maxBound = requireNotNull(newAnchors.keys.maxOrNull()) { "newAnchors must not be empty" }
             val initialOffset = newAnchors.getOffset(currentValue)
             requireNotNull(initialOffset) {
                 "The initial value must have an associated anchor."
@@ -169,8 +169,8 @@ open class SwipeableState<T>(
                 snapInternalToOffset(targetOffset)
             } finally {
                 currentValue = newAnchors.getValue(targetOffset)
-                minBound = newAnchors.keys.minOrNull()!!
-                maxBound = newAnchors.keys.maxOrNull()!!
+                minBound = requireNotNull(newAnchors.keys.minOrNull()) { "newAnchors must not be empty" }
+                maxBound = requireNotNull(newAnchors.keys.maxOrNull()) { "newAnchors must not be empty" }
             }
         }
     }
@@ -780,7 +780,8 @@ object SwipeableDefaults {
         return if (anchors.size <= 1) {
             null
         } else {
-            val basis = anchors.maxOrNull()!! - anchors.minOrNull()!!
+            val basis = requireNotNull(anchors.maxOrNull()) { "anchors must not be empty" } -
+                requireNotNull(anchors.minOrNull()) { "anchors must not be empty" }
             ResistanceConfig(basis, factorAtMin, factorAtMax)
         }
     }

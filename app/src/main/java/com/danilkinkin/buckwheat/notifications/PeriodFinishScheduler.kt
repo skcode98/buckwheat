@@ -22,7 +22,7 @@ object PeriodFinishScheduler {
     // One-shot setWindow alarm for the end of the current period. A later schedule() call for
     // the same request code silently replaces the previous alarm (setBudget/changeBudget).
     fun schedule(context: Context, finishDate: Date) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         alarmManager.setWindow(
             AlarmManager.RTC_WAKEUP,
             periodEnd(finishDate).time,
@@ -32,7 +32,7 @@ object PeriodFinishScheduler {
     }
 
     fun cancel(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         alarmManager.cancel(buildPendingIntent(context))
     }
 

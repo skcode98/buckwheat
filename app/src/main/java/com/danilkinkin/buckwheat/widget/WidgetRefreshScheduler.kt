@@ -26,7 +26,7 @@ object WidgetRefreshScheduler {
     private const val WINDOW_MILLIS = 10 * 60 * 1000L
 
     fun schedule(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val triggerAt = nextTriggerAtMillis()
 
         alarmManager.setWindow(
@@ -38,7 +38,7 @@ object WidgetRefreshScheduler {
     }
 
     fun cancel(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         alarmManager.cancel(buildPendingIntent(context))
     }
 

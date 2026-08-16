@@ -27,7 +27,7 @@ class ContextWithUpdatedResources(
 
 @Composable
 fun OverrideLocalize(content: @Composable () -> Unit) {
-    val systemLocale = LocalContext.current.systemLocale!!
+    val systemLocale = LocalContext.current.systemLocale ?: LocalConfiguration.current.locales[0]
     val overrideLocale = LocalContext.current.appLocale ?: systemLocale
     val localContext = LocalContext.current
 

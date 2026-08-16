@@ -79,7 +79,7 @@ class DailyBudgetReminderReceiver : BroadcastReceiver() {
             .build()
 
         val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
         notificationManager.notify(DailyBudgetReminderScheduler.NOTIFICATION_ID, notification)
     }
 

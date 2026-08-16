@@ -83,7 +83,7 @@ class PeriodFinishReceiver : BroadcastReceiver() {
             .build()
 
         val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
         notificationManager.notify(PeriodFinishScheduler.NOTIFICATION_ID, notification)
     }
 

@@ -52,7 +52,6 @@ import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
 import java.util.Date
 import java.util.Locale
@@ -316,7 +315,7 @@ fun Keyboard(
                 Log.d("newValue", "'${newValue}'")
 
                 if (newValue == "") {
-                    if (mode === EditMode.ADD) runBlocking {
+                    if (mode === EditMode.ADD) {
                         editorViewModel.resetEditingSpent()
 
                         isMutate = false
@@ -325,7 +324,7 @@ fun Keyboard(
             }
         }
 
-        if (isMutate) runBlocking {
+        if (isMutate) {
             editorViewModel.rawSpentValue.value =
                 tryConvertStringToNumber(newValue).join(third = false)
 
@@ -614,8 +613,7 @@ fun Keyboard(
 
                                 debugProgress = 0
 
-                                runBlocking {
-                                    if (editorViewModel.canCommitEditingSpent()) {
+                                if (editorViewModel.canCommitEditingSpent()) {
                                         if (mode == EditMode.EDIT) {
                                             val newVersionOfSpent =
                                                 editorViewModel.editedTransaction!!.copy(
@@ -647,7 +645,6 @@ fun Keyboard(
 
                                         editorViewModel.resetEditingSpent()
                                     }
-                                }
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                         )

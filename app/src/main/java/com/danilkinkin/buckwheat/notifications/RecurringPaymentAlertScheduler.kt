@@ -22,7 +22,7 @@ object RecurringPaymentAlertScheduler {
         hour: Int = RECURRING_ALERT_DEFAULT_HOUR,
         minute: Int = RECURRING_ALERT_DEFAULT_MINUTE,
     ) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
@@ -42,7 +42,7 @@ object RecurringPaymentAlertScheduler {
     }
 
     fun cancel(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         alarmManager.cancel(buildPendingIntent(context))
     }
 

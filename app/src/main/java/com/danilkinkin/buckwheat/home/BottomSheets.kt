@@ -96,8 +96,8 @@ fun BottomSheets(
         name = FINISH_DATE_SELECTOR_SHEET,
     ) { state ->
         FinishDateSelector(
-            selectDate = state.args["initialDate"] as Date?,
-            selectStartDate = state.args["initialStartDate"] as Date?,
+            selectDate = state.args["initialDate"] as? Date?,
+            selectStartDate = state.args["initialStartDate"] as? Date?,
             onBackPressed = {
                 coroutineScope.launch {
                     state.hide()
@@ -173,7 +173,7 @@ fun BottomSheets(
 
     BottomSheetWrapper(name = VIEWER_HISTORY_SHEET) { state ->
         ViewerHistory(
-            onlyDay = state.args["onlyDay"] as LocalDate?,
+            onlyDay = state.args["onlyDay"] as? LocalDate?,
             onClose = {
                 coroutineScope.launch { state.hide() }
             }
@@ -182,7 +182,7 @@ fun BottomSheets(
 
     BottomSheetWrapper(name = CATEGORY_HISTORY_SHEET) { state ->
         ViewerHistory(
-            onlyCategoryKey = state.args["onlyCategoryKey"] as CategoryKey?,
+            onlyCategoryKey = state.args["onlyCategoryKey"] as? CategoryKey?,
             onClose = {
                 coroutineScope.launch { state.hide() }
             }
