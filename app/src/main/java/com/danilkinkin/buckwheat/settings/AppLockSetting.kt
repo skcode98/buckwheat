@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.biometric.BiometricPrompt.PromptInfo
 import androidx.biometric.BiometricPrompt.CryptoObject
+import javax.crypto.Cipher
 
 private enum class AppLockDialog { SETUP, MENU, CHANGE, REMOVE }
 

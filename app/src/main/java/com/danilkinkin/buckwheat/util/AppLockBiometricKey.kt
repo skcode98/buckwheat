@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
 object AppLockBiometricKey {
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "buckwheat_app_lock_biometric_key"
-    private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_BITS = 128
     private const val IV_BYTES = 12
     private const val SECRET_BYTES = 32
@@ -103,7 +103,7 @@ object AppLockBiometricKey {
         }.getOrDefault(false)
     }
 
-    private fun getKey(): SecretKey? {
+    fun getKey(): SecretKey? {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         return store.getKey(ALIAS, null) as? SecretKey
     }
