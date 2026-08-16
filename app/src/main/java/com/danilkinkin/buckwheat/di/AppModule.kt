@@ -31,10 +31,6 @@ object AppModule {
 
     @Singleton
     @Provides
-    fun provideStorageDao(db: DatabaseModule) = db.storageDao()
-
-    @Singleton
-    @Provides
     fun provideSavedTagDao(db: DatabaseModule) = db.savedTagDao()
 
     @Singleton

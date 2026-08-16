@@ -9,7 +9,6 @@ import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
-import com.danilkinkin.buckwheat.data.dao.StorageDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
@@ -17,7 +16,6 @@ import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.data.entities.Storage
 import com.danilkinkin.buckwheat.data.entities.Transaction
 
 
@@ -33,6 +31,30 @@ class AutoMigration2to3 : AutoMigrationSpec
 
 // Preparing for remove storage table
 class AutoMigration3to4 : AutoMigrationSpec
+
+// Rename Spent to Transaction
+val AutoMigration4to5: Migration = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Create the new "transactions" table
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `transactions` " +
+                    "(`type` TEXT NOT NULL, " +
+                    "`value` TEXT NOT NULL, " +
+                    "`date` INTEGER NOT NULL, " +
+                    "`comment` TEXT NOT NULL DEFAULT '', " +
+                    "`uid` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)"
+        )
+
+        // Copy data from the old "Spent" table to the new "transactions" table
+        database.execSQL(
+            "INSERT INTO `transactions` (`type`, `value`, `date`, `comment`) " +
+                    "SELECT 'SPENT', `value`, `date`, `comment` FROM `Spent`"
+        )
+
+        // Drop the old "Spent" table
+        database.execSQL("DROP TABLE IF EXISTS `Spent`")
+    }
+}
 
 // Create saved_tags table for persistent tag management
 val AutoMigration5to6: Migration = object : Migration(5, 6) {
@@ -143,33 +165,16 @@ val AutoMigration13to14: Migration = object : Migration(13, 14) {
     }
 }
 
-// Rename Spent to Transaction
-val AutoMigration4to5: Migration = object : Migration(4, 5) {
+// Drop legacy storage table (migrated to DataStore long ago)
+val AutoMigration14to15: Migration = object : Migration(14, 15) {
     override fun migrate(database: SupportSQLiteDatabase) {
-        // Create the new "transactions" table
-        database.execSQL(
-            "CREATE TABLE IF NOT EXISTS `transactions` " +
-                    "(`type` TEXT NOT NULL, " +
-                    "`value` TEXT NOT NULL, " +
-                    "`date` INTEGER NOT NULL, " +
-                    "`comment` TEXT NOT NULL DEFAULT '', " +
-                    "`uid` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)"
-        )
-
-        // Copy data from the old "Spent" table to the new "transactions" table
-        database.execSQL(
-            "INSERT INTO `transactions` (`type`, `value`, `date`, `comment`) " +
-                    "SELECT 'SPENT', `value`, `date`, `comment` FROM `Spent`"
-        )
-
-        // Drop the old "Spent" table
-        database.execSQL("DROP TABLE IF EXISTS `Spent`")
+        database.execSQL("DROP TABLE IF EXISTS `storage`")
     }
 }
 
 @Database(
-    entities = [Transaction::class, Storage::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 14,
+    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
+    version = 15,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -183,8 +188,6 @@ abstract class DatabaseModule : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
 
-    abstract fun storageDao(): StorageDao
-
     abstract fun savedTagDao(): SavedTagDao
 
     abstract fun savedCategoryDao(): SavedCategoryDao
@@ -196,6 +199,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15)
     }
 }
