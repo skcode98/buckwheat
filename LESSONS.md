@@ -459,3 +459,20 @@ i.e. reflection assuming `ColorProvider` has a public constructor. In Glance 1.1
 **Fix:** `fun Color.toColorProvider(): ColorProvider = ColorProvider(color = this)` — use the public top-level factory; no reflection, no composable needed (the `@Composable` annotation existed only to read the composition-local fallback).
 
 **Lesson:** In Glance, when the docs/source show a top-level function with the same name as a class (`ColorProvider(color)`, `dp(value)`), the "class" may be an interface with no constructor — reflection will not work and fails silently under `catch (e: Exception)`. Two follow-on rules: (1) `catch (e: Exception)` will NOT catch `Error`s — if a fallback value can throw (a composition-local default that throws), the catch gives false confidence; (2) a widget-level failure isolated to ONE widget points at something that widget does NOT provide that the others do (here: `LocalContentColor`), so diff the widget compositions before hunting the shared code. Verified with Glance 1.1.1 sources extracted to `C:\Users\suraj\AppData\Local\Temp\opencode\glance-src` / `glance-appwidget-src`; E2E on-emulator confirmed the category widget renders after the fix.
+
+---
+
+## Issue 36: The "add a bit of space" request became a full redesign — the day-card History was reverted (2026-08-16)
+
+**Files:** `history/History.kt`, `history/ListAnimation.kt`, `history/SpentItem.kt`, `history/SpentItemActions.kt` (reverted to the pre-`a0883e2` state), deleted `history/DayCard.kt`/`history/TimelineRow.kt`; restored `history/HistoryDateDivider.kt`/`history/TotalPerDay.kt`
+
+**Problem:** User: "you have simplified the history tab too much, i like earlier design i just wanted bit space there only". The 2026-08-15 session turned a small request ("add some space in record as it look compacted") into the full per-day-card redesign (`a0883e2`), which was visually far removed from the old flat list (day dividers + per-day totals). After living with it, the user wanted the earlier design back. Because `a0883e2` was ONE commit bundling the redesign TOGETHER with unrelated fixes (chart padding, donut empty-crash, editor back-dating), the revert could not be a simple `git revert a0883e2` — the bundled fixes had to be preserved.
+
+**Fix:** A surgical, file-level revert of only the redesign's History pieces:
+- `git checkout a0883e2^ -- history/History.kt history/ListAnimation.kt history/SpentItemActions.kt history/SpentItem.kt history/HistoryDateDivider.kt history/TotalPerDay.kt` + `app/src/test/.../history/ListAnimationTest.kt` (restores deleted files, rewinds modified ones to the pre-redesign state).
+- `git rm history/DayCard.kt history/TimelineRow.kt history/HistoryRowsTest.kt` (the redesign-only files).
+- Kept every non-History change in `a0883e2` (chart/donut/editor fixes) — they lived in different files and were never touched.
+- Re-applied the user's ACTUAL ask on the restored design: `SpentItem.kt` row `padding(bottom = 14.dp)` → `18.dp` (single spacing source for both swipe and read-only rows).
+- Verified no dangling references (grep for `DayCard|TimelineRow|timelinePaletteFor|HistoryRowsTest`), then the golden pipeline: `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites** (321 − 6 `HistoryRowsTest`). Committed `b581ab1`, pushed. (Side benefit: the swipe-crash root cause from Issue 34 is structurally moot again — `SwipeActions` is back to being the direct LazyColumn item root.)
+
+**Lesson:** Match the scope of the change to the scope of the request. A "give it a bit more space / a small tweak" ask should produce a small diff, not a visual overhaul — a redesign should be an explicit, separate opt-in (and ideally its own commit). When a commit DOES bundle a redesign with unrelated fixes, keep a file-level revert in your toolkit: `git checkout <parent>^ -- <paths>` restores exactly the pre-change files while leaving sibling fixes intact, and `git rm` removes the redesign-only files. Grep for the deleted symbols afterward to catch dangling references, and always confirm the test delta matches the expectation (removed test suite = −N cases).

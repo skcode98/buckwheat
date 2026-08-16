@@ -1,11 +1,23 @@
 # Changelog
 
-## 2026-08-16 — Widget "Can't show content" crash root-caused & fixed, history timeline spacing, editor date picker restricted to the spend period (start → today), Play Store release signing (committed, pushed)
+## 2026-08-16 — History tab: day-card redesign REVERTED back to the earlier flat-list design; only the extra row spacing kept (committed `b581ab1`, pushed)
+
+User: "you have simplified the history tab too much, i like earlier design i just wanted bit space there only". The 2026-08-15 day-card redesign (`a0883e2`) was a big visual change bundled into the same commit as unrelated fixes (chart padding, donut empty-crash, editor back-dating). The user only wanted "a bit of space" between records, so the redesign was **surgically reverted** — only the History pieces of `a0883e2` were rewound to `a0883e2^`; every non-History fix stayed in place:
+
+- **Restored from `a0883e2^`**: `history/SpentItem.kt` (amount + date row, right-aligned category pill, comment), `history/HistoryDateDivider.kt`, `history/TotalPerDay.kt`; reverted `history/History.kt` (`composeHistoryRows` back to per-row `DayDivider → Spent* → DayTotal`, newest-day-first via `reversed()`), `history/ListAnimation.kt` (`RowEntityType { DayDivider, Spent, DayTotal }`), `history/SpentItemActions.kt` (renders `SpentItem`; tap-edit + long-press copy/edit/delete kept), and `app/src/test/.../history/ListAnimationTest.kt` (per-row model).
+- **Deleted**: `history/DayCard.kt`, `history/TimelineRow.kt`, `app/src/test/.../history/HistoryRowsTest.kt` (day-card grouping/content-hash model no longer exists).
+- **Spacing kept (the user's actual ask)**: `history/SpentItem.kt` row bottom padding `14.dp` → `18.dp` — the single spacing source for both swipe (`SpentItemActions`) and read-only rows.
+- **Side benefit**: the swipe-crash root cause (Issue 34) is structurally moot — `SwipeActions` is again the direct LazyColumn item root, no `IntrinsicSize.Min` in the picture.
+- The earlier `4b87995` spacing entry below is superseded (it tweaked `TimelineRow.kt`, which no longer exists).
+
+Golden pipeline green: `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites** (321 − 6 `HistoryRowsTest`). See LESSONS.md Issue 36.
+
+---
 
 ### 1. Categories widget "Can't show content" — ROOT CAUSE FOUND + FIXED (`620d4d5`)
 User: the categories widget "is also crash .. cant show content". Root cause: `widget/CommonWidgetReceiver.kt` `Color.toColorProvider()` used reflection — `ColorProvider::class.java.getDeclaredConstructor(Color::class.java)` — but in Glance 1.1.1 `ColorProvider` is an **interface** (verified against the extracted `glance`/`glance-appwidget` 1.1.1 sources at `C:\Users\suraj\AppData\Local\Temp\opencode\glance-src` / `glance-appwidget-src`): there is no public constructor; the public API is the top-level `fun ColorProvider(color: Color): ColorProvider` (`androidx.glance.unit.ColorProvider`). The reflection therefore ALWAYS threw `NoSuchMethodException`, the `catch (e: Exception)` fell back to `LocalContentColor.current`, whose composition-local default is `{ throw Error("No set") }` — and `catch (e: Exception)` does NOT catch `Error`, so the whole composition aborted whenever a widget didn't provide `LocalContentColor`. The category widget was the ONLY widget not providing it (voice/minimal/extend do), so only it hard-failed → "Can't show content". Fix: `fun Color.toColorProvider(): ColorProvider = ColorProvider(color = this)` (dropped the `@Composable` annotation + unused `Composable` import — the composable was only needed for the reflection fallback). Verified: pipeline green (321 tests); on-emulator (`Pixel_9_Pro_API_36`) the category widget now renders real content — `rootView` + `background`, title bitmap `[96,596][286,641]`, empty-state bitmap `[96,927][359,972]`, no "Can't show content" node, zero `GlanceAppWidget`/`CategoryWidget` logcat errors; voice widget unchanged. See LESSONS.md Issue 35.
 
-### 2. History timeline row spacing (`4b87995`)
+### 2. History timeline row spacing (`4b87995` — SUPERSEDED by the revert `b581ab1` below; the `TimelineRow.kt` design was reverted, spacing now lives in `SpentItem.kt` bottom padding 18dp)
 User: "in new history page new design can we add some space in record as it look compacted". `history/TimelineRow.kt` `TimelineRowContent` padding `top/bottom = 10.dp` → `14.dp` (start/end unchanged).
 
 ### 3. Editor date picker: only the spend period, enabled from period start to today (`fb6b619`)

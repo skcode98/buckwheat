@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-08-16 — Decision: revert the History day-card redesign back to the earlier flat-list design, keeping only the extra row spacing
+
+**Decision**: Surgically reverted the History pieces of the `a0883e2` redesign (committed `b581ab1`): restored `history/SpentItem.kt`, `history/HistoryDateDivider.kt`, `history/TotalPerDay.kt` and rewound `History.kt`, `ListAnimation.kt`, `SpentItemActions.kt`, `ListAnimationTest.kt` to their `a0883e2^` state; deleted the redesign-only `DayCard.kt`, `TimelineRow.kt`, `HistoryRowsTest.kt`. Re-applied the user's actual request on the restored design: `SpentItem` bottom padding `14.dp` → `18.dp`. Every non-History fix bundled in `a0883e2` (chart padding, donut empty-crash, editor back-dating) was left untouched.
+
+**Why**: User: "you have simplified the history tab too much, i like earlier design i just wanted bit space there only". The redesign overshot a small "add some space in record" request. `a0883e2` was a single commit bundling the redesign with unrelated fixes, so `git revert a0883e2` was NOT an option — a file-level revert (`git checkout a0883e2^ -- <history paths>` + `git rm` of the redesign-only files) isolated the visual change without losing the bundled fixes. Spacing was moved to the single row source (`SpentItem`) so both the swipe and read-only render paths breathe equally. The restored layout also structurally removes the Issue 34 crash trigger (`SwipeActions` back as the direct LazyColumn item root, no `IntrinsicSize.Min`).
+
+**Outcome**: Golden pipeline green — `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites** (321 − 6 `HistoryRowsTest`). Committed `b581ab1`, pushed. See LESSONS.md Issue 36.
+
+---
+
 ## 2026-08-16 — Decision: re-add the editor date-picker period floor per the user's exact spec, decoupling "shown months" from "enabled days"
 
 **Decision**: The editor's spend date picker (`DateTimeEditPill` → `DatePickerDialog` → `CalendarState`) now passes `disableBeforeDate = startPeriodDate`, `disableAfterDate = LocalDate.now()`, `showBeforeDate = startPeriodDate`, `showAfterDate = finishPeriodDate`. `CalendarState` gained `showBeforeDate`/`showAfterDate` (defaulting to the disable bounds) so the rendered month range (`listMonths`) and the enabled-day bounds (`disabledBefore`/`disabledAfter`) can differ.
