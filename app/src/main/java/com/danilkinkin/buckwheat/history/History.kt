@@ -1,9 +1,6 @@
 package com.danilkinkin.buckwheat.history
 
-import androidx.compose.animation.core.TweenSpec
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.*import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.transactionMatchesCategory
@@ -34,13 +32,21 @@ import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
+
+data class RowEntity(
+    val key: String,
+    var contentHash: String? = null,
+    val day: LocalDate,
+    val transactions: List<Transaction>,
+    val firstTransactionIndex: Int = 0,
+    var dayTotal: BigDecimal? = null,
+)
 
 @Composable
 fun History(
@@ -107,15 +113,12 @@ fun History(
         animationSpec = TweenSpec(250),
     )
 
-    val animatedList = updateAnimatedItemsState(newList = historyList)
-
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             LazyColumn(
-                reverseLayout = true,
-                state = scrollState
+                state = scrollState,
+                userScrollEnabled = true,
             ) {
-
                 item("spacer-2") {
                     Spacer(modifier = Modifier.height(2.dp))
                 }
@@ -134,53 +137,76 @@ fun History(
                     Spacer(modifier = Modifier.height(18.dp))
                 }
 
-                animatedItemsIndexed(
-                    state = animatedList.value,
-                ) { _, row ->
-                    DayCard(
-                        day = row.day,
-                        transactions = row.transactions,
-                        dayTotal = row.dayTotal ?: BigDecimal.ZERO,
-                        firstTransactionIndex = row.firstTransactionIndex,
-                        currency = currency.value,
-                        categoryEmojis = categoryEmojis,
-                        readOnly = readOnly,
-                        onEdit = { transaction ->
-                            editorViewModel.startEditingSpent(transaction)
-                            onClose()
-                        },
-                        onDelete = { transaction ->
-                            spendsViewModel.removeSpent(transaction)
-                        },
-                        onCopy = { transaction ->
-                            clipboard.setText(
-                                AnnotatedString(
-                                    buildSpendCopyText(
-                                        amount = numberFormat(
-                                            context = context,
-                                            transaction.value,
-                                            currency = currency.value,
-                                        ),
-                                        comment = transaction.comment,
+                historyList.reversed().forEachIndexed { rowIndex, row ->
+                    item("date-${row.key}") {
+                        HistoryDateDivider(
+                            day = row.day,
+                            dayTotal = row.dayTotal ?: BigDecimal.ZERO,
+                            currency = currency.value,
+                        )
+                    }
+
+                    row.transactions.forEachIndexed { index, transaction ->
+                        item("spent-${transaction.uid}") {
+                            SpentItem(
+                                transaction = transaction,
+                                currency = currency.value,
+                                categoryEmojis = categoryEmojis,
+                                readOnly = readOnly,
+                                onEdit = {
+                                    editorViewModel.startEditingSpent(transaction)
+                                    onClose()
+                                },
+                                onDelete = {
+                                    spendsViewModel.removeSpent(transaction)
+                                },
+                                onCopy = {
+                                    clipboard.setText(
+                                        AnnotatedString(
+                                            buildSpendCopyText(
+                                                amount = numberFormat(
+                                                    context = context,
+                                                    transaction.value,
+                                                    currency = currency.value,
+                                                ),
+                                                comment = transaction.comment,
+                                            )
+                                        )
                                     )
-                                )
+                                    appViewModel.showSnackbar(
+                                        context.getString(R.string.history_actions_copied)
+                                    )
+                                },
+                                onSwipeEdit = {
+                                    editorViewModel.startEditingSpent(transaction)
+                                    onClose()
+                                },
+                                onSwipeDelete = {
+                                    spendsViewModel.removeSpent(transaction)
+                                },
+                                onTriedSwipe = { isUserTrySwipe = true },
+                                showTutorial = row.firstTransactionIndex + index == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW,
                             )
-                            appViewModel.showSnackbar(
-                                context.getString(R.string.history_actions_copied)
-                            )
-                        },
-                        onSwipeEdit = { transaction ->
-                            editorViewModel.startEditingSpent(transaction)
-                            onClose()
-                        },
-                        onSwipeDelete = { transaction ->
-                            spendsViewModel.removeSpent(transaction)
-                        },
-                        onTriedSwipe = { isUserTrySwipe = true },
-                        showTutorial = { globalIndex ->
-                            globalIndex == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW
-                        },
-                    )
+                        }
+                        if (index < row.transactions.lastIndex) {
+                            item("item-spacer-${transaction.uid}") {
+                                HistoryItemSpacer()
+                            }
+                        }
+                    }
+
+                    item("total-${row.key}") {
+                        TotalPerDay(
+                            dayTotal = row.dayTotal ?: BigDecimal.ZERO,
+                            currency = currency.value,
+                        )
+                    }
+
+                    if (rowIndex < historyList.lastIndex) {
+                        item("day-spacer-${row.key}") {
+                            HistoryDaySpacer()
+                        }
+                    }
                 }
 
                 if (!readOnly) {
@@ -226,7 +252,10 @@ fun History(
                         .scale(fapScale),
                     onClick = {
                         coroutineScope.launch {
-                            scrollState.animateScrollToItem(0)
+                            val lastItem = scrollState.layoutInfo.totalItemsCount - 1
+                            if (lastItem >= 0) {
+                                scrollState.animateScrollToItem(lastItem)
+                            }
                         }
                     },
                 ) {
