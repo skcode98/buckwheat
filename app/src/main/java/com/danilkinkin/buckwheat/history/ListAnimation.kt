@@ -10,22 +10,17 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import java.math.BigDecimal
 import java.time.LocalDate
 
-enum class RowEntityType { DayDivider, Spent, DayTotal }
-
 data class RowEntity(
-    val type: RowEntityType,
     val key: String,
     var contentHash: String? = null,
     val day: LocalDate,
-    val transaction: Transaction?,
-    var dayTotal: BigDecimal?,
+    val transactions: List<Transaction>,
+    val firstTransactionIndex: Int = 0,
+    var dayTotal: BigDecimal? = null,
 )
 
 @Suppress("UpdateTransitionLabel", "TransitionPropertiesLabel")
 @SuppressLint("ComposableNaming", "UnusedTransitionTargetStateParameter")
-/**
- * @param state Use [updateAnimatedItemsState].
- */
 inline fun LazyListScope.animatedItemsIndexed(
     state: List<AnimatedItem<RowEntity>>,
     enterTransition: EnterTransition = expandVertically(),
@@ -74,12 +69,6 @@ fun updateAnimatedItemsState(
         val oldKeyToIndex = HashMap<String, Int>()
         oldList.forEachIndexed { index, item -> oldKeyToIndex[item.item.key] = index }
 
-        // Build the composite directly by key instead of consuming DiffUtil's event stream.
-        // DiffUtil reports insert positions in the coordinate space of the previous composite,
-        // which can still contain rows animating out (a keystroke cancels the previous exit
-        // animation). Those lingering rows inflate the positions beyond newList.size and made
-        // the old dispatch read newList[position + i] out of bounds (IndexOutOfBoundsException
-        // when searching or editing a record's date).
         val consumedOld = BooleanArray(oldList.size)
         val compositeList = ArrayList<AnimatedItem<RowEntity>>(newList.size)
         val oldIndexOfComposite = ArrayList<Int>(newList.size)
@@ -106,7 +95,6 @@ fun updateAnimatedItemsState(
             }
         }
 
-        // Rows that disappeared keep their spot as long as the exit animation runs.
         for (oldIndex in oldList.indices) {
             if (!consumedOld[oldIndex]) {
                 val animated = oldList[oldIndex]

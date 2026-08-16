@@ -1,29 +1,22 @@
 package com.danilkinkin.buckwheat.history
 
 import androidx.compose.animation.core.TweenSpec
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.DismissDirection
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
@@ -41,20 +34,14 @@ import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.data.ExtendCurrency
-import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.numberFormat
-import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
-import kotlin.math.abs
-import kotlin.math.absoluteValue
 
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun History(
     modifier: Modifier = Modifier,
@@ -129,7 +116,6 @@ fun History(
                 state = scrollState
             ) {
 
-                // Fixer, because if scroll fast end-checker dispose
                 item("spacer-2") {
                     Spacer(modifier = Modifier.height(2.dp))
                 }
@@ -150,134 +136,51 @@ fun History(
 
                 animatedItemsIndexed(
                     state = animatedList.value,
-                ) { index, row ->
-                    when (row.type) {
-                        RowEntityType.DayDivider -> HistoryDateDivider(row.day)
-                        RowEntityType.DayTotal -> TotalPerDay(
-                            spentPerDay = row.dayTotal!!,
-                            currency = currency.value,
-                        )
-                        RowEntityType.Spent -> if (!readOnly) SwipeActions(
-                            startActionsConfig = SwipeActionsConfig(
-                                threshold = 0.4f,
-                                background = MaterialTheme.colorScheme.tertiaryContainer,
-                                backgroundActive = MaterialTheme.colorScheme.tertiary,
-                                iconTint = MaterialTheme.colorScheme.onTertiary,
-                                icon = painterResource(R.drawable.ic_edit),
-                                stayDismissed = false,
-                                onDismiss = {
-                                    editorViewModel.startEditingSpent(row.transaction!!)
-                                    onClose()
-                                }
-                            ),
-                            endActionsConfig = SwipeActionsConfig(
-                                threshold = 0.4f,
-                                background = MaterialTheme.colorScheme.errorContainer,
-                                backgroundActive = MaterialTheme.colorScheme.error,
-                                iconTint = MaterialTheme.colorScheme.onError,
-                                icon = painterResource(R.drawable.ic_delete_forever),
-                                stayDismissed = true,
-                                onDismiss = {
-                                    spendsViewModel.removeSpent(row.transaction!!)
-                                }
-                            ),
-                            onTried = { isUserTrySwipe = true },
-                            showTutorial = index == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW,
-                        ) { state ->
-                            val size = with(LocalDensity.current) {
-                                java.lang.Float.max(
-                                    java.lang.Float.min(
-                                        16.dp.toPx(),
-                                        abs(state.offset.value)
-                                    ), 0f
-                                ).toDp()
-                            }
-
-                            val animateCorners by remember {
-                                derivedStateOf {
-                                    state.offset.value.absoluteValue > 30
-                                }
-                            }
-                            val startCorners by animateDpAsState(
-                                targetValue = when {
-                                    state.dismissDirection == DismissDirection.StartToEnd &&
-                                            animateCorners -> 8.dp
-                                    else -> 0.dp
-                                }
-                            )
-                            val endCorners by animateDpAsState(
-                                targetValue = when {
-                                    state.dismissDirection == DismissDirection.EndToStart &&
-                                            animateCorners -> 8.dp
-                                    else -> 0.dp
-                                }
-                            )
-
-                            Box(
-                                modifier = Modifier.height(IntrinsicSize.Min)
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(
-                                            vertical = min(
-                                                size / 4f,
-                                                4.dp
-                                            )
-                                        )
-                                        .clip(RoundedCornerShape(size)),
-                                    color = colorEditor,
-                                    shape = RoundedCornerShape(
-                                        topStart = startCorners,
-                                        bottomStart = startCorners,
-                                        topEnd = endCorners,
-                                        bottomEnd = endCorners,
-                                    ),
-                                ) {
-                                }
-                                Box(
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                ) {
-                                    SpentItemActions(
-                                        transaction = row.transaction!!,
-                                        currency = currency.value,
-                                        categoryEmojis = categoryEmojis,
-                                        onEdit = {
-                                            editorViewModel.startEditingSpent(row.transaction!!)
-                                            onClose()
-                                        },
-                                        onDelete = {
-                                            spendsViewModel.removeSpent(row.transaction!!)
-                                        },
-                                        onCopy = {
-                                            val transaction = row.transaction!!
-                                            clipboard.setText(
-                                                AnnotatedString(
-                                                    buildSpendCopyText(
-                                                        amount = numberFormat(
-                                                            context = context,
-                                                            transaction.value,
-                                                            currency = currency.value,
-                                                        ),
-                                                        comment = transaction.comment,
-                                                    )
-                                                )
-                                            )
-                                            appViewModel.showSnackbar(
-                                                context.getString(R.string.history_actions_copied)
-                                            )
-                                        },
+                ) { _, row ->
+                    DayCard(
+                        day = row.day,
+                        transactions = row.transactions,
+                        dayTotal = row.dayTotal ?: BigDecimal.ZERO,
+                        firstTransactionIndex = row.firstTransactionIndex,
+                        currency = currency.value,
+                        categoryEmojis = categoryEmojis,
+                        readOnly = readOnly,
+                        onEdit = { transaction ->
+                            editorViewModel.startEditingSpent(transaction)
+                            onClose()
+                        },
+                        onDelete = { transaction ->
+                            spendsViewModel.removeSpent(transaction)
+                        },
+                        onCopy = { transaction ->
+                            clipboard.setText(
+                                AnnotatedString(
+                                    buildSpendCopyText(
+                                        amount = numberFormat(
+                                            context = context,
+                                            transaction.value,
+                                            currency = currency.value,
+                                        ),
+                                        comment = transaction.comment,
                                     )
-                                }
-                            }
-                        } else {
-                            SpentItem(
-                                transaction = row.transaction!!,
-                                currency = currency.value,
-                                categoryEmojis = categoryEmojis,
+                                )
                             )
-                        }
-                    }
+                            appViewModel.showSnackbar(
+                                context.getString(R.string.history_actions_copied)
+                            )
+                        },
+                        onSwipeEdit = { transaction ->
+                            editorViewModel.startEditingSpent(transaction)
+                            onClose()
+                        },
+                        onSwipeDelete = { transaction ->
+                            spendsViewModel.removeSpent(transaction)
+                        },
+                        onTriedSwipe = { isUserTrySwipe = true },
+                        showTutorial = { globalIndex ->
+                            globalIndex == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW
+                        },
+                    )
                 }
 
                 if (!readOnly) {
@@ -347,7 +250,7 @@ private fun PreviewDefault() {
     }
 }
 
-private fun composeHistoryRows(
+internal fun composeHistoryRows(
     periodSpends: List<Transaction>,
     archivedTransactions: List<ArchivedTransaction>,
     searchQuery: String,
@@ -389,68 +292,23 @@ private fun composeHistoryRows(
             (onlyCategoryKey == null || transactionMatchesCategory(entry.transaction, onlyCategoryKey))
     }.sortedBy { it.date }
 
-    val composedList = emptyList<RowEntity>().toMutableList()
-    var lastSpentDate: LocalDate? = null
-    var lastDayTotal: BigDecimal = BigDecimal.ZERO
+    if (entries.isEmpty()) return emptyList()
 
-    entries.forEach { spent ->
-        if (lastSpentDate === null || !isSameDay(spent.date.time, lastSpentDate!!.toDate().time)) {
-            if (lastSpentDate !== null) {
-                composedList.add(
-                    RowEntity(
-                        type = RowEntityType.DayTotal,
-                        key = "total-${lastSpentDate}",
-                        contentHash = "total-${lastSpentDate}-${lastDayTotal}",
-                        transaction = null,
-                        day = lastSpentDate!!,
-                        dayTotal = lastDayTotal,
-                    )
-                )
-            }
-
-            lastSpentDate = spent.date.toLocalDate()
-            lastDayTotal = BigDecimal.ZERO
-
-            composedList.add(
-                RowEntity(
-                    type = RowEntityType.DayDivider,
-                    key = "header-${lastSpentDate}",
-                    contentHash = "header-${lastSpentDate}",
-                    transaction = null,
-                    day = lastSpentDate!!,
-                    dayTotal = null,
-                )
-            )
-        }
-
-        lastDayTotal += spent.value
-
-        composedList.add(
-            RowEntity(
-                type = RowEntityType.Spent,
-                key = spent.key,
-                contentHash = spent.contentHash,
-                transaction = spent.transaction,
-                day = lastSpentDate!!,
-                dayTotal = null,
-            )
+    val grouped = entries.groupBy { it.date.toLocalDate() }
+    var firstTransactionIndex = 0
+    return grouped.keys.sorted().map { day ->
+        val dayEntries = grouped.getValue(day)
+        val card = RowEntity(
+            key = "day-$day",
+            contentHash = "day-$day-" + dayEntries.joinToString("|") { it.contentHash },
+            day = day,
+            transactions = dayEntries.map { it.transaction },
+            firstTransactionIndex = firstTransactionIndex,
+            dayTotal = dayEntries.sumOf { it.value },
         )
-    }
-
-    if (entries.isNotEmpty() && lastSpentDate !== null) {
-        composedList.add(
-            RowEntity(
-                type = RowEntityType.DayTotal,
-                key = "total-${lastSpentDate!!}",
-                contentHash = "total-${lastSpentDate!!}-${lastDayTotal}",
-                transaction = null,
-                day = lastSpentDate!!,
-                dayTotal = lastDayTotal,
-            )
-        )
-    }
-
-    return composedList.toList().reversed()
+        firstTransactionIndex += dayEntries.size
+        card
+    }.reversed()
 }
 
 private data class HistoryEntry(
