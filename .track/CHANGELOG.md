@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-08-16 — Widgets use the canonical `whatBudgetForDay` from `SpendsRepository` (backlog #17 — "Unify whatBudgetForDay", committed `pending`, pushed after)
+## 2026-08-16 — Widgets use the canonical `whatBudgetForDay` from `SpendsRepository` (backlog #17 — "Unify whatBudgetForDay", committed `0089023`, pushed after)
 
 User picked "Unify whatBudgetForDay" as the next feature. The widget receiver (`widget/CommonWidgetReceiver.kt`) held a **private inline copy** of the daily-budget split math (`whatBudgetForDay(finishDate, spent, budget, dailyBudget, spentFromDailyBudget)`) that was already drifting from the repository's canonical, tested `SpendsRepository.whatBudgetForDay(...)`:
 
