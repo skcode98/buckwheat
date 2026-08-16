@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-16 — Widgets use the canonical `whatBudgetForDay` from `SpendsRepository` (backlog #17 — "Unify whatBudgetForDay", committed `pending`, pushed after)
+
+User picked "Unify whatBudgetForDay" as the next feature. The widget receiver (`widget/CommonWidgetReceiver.kt`) held a **private inline copy** of the daily-budget split math (`whatBudgetForDay(finishDate, spent, budget, dailyBudget, spentFromDailyBudget)`) that was already drifting from the repository's canonical, tested `SpendsRepository.whatBudgetForDay(...)`:
+
+- **Widget copy (deleted)**: `restDays = countDaysToToday(finishDate) - 1`, `splitBudget = budget - spent - spentFromDailyBudget`, divide with **scale 0, `RoundingMode.FLOOR`**.
+- **Canonical (`SpendsRepository.kt:468`)**: `restDays = countDays(finish, today) - 1`, `restBudget = budget - spent - spentFromDailyBudget` (`applyTodaySpends`), divide with **scale 2, `RoundingMode.HALF_EVEN`**, logged, unit-tested.
+
+Both computed the same quantity — budget left for the rest of the period, split per remaining day (excluding today) — but the widget copy could drift (scale/rounding, date counting, no logging) so widget rest could disagree with wallet rest. Fix: `observeData` now calls `databaseRepository.whatBudgetForDay(excludeCurrentDay = true, applyTodaySpends = true)` directly (same semantics as the deleted copy; the editor pill uses the identical call with `notCommittedSpent`). Also removed the now-unused `spent` read. No test delta (the canonical method was already covered by `SpendsRepositoryTest`).
+
+Golden pipeline green: `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites**.
+
+---
+
 ## 2026-08-16 — Categories widget: explicit background = Android theme background color (committed `c98bf74`, pushed)
 
 User: "the category widget does not have bg, use android theme as bg colour make sure our category colour not mess with it". The category widget relied only on `GlanceModifier.appWidgetBackground()` (the launcher-provided default, which renders nothing visible on many hosts) — so the widget looked transparent and the pills floated on the wallpaper. Fix in `widget/category/CategoryWidget.kt`:

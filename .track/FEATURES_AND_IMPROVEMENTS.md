@@ -112,11 +112,11 @@
 
 ## Tier 3 — Polish / correctness
 
-### 17. Unify `whatBudgetForDay` (widget vs repository drift)
-- **Files**: `widget/CommonWidgetReceiver.kt:107` (private copy), `di/SpendsRepository.kt:479` (canonical)
+### 17. Unify `whatBudgetForDay` (widget vs repository drift) ✅ **SHIPPED 2026-08-16**
+- **Files**: `widget/CommonWidgetReceiver.kt:114` (private copy) → deleted; `di/SpendsRepository.kt:468` (canonical)
 - **What**: The widget receiver holds a simplified inline copy of daily-budget math that can drift. Route widgets through the repository so widget rest always matches wallet rest.
 - **Complexity**: Small–Medium · **Value**: Medium (correctness)
-- **Status**: Backlog
+- **Status**: ✅ Implemented — golden pipeline green, **315 tests, 0 failures**. `observeData` calls `databaseRepository.whatBudgetForDay(excludeCurrentDay = true, applyTodaySpends = true)` directly (same call as the editor pill); the private copy used scale-0 FLOOR + `countDaysToToday` and could disagree with the canonical scale-2 HALF_EVEN. No test delta.
 
 ### 18. Archived-period weekday comparison
 - **Files**: `analytics/SpendsWeekdayCard.kt`, `CompareToLastPeriodCard.kt`

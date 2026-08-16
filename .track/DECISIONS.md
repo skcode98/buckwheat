@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-08-16 — Decision: route widget rest through the canonical `SpendsRepository.whatBudgetForDay` instead of a private widget copy
+
+**Decision**: Deleted the private `whatBudgetForDay(finishDate, spent, budget, dailyBudget, spentFromDailyBudget)` copy in `widget/CommonWidgetReceiver.kt`; `observeData` now calls `databaseRepository.whatBudgetForDay(excludeCurrentDay = true, applyTodaySpends = true)`.
+
+**Why**: Backlog #17 — the widget receiver held a simplified inline copy of daily-budget math that can drift from `SpendsRepository.kt:468`. It already drifted in visible ways: the copy used `countDaysToToday(finishDate) - 1` and divided with **scale 0, `RoundingMode.FLOOR`**, while the canonical (unit-tested, logged) method uses `countDays(finish, today) - 1` and **scale 2, `RoundingMode.HALF_EVEN`**. Same quantity (budget remaining for the period split per day, excluding today), but the widget could show a different rest than the wallet. The editor pill (`RestBudgetPillViewModel`) uses exactly `excludeCurrentDay = true, applyTodaySpends = true` (plus `notCommittedSpent`), so this is the single source of truth.
+
+**Outcome**: Golden pipeline green — `spotlessApply` + `testDebugUnitTest` + `assembleDebug` = **315 tests, 0 failures, 32 suites** (no test delta — the canonical method was already covered). Committed `pending`, pushed.
+
+---
+
 ## 2026-08-16 — Decision: categories widget background = the Android theme's `background` color, painted with `GlanceModifier.background(...)`
 
 **Decision**: In `widget/category/CategoryWidget.kt`, resolve `backgroundColor = GlanceTheme.colors.background.getColor(context)` and replace `GlanceModifier.appWidgetBackground()` on the root `Column` with `.background(backgroundColor)` (kept `.cornerRadius(16.dp)`).
