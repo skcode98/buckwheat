@@ -69,6 +69,15 @@
   <string name="recurring_due_channel_name">Регулярные платежи</string>
   <string name="recurring_due_channel_description">Уведомления о регулярных платежах, запланированных на сегодня</string>
   <string name="recurring_due_notification_title">Сегодня запланированы регулярные платежи</string>
+  <string name="recurring_auto_apply_title">Автодобавление платежей</string>
+  <string name="recurring_auto_apply_description">Как новые регулярные платежи попадают в расходы</string>
+  <string name="recurring_auto_apply_off">Выкл</string>
+  <string name="recurring_auto_apply_ask">Спросить</string>
+  <string name="recurring_auto_apply_silent">Авто</string>
+  <string name="recurring_charge_confirm_title">Добавить регулярные платежи?</string>
+  <string name="recurring_charge_confirm_description">Эти регулярные платежи будут записаны в расходы:</string>
+  <string name="recurring_charge_confirm_add">Добавить</string>
+  <string name="recurring_charge_confirm_skip">Пропустить</string>
   <string name="goal_nudge_channel_name">Сберегательные цели</string>
   <string name="goal_nudge_channel_description">Напоминания о прогрессе при достижении вех цели</string>
   <string name="goal_nudge_milestone_title">%1$s — накоплено %2$d%%</string>

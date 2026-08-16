@@ -10,6 +10,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
+import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.di.currencyStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertHourStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertMinuteStoreKey
@@ -29,6 +30,9 @@ import javax.inject.Inject
 class RecurringPaymentAlertReceiver : BroadcastReceiver() {
     @Inject
     lateinit var recurringDao: RecurringDao
+
+    @Inject
+    lateinit var transactionDao: TransactionDao
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != RecurringPaymentAlertScheduler.ACTION_RECURRING_ALERT) return
@@ -57,6 +61,7 @@ class RecurringPaymentAlertReceiver : BroadcastReceiver() {
         val dayOfMonth = Calendar.getInstance().apply { time = today }
             .get(Calendar.DAY_OF_MONTH)
         val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
+            .let { filterAlreadyRecorded(it, transactionDao.getAllNow(), today) }
         if (dueTemplates.isEmpty()) return
 
         val currency = context.budgetDataStore.data.first()[currencyStoreKey]

@@ -22,6 +22,7 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -38,6 +39,7 @@ fun RecurringPaymentsSheet(
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
     val templates by viewModel.templates.observeAsState(emptyList())
+    val autoApplyMode by viewModel.autoApplyMode.observeAsState(RecurringAutoApplyMode.SILENT)
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -60,6 +62,52 @@ fun RecurringPaymentsSheet(
                     text = stringResource(R.string.recurring_payments_title),
                     style = MaterialTheme.typography.titleLarge,
                 )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.recurring_auto_apply_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.recurring_auto_apply_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RecurringAutoApplyMode.values().forEach { mode ->
+                        FilterChip(
+                            selected = autoApplyMode == mode,
+                            onClick = { viewModel.setAutoApplyMode(mode) },
+                            label = {
+                                Text(
+                                    stringResource(
+                                        when (mode) {
+                                            RecurringAutoApplyMode.OFF ->
+                                                R.string.recurring_auto_apply_off
+
+                                            RecurringAutoApplyMode.ASK ->
+                                                R.string.recurring_auto_apply_ask
+
+                                            RecurringAutoApplyMode.SILENT ->
+                                                R.string.recurring_auto_apply_silent
+                                        }
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
 
             Column(

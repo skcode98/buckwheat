@@ -7,10 +7,10 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -25,11 +25,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.danilkinkin.buckwheat.base.balloon.BalloonProvider
+import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.home.MainScreen
 import dagger.hilt.android.AndroidEntryPoint
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.ui.AppLockScreen
 import com.danilkinkin.buckwheat.ui.ThemeMode
 import com.danilkinkin.buckwheat.ui.syncTheme
 import com.danilkinkin.buckwheat.util.locScreenOrientation
@@ -51,13 +54,24 @@ val LocalWindowSize = compositionLocalOf { WindowWidthSizeClass.Compact }
 val LocalWindowInsets = compositionLocalOf { PaddingValues(0.dp) }
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     // Broke tests. Set to true for tests
     private val isDone: MutableState<Boolean> = mutableStateOf(false)
     private val isReady: MutableState<Boolean> = mutableStateOf(false)
 
+    private val appLockViewModel: AppLockViewModel by viewModels()
+
     private val micPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+
+    override fun onStop() {
+        super.onStop()
+        // Re-arm the app lock whenever the activity actually leaves the foreground. Skipped on
+        // configuration changes (rotation), which also go through onStop without a real exit.
+        if (!isChangingConfigurations) {
+            appLockViewModel.armLock()
+        }
+    }
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -121,7 +135,11 @@ class MainActivity : ComponentActivity() {
                                 LocalWindowSize provides widthSizeClass,
                                 LocalWindowInsets provides windowInsets,
                             ) {
-                                MainScreen(activityResultRegistryOwner)
+                                if (appLockViewModel.isLocked) {
+                                    AppLockScreen(appLockViewModel)
+                                } else {
+                                    MainScreen(activityResultRegistryOwner)
+                                }
 
                                 LaunchedEffect(Unit) {
                                     // App rendered and splash screen can be hidden

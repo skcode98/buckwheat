@@ -3,10 +3,13 @@ package com.danilkinkin.buckwheat.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.di.finishPeriodDateStoreKey
+import com.danilkinkin.buckwheat.di.periodFinishEnabledStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertEnabledStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertHourStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertMinuteStoreKey
@@ -26,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Date
 
 class ReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -63,6 +67,13 @@ class ReminderBootReceiver : BroadcastReceiver() {
                         )
                     }.getOrDefault(SpendDigestFrequency.WEEKLY)
                     SpendDigestScheduler.schedule(context, hour, minute, frequency)
+                }
+                val periodFinishEnabled = prefs[periodFinishEnabledStoreKey] ?: false
+                if (periodFinishEnabled) {
+                    val finishDateMillis = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
+                    if (finishDateMillis != null && finishDateMillis > Date().time) {
+                        PeriodFinishScheduler.schedule(context, Date(finishDateMillis))
+                    }
                 }
                 WidgetRefreshScheduler.schedule(context)
             } finally {

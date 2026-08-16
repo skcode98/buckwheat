@@ -65,6 +65,7 @@ import com.danilkinkin.buckwheat.history.History
 import com.danilkinkin.buckwheat.keyboard.Keyboard
 import com.danilkinkin.buckwheat.onboarding.ON_BOARDING_SHEET
 import com.danilkinkin.buckwheat.recalcBudget.RECALCULATE_DAILY_BUDGET_SHEET
+import com.danilkinkin.buckwheat.settings.RECURRING_CHARGE_CONFIRM_SHEET
 import com.danilkinkin.buckwheat.ui.colorBackground
 import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.ui.colorOnEditor
@@ -119,6 +120,10 @@ fun MainScreen(
 
     observeLiveData(spendsViewModel.requireDistributionRestedBudget) {
         if (it) appViewModel.openSheet(PathState(RECALCULATE_DAILY_BUDGET_SHEET))
+    }
+
+    observeLiveData(spendsViewModel.pendingRecurringCharges) { pending ->
+        if (pending.isNotEmpty()) appViewModel.openSheet(PathState(RECURRING_CHARGE_CONFIRM_SHEET))
     }
 
     observeLiveData(spendsViewModel.requireSetBudget) {

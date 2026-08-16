@@ -27,9 +27,11 @@ import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderScheduler
+import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -100,6 +102,15 @@ class BackupRepository @Inject constructor(
         context.settingsDataStore.edit { prefs ->
             prefs.clear()
             prefs.applyBackupMap(backup.settingsPreferences)
+            // Never let a (possibly crafted) backup re-enable the app lock: the PIN hash is
+            // stripped on export, so restoring the flags could lock the user out.
+            prefs.remove(appLockEnabledStoreKey)
+            prefs.remove(appLockPinHashStoreKey)
+            prefs.remove(appLockBiometricEnabledStoreKey)
+            prefs.remove(appLockFailedAttemptsStoreKey)
+            prefs.remove(appLockLockoutUntilStoreKey)
+            prefs.remove(appLockBiometricIvStoreKey)
+            prefs.remove(appLockBiometricSecretStoreKey)
         }
 
         // The reminder alarm survives neither DataStore changes nor the DB wipe, so re-arm it
@@ -115,6 +126,18 @@ class BackupRepository @Inject constructor(
             DailyBudgetReminderScheduler.cancel(context)
         }
 
+        // Same for the period-finish alarm: re-arm it from the restored finish date. A restored
+        // period that already ended must not notify (the finish moment is in the past).
+        val periodFinishEnabled = restoredSettings[periodFinishEnabledStoreKey] ?: false
+        if (periodFinishEnabled) {
+            val finishDateMillis = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
+            if (finishDateMillis != null && finishDateMillis > Date().time) {
+                PeriodFinishScheduler.schedule(context, Date(finishDateMillis))
+            }
+        } else {
+            PeriodFinishScheduler.cancel(context)
+        }
+
         return true
     }
 }
@@ -125,6 +148,16 @@ private fun Preferences.asBackupMap(): Map<String, BackupValue> {
         // Never persist AI API keys into a backup file (plaintext secrets). Covers both the
         // legacy voiceAiApiKey key and every per-provider "ai.<provider>.apiKey" key.
         if (key.name == voiceAiApiKeyStoreKey.name || key.name.endsWith(".apiKey")) return@forEach
+        // App lock is a local-only concern: never persist the PIN hash (secret) nor the lock
+        // flags (a restored flag without a hash would lock the user out).
+        if (key.name == appLockPinHashStoreKey.name ||
+            key.name == appLockEnabledStoreKey.name ||
+            key.name == appLockBiometricEnabledStoreKey.name ||
+            key.name == appLockFailedAttemptsStoreKey.name ||
+            key.name == appLockLockoutUntilStoreKey.name ||
+            key.name == appLockBiometricIvStoreKey.name ||
+            key.name == appLockBiometricSecretStoreKey.name
+        ) return@forEach
         when (value) {
             is Boolean -> result[key.name] = BackupValue.Bool(value)
             is Int -> result[key.name] = BackupValue.IntValue(value)

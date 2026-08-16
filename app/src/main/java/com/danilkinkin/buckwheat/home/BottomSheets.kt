@@ -317,6 +317,17 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = RECURRING_CHARGE_CONFIRM_SHEET,
+        cancelable = false,
+    ) { state ->
+        RecurringChargeConfirmSheet(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            }
+        )
+    }
+
+    BottomSheetWrapper(
         name = GOALS_SHEET,
     ) {
         GoalsSheet()

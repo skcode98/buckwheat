@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.data
 
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
@@ -10,12 +11,15 @@ import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
+import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
 import com.danilkinkin.buckwheat.util.roundToDay
 import java.util.Calendar
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -27,11 +31,18 @@ import javax.inject.Inject
 
 enum class RestedBudgetDistributionMethod { REST, ADD_TODAY, ASK }
 
+// Controls how due recurring payments are recorded. OFF leaves them to the daily reminder
+// notification, ASK surfaces a one-tap confirm sheet before recording, SILENT records them
+// automatically (the historical behavior).
+enum class RecurringAutoApplyMode { OFF, ASK, SILENT }
+
 @HiltViewModel
 class SpendsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val savedStateHandle: SavedStateHandle,
     private val spendsRepository: SpendsRepository,
     private val recurringDao: RecurringDao,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     var tags = spendsRepository.getAllTags()
     var transactions = spendsRepository.getAllTransactions()
@@ -143,6 +154,7 @@ class SpendsViewModel @Inject constructor(
     var requireSetBudget = MutableLiveData(false)
     var periodFinished = MutableLiveData(false)
     var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
+    var pendingRecurringCharges: MutableLiveData<List<Transaction>> = MutableLiveData(emptyList())
 
     private val changeDayMutex = Mutex()
 
@@ -167,6 +179,7 @@ class SpendsViewModel @Inject constructor(
 
             requireSetBudget.value = false
             periodFinished.value = false
+            syncPeriodFinishAlarm(newFinishDate)
         }
     }
 
@@ -176,6 +189,7 @@ class SpendsViewModel @Inject constructor(
 
             requireSetBudget.value = false
             periodFinished.value = false
+            syncPeriodFinishAlarm(newFinishDate)
         }
     }
 
@@ -191,6 +205,8 @@ class SpendsViewModel @Inject constructor(
 
             requireSetBudget.value = false
             periodFinished.value = true
+            // The period ended now, so the scheduled end-of-period alarm is no longer needed.
+            PeriodFinishScheduler.cancel(context)
         }
     }
 
@@ -243,6 +259,18 @@ class SpendsViewModel @Inject constructor(
     fun hideOverspendingWarn(hide: Boolean) {
         viewModelScope.launch {
             spendsRepository.hideOverspendingWarn(hide)
+        }
+    }
+
+    // Re-arms the one-shot end-of-period notification for the (possibly changed) finish date.
+    // Scheduling is opt-in: with the setting off the alarm is cancelled instead. The alarm is
+    // always keyed to the same request code, so a new schedule silently replaces any stale one.
+    private suspend fun syncPeriodFinishAlarm(finishDate: Date) {
+        val enabled = settingsRepository.isPeriodFinishEnabled().first()
+        if (enabled) {
+            PeriodFinishScheduler.schedule(context, finishDate)
+        } else {
+            PeriodFinishScheduler.cancel(context)
         }
     }
 
@@ -339,7 +367,9 @@ class SpendsViewModel @Inject constructor(
 
     // Applies recurring payments for every day since the last application, so payments
     // are never skipped when the app is closed on the due day. Self-guarded by a dedicated
-    // DataStore key, independent of the budget-distribution date.
+    // DataStore key, independent of the budget-distribution date. The mode setting decides
+    // what happens to the due payments: OFF skips recording, SILENT records them, ASK queues
+    // them for the confirm sheet via pendingRecurringCharges.
     private suspend fun processDueRecurringPayments() {
         val lastApplied = spendsRepository.getLastRecurringAppliedDate().first()
         val today = roundToDay(Date())
@@ -353,22 +383,23 @@ class SpendsViewModel @Inject constructor(
             return
         }
 
+        val mode = settingsRepository.getRecurringAutoApplyMode().first()
+
         var cursor = roundToDay(lastApplied)
         var guard = 0
         val maxBackfillDays = 366
+        val dueTransactions: MutableList<Transaction> = mutableListOf()
         while (cursor.time < today.time && guard < maxBackfillDays) {
             val calendar = Calendar.getInstance().apply { time = cursor }
             val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
             val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
             if (dueTemplates.isNotEmpty()) {
                 dueTemplates.forEach { template ->
-                    spendsRepository.addSpent(
-                        Transaction(
-                            type = TransactionType.SPENT,
-                            value = template.amount,
-                            date = Date(cursor.time),
-                            comment = template.comment,
-                        )
+                    dueTransactions += Transaction(
+                        type = TransactionType.SPENT,
+                        value = template.amount,
+                        date = Date(cursor.time),
+                        comment = template.comment,
                     )
                 }
             }
@@ -377,7 +408,38 @@ class SpendsViewModel @Inject constructor(
             guard++
         }
 
+        // The marker advances in every mode so each due payment is evaluated exactly once
+        // per day. In ASK mode the queue survives only while the app is running; a dismissed
+        // or skipped sheet simply drops the pending payments for that day.
         spendsRepository.setLastRecurringAppliedDate(today)
+
+        if (dueTransactions.isEmpty()) return
+
+        when (mode) {
+            RecurringAutoApplyMode.SILENT -> {
+                dueTransactions.forEach { spendsRepository.addSpent(it) }
+            }
+
+            RecurringAutoApplyMode.ASK -> {
+                pendingRecurringCharges.value = dueTransactions
+            }
+
+            RecurringAutoApplyMode.OFF -> {
+                // Left to the daily reminder notification; nothing is recorded automatically.
+            }
+        }
+    }
+
+    fun confirmRecurringCharges() {
+        val pending = pendingRecurringCharges.value.orEmpty()
+        viewModelScope.launch {
+            pending.forEach { spendsRepository.addSpent(it) }
+            pendingRecurringCharges.value = emptyList()
+        }
+    }
+
+    fun skipRecurringCharges() {
+        pendingRecurringCharges.value = emptyList()
     }
 
     private fun filterByPeriod(

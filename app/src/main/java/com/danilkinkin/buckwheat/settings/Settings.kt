@@ -63,6 +63,7 @@ fun Settings(
                 ThemeSwitcher()
                 LangSwitcher()
                 RoundValuesSetting()
+                AppLockSetting()
                 TextRow(
                     icon = painterResource(R.drawable.ic_notifications),
                     text = stringResource(R.string.notifications_title),
