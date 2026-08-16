@@ -111,24 +111,6 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
         }
     }
 
-    private fun whatBudgetForDay(
-        finishDate: Date,
-        spent: BigDecimal,
-        budget: BigDecimal,
-        dailyBudget: BigDecimal,
-        spentFromDailyBudget: BigDecimal,
-    ): BigDecimal {
-        val restDays = countDaysToToday(finishDate) - 1
-        val restBudget = (budget - spent) - dailyBudget
-        val splitBudget = restBudget + dailyBudget - spentFromDailyBudget
-
-        return splitBudget.divide(
-            restDays.toBigDecimal().coerceAtLeast(BigDecimal.ONE),
-            0,
-            RoundingMode.FLOOR
-        )
-    }
-
     private fun observeData(context: Context) {
         coroutineScope.launch {
 
@@ -138,7 +120,6 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             val actualFinishDate = databaseRepository.getFinishPeriodActualDate().first()
             val spentFromDailyBudget = databaseRepository.getSpentFromDailyBudget().first()
             val dailyBudget = databaseRepository.getDailyBudget().first()
-            val spent = databaseRepository.getSpent().first()
             val budget = databaseRepository.getBudget().first()
             val currency = databaseRepository.getCurrency().first()
             val startPeriodDate = databaseRepository.getStartPeriodDate().first()
@@ -176,12 +157,9 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             } else {
                 val newBudget = dailyBudget - spentFromDailyBudget
 
-                val newPerDayBudget = whatBudgetForDay(
-                    finishDate = finishDate,
-                    spent = spent,
-                    budget = budget,
-                    dailyBudget = dailyBudget,
-                    spentFromDailyBudget = spentFromDailyBudget,
+                val newPerDayBudget = databaseRepository.whatBudgetForDay(
+                    excludeCurrentDay = true,
+                    applyTodaySpends = true,
                 )
 
                 val endBudget = newPerDayBudget <= BigDecimal.ZERO
