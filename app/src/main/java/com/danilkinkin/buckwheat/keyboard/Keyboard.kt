@@ -329,7 +329,7 @@ fun Keyboard(
                 tryConvertStringToNumber(newValue).join(third = false)
 
             if (editorViewModel.stage.value === EditStage.IDLE) editorViewModel.startCreatingSpent()
-            editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value!!.toBigDecimal())
+            editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value?.toBigDecimal() ?: BigDecimal.ZERO)
         } else if (newValue == "") {
             editorViewModel.rawSpentValue.value = newValue
         }
@@ -451,7 +451,7 @@ fun Keyboard(
                             tryConvertStringToNumber("0").join(third = false)
 
                         if (editorViewModel.stage.value === EditStage.IDLE) editorViewModel.startCreatingSpent()
-                        editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value!!.toBigDecimal())
+                        editorViewModel.modifyEditingSpent(editorViewModel.rawSpentValue.value?.toBigDecimal() ?: BigDecimal.ZERO)
                     }
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 },
@@ -594,12 +594,13 @@ fun Keyboard(
                                 if (debugProgress == -1) {
                                     editorViewModel.resetEditingSpent()
 
-                                    appViewModel.setIsDebug(!appViewModel.isDebug.value!!)
+                                    val currentDebug = appViewModel.isDebug.value ?: false
+                                    appViewModel.setIsDebug(!currentDebug)
 
                                     coroutineScope.launch {
                                         appViewModel.showSnackbar(
                                             "Debug ${
-                                                if (appViewModel.isDebug.value!!) {
+                                                if (currentDebug) {
                                                     "ON"
                                                 } else {
                                                     "OFF"
@@ -615,8 +616,9 @@ fun Keyboard(
 
                                 if (editorViewModel.canCommitEditingSpent()) {
                                         if (mode == EditMode.EDIT) {
+                                            val edited = editorViewModel.editedTransaction ?: return@KeyboardButton
                                             val newVersionOfSpent =
-                                                editorViewModel.editedTransaction!!.copy(
+                                                edited.copy(
                                                     value = editorViewModel.currentSpent,
                                                     date = editorViewModel.currentDate,
                                                     comment = (editorViewModel.currentComment.value
@@ -625,7 +627,7 @@ fun Keyboard(
                                                 )
 
                                             spendsViewModel.removeSpent(
-                                                editorViewModel.editedTransaction!!,
+                                                edited,
                                                 silent = true
                                             )
                                             spendsViewModel.addSpent(newVersionOfSpent)

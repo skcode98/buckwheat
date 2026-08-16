@@ -50,7 +50,7 @@ fun CurrentSpendEditor(
     val focusRequester = remember { FocusRequester() }
 
     fun calculateValues() {
-        spentValue = editorViewModel.rawSpentValue.value!!
+        spentValue = editorViewModel.rawSpentValue.value ?: ""
         requestFocus = true
     }
 
@@ -59,7 +59,7 @@ fun CurrentSpendEditor(
             requestFocus = true
             hide = false
         } else {
-            hide = editorViewModel.rawSpentValue.value!! == ""
+            hide = editorViewModel.rawSpentValue.value == ""
         }
     }
 

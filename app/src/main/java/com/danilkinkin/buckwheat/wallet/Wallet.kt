@@ -78,11 +78,12 @@ fun Wallet(
                     || dateToValue.value != finishPeriodDate
             )
 
+    val finishDate = finishPeriodDate
     var isEdit by remember(startPeriodDate, finishPeriodDate, forceChange) {
         mutableStateOf(
-            (finishPeriodDate !== null && isSameDay(
+            (finishDate != null && isSameDay(
                 startPeriodDate.time,
-                finishPeriodDate!!.time
+                finishDate.time
             ))
                     || forceChange
         )
@@ -92,11 +93,7 @@ fun Wallet(
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
-            val days = if (dateToValue.value !== null) {
-                countDaysToToday(dateToValue.value!!)
-            } else {
-                0
-            }
+            val days = dateToValue.value?.let { countDaysToToday(it) } ?: 0
 
             Row(
                 modifier = Modifier
@@ -312,9 +309,11 @@ fun Wallet(
                         Button(
                             onClick = {
                                 val currentSpends = spends
-                                if (dateToValue.value != null) {
-                                    if (currency != null) {
-                                        spendsViewModel.changeDisplayCurrency(currency!!)
+                                val currentDateToValue = dateToValue.value
+                                val currentCurrency = currency
+                                if (currentDateToValue != null) {
+                                    if (currentCurrency != null) {
+                                        spendsViewModel.changeDisplayCurrency(currentCurrency)
                                     }
 
                                     val newStartDate = startDateToValue.value
@@ -323,13 +322,13 @@ fun Wallet(
                                     if (currentSpends?.isNotEmpty() == true && !forceChange) {
                                         spendsViewModel.changeBudget(
                                             budgetCache,
-                                            dateToValue.value!!,
+                                            currentDateToValue,
                                             newStartDate,
                                         )
                                     } else {
                                         spendsViewModel.setBudget(
                                             budgetCache,
-                                            dateToValue.value!!,
+                                            currentDateToValue,
                                             newStartDate,
                                         )
                                         appViewModel.activateTutorial(TUTORS.OPEN_WALLET)
@@ -343,12 +342,12 @@ fun Wallet(
                                 .fillMaxWidth()
                                 .heightIn(60.dp)
                                 .padding(horizontal = 16.dp),
-                            enabled = dateToValue.value !== null && countDaysToToday(dateToValue.value!!) > 0 && budgetCache > BigDecimal(
+                            enabled = dateToValue.value?.let { countDaysToToday(it) > 0 } == true && budgetCache > BigDecimal(
                                 0
                             )
                         ) {
                             Text(
-                                text = if (spends!!.isNotEmpty() && !forceChange) {
+                                text = if (spends?.isNotEmpty() == true && !forceChange) {
                                     stringResource(R.string.change_budget)
                                 } else {
                                     stringResource(R.string.apply)
