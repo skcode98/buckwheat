@@ -14,9 +14,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,11 +22,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
-import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
-import com.danilkinkin.buckwheat.data.categories.SpendCategory
-import com.danilkinkin.buckwheat.data.categories.categoryKey
 import com.danilkinkin.buckwheat.data.categories.transactionMatchesCategory
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -39,28 +34,13 @@ import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
-
-data class CategoryGroup(
-    val categoryKey: CategoryKey,
-    val transactions: List<Transaction>,
-    val total: BigDecimal,
-)
-
-data class RowEntity(
-    val key: String,
-    var contentHash: String? = null,
-    val day: LocalDate,
-    val transactions: List<Transaction>,
-    val categoryGroups: List<CategoryGroup> = emptyList(),
-    val firstTransactionIndex: Int = 0,
-    var dayTotal: BigDecimal? = null,
-)
 
 @Composable
 fun History(
@@ -127,12 +107,15 @@ fun History(
         animationSpec = TweenSpec(250),
     )
 
+    val animatedList = updateAnimatedItemsState(newList = historyList)
+
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             LazyColumn(
-                state = scrollState,
-                userScrollEnabled = true,
+                reverseLayout = true,
+                state = scrollState
             ) {
+
                 item("spacer-2") {
                     Spacer(modifier = Modifier.height(2.dp))
                 }
@@ -151,93 +134,53 @@ fun History(
                     Spacer(modifier = Modifier.height(18.dp))
                 }
 
-                historyList.reversed().forEachIndexed { rowIndex, row ->
-                    item("date-${row.key}") {
-                        HistoryDateDivider(
-                            day = row.day,
-                            dayTotal = row.dayTotal ?: BigDecimal.ZERO,
-                            currency = currency.value,
-                        )
-                    }
-
-                    var flatIndex = 0
-                    row.categoryGroups.forEachIndexed { catIndex, group ->
-                        item("cat-header-${row.key}-$catIndex") {
-                            val (catEmoji, catLabel) = when (val key = group.categoryKey) {
-                                is CategoryKey.BuiltIn -> key.category.emoji to stringResource(key.category.labelRes)
-                                is CategoryKey.Custom -> SpendCategory.emojiFor(key.name, categoryEmojis[key.name]) to key.name
-                            }
-                            CategoryGroupHeader(
-                                emoji = catEmoji,
-                                label = catLabel,
-                                subtotal = group.total,
-                                currency = currency.value,
-                            )
-                        }
-
-                        group.transactions.forEachIndexed { index, transaction ->
-                            item("spent-${transaction.uid}") {
-                                SpentItem(
-                                    transaction = transaction,
-                                    currency = currency.value,
-                                    categoryEmojis = categoryEmojis,
-                                    readOnly = readOnly,
-                                    onEdit = {
-                                        editorViewModel.startEditingSpent(transaction)
-                                        onClose()
-                                    },
-                                    onDelete = {
-                                        spendsViewModel.removeSpent(transaction)
-                                    },
-                                    onCopy = {
-                                        clipboard.setText(
-                                            AnnotatedString(
-                                                buildSpendCopyText(
-                                                    amount = numberFormat(
-                                                        context = context,
-                                                        transaction.value,
-                                                        currency = currency.value,
-                                                    ),
-                                                    comment = transaction.comment,
-                                                )
-                                            )
-                                        )
-                                        appViewModel.showSnackbar(
-                                            context.getString(R.string.history_actions_copied)
-                                        )
-                                    },
-                                    onSwipeEdit = {
-                                        editorViewModel.startEditingSpent(transaction)
-                                        onClose()
-                                    },
-                                    onSwipeDelete = {
-                                        spendsViewModel.removeSpent(transaction)
-                                    },
-                                    onTriedSwipe = { isUserTrySwipe = true },
-                                    showTutorial = row.firstTransactionIndex + flatIndex == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW,
+                animatedItemsIndexed(
+                    state = animatedList.value,
+                ) { _, row ->
+                    DayCard(
+                        day = row.day,
+                        transactions = row.transactions,
+                        dayTotal = row.dayTotal ?: BigDecimal.ZERO,
+                        firstTransactionIndex = row.firstTransactionIndex,
+                        currency = currency.value,
+                        categoryEmojis = categoryEmojis,
+                        readOnly = readOnly,
+                        onEdit = { transaction ->
+                            editorViewModel.startEditingSpent(transaction)
+                            onClose()
+                        },
+                        onDelete = { transaction ->
+                            spendsViewModel.removeSpent(transaction)
+                        },
+                        onCopy = { transaction ->
+                            clipboard.setText(
+                                AnnotatedString(
+                                    buildSpendCopyText(
+                                        amount = numberFormat(
+                                            context = context,
+                                            transaction.value,
+                                            currency = currency.value,
+                                        ),
+                                        comment = transaction.comment,
+                                    )
                                 )
-                            }
-                            flatIndex++
-                            if (index < group.transactions.lastIndex) {
-                                item("item-spacer-${transaction.uid}") {
-                                    HistoryItemSpacer()
-                                }
-                            }
-                        }
-                    }
-
-                    item("total-${row.key}") {
-                        TotalPerDay(
-                            dayTotal = row.dayTotal ?: BigDecimal.ZERO,
-                            currency = currency.value,
-                        )
-                    }
-
-                    if (rowIndex < historyList.lastIndex) {
-                        item("day-spacer-${row.key}") {
-                            HistoryDaySpacer()
-                        }
-                    }
+                            )
+                            appViewModel.showSnackbar(
+                                context.getString(R.string.history_actions_copied)
+                            )
+                        },
+                        onSwipeEdit = { transaction ->
+                            editorViewModel.startEditingSpent(transaction)
+                            onClose()
+                        },
+                        onSwipeDelete = { transaction ->
+                            spendsViewModel.removeSpent(transaction)
+                        },
+                        onTriedSwipe = { isUserTrySwipe = true },
+                        showTutorial = { globalIndex ->
+                            globalIndex == 2 && tutorial === TUTORIAL_STAGE.READY_TO_SHOW
+                        },
+                    )
                 }
 
                 if (!readOnly) {
@@ -283,10 +226,7 @@ fun History(
                         .scale(fapScale),
                     onClick = {
                         coroutineScope.launch {
-                            val lastItem = scrollState.layoutInfo.totalItemsCount - 1
-                            if (lastItem >= 0) {
-                                scrollState.animateScrollToItem(lastItem)
-                            }
+                            scrollState.animateScrollToItem(0)
                         }
                     },
                 ) {
@@ -307,43 +247,6 @@ fun History(
 private fun PreviewDefault() {
     BuckwheatTheme {
         History()
-    }
-}
-
-@Composable
-fun CategoryGroupHeader(
-    emoji: String,
-    label: String,
-    subtotal: BigDecimal,
-    currency: ExtendCurrency,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = emoji,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = numberFormat(context, subtotal, currency = currency),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
     }
 }
 
@@ -395,25 +298,11 @@ internal fun composeHistoryRows(
     var firstTransactionIndex = 0
     return grouped.keys.sorted().map { day ->
         val dayEntries = grouped.getValue(day)
-        val transactions = dayEntries.map { it.transaction }
-
-        val categoryGroups = transactions
-            .groupBy { categoryKey(it) }
-            .map { (key, txs) ->
-                CategoryGroup(
-                    categoryKey = key,
-                    transactions = txs.sortedBy { it.date },
-                    total = txs.sumOf { it.value },
-                )
-            }
-            .sortedByDescending { it.total }
-
         val card = RowEntity(
             key = "day-$day",
             contentHash = "day-$day-" + dayEntries.joinToString("|") { it.contentHash },
             day = day,
-            transactions = transactions,
-            categoryGroups = categoryGroups,
+            transactions = dayEntries.map { it.transaction },
             firstTransactionIndex = firstTransactionIndex,
             dayTotal = dayEntries.sumOf { it.value },
         )

@@ -8,14 +8,12 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.di.MainDispatcherRule
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import java.math.BigDecimal
 import java.util.Date
 
@@ -25,12 +23,6 @@ class RecurringChargeConfirmSheetTest {
 
     @get:Rule
     val compose = createComposeRule()
-
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
-
-    @get:Rule
-    val instantTaskExecutorRule = InstantTaskExecutorRule()
 
     private fun pendingCharges() = listOf(
         Transaction(
@@ -67,7 +59,7 @@ class RecurringChargeConfirmSheetTest {
         compose.onNodeWithText("Add").performClick()
 
         compose.waitUntil(timeoutMillis = 5_000) {
-            harness.spendsViewModel.pendingRecurringCharges.value.orEmpty().isEmpty()
+            harness.spendsViewModel.pendingRecurringCharges.value?.isEmpty() == true
         }
 
         val comments = harness.transactionDao.spends.map { it.comment }

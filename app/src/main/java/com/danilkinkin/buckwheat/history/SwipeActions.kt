@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.history
 
 import android.view.MotionEvent
 import androidx.compose.animation.*
-import kotlinx.coroutines.launch
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorEditor
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.math.sqrt
@@ -102,21 +102,40 @@ fun SwipeActions(
         mutableStateOf(showTutorial)
     }
 
-    LaunchedEffect(Unit) {
-        snapshotFlow {
-            try {
-                state.offset.value
-            } catch (_: Exception) {
-                0f
-            }
-        }.collect {
-            willDismissDirection = when {
-                it > width * startActionsConfig.threshold -> DismissDirection.StartToEnd
-                it < -width * endActionsConfig.threshold -> DismissDirection.EndToStart
-                else -> null
-            }
-        }
+    if (showingTutorial) {
+        val infiniteTransition = rememberInfiniteTransition()
+        val x by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = width * (startActionsConfig.threshold) / 2f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(500, easing = FastOutSlowInEasing, delayMillis = 1000),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+        val dir by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+
+        LaunchedEffect(key1 = x, block = {
+            state.performDrag(x * (if (dir > 0.5f) 1f else -1f) - state.offset.value)
+        })
     }
+
+    LaunchedEffect(key1 = Unit, block = {
+        snapshotFlow { state.offset.value }
+            .collect {
+                willDismissDirection = when {
+                    it > width * startActionsConfig.threshold -> DismissDirection.StartToEnd
+                    it < -width * endActionsConfig.threshold -> DismissDirection.EndToStart
+                    else -> null
+                }
+            }
+    })
 
     val haptic = LocalHapticFeedback.current
     LaunchedEffect(key1 = willDismissDirection, block = {
@@ -136,12 +155,13 @@ fun SwipeActions(
 
     SwipeToDismiss(
         state = state,
-        modifier = Modifier.pointerInteropFilter {
-            if (it.action == MotionEvent.ACTION_DOWN) {
-                showingTutorial = false
-            }
-            false
-        },
+        modifier = Modifier
+            .pointerInteropFilter {
+                if (it.action == MotionEvent.ACTION_DOWN) {
+                    showingTutorial = false
+                }
+                false
+            },
         directions = dismissDirections,
         dismissThresholds = {
             if (it == DismissDirection.StartToEnd)

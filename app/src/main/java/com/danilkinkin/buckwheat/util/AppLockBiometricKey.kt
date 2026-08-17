@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
 object AppLockBiometricKey {
     private const val ANDROID_KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "buckwheat_app_lock_biometric_key"
-    const val TRANSFORMATION = "AES/GCM/NoPadding"
+    private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_TAG_BITS = 128
     private const val IV_BYTES = 12
     private const val SECRET_BYTES = 32
@@ -59,24 +59,16 @@ object AppLockBiometricKey {
         }
     }
 
-    // Encrypts a fresh random unlock secret using an already-initialized cipher. Returns
-    // (base64Iv, base64Ciphertext) or null if encryption fails.
-    fun encryptSecret(cipher: Cipher): Pair<String, String>? {
-        return runCatching {
-            val secret = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
-            val ciphertext = cipher.doFinal(secret)
-            Base64.encodeToString(cipher.iv, Base64.NO_WRAP) to
-                Base64.encodeToString(ciphertext, Base64.NO_WRAP)
-        }.getOrNull()
-    }
-
     // Encrypts a fresh random unlock secret. Returns (base64Iv, base64Ciphertext) or null if
     // the key could not be created/used.
     fun encryptSecret(): Pair<String, String>? {
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getKey() ?: error("biometric key missing"))
-            encryptSecret(cipher)
+            val secret = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
+            val ciphertext = cipher.doFinal(secret)
+            Base64.encodeToString(cipher.iv, Base64.NO_WRAP) to
+                Base64.encodeToString(ciphertext, Base64.NO_WRAP)
         }.getOrNull()
     }
 
@@ -103,7 +95,7 @@ object AppLockBiometricKey {
         }.getOrDefault(false)
     }
 
-    fun getKey(): SecretKey? {
+    private fun getKey(): SecretKey? {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         return store.getKey(ALIAS, null) as? SecretKey
     }
