@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,8 +53,6 @@ fun AppLockScreen(
     val context = LocalContext.current
     val pinFocusRequester = remember { FocusRequester() }
 
-    // Only strong biometrics (hardware fingerprint/face) back the Keystore key used for the
-    // unlock; weak modalities like camera face-unlock are never accepted for the app lock.
     val allowedAuthenticators = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -86,6 +85,23 @@ fun AppLockScreen(
                         } else {
                             viewModel.disableBiometric()
                         }
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        // User-initiated cancellation (tapped "Use PIN" button, swiped away,
+                        // or pressed back) should NOT disable biometric — they'll want it next
+                        // time. Only fatal errors (key lost, hardware unavailable) disable it.
+                        when (errorCode) {
+                            BiometricPrompt.ERROR_USER_CANCELED,
+                            BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                            BiometricPrompt.ERROR_CANCELED,
+                            -> { /* user cancelled — do nothing */ }
+                            else -> viewModel.disableBiometric()
+                        }
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        // Wrong fingerprint/face — prompt stays open, no action needed.
                     }
                 },
             )
@@ -129,7 +145,7 @@ fun AppLockScreen(
 
     LaunchedEffect(Unit) {
         pinFocusRequester.requestFocus()
-        if (viewModel.biometricEnabled && canUseBiometric && viewModel.biometricIv != null) {
+        if (viewModel.showBiometricButton && canUseBiometric && viewModel.biometricIv != null) {
             promptBiometric()
         }
     }
@@ -196,12 +212,13 @@ fun AppLockScreen(
             if (viewModel.unlockError != null && viewModel.lockoutSecondsLeft <= 0) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.app_lock_pin_wrong),
+                    text = viewModel.unlockError
+                        ?: stringResource(R.string.app_lock_pin_wrong),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            if (viewModel.biometricEnabled && canUseBiometric) {
+            if (viewModel.showBiometricButton && canUseBiometric) {
                 Spacer(Modifier.height(24.dp))
                 Button(onClick = { promptBiometric() }) {
                     Icon(
@@ -210,6 +227,10 @@ fun AppLockScreen(
                     )
                     Spacer(Modifier.size(8.dp))
                     Text(stringResource(R.string.app_lock_biometric_title))
+                }
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { viewModel.hideBiometricButton() }) {
+                    Text(stringResource(R.string.app_lock_biometric_prompt_cancel))
                 }
             }
         }
