@@ -1,5 +1,7 @@
 package com.danilkinkin.buckwheat.settings
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -8,10 +10,15 @@ import androidx.compose.ui.test.performClick
 import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
 import com.danilkinkin.buckwheat.di.MainDispatcherRule
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
+import com.danilkinkin.buckwheat.di.recurringAutoApplyModeStoreKey
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import androidx.datastore.preferences.core.edit
+import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,6 +34,18 @@ class RecurringPaymentsSheetTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @get:Rule
+    val instantTaskExecutorRule = InstantTaskExecutorRule()
+
+    @Before
+    fun setUp() {
+        runBlocking {
+            ApplicationProvider.getApplicationContext<Context>().settingsDataStore.edit {
+                it.remove(recurringAutoApplyModeStoreKey)
+            }
+        }
+    }
 
     private fun showSheet() {
         val harness = buildTestUiHarness()

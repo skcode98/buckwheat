@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import java.math.BigDecimal
 import java.util.Date
 
@@ -27,6 +28,9 @@ class RecurringChargeConfirmSheetTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @get:Rule
+    val instantTaskExecutorRule = InstantTaskExecutorRule()
 
     private fun pendingCharges() = listOf(
         Transaction(
