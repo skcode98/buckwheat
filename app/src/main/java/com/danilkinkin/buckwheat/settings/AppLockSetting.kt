@@ -11,8 +11,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -35,15 +39,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.datastore.preferences.core.edit
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.TextRow
-import com.danilkinkin.buckwheat.data.appLockBiometricEnabledStoreKey
-import com.danilkinkin.buckwheat.data.appLockBiometricIvStoreKey
-import com.danilkinkin.buckwheat.data.appLockBiometricSecretStoreKey
-import com.danilkinkin.buckwheat.data.appLockEnabledStoreKey
-import com.danilkinkin.buckwheat.data.appLockPinHashStoreKey
-import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.util.APP_LOCK_PIN_MAX_LENGTH
 import com.danilkinkin.buckwheat.util.APP_LOCK_PIN_MIN_LENGTH
 import com.danilkinkin.buckwheat.util.AppLockBiometricKey
@@ -55,21 +53,40 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.MaterialTheme as M3Theme
 
 private enum class AppLockDialog { SETUP, MENU, CHANGE, REMOVE }
 
+private data class SmartTimeoutOption(val labelRes: Int, val seconds: Int)
+
+private val smartTimeoutOptions = listOf(
+    SmartTimeoutOption(R.string.app_lock_smart_timeout_off, 0),
+    SmartTimeoutOption(R.string.app_lock_smart_timeout_10s, 10),
+    SmartTimeoutOption(R.string.app_lock_smart_timeout_30s, 30),
+    SmartTimeoutOption(R.string.app_lock_smart_timeout_1m, 60),
+    SmartTimeoutOption(R.string.app_lock_smart_timeout_5m, 300),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppLockSetting() {
+fun AppLockSetting(
+    viewModel: AppLockViewModel,
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val repository = viewModel.repository
     var hasPin by remember { mutableStateOf(false) }
     var biometricEnabled by remember { mutableStateOf(false) }
     var activeDialog by remember { mutableStateOf<AppLockDialog?>(null) }
 
+    var smartTimeoutEnabled by remember { mutableStateOf(true) }
+    var smartTimeoutSeconds by remember { mutableIntStateOf(30) }
+
     LaunchedEffect(Unit) {
-        val prefs = context.settingsDataStore.data.first()
-        hasPin = prefs[appLockPinHashStoreKey] != null
-        biometricEnabled = prefs[appLockBiometricEnabledStoreKey] ?: false
+        hasPin = repository.getPinHash() != null
+        biometricEnabled = repository.isBiometricEnabled().first()
+        smartTimeoutEnabled = repository.getSmartTimeoutEnabled().first()
+        smartTimeoutSeconds = repository.getSmartTimeoutSeconds().first()
     }
 
     val canUseBiometric = remember {
@@ -84,8 +101,8 @@ fun AppLockSetting() {
 
     val iconTint = contentColorFor(
         combineColors(
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.surfaceVariant,
+            M3Theme.colorScheme.secondaryContainer,
+            M3Theme.colorScheme.surfaceVariant,
             angle = 0.3F,
         )
     )
@@ -123,33 +140,26 @@ fun AppLockSetting() {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.app_lock_biometric_title),
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = M3Theme.typography.bodyLarge,
                 )
                 Text(
                     text = stringResource(R.string.app_lock_biometric_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = M3Theme.typography.bodySmall,
+                    color = M3Theme.colorScheme.onSurfaceVariant,
                 )
             }
             Switch(
                 checked = biometricEnabled,
                 onCheckedChange = { enabled ->
                     if (enabled) {
-                        // Enabling biometric unlock first creates a Keystore key bound to a
-                        // biometric authentication, then stores a random unlock secret encrypted
-                        // under that key. Unlock later requires the OS to release the key, so a
-                        // tampered build cannot fake a successful fingerprint.
                         coroutineScope.launch {
                             val pair = withContext(Dispatchers.IO) {
                                 AppLockBiometricKey.createKey()
                                 AppLockBiometricKey.encryptSecret()
                             }
                             if (pair != null) {
-                                context.settingsDataStore.edit {
-                                    it[appLockBiometricEnabledStoreKey] = true
-                                    it[appLockBiometricIvStoreKey] = pair.first
-                                    it[appLockBiometricSecretStoreKey] = pair.second
-                                }
+                                repository.setBiometricSecret(pair.first, pair.second)
+                                repository.setBiometricEnabled(true)
                                 biometricEnabled = true
                             } else {
                                 biometricEnabled = false
@@ -158,11 +168,7 @@ fun AppLockSetting() {
                     } else {
                         AppLockBiometricKey.deleteKey()
                         coroutineScope.launch {
-                            context.settingsDataStore.edit {
-                                it[appLockBiometricEnabledStoreKey] = false
-                                it.remove(appLockBiometricIvStoreKey)
-                                it.remove(appLockBiometricSecretStoreKey)
-                            }
+                            repository.setBiometricEnabled(false)
                         }
                         biometricEnabled = false
                     }
@@ -170,14 +176,80 @@ fun AppLockSetting() {
                 enabled = canUseBiometric,
             )
         }
+
+        // Smart timeout config
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.app_lock_smart_timeout),
+                    style = M3Theme.typography.bodyLarge,
+                )
+                Text(
+                    text = stringResource(R.string.app_lock_smart_timeout_desc),
+                    style = M3Theme.typography.bodySmall,
+                    color = M3Theme.colorScheme.onSurfaceVariant,
+                )
+            }
+            var expanded by remember { mutableStateOf(false) }
+            val selectedLabel = smartTimeoutOptions
+                .firstOrNull { it.seconds == smartTimeoutSeconds }
+                ?.let { stringResource(it.labelRes) }
+                ?: stringResource(R.string.app_lock_smart_timeout_off)
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .width(120.dp),
+                    textStyle = M3Theme.typography.bodyMedium,
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    smartTimeoutOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(option.labelRes)) },
+                            onClick = {
+                                smartTimeoutSeconds = option.seconds
+                                expanded = false
+                                coroutineScope.launch {
+                                    repository.setSmartTimeoutSeconds(option.seconds)
+                                    if (option.seconds > 0) {
+                                        repository.setSmartTimeoutEnabled(true)
+                                        smartTimeoutEnabled = true
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 
     when (activeDialog) {
         AppLockDialog.SETUP -> PinSetupDialog(
+            repository = repository,
             onDone = {
                 hasPin = true
                 biometricEnabled = false
                 activeDialog = null
+                coroutineScope.launch { viewModel.refresh() }
             },
             onCancel = { activeDialog = null },
         )
@@ -207,7 +279,11 @@ fun AppLockSetting() {
         )
 
         AppLockDialog.CHANGE -> PinChangeDialog(
-            onDone = { activeDialog = null },
+            repository = repository,
+            onDone = {
+                activeDialog = null
+                coroutineScope.launch { viewModel.refresh() }
+            },
             onCancel = { activeDialog = null },
         )
 
@@ -219,17 +295,13 @@ fun AppLockSetting() {
                 TextButton(onClick = {
                     AppLockBiometricKey.deleteKey()
                     coroutineScope.launch {
-                        context.settingsDataStore.edit {
-                            it.remove(appLockPinHashStoreKey)
-                            it.remove(appLockBiometricEnabledStoreKey)
-                            it.remove(appLockBiometricIvStoreKey)
-                            it.remove(appLockBiometricSecretStoreKey)
-                            it[appLockEnabledStoreKey] = false
-                        }
+                        repository.setPinHash(null)
+                        repository.setEnabled(false)
                     }
                     hasPin = false
                     biometricEnabled = false
                     activeDialog = null
+                    coroutineScope.launch { viewModel.refresh() }
                 }) {
                     Text(stringResource(R.string.app_lock_remove_pin))
                 }
@@ -247,6 +319,7 @@ fun AppLockSetting() {
 
 @Composable
 private fun PinSetupDialog(
+    repository: com.danilkinkin.buckwheat.data.AppLockRepository,
     onDone: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -278,8 +351,8 @@ private fun PinSetupDialog(
                 error?.let {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        style = M3Theme.typography.bodySmall,
+                        color = M3Theme.colorScheme.error,
                     )
                 }
             }
@@ -308,12 +381,11 @@ private fun PinSetupDialog(
                         if (pin != firstPin) {
                             error = context.getString(R.string.app_lock_pin_mismatch)
                         } else {
+                            val hash = generatePinHash(pin)
                             coroutineScope.launch {
-                                context.settingsDataStore.edit {
-                                    it[appLockPinHashStoreKey] = generatePinHash(pin)
-                                    it[appLockEnabledStoreKey] = true
-                                    it[appLockBiometricEnabledStoreKey] = false
-                                }
+                                repository.setPinHash(hash)
+                                repository.setEnabled(true)
+                                repository.setBiometricEnabled(false)
                             }
                             onDone()
                         }
@@ -333,6 +405,7 @@ private fun PinSetupDialog(
 
 @Composable
 private fun PinChangeDialog(
+    repository: com.danilkinkin.buckwheat.data.AppLockRepository,
     onDone: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -345,7 +418,7 @@ private fun PinChangeDialog(
     var storedHash by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        storedHash = context.settingsDataStore.data.first()[appLockPinHashStoreKey]
+        storedHash = repository.getPinHash()
     }
 
     fun onPinChange(value: String) {
@@ -372,8 +445,8 @@ private fun PinChangeDialog(
                 error?.let {
                     Text(
                         text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        style = M3Theme.typography.bodySmall,
+                        color = M3Theme.colorScheme.error,
                     )
                 }
             }
@@ -383,14 +456,11 @@ private fun PinChangeDialog(
                 when (step) {
                     0 -> {
                         if (storedHash != null && verifyPinHash(pin, storedHash)) {
-                            // Migrate hashes written by the legacy SHA-256 scheme to PBKDF2.
                             if (isLegacyPinHash(storedHash)) {
                                 val upgraded = generatePinHash(pin)
                                 storedHash = upgraded
                                 coroutineScope.launch {
-                                    context.settingsDataStore.edit {
-                                        it[appLockPinHashStoreKey] = upgraded
-                                    }
+                                    repository.setPinHash(upgraded)
                                 }
                             }
                             pin = ""
@@ -422,10 +492,9 @@ private fun PinChangeDialog(
                         if (pin != newPin) {
                             error = context.getString(R.string.app_lock_pin_mismatch)
                         } else {
+                            val hash = generatePinHash(pin)
                             coroutineScope.launch {
-                                context.settingsDataStore.edit {
-                                    it[appLockPinHashStoreKey] = generatePinHash(pin)
-                                }
+                                repository.setPinHash(hash)
                             }
                             onDone()
                         }

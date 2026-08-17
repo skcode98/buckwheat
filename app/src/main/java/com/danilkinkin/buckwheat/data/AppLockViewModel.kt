@@ -20,7 +20,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AppLockViewModel @Inject constructor(
-    private val repository: AppLockRepository,
+    val repository: AppLockRepository,
 ) : ViewModel() {
     var isLocked by mutableStateOf(false)
         private set

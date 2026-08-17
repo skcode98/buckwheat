@@ -24,6 +24,7 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.base.TextRow
+import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.patterns.PATTERN_INSIGHTS_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -34,6 +35,7 @@ const val SETTINGS_SHEET = "settings"
 @Composable
 fun Settings(
     appViewModel: AppViewModel = hiltViewModel(),
+    appLockViewModel: AppLockViewModel = hiltViewModel(),
     onTriedWidget: () -> Unit = {},
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -64,7 +66,7 @@ fun Settings(
                 ThemeSwitcher()
                 LangSwitcher()
                 RoundValuesSetting()
-                AppLockSetting()
+                AppLockSetting(viewModel = appLockViewModel)
                 TextRow(
                     icon = painterResource(R.drawable.ic_notifications),
                     text = stringResource(R.string.notifications_title),
