@@ -49,13 +49,7 @@ val categoryCapsStoreKey = stringPreferencesKey("categoryCaps")
 val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
 val periodFinishEnabledStoreKey = booleanPreferencesKey("periodFinishEnabled")
 val recurringAutoApplyModeStoreKey = stringPreferencesKey("recurringAutoApplyMode")
-val appLockEnabledStoreKey = booleanPreferencesKey("appLockEnabled")
-val appLockPinHashStoreKey = stringPreferencesKey("appLockPinHash")
-val appLockBiometricEnabledStoreKey = booleanPreferencesKey("appLockBiometricEnabled")
-val appLockFailedAttemptsStoreKey = intPreferencesKey("appLockFailedAttempts")
-val appLockLockoutUntilStoreKey = longPreferencesKey("appLockLockoutUntil")
-val appLockBiometricIvStoreKey = stringPreferencesKey("appLockBiometricIv")
-val appLockBiometricSecretStoreKey = stringPreferencesKey("appLockBiometricSecret")
+// App lock keys moved to AppLockRepository (com.danilkinkin.buckwheat.data)
 
 const val RECURRING_ALERT_DEFAULT_HOUR = 9
 const val RECURRING_ALERT_DEFAULT_MINUTE = 0
@@ -282,93 +276,6 @@ class SettingsRepository @Inject constructor(
     suspend fun switchPeriodFinishEnabled(enabled: Boolean) {
         context.settingsDataStore.edit {
             it[periodFinishEnabledStoreKey] = enabled
-        }
-    }
-
-    fun isAppLockEnabled() = context.settingsDataStore.data.map {
-        it[appLockEnabledStoreKey] ?: false
-    }
-
-    fun isAppLockBiometricEnabled() = context.settingsDataStore.data.map {
-        it[appLockBiometricEnabledStoreKey] ?: false
-    }
-
-    suspend fun getAppLockPinHash(): String? =
-        context.settingsDataStore.data.first()[appLockPinHashStoreKey]
-
-    suspend fun switchAppLockEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit {
-            it[appLockEnabledStoreKey] = enabled
-            if (!enabled) {
-                it[appLockBiometricEnabledStoreKey] = false
-            }
-        }
-    }
-
-    suspend fun setAppLockPinHash(pinHash: String?) {
-        context.settingsDataStore.edit {
-            if (pinHash.isNullOrBlank()) {
-                it.remove(appLockPinHashStoreKey)
-                it.remove(appLockBiometricEnabledStoreKey)
-                it.remove(appLockBiometricIvStoreKey)
-                it.remove(appLockBiometricSecretStoreKey)
-            } else {
-                it[appLockPinHashStoreKey] = pinHash
-            }
-        }
-    }
-
-    suspend fun switchAppLockBiometricEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit {
-            it[appLockBiometricEnabledStoreKey] = enabled
-            if (!enabled) {
-                it.remove(appLockBiometricIvStoreKey)
-                it.remove(appLockBiometricSecretStoreKey)
-            }
-        }
-    }
-
-    suspend fun getAppLockFailedAttempts(): Int =
-        context.settingsDataStore.data.first()[appLockFailedAttemptsStoreKey] ?: 0
-
-    suspend fun setAppLockFailedAttempts(count: Int) {
-        context.settingsDataStore.edit {
-            if (count <= 0) {
-                it.remove(appLockFailedAttemptsStoreKey)
-            } else {
-                it[appLockFailedAttemptsStoreKey] = count
-            }
-        }
-    }
-
-    suspend fun getAppLockLockoutUntil(): Long =
-        context.settingsDataStore.data.first()[appLockLockoutUntilStoreKey] ?: 0L
-
-    suspend fun setAppLockLockoutUntil(until: Long) {
-        context.settingsDataStore.edit {
-            if (until <= 0L) {
-                it.remove(appLockLockoutUntilStoreKey)
-            } else {
-                it[appLockLockoutUntilStoreKey] = until
-            }
-        }
-    }
-
-    suspend fun getAppLockBiometricIv(): String? =
-        context.settingsDataStore.data.first()[appLockBiometricIvStoreKey]
-
-    suspend fun getAppLockBiometricSecret(): String? =
-        context.settingsDataStore.data.first()[appLockBiometricSecretStoreKey]
-
-    suspend fun setAppLockBiometricSecret(iv: String?, secret: String?) {
-        context.settingsDataStore.edit {
-            if (iv.isNullOrBlank() || secret.isNullOrBlank()) {
-                it.remove(appLockBiometricIvStoreKey)
-                it.remove(appLockBiometricSecretStoreKey)
-            } else {
-                it[appLockBiometricIvStoreKey] = iv
-                it[appLockBiometricSecretStoreKey] = secret
-            }
         }
     }
 

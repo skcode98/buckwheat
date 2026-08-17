@@ -29,6 +29,16 @@ import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderScheduler
 import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.data.appLockEnabledStoreKey
+import com.danilkinkin.buckwheat.data.appLockPinHashStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricEnabledStoreKey
+import com.danilkinkin.buckwheat.data.appLockFailedAttemptsStoreKey
+import com.danilkinkin.buckwheat.data.appLockLockoutUntilStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricIvStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricSecretStoreKey
+import com.danilkinkin.buckwheat.data.appLockSmartTimeoutEnabledStoreKey
+import com.danilkinkin.buckwheat.data.appLockSmartTimeoutSecondsStoreKey
+import com.danilkinkin.buckwheat.data.appLockLastBackgroundTimeStoreKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import java.util.Date
@@ -111,6 +121,9 @@ class BackupRepository @Inject constructor(
             prefs.remove(appLockLockoutUntilStoreKey)
             prefs.remove(appLockBiometricIvStoreKey)
             prefs.remove(appLockBiometricSecretStoreKey)
+            prefs.remove(appLockSmartTimeoutEnabledStoreKey)
+            prefs.remove(appLockSmartTimeoutSecondsStoreKey)
+            prefs.remove(appLockLastBackgroundTimeStoreKey)
         }
 
         // The reminder alarm survives neither DataStore changes nor the DB wipe, so re-arm it
@@ -156,7 +169,10 @@ private fun Preferences.asBackupMap(): Map<String, BackupValue> {
             key.name == appLockFailedAttemptsStoreKey.name ||
             key.name == appLockLockoutUntilStoreKey.name ||
             key.name == appLockBiometricIvStoreKey.name ||
-            key.name == appLockBiometricSecretStoreKey.name
+            key.name == appLockBiometricSecretStoreKey.name ||
+            key.name == appLockSmartTimeoutEnabledStoreKey.name ||
+            key.name == appLockSmartTimeoutSecondsStoreKey.name ||
+            key.name == appLockLastBackgroundTimeStoreKey.name
         ) return@forEach
         when (value) {
             is Boolean -> result[key.name] = BackupValue.Bool(value)

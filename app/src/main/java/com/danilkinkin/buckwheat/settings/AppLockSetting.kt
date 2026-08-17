@@ -38,11 +38,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.datastore.preferences.core.edit
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.TextRow
-import com.danilkinkin.buckwheat.di.appLockBiometricEnabledStoreKey
-import com.danilkinkin.buckwheat.di.appLockBiometricIvStoreKey
-import com.danilkinkin.buckwheat.di.appLockBiometricSecretStoreKey
-import com.danilkinkin.buckwheat.di.appLockEnabledStoreKey
-import com.danilkinkin.buckwheat.di.appLockPinHashStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricEnabledStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricIvStoreKey
+import com.danilkinkin.buckwheat.data.appLockBiometricSecretStoreKey
+import com.danilkinkin.buckwheat.data.appLockEnabledStoreKey
+import com.danilkinkin.buckwheat.data.appLockPinHashStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.APP_LOCK_PIN_MAX_LENGTH
 import com.danilkinkin.buckwheat.util.APP_LOCK_PIN_MIN_LENGTH
