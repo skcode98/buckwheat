@@ -18,12 +18,14 @@ private const val SALT_BYTES = 16
 // earlier app versions. New hashes are never produced in this format.
 private const val LEGACY_SALT = "buckwheat-app-lock-v1:"
 
+private val secureRandom = SecureRandom()
+
 // Stores the PIN as PBKDF2-HMAC-SHA256 with a random per-install salt so the value is never
 // kept in plaintext and offline brute force requires a key-stretching cost per guess. Format:
 // "v1$<saltHex>$<hashHex>". The app-lock data is excluded from backups, so the hash can never
 // travel into a plaintext backup file.
 fun generatePinHash(pin: String): String {
-    val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
+    val salt = ByteArray(SALT_BYTES).also { secureRandom.nextBytes(it) }
     val derived = pbkdf2(pin, salt)
     return "$V1_PREFIX$${salt.toHex()}$${derived.toHex()}"
 }

@@ -64,6 +64,11 @@ class MainActivity : FragmentActivity() {
     private val micPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
+    override fun onStart() {
+        super.onStart()
+        appLockViewModel.checkSmartTimeout()
+    }
+
     override fun onStop() {
         super.onStop()
         // Re-arm the app lock whenever the activity actually leaves the foreground. Skipped on
