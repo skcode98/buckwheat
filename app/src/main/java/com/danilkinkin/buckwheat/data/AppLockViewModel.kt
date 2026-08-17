@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.util.APP_LOCK_PIN_MAX_LENGTH
 import com.danilkinkin.buckwheat.util.AppLockBiometricKey
 import com.danilkinkin.buckwheat.util.appLockLockoutMillis
@@ -13,6 +12,7 @@ import com.danilkinkin.buckwheat.util.generatePinHash
 import com.danilkinkin.buckwheat.util.isLegacyPinHash
 import com.danilkinkin.buckwheat.util.verifyPinHash
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -20,7 +20,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AppLockViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository,
+    private val repository: AppLockRepository,
 ) : ViewModel() {
     var isLocked by mutableStateOf(false)
         private set
@@ -30,7 +30,7 @@ class AppLockViewModel @Inject constructor(
         private set
     var pinInput by mutableStateOf("")
         private set
-    var unlockError by mutableStateOf(false)
+    var unlockError by mutableStateOf<String?>(null)
         private set
     var lockoutSecondsLeft by mutableStateOf(0)
         private set
@@ -38,58 +38,70 @@ class AppLockViewModel @Inject constructor(
         private set
     var biometricSecret by mutableStateOf<String?>(null)
         private set
+    var showBiometricButton by mutableStateOf(false)
+        private set
 
     private var storedPinHash: String? = null
     private var lockoutUntilMillis = 0L
+    private var lockoutTickerJob: Job? = null
 
     init {
         viewModelScope.launch {
-            refreshLockState()
+            refresh()
         }
     }
 
-    private suspend fun refreshLockState() {
-        storedPinHash = settingsRepository.getAppLockPinHash()
+    suspend fun refresh() {
+        storedPinHash = repository.getPinHash()
         hasPin = storedPinHash != null
-        biometricIv = settingsRepository.getAppLockBiometricIv()
-        biometricSecret = settingsRepository.getAppLockBiometricSecret()
-        // If the Keystore key is gone (data restore, key eviction) or was invalidated by a
-        // biometric enrollment change, the stored secret is unrecoverable — disable biometric
-        // unlock so the user is not shown a dead prompt.
-        val enroll = settingsRepository.isAppLockBiometricEnabled().first()
+        biometricIv = repository.getBiometricIv()
+        biometricSecret = repository.getBiometricSecret()
+        val enroll = repository.isBiometricEnabled().first()
         biometricEnabled = enroll &&
             biometricIv != null &&
             biometricSecret != null &&
             AppLockBiometricKey.hasKey()
+        showBiometricButton = biometricEnabled
         if (enroll && !biometricEnabled) {
-            settingsRepository.switchAppLockBiometricEnabled(false)
-            settingsRepository.setAppLockBiometricSecret(null, null)
+            repository.setBiometricEnabled(false)
+            repository.setBiometricSecret(null, null)
         }
-        val enabled = settingsRepository.isAppLockEnabled().first()
+        val enabled = repository.isAppLockEnabled().first()
         isLocked = enabled && hasPin
-        lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
+        lockoutUntilMillis = repository.getLockoutUntil()
         startLockoutTicker()
     }
 
-    // Re-arms the lock when the app leaves the foreground. Reads fresh settings so a PIN
-    // set/removed during this session is respected.
     fun armLock() {
         viewModelScope.launch {
-            val hash = settingsRepository.getAppLockPinHash()
+            repository.setLastBackgroundTime(System.currentTimeMillis())
+            val hash = repository.getPinHash()
             storedPinHash = hash
-            val enabled = settingsRepository.isAppLockEnabled().first()
+            val enabled = repository.isAppLockEnabled().first()
             if (enabled && hash != null) {
                 isLocked = true
             }
-            lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
+            lockoutUntilMillis = repository.getLockoutUntil()
             startLockoutTicker()
         }
     }
 
-    // Counts down the remaining lockout in the UI. Exits once the app is unlocked; re-armed by
-    // refreshLockState()/armLock() whenever the lock goes up again.
-    private fun startLockoutTicker() {
+    fun checkSmartTimeout() {
         viewModelScope.launch {
+            val smartEnabled = repository.getSmartTimeoutEnabled().first()
+            val timeout = repository.getSmartTimeoutSeconds().first()
+            val lastBg = repository.getLastBackgroundTime()
+            val elapsed = System.currentTimeMillis() - lastBg
+
+            if (smartEnabled && elapsed < timeout * 1000L) {
+                isLocked = false
+            }
+        }
+    }
+
+    private fun startLockoutTicker() {
+        lockoutTickerJob?.cancel()
+        lockoutTickerJob = viewModelScope.launch {
             while (true) {
                 if (!isLocked) return@launch
                 val remaining = ((lockoutUntilMillis - System.currentTimeMillis()) / 1000L)
@@ -103,7 +115,7 @@ class AppLockViewModel @Inject constructor(
 
     fun onPinChange(value: String) {
         pinInput = value.filter { it.isDigit() }.take(APP_LOCK_PIN_MAX_LENGTH)
-        unlockError = false
+        unlockError = null
     }
 
     fun verifyPin() {
@@ -117,51 +129,51 @@ class AppLockViewModel @Inject constructor(
 
             val hash = storedPinHash
             if (hash != null && verifyPinHash(pinInput, hash)) {
-                settingsRepository.setAppLockFailedAttempts(0)
-                settingsRepository.setAppLockLockoutUntil(0L)
+                repository.setFailedAttempts(0)
+                repository.setLockoutUntil(0L)
                 lockoutUntilMillis = 0L
                 lockoutSecondsLeft = 0
-                // Migrate hashes written by the legacy SHA-256 scheme to the PBKDF2 format.
                 if (isLegacyPinHash(hash)) {
                     storedPinHash = generatePinHash(pinInput)
-                    settingsRepository.setAppLockPinHash(storedPinHash)
+                    repository.setPinHash(storedPinHash)
                 }
                 isLocked = false
                 pinInput = ""
-                unlockError = false
+                unlockError = null
             } else {
-                val attempts = settingsRepository.getAppLockFailedAttempts() + 1
-                settingsRepository.setAppLockFailedAttempts(attempts)
+                val attempts = repository.getFailedAttempts() + 1
+                repository.setFailedAttempts(attempts)
                 lockoutUntilMillis = now + appLockLockoutMillis(attempts)
-                settingsRepository.setAppLockLockoutUntil(lockoutUntilMillis)
+                repository.setLockoutUntil(lockoutUntilMillis)
                 lockoutSecondsLeft = (appLockLockoutMillis(attempts) / 1000L).toInt()
-                unlockError = true
+                unlockError = "Invalid PIN"
                 pinInput = ""
             }
         }
     }
 
-    // Called only after the BiometricPrompt produced a CryptoObject whose decryption of the
-    // unlock secret succeeded (i.e. a real OS-level biometric match released the Keystore key).
     fun unlockWithBiometric() {
         viewModelScope.launch {
-            settingsRepository.setAppLockFailedAttempts(0)
-            settingsRepository.setAppLockLockoutUntil(0L)
+            repository.setFailedAttempts(0)
+            repository.setLockoutUntil(0L)
             lockoutUntilMillis = 0L
             lockoutSecondsLeft = 0
             isLocked = false
             pinInput = ""
-            unlockError = false
+            unlockError = null
         }
     }
 
-    // The biometric path broke (missing/invalidated key or decryption failure). Fall back to
-    // the PIN and drop the biometric flag so the UI stops offering a dead prompt.
     fun disableBiometric() {
         viewModelScope.launch {
             biometricEnabled = false
-            settingsRepository.switchAppLockBiometricEnabled(false)
-            settingsRepository.setAppLockBiometricSecret(null, null)
+            showBiometricButton = false
+            repository.setBiometricEnabled(false)
+            repository.setBiometricSecret(null, null)
         }
+    }
+
+    fun hideBiometricButton() {
+        showBiometricButton = false
     }
 }

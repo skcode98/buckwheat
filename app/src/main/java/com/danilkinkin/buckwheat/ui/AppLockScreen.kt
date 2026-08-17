@@ -176,7 +176,7 @@ fun AppLockScreen(
                     imeAction = ImeAction.Done,
                 ),
                 keyboardActions = KeyboardActions(onDone = { viewModel.verifyPin() }),
-                isError = viewModel.unlockError,
+                isError = viewModel.unlockError != null,
                 enabled = viewModel.lockoutSecondsLeft <= 0,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -193,7 +193,7 @@ fun AppLockScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            if (viewModel.unlockError && viewModel.lockoutSecondsLeft <= 0) {
+            if (viewModel.unlockError != null && viewModel.lockoutSecondsLeft <= 0) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.app_lock_pin_wrong),
