@@ -41,6 +41,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.fragment.app.FragmentActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.TextRow
+import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.di.appLockBiometricEnabledStoreKey
 import com.danilkinkin.buckwheat.di.appLockBiometricIvStoreKey
 import com.danilkinkin.buckwheat.di.appLockBiometricSecretStoreKey
@@ -54,6 +55,7 @@ import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.generatePinHash
 import com.danilkinkin.buckwheat.util.isLegacyPinHash
 import com.danilkinkin.buckwheat.util.verifyPinHash
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -65,7 +67,9 @@ import javax.crypto.Cipher
 private enum class AppLockDialog { SETUP, MENU, CHANGE, REMOVE }
 
 @Composable
-fun AppLockSetting() {
+fun AppLockSetting(
+    appLockViewModel: AppLockViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var hasPin by remember { mutableStateOf(false) }
@@ -189,7 +193,19 @@ fun AppLockSetting() {
                                         }
 
                                         override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                            biometricEnabled = false
+                                            // User-initiated cancellations (back, negative button,
+                                            // fingerprint dialog dismissed) should NOT revert the
+                                            // toggle — only fatal errors (no hardware, no enrolls,
+                                            // lockout, security update required) should.
+                                            val fatal = errorCode !in setOf(
+                                                BiometricPrompt.ERROR_USER_CANCELED,
+                                                BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                                                BiometricPrompt.ERROR_CANCELED,
+                                                10, // ERROR_HW_NOT_PRESENT may appear as 10 on some OEMs
+                                            )
+                                            if (fatal) {
+                                                biometricEnabled = false
+                                            }
                                         }
                                     },
                                 )
@@ -221,6 +237,7 @@ fun AppLockSetting() {
                 hasPin = true
                 biometricEnabled = false
                 activeDialog = null
+                appLockViewModel.refresh()
             },
             onCancel = { activeDialog = null },
         )
@@ -250,7 +267,10 @@ fun AppLockSetting() {
         )
 
         AppLockDialog.CHANGE -> PinChangeDialog(
-            onDone = { activeDialog = null },
+            onDone = {
+                activeDialog = null
+                appLockViewModel.refresh()
+            },
             onCancel = { activeDialog = null },
         )
 
@@ -273,6 +293,7 @@ fun AppLockSetting() {
                     hasPin = false
                     biometricEnabled = false
                     activeDialog = null
+                    appLockViewModel.refresh()
                 }) {
                     Text(stringResource(R.string.app_lock_remove_pin))
                 }

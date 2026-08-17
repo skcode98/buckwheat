@@ -156,10 +156,11 @@ private fun SpentItemSheet(
     content: @Composable () -> Unit,
 ) {
     val size = with(LocalDensity.current) {
+        val offset = try { state.offset.value } catch (_: Exception) { 0f }
         java.lang.Float.max(
             java.lang.Float.min(
                 16.dp.toPx(),
-                abs(state.offset.value),
+                abs(offset),
             ), 0f
         ).toDp()
     }

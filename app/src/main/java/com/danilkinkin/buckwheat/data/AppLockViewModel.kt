@@ -49,40 +49,54 @@ class AppLockViewModel @Inject constructor(
     }
 
     private suspend fun refreshLockState() {
-        storedPinHash = settingsRepository.getAppLockPinHash()
-        hasPin = storedPinHash != null
-        biometricIv = settingsRepository.getAppLockBiometricIv()
-        biometricSecret = settingsRepository.getAppLockBiometricSecret()
-        // If the Keystore key is gone (data restore, key eviction) or was invalidated by a
-        // biometric enrollment change, the stored secret is unrecoverable — disable biometric
-        // unlock so the user is not shown a dead prompt.
-        val enroll = settingsRepository.isAppLockBiometricEnabled().first()
-        biometricEnabled = enroll &&
-            biometricIv != null &&
-            biometricSecret != null &&
-            AppLockBiometricKey.hasKey()
-        if (enroll && !biometricEnabled) {
-            settingsRepository.switchAppLockBiometricEnabled(false)
-            settingsRepository.setAppLockBiometricSecret(null, null)
+        try {
+            storedPinHash = settingsRepository.getAppLockPinHash()
+            hasPin = storedPinHash != null
+            biometricIv = settingsRepository.getAppLockBiometricIv()
+            biometricSecret = settingsRepository.getAppLockBiometricSecret()
+            // If the Keystore key is gone (data restore, key eviction) or was invalidated by a
+            // biometric enrollment change, the stored secret is unrecoverable — disable biometric
+            // unlock so the user is not shown a dead prompt.
+            val enroll = settingsRepository.isAppLockBiometricEnabled().first()
+            biometricEnabled = enroll &&
+                biometricIv != null &&
+                biometricSecret != null &&
+                AppLockBiometricKey.hasKey()
+            if (enroll && !biometricEnabled) {
+                settingsRepository.switchAppLockBiometricEnabled(false)
+                settingsRepository.setAppLockBiometricSecret(null, null)
+            }
+            val enabled = settingsRepository.isAppLockEnabled().first()
+            isLocked = enabled && hasPin
+            lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
+            startLockoutTicker()
+        } catch (e: Exception) {
+            isLocked = false
         }
-        val enabled = settingsRepository.isAppLockEnabled().first()
-        isLocked = enabled && hasPin
-        lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
-        startLockoutTicker()
     }
 
     // Re-arms the lock when the app leaves the foreground. Reads fresh settings so a PIN
     // set/removed during this session is respected.
     fun armLock() {
         viewModelScope.launch {
-            val hash = settingsRepository.getAppLockPinHash()
-            storedPinHash = hash
-            val enabled = settingsRepository.isAppLockEnabled().first()
-            if (enabled && hash != null) {
-                isLocked = true
+            try {
+                val hash = settingsRepository.getAppLockPinHash()
+                storedPinHash = hash
+                val enabled = settingsRepository.isAppLockEnabled().first()
+                if (enabled && hash != null) {
+                    isLocked = true
+                }
+                lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
+                startLockoutTicker()
+            } catch (e: Exception) {
+                // If DataStore read fails, keep previous isLocked state
             }
-            lockoutUntilMillis = settingsRepository.getAppLockLockoutUntil()
-            startLockoutTicker()
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            refreshLockState()
         }
     }
 
