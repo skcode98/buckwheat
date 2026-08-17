@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
+import com.danilkinkin.buckwheat.di.MainDispatcherRule
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import kotlinx.coroutines.flow.first
@@ -23,6 +24,9 @@ class RecurringPaymentsSheetTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private fun showSheet() {
         val harness = buildTestUiHarness()

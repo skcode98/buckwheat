@@ -8,6 +8,7 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+import com.danilkinkin.buckwheat.di.MainDispatcherRule
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -23,6 +24,9 @@ class RecurringChargeConfirmSheetTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private fun pendingCharges() = listOf(
         Transaction(
@@ -59,7 +63,7 @@ class RecurringChargeConfirmSheetTest {
         compose.onNodeWithText("Add").performClick()
 
         compose.waitUntil(timeoutMillis = 5_000) {
-            harness.spendsViewModel.pendingRecurringCharges.value?.isEmpty() == true
+            harness.spendsViewModel.pendingRecurringCharges.value.orEmpty().isEmpty()
         }
 
         val comments = harness.transactionDao.spends.map { it.comment }
