@@ -1,7 +1,11 @@
 package com.danilkinkin.buckwheat.history
 
 import android.content.Context
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,13 +17,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -119,6 +131,47 @@ internal fun TimelineRail(
 }
 
 @Composable
+internal fun CategoryFlipContainer(
+    emoji: String,
+    categoryName: String,
+    palette: HarmonizedColorPalette,
+    modifier: Modifier = Modifier,
+) {
+    var isFlipped by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(
+        targetValue = if (isFlipped) 180f else 0f,
+        animationSpec = tween(400, easing = FastOutSlowInEasing),
+        label = "flipRotation",
+    )
+
+    Box(
+        modifier = modifier
+            .size(28.dp)
+            .graphicsLayer {
+                rotationY = rotation
+                cameraDistance = 12f * density
+            }
+            .clip(RoundedCornerShape(8.dp))
+            .background(palette.main.copy(alpha = 0.15f))
+            .clickable { isFlipped = !isFlipped },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (rotation < 90f) {
+            Text(text = emoji, fontSize = 14.sp, maxLines = 1)
+        } else {
+            Text(
+                text = categoryName.take(2),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = palette.main,
+                maxLines = 1,
+                modifier = Modifier.graphicsLayer { rotationY = 180f },
+            )
+        }
+    }
+}
+
+@Composable
 internal fun TimelineRowContent(
     transaction: Transaction,
     currency: ExtendCurrency,
@@ -126,6 +179,7 @@ internal fun TimelineRowContent(
     category: Pair<String, String>? = null,
 ) {
     val context = LocalContext.current
+    val palette = timelinePaletteFor(transaction)
     val name = category?.second ?: ""
     val comment = transaction.comment
     val time = prettyDate(transaction.date, showTime = true, forceHideDate = true)
@@ -133,13 +187,20 @@ internal fun TimelineRowContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        CategoryFlipContainer(
+            emoji = category?.first ?: SpendCategory.DEFAULT_EMOJI,
+            categoryName = name,
+            palette = palette,
+        )
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = comment.ifBlank { name },
                 style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
                 color = colorOnEditor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -157,6 +218,7 @@ internal fun TimelineRowContent(
         Text(
             text = numberFormat(context, transaction.value, currency = currency),
             style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
             color = colorOnEditor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -168,29 +230,15 @@ internal fun TimelineRowContent(
 @Composable
 private fun PreviewWithCategory() {
     BuckwheatTheme {
-        Row(Modifier.fillMaxWidth()) {
-            TimelineRail(
-                palette = timelinePaletteFor(
-                    Transaction(
-                        type = TransactionType.SPENT,
-                        value = BigDecimal("500"),
-                        date = Date(),
-                        comment = "lunch",
-                    ),
-                ),
-                emoji = "🍔",
-                isLast = false,
-            )
-            TimelineRowContent(
-                transaction = Transaction(
-                    type = TransactionType.SPENT,
-                    value = BigDecimal("500"),
-                    date = Date(),
-                    comment = "Lunch at a cafe",
-                ),
-                currency = ExtendCurrency.none(),
-            )
-        }
+        TimelineRowContent(
+            transaction = Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("500"),
+                date = Date(),
+                comment = "Lunch at a cafe",
+            ),
+            currency = ExtendCurrency.none(),
+        )
     }
 }
 
@@ -198,27 +246,14 @@ private fun PreviewWithCategory() {
 @Composable
 private fun PreviewCommentless() {
     BuckwheatTheme {
-        Row(Modifier.fillMaxWidth()) {
-            TimelineRail(
-                palette = timelinePaletteFor(
-                    Transaction(
-                        type = TransactionType.SPENT,
-                        value = BigDecimal("120"),
-                        date = Date(),
-                        comment = "metro",
-                    ),
-                ),
-                emoji = "🚕",
-                isLast = true,
-            )
-            TimelineRowContent(
-                transaction = Transaction(
-                    type = TransactionType.SPENT,
-                    value = BigDecimal("120"),
-                    date = Date(),
-                ),
-                currency = ExtendCurrency.none(),
-            )
-        }
+        TimelineRowContent(
+            transaction = Transaction(
+                type = TransactionType.SPENT,
+                value = BigDecimal("120"),
+                date = Date(),
+                comment = "metro",
+            ),
+            currency = ExtendCurrency.none(),
+        )
     }
 }

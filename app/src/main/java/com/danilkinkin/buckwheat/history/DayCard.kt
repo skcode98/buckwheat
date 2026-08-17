@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
-import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -95,64 +94,48 @@ fun DayCard(
         Column {
             DayCardHeader(day = day, dayTotal = dayTotal, currency = currency)
             transactions.forEachIndexed { index, transaction ->
-                val isLast = index == transactions.lastIndex
                 val category = remember(transaction, categoryEmojis) {
                     categoryLabelFor(context, transaction, categoryEmojis)
                 }
-                val palette = timelinePaletteFor(transaction)
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
-                        .padding(start = 16.dp, end = 12.dp),
-                ) {
-                    TimelineRail(
-                        palette = palette,
-                        emoji = category?.first ?: SpendCategory.DEFAULT_EMOJI,
-                        isLast = isLast,
+                if (readOnly) {
+                    TimelineRowContent(
+                        transaction = transaction,
+                        currency = currency,
+                        category = category,
                     )
-                    Box(Modifier.weight(1f)) {
-                        if (readOnly) {
-                            TimelineRowContent(
+                } else {
+                    SwipeActions(
+                        startActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.tertiaryContainer,
+                            backgroundActive = MaterialTheme.colorScheme.tertiary,
+                            iconTint = MaterialTheme.colorScheme.onTertiary,
+                            icon = painterResource(R.drawable.ic_edit),
+                            stayDismissed = false,
+                            onDismiss = { onSwipeEdit(transaction) },
+                        ),
+                        endActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.errorContainer,
+                            backgroundActive = MaterialTheme.colorScheme.error,
+                            iconTint = MaterialTheme.colorScheme.onError,
+                            icon = painterResource(R.drawable.ic_delete_forever),
+                            stayDismissed = true,
+                            onDismiss = { onSwipeDelete(transaction) },
+                        ),
+                        onTried = onTriedSwipe,
+                        showTutorial = showTutorial(firstTransactionIndex + index),
+                    ) { state ->
+                        SwipeRowSheet(state = state) {
+                            SpentItemActions(
                                 transaction = transaction,
                                 currency = currency,
-                                category = category,
+                                categoryEmojis = categoryEmojis,
+                                onEdit = { onEdit(transaction) },
+                                onDelete = { onDelete(transaction) },
+                                onCopy = { onCopy(transaction) },
                             )
-                        } else {
-                            SwipeActions(
-                                startActionsConfig = SwipeActionsConfig(
-                                    threshold = 0.4f,
-                                    background = MaterialTheme.colorScheme.tertiaryContainer,
-                                    backgroundActive = MaterialTheme.colorScheme.tertiary,
-                                    iconTint = MaterialTheme.colorScheme.onTertiary,
-                                    icon = painterResource(R.drawable.ic_edit),
-                                    stayDismissed = false,
-                                    onDismiss = { onSwipeEdit(transaction) },
-                                ),
-                                endActionsConfig = SwipeActionsConfig(
-                                    threshold = 0.4f,
-                                    background = MaterialTheme.colorScheme.errorContainer,
-                                    backgroundActive = MaterialTheme.colorScheme.error,
-                                    iconTint = MaterialTheme.colorScheme.onError,
-                                    icon = painterResource(R.drawable.ic_delete_forever),
-                                    stayDismissed = true,
-                                    onDismiss = { onSwipeDelete(transaction) },
-                                ),
-                                onTried = onTriedSwipe,
-                                showTutorial = showTutorial(firstTransactionIndex + index),
-                            ) { state ->
-                                SwipeRowSheet(state = state) {
-                                    SpentItemActions(
-                                        transaction = transaction,
-                                        currency = currency,
-                                        categoryEmojis = categoryEmojis,
-                                        onEdit = { onEdit(transaction) },
-                                        onDelete = { onDelete(transaction) },
-                                        onCopy = { onCopy(transaction) },
-                                    )
-                                }
-                            }
                         }
                     }
                 }
