@@ -59,12 +59,20 @@ object AppLockBiometricKey {
         }
     }
 
-    // Encrypts a fresh random unlock secret. Returns (base64Iv, base64Ciphertext) or null if
-    // the key could not be created/used.
-    fun encryptSecret(): Pair<String, String>? {
+    // Creates an ENCRYPT_MODE cipher bound to the biometric key. The cipher is returned
+    // locked — it can only be used after BiometricPrompt authentication releases the key.
+    fun createEncryptCipher(): Cipher? {
         return runCatching {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getKey() ?: error("biometric key missing"))
+            cipher
+        }.getOrNull()
+    }
+
+    // Encrypts a fresh random unlock secret using an already-authenticated cipher.
+    // Returns (base64Iv, base64Ciphertext) or null on failure.
+    fun encryptWithCipher(cipher: Cipher): Pair<String, String>? {
+        return runCatching {
             val secret = ByteArray(SECRET_BYTES).also { SecureRandom().nextBytes(it) }
             val ciphertext = cipher.doFinal(secret)
             Base64.encodeToString(cipher.iv, Base64.NO_WRAP) to

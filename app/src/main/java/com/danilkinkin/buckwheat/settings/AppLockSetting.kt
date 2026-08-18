@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.settings
 
 import android.os.Build
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.text.KeyboardOptions
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.TextRow
@@ -148,33 +151,74 @@ fun AppLockSetting(
                     color = M3Theme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(
-                checked = biometricEnabled,
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        coroutineScope.launch {
-                            val pair = withContext(Dispatchers.IO) {
-                                AppLockBiometricKey.createKey()
-                                AppLockBiometricKey.encryptSecret()
-                            }
-                            if (pair != null) {
-                                repository.setBiometricSecret(pair.first, pair.second)
-                                repository.setBiometricEnabled(true)
-                                biometricEnabled = true
-                            } else {
+                    Switch(
+                    checked = biometricEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            val activity = context as? FragmentActivity
+                            if (activity == null) {
                                 biometricEnabled = false
+                                return@Switch
                             }
+                            coroutineScope.launch {
+                                withContext(Dispatchers.IO) {
+                                    AppLockBiometricKey.createKey()
+                                }
+                                val cipher = withContext(Dispatchers.IO) {
+                                    AppLockBiometricKey.createEncryptCipher()
+                                }
+                                if (cipher == null) {
+                                    biometricEnabled = false
+                                    return@launch
+                                }
+                                val cryptoObject = BiometricPrompt.CryptoObject(cipher)
+                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                    .setTitle(context.getString(R.string.app_lock_biometric_prompt_title))
+                                    .setSubtitle(context.getString(R.string.app_lock_biometric_prompt_subtitle))
+                                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                                    .setNegativeButtonText(context.getString(R.string.app_lock_biometric_prompt_cancel))
+                                    .build()
+                                val biometricPrompt = BiometricPrompt(
+                                    activity,
+                                    ContextCompat.getMainExecutor(activity),
+                                    object : BiometricPrompt.AuthenticationCallback() {
+                                        override fun onAuthenticationSucceeded(
+                                            result: BiometricPrompt.AuthenticationResult,
+                                        ) {
+                                            coroutineScope.launch {
+                                                val pair = withContext(Dispatchers.IO) {
+                                                    AppLockBiometricKey.encryptWithCipher(cipher)
+                                                }
+                                                if (pair != null) {
+                                                    repository.setBiometricSecret(pair.first, pair.second)
+                                                    repository.setBiometricEnabled(true)
+                                                    biometricEnabled = true
+                                                } else {
+                                                    biometricEnabled = false
+                                                }
+                                            }
+                                        }
+
+                                        override fun onAuthenticationError(
+                                            errorCode: Int,
+                                            errString: CharSequence,
+                                        ) {
+                                            biometricEnabled = false
+                                        }
+                                    },
+                                )
+                                biometricPrompt.authenticate(promptInfo, cryptoObject)
+                            }
+                        } else {
+                            AppLockBiometricKey.deleteKey()
+                            coroutineScope.launch {
+                                repository.setBiometricEnabled(false)
+                            }
+                            biometricEnabled = false
                         }
-                    } else {
-                        AppLockBiometricKey.deleteKey()
-                        coroutineScope.launch {
-                            repository.setBiometricEnabled(false)
-                        }
-                        biometricEnabled = false
-                    }
-                },
-                enabled = canUseBiometric,
-            )
+                    },
+                    enabled = canUseBiometric,
+                )
         }
 
         // Smart timeout config
@@ -381,13 +425,13 @@ private fun PinSetupDialog(
                         if (pin != firstPin) {
                             error = context.getString(R.string.app_lock_pin_mismatch)
                         } else {
-                            val hash = generatePinHash(pin)
-                            coroutineScope.launch {
-                                repository.setPinHash(hash)
-                                repository.setEnabled(true)
-                                repository.setBiometricEnabled(false)
-                            }
-                            onDone()
+                val hash = generatePinHash(pin)
+                coroutineScope.launch {
+                    repository.setPinHash(hash)
+                    repository.setEnabled(true)
+                    repository.setBiometricEnabled(false)
+                    onDone()
+                }
                         }
                     }
                 }
@@ -495,8 +539,8 @@ private fun PinChangeDialog(
                             val hash = generatePinHash(pin)
                             coroutineScope.launch {
                                 repository.setPinHash(hash)
+                                onDone()
                             }
-                            onDone()
                         }
                     }
                 }
