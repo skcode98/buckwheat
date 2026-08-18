@@ -30,6 +30,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     suspend fun getAllNow(): List<Transaction>
 
+    @Query("SELECT * FROM transactions WHERE type = :type AND date >= :startDate AND date <= :endDate ORDER BY date ASC")
+    suspend fun getAllNow(type: TransactionType, startDate: Long, endDate: Long): List<Transaction>
+
     @Query("SELECT COUNT(*) FROM transactions WHERE type = 'SPENT' AND (category IS NULL OR category = '')")
     fun getUncategorizedCount(): LiveData<Int>
 

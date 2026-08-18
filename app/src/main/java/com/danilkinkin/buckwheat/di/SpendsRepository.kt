@@ -1055,9 +1055,7 @@ class SpendsRepository @Inject constructor(
     }
 
     private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
-        transactionDao.getAll().asFlow().first()
-            .filter { it.type == TransactionType.SPENT }
-            .filter { !it.date.before(start) && !it.date.after(finish) }
+        transactionDao.getAllNow(TransactionType.SPENT, start.time, finish.time)
             .filter { categoryKey(it) == key }
             .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
 

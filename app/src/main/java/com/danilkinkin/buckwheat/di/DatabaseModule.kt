@@ -172,9 +172,18 @@ val AutoMigration14to15: Migration = object : Migration(14, 15) {
     }
 }
 
+// Add composite index on (type, date) for the hot query path in periodCategoryTotal
+val AutoMigration15to16: Migration = object : Migration(15, 16) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_transactions_type_date` ON `transactions`(`type`, `date`)"
+        )
+    }
+}
+
 @Database(
     entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class],
-    version = 15,
+    version = 16,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -199,6 +208,6 @@ abstract class DatabaseModule : RoomDatabase() {
     abstract fun savingsGoalDao(): SavingsGoalDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16)
     }
 }
