@@ -450,6 +450,12 @@
   <string name="goal_completed">Completed!</string>
   <string name="goal_delete_desc">Delete goal</string>
   <string name="goal_progress">%1$s / %2$s</string>
+  <string name="goal_deadline_hint">Deadline (optional)</string>
+  <string name="goal_deadline_format">Due: %1$s</string>
+  <string name="goal_days_remaining">%1$d days left</string>
+  <string name="goal_overdue">Overdue by %1$d days</string>
+  <string name="goals_progress_title">Savings Goals</string>
+  <string name="goals_active_count">%1$d active</string>
   <string name="recurring_amount_hint">Amount</string>
   <string name="recurring_day_hint">Day</string>
   <string name="recurring_comment_hint">Description (e.g. Netflix)</string>

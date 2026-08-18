@@ -84,6 +84,12 @@
   <string name="goal_nudge_milestone_text">Вы накопили %1$s из %2$s — так держать!</string>
   <string name="goal_nudge_reached_title">Цель достигнута!</string>
   <string name="goal_nudge_reached_text">Цель «%1$s» достигнута — вы накопили %2$s из %3$s!</string>
+  <string name="goal_deadline_hint">Срок (необязательно)</string>
+  <string name="goal_deadline_format">До: %1$s</string>
+  <string name="goal_days_remaining">Осталось %1$d дн.</string>
+  <string name="goal_overdue">Просрочено на %1$d дн.</string>
+  <string name="goals_progress_title">Сберегательные цели</string>
+  <string name="goals_active_count">Активных: %1$d</string>
   <string name="spend_digest_setting_title">Дайджест расходов</string>
   <string name="spend_digest_frequency">Период</string>
   <string name="spend_digest_frequency_weekly">Еженедельно</string>

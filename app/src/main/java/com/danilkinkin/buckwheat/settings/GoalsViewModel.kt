@@ -1,10 +1,14 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.content.Context
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
@@ -13,7 +17,6 @@ import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,15 +31,17 @@ class GoalsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
-    val goals: LiveData<List<SavingsGoal>> = savingsGoalDao.getAll()
+    val goals: StateFlow<List<SavingsGoal>> = savingsGoalDao.getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addGoal(name: String, targetAmount: BigDecimal) {
+    fun addGoal(name: String, targetAmount: BigDecimal, deadline: Date? = null) {
         if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
         viewModelScope.launch {
             savingsGoalDao.insert(
                 SavingsGoal(
                     name = name.trim(),
                     targetAmount = targetAmount,
+                    deadline = deadline,
                 )
             )
         }

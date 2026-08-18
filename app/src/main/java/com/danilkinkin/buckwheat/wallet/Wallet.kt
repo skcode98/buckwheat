@@ -3,17 +3,19 @@ package com.danilkinkin.buckwheat.wallet
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,11 +31,15 @@ import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.analytics.ANALYTICS_SHEET
+import com.danilkinkin.buckwheat.settings.GOALS_SHEET
+import com.danilkinkin.buckwheat.settings.GoalsViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.*
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.*
 
 
@@ -45,22 +51,23 @@ fun Wallet(
     activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
     appViewModel: AppViewModel = hiltViewModel(),
     spendsViewModel: SpendsViewModel = hiltViewModel(),
+    goalsViewModel: GoalsViewModel = hiltViewModel(),
     onClose: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
     var budgetCache by remember { mutableStateOf(spendsViewModel.budget.value ?: BigDecimal.ZERO) }
-    val budget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
-    val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
-    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
+    val budget by spendsViewModel.budget.collectAsStateWithLifecycle()
+    val spent by spendsViewModel.spent.collectAsStateWithLifecycle()
+    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.collectAsStateWithLifecycle()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
     val dateToValue = remember { mutableStateOf(finishPeriodDate) }
     val startDateToValue = remember { mutableStateOf<Date?>(startPeriodDate) }
-    val currency by spendsViewModel.currency.observeAsState()
-    val spends by spendsViewModel.periodSpends.observeAsState()
-    val restedBudgetDistributionMethod by spendsViewModel.restedBudgetDistributionMethod.observeAsState()
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val spends by spendsViewModel.periodSpends.collectAsStateWithLifecycle()
+    val restedBudgetDistributionMethod by spendsViewModel.restedBudgetDistributionMethod.collectAsStateWithLifecycle()
 
     val restBudget =
         (budgetCache - spent - spentFromDailyBudget)
@@ -193,6 +200,13 @@ fun Wallet(
                         )
                     }
                 }
+                val activeGoals by goalsViewModel.goals.collectAsStateWithLifecycle()
+                GoalProgressCard(
+                    goals = activeGoals,
+                    currency = currency,
+                    visible = !isChange && !isEdit && activeGoals.any { !it.completed },
+                    onClick = { appViewModel.openSheet(PathState(GOALS_SHEET)) },
+                )
                 ButtonRow(
                     icon = painterResource(R.drawable.ic_directions),
                     text = stringResource(R.string.rest_label),
@@ -375,6 +389,106 @@ fun Wallet(
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             },
             onClose = { openConfirmFinishBudgetDialog.value = false },
+        )
+    }
+}
+
+@Composable
+private fun GoalProgressCard(
+    goals: List<SavingsGoal>,
+    currency: ExtendCurrency,
+    visible: Boolean,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(350)) + expandVertically(
+            expandFrom = Alignment.Top,
+            animationSpec = tween(350),
+        ),
+        exit = fadeOut(tween(350)) + shrinkVertically(
+            shrinkTowards = Alignment.Top,
+            animationSpec = tween(350),
+        ),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable { onClick() },
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.goals_progress_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.goals_active_count,
+                            goals.count { !it.completed },
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                val activeGoals = goals.filter { !it.completed }.take(3)
+                activeGoals.forEach { goal ->
+                    GoalMiniRow(goal = goal, currency = currency)
+                    if (goal != activeGoals.last()) {
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoalMiniRow(
+    goal: SavingsGoal,
+    currency: ExtendCurrency,
+) {
+    val context = LocalContext.current
+    val progress = if (goal.targetAmount > BigDecimal.ZERO) {
+        goal.currentAmount
+            .divide(goal.targetAmount, 2, RoundingMode.HALF_EVEN)
+            .toFloat()
+            .coerceIn(0f, 1f)
+    } else 0f
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = goal.name,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(
+                    R.string.goal_progress,
+                    numberFormat(context, goal.currentAmount, currency).trim(),
+                    numberFormat(context, goal.targetAmount, currency).trim(),
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
