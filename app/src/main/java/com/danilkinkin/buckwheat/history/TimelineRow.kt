@@ -187,7 +187,7 @@ internal fun TimelineRowContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryFlipContainer(
@@ -205,7 +205,7 @@ internal fun TimelineRowContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
                 text = if (comment.isBlank()) time else "$name · $time",
                 style = MaterialTheme.typography.bodySmall,
@@ -214,7 +214,7 @@ internal fun TimelineRowContent(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
             text = numberFormat(context, transaction.value, currency = currency),
             style = MaterialTheme.typography.titleMedium,
