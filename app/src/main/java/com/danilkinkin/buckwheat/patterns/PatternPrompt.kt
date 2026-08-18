@@ -39,8 +39,11 @@ data class PatternAiSummary(
     val compliance: BudgetCompliance,
     val anomalies: List<Anomaly>,
     val forecast: Forecast,
+    val enhancedForecast: EnhancedForecast,
     val recurringCount: Int,
     val noSpendDays: Int,
+    val commentPatterns: List<CommentPattern>,
+    val recurringForecasts: List<RecurringForecast>,
     val suggestions: List<InsightSuggestion>,
 )
 
@@ -64,8 +67,11 @@ fun buildPatternAiSummary(
         compliance = metrics.compliance,
         anomalies = metrics.anomalies,
         forecast = metrics.forecast,
+        enhancedForecast = metrics.enhancedForecast,
         recurringCount = metrics.recurring.size,
         noSpendDays = metrics.noSpendDays,
+        commentPatterns = metrics.commentPatterns,
+        recurringForecasts = metrics.recurringForecasts,
         suggestions = metrics.suggestions.filterNot { suggestion ->
             suggestion.title.contains("recurring", ignoreCase = true)
         },
@@ -127,6 +133,40 @@ internal fun buildPatternAiUserPrompt(summary: PatternAiSummary): String {
         BigDecimal.ZERO
     }
 
+    // Comment patterns section
+    val commentLines = if (summary.commentPatterns.isEmpty()) {
+        "  none"
+    } else {
+        summary.commentPatterns.take(8).joinToString("\n") { cp ->
+            "  - ${cp.displayName}: ${patternPromptAmount(cp.total)} (${cp.percent}%), " +
+                "${cp.transactionCount} transactions, avg ${patternPromptAmount(cp.monthlyAverage)}/month"
+        }
+    }
+
+    // Recurring template forecasts section
+    val recurringTemplateLines = if (summary.recurringForecasts.isEmpty()) {
+        "  none"
+    } else {
+        summary.recurringForecasts.joinToString("\n") { rf ->
+            val nextDate = rf.upcomingPayments.firstOrNull()?.format(PATTERN_DATE_FORMAT) ?: "unknown"
+            "  - ${rf.template.comment}: ${patternPromptAmount(rf.template.amount)}/month, " +
+                "next payment $nextDate, annual ${patternPromptAmount(rf.annualTotal)}"
+        }
+    }
+
+    // Enhanced forecast section
+    val confidenceLine = if (summary.enhancedForecast.confidenceLow != null &&
+        summary.enhancedForecast.confidenceHigh != null
+    ) {
+        "Confidence range: ${patternPromptAmount(summary.enhancedForecast.confidenceLow)} – " +
+            "${patternPromptAmount(summary.enhancedForecast.confidenceHigh)}"
+    } else {
+        "Confidence range: not enough data"
+    }
+    val overspendLine = summary.enhancedForecast.estimatedOverspendDays?.let {
+        "Estimated overspend days this month: $it"
+    } ?: "Estimated overspend days: not enough data"
+
     return buildString {
         append("Currency: ${summary.currencyCode.ifBlank { "(none)" }}")
         append(
@@ -148,7 +188,13 @@ internal fun buildPatternAiUserPrompt(summary: PatternAiSummary): String {
             "${summary.forecast.projectedThisMonth?.let { patternPromptAmount(it) } ?: "none"}")
         append("\nForecast next month: " +
             "${summary.forecast.nextMonth?.let { patternPromptAmount(it) } ?: "none"}")
+        append("\n$confidenceLine")
+        append("\n$overspendLine")
         append("\nPossible recurring charges: ${summary.recurringCount} (names not sent)")
+        append("\nRecurring templates:\n")
+        append(recurringTemplateLines)
+        append("\nComment/tag patterns:\n")
+        append(commentLines)
         append("\nNo-spend days: ${summary.noSpendDays}")
         append("\nCurrent suggestions:\n")
         append(suggestionLines)

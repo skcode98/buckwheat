@@ -514,4 +514,19 @@
   <string name="patterns_loading">Analyzing your spending patterns…</string>
   <string name="patterns_retry">Try again</string>
   <string name="patterns_empty">No spending history yet in this window.</string>
+  <string name="patterns_comment_patterns">Tag patterns</string>
+  <string name="patterns_comment_patterns_desc">How your spending breaks down by tag</string>
+  <string name="patterns_comment_pattern_detail">%1$d transactions</string>
+  <string name="patterns_recurring_forecast">Recurring forecast</string>
+  <string name="patterns_recurring_forecast_desc">Upcoming scheduled payments</string>
+  <string name="patterns_recurring_next_payment">Next: %1$s</string>
+  <string name="patterns_recurring_annual">≈ %1$s/yr</string>
+  <string name="patterns_enhanced_forecast">Enhanced forecast</string>
+  <string name="patterns_projected_this_month">Projected this month</string>
+  <string name="patterns_confidence_range">Confidence range</string>
+  <string name="patterns_overspend_days_high">⚠ Likely %1$d overspend days this month</string>
+  <string name="patterns_overspend_days_medium">~%1$d possible overspend days</string>
+  <string name="patterns_overspend_days_none">No overspend days expected</string>
+  <string name="patterns_next_month_forecast">Next month forecast</string>
+  <string name="patterns_category_forecasts">Category projections</string>
 </resources>

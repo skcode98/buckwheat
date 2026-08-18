@@ -381,6 +381,19 @@ private fun PatternsBody(
             SuggestionsCard(metrics.suggestions)
         }
 
+        if (metrics.commentPatterns.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            CommentPatternsCard(metrics.commentPatterns, context, currency)
+        }
+
+        if (metrics.recurringForecasts.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            RecurringForecastCard(metrics.recurringForecasts, context, currency)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        EnhancedForecastCard(metrics, context, currency)
+
         Spacer(Modifier.height(16.dp))
         NarrativeCard(report, patternsViewModel)
     }
@@ -943,6 +956,283 @@ private fun SuggestionsCard(suggestions: List<InsightSuggestion>) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentPatternsCard(
+    patterns: List<CommentPattern>,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_comment_patterns),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_comment_patterns_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            patterns.take(8).forEach { pattern ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = pattern.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_comment_pattern_detail,
+                                pattern.transactionCount,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = numberFormat(context, pattern.total, currency),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "${pattern.percent}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecurringForecastCard(
+    forecasts: List<RecurringForecast>,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_recurring_forecast),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_recurring_forecast_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            forecasts.forEach { forecast ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = forecast.template.comment,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val nextPayment = forecast.upcomingPayments.firstOrNull()
+                        if (nextPayment != null) {
+                            Text(
+                                text = stringResource(
+                                    R.string.patterns_recurring_next_payment,
+                                    prettyDate(
+                                        nextPayment.toDate(),
+                                        showTime = false,
+                                        forceShowDate = true,
+                                        shortMonth = true,
+                                    ),
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "${numberFormat(context, forecast.template.amount, currency)}/mo",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_recurring_annual,
+                                numberFormat(context, forecast.annualTotal, currency),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnhancedForecastCard(
+    metrics: PatternMetrics,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    val forecast = metrics.enhancedForecast
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_enhanced_forecast),
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Projected this month with confidence interval
+            Row(Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.patterns_projected_this_month),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = forecast.base.projectedThisMonth?.let {
+                            numberFormat(context, it, currency)
+                        } ?: "—",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
+                if (forecast.confidenceLow != null && forecast.confidenceHigh != null) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(R.string.patterns_confidence_range),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "${numberFormat(context, forecast.confidenceLow, currency)} – ${numberFormat(context, forecast.confidenceHigh, currency)}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
+            }
+
+            // Overspend days estimate
+            forecast.estimatedOverspendDays?.let { days ->
+                Spacer(Modifier.height(12.dp))
+                val daysText: String
+                val daysColor = when {
+                    days > 5 -> {
+                        daysText = stringResource(R.string.patterns_overspend_days_high, days)
+                        colorBad
+                    }
+                    days > 0 -> {
+                        daysText = stringResource(R.string.patterns_overspend_days_medium, days)
+                        colorNotGood
+                    }
+                    else -> {
+                        daysText = stringResource(R.string.patterns_overspend_days_none)
+                        colorGood
+                    }
+                }
+                Text(
+                    text = daysText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = daysColor,
+                )
+            }
+
+            // Next month forecast
+            forecast.base.nextMonth?.let { next ->
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.patterns_next_month_forecast),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = numberFormat(context, next, currency),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+
+            // Category forecasts
+            if (forecast.categoryForecasts.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.patterns_category_forecasts),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                forecast.categoryForecasts.take(4).forEach { cat ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = cat.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = cat.projectedThisMonth?.let {
+                                numberFormat(context, it, currency)
+                            } ?: "—",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
                 }
             }

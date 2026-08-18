@@ -9,14 +9,14 @@ import java.util.Date
 // models with no Android / Room / DataStore imports so the whole engine runs under JUnit on
 // the desktop. All math uses BigDecimal with an explicit RoundingMode.
 
-// One spend as the pattern engine sees it. Deliberately carries NO comment: this is the view
-// that feeds the AI prompt builder (Phase 2), so it structurally cannot leak spend comments.
-// `category` is the stored category string; the ViewModel resolves blank ones via the offline
-// keyword categorizer before constructing this.
+// One spend as the pattern engine sees it. `category` is the stored category string; the
+// ViewModel resolves blank ones via the offline keyword categorizer before constructing this.
+// `comment` carries the user's tag/label for the spend (used for comment-pattern analysis).
 data class PatternSpend(
     val date: Date,
     val value: BigDecimal,
     val category: String?,
+    val comment: String? = null,
 )
 
 // One budget period (archived or current). The current period is the one whose range contains
@@ -36,6 +36,7 @@ data class PatternDataset(
     val periods: List<PatternPeriod>,
     val currencyCode: String,
     val today: LocalDate,
+    val recurringTemplates: List<PatternRecurringTemplate> = emptyList(),
 )
 
 // A spend WITH its comment, fed ONLY to the recurring-charge detector. This is pure on-device
@@ -44,6 +45,15 @@ data class PatternCharge(
     val date: Date,
     val amount: BigDecimal,
     val comment: String,
+)
+
+// A recurring template as the pattern engine sees it — mirrors the Room entity fields
+// relevant for forecasting.
+data class PatternRecurringTemplate(
+    val amount: BigDecimal,
+    val comment: String,
+    val dayOfMonth: Int,
+    val enabled: Boolean,
 )
 
 // The flexible month window the user picks on the page: any count 1..availableMonths, or "All".
@@ -176,6 +186,42 @@ data class InsightSuggestion(
     val actionable: Boolean,
 )
 
+// One normalized comment/tag pattern. Same grouping logic as CategoryPattern but for comments.
+data class CommentPattern(
+    val key: String,
+    val displayName: String,
+    val total: BigDecimal,
+    val percent: Int,
+    val monthlyAverage: BigDecimal,
+    val transactionCount: Int,
+    val activeMonths: Int,
+)
+
+// A recurring template's upcoming payments and annual projection.
+data class RecurringForecast(
+    val template: PatternRecurringTemplate,
+    val upcomingPayments: List<LocalDate>,
+    val annualTotal: BigDecimal,
+)
+
+// Per-category forecast: projected end-of-month and next-month for one category.
+data class CategoryForecast(
+    val key: String,
+    val displayName: String,
+    val projectedThisMonth: BigDecimal?,
+    val nextMonth: BigDecimal?,
+    val monthlyAverage: BigDecimal,
+)
+
+// Enhanced forecast with confidence intervals and overspend-day estimate.
+data class EnhancedForecast(
+    val base: Forecast,
+    val confidenceLow: BigDecimal?,
+    val confidenceHigh: BigDecimal?,
+    val estimatedOverspendDays: Int?,
+    val categoryForecasts: List<CategoryForecast>,
+)
+
 // Every pure-engine result bundled for the ViewModel state, so the UI stays dumb.
 data class PatternMetrics(
     val monthlyPoints: List<MonthlyPoint>,
@@ -191,7 +237,10 @@ data class PatternMetrics(
     val compliance: BudgetCompliance,
     val anomalies: List<Anomaly>,
     val forecast: Forecast,
+    val enhancedForecast: EnhancedForecast,
     val recurring: List<RecurringCharge>,
+    val commentPatterns: List<CommentPattern>,
+    val recurringForecasts: List<RecurringForecast>,
     val suggestions: List<InsightSuggestion>,
     val report: String,
 )

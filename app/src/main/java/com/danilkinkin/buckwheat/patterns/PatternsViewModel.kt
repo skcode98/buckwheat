@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.ai.AiInsightResult
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
@@ -56,6 +57,7 @@ internal data class PatternDataLoad(
 class PatternsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val spendsRepository: SpendsRepository,
+    private val recurringDao: RecurringDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow<PatternsUiState>(PatternsUiState.Idle)
@@ -186,17 +188,27 @@ class PatternsViewModel @Inject constructor(
         val archived = spendsRepository.getAllArchivedTransactions().first()
         val periods = spendsRepository.getAllBudgetPeriods().first()
         val currency = spendsRepository.getCurrency().first().value ?: ""
+        val templates = recurringDao.getAll().first()
 
         val currentSpends = spends.map { toPatternSpend(it) }
         val archivedSpends = archived
             .filter { it.type == TransactionType.SPENT }
             .map { toPatternSpend(it.toTransaction()) }
 
-        // The recurring-charge detector is the ONLY consumer of comments: pure on-device, never
-        // part of a PatternDataset, so the AI prompt builder structurally cannot reach them.
+        // The recurring-charge detector is the ONLY consumer of comments for charge detection:
+        // pure on-device, never part of a PatternDataset, so the AI prompt builder cannot reach them.
         val charges = (spends + archived.map { it.toTransaction() })
             .filter { it.type == TransactionType.SPENT && it.comment.isNotBlank() }
             .map { PatternCharge(it.date, it.value, it.comment) }
+
+        val patternTemplates = templates.map {
+            PatternRecurringTemplate(
+                amount = it.amount,
+                comment = it.comment,
+                dayOfMonth = it.dayOfMonth,
+                enabled = it.enabled,
+            )
+        }
 
         val periodList = periods.map {
             PatternPeriod(
@@ -213,6 +225,7 @@ class PatternsViewModel @Inject constructor(
             periods = periodList,
             currencyCode = currency,
             today = today,
+            recurringTemplates = patternTemplates,
         )
         return PatternDataLoad(dataset, charges, spendsRepository.getDailyBudget().first())
     }
@@ -233,9 +246,11 @@ class PatternsViewModel @Inject constructor(
 
     // The stored category string when present; otherwise the offline keyword guess. Unresolved
     // (blank comment, no keyword) stays null so the engine buckets it under "Other".
+    // Comment is now passed through for comment-pattern analysis.
     private fun toPatternSpend(tx: Transaction): PatternSpend = PatternSpend(
         date = tx.date,
         value = tx.value,
         category = tx.category?.takeIf { it.isNotBlank() } ?: offlineCategoryOrNull(tx.comment)?.name,
+        comment = tx.comment?.takeIf { it.isNotBlank() },
     )
 }

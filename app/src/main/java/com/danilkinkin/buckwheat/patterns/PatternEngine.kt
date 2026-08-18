@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
+import kotlin.math.sqrt
 
 // The pure pattern engine. No Android / Room / DataStore imports — everything operates on the
 // plain value models in PatternData.kt so it runs under JUnit on the desktop. All math uses
@@ -134,6 +135,109 @@ fun canonicalCategory(category: String?, index: CategoryNameIndex): String {
     val raw = category?.takeIf { it.isNotBlank() } ?: return UNCATEGORIZED_KEY
     val norm = normalizeName(raw)
     return index.aliasToCanonical[norm] ?: norm
+}
+
+// --- Comment normalization (mirrors category logic) ----------------------------
+
+const val NO_COMMENT_KEY = "__no_comment__"
+
+data class CommentNameIndex(
+    val canonicalToDisplay: Map<String, String>,
+    val aliasToCanonical: Map<String, String>,
+)
+
+fun commentNameIndex(names: List<String>): CommentNameIndex {
+    val nonBlank = names.filter { it.isNotBlank() }
+    if (nonBlank.isEmpty()) return CommentNameIndex(emptyMap(), emptyMap())
+
+    val groups = linkedMapOf<String, MutableList<Pair<String, Int>>>()
+    nonBlank.groupingBy { it }.eachCount().forEach { (raw, count) ->
+        val norm = normalizeName(raw)
+        if (norm.isNotEmpty()) groups.getOrPut(norm) { mutableListOf() } += raw to count
+    }
+    if (groups.isEmpty()) return CommentNameIndex(emptyMap(), emptyMap())
+
+    val ordered = groups.entries.sortedWith(
+        compareByDescending<Map.Entry<String, List<Pair<String, Int>>>> { entry ->
+            entry.value.sumOf { (_, count) -> count }
+        }.thenBy { it.key },
+    )
+    val canonicalKeys = mutableListOf<String>()
+    val aliasesByCanonical = linkedMapOf<String, MutableList<String>>()
+    ordered.forEach { (norm, _) ->
+        val anchor = canonicalKeys.firstOrNull { levenshteinDistance(norm, it) <= 2 }
+        if (anchor != null) {
+            aliasesByCanonical.getValue(anchor) += norm
+        } else {
+            canonicalKeys += norm
+            aliasesByCanonical[norm] = mutableListOf(norm)
+        }
+    }
+
+    val aliasToCanonical = linkedMapOf<String, String>()
+    aliasesByCanonical.forEach { (canonical, aliases) ->
+        aliases.forEach { alias -> aliasToCanonical[alias] = canonical }
+    }
+
+    val canonicalToDisplay = linkedMapOf<String, String>()
+    aliasesByCanonical.forEach { (canonical, aliases) ->
+        val spellings = mutableMapOf<String, Int>()
+        aliases.forEach { alias ->
+            groups.getValue(alias).forEach { (raw, count) ->
+                spellings[raw] = (spellings[raw] ?: 0) + count
+            }
+        }
+        canonicalToDisplay[canonical] = spellings.maxByOrNull { it.value }?.key ?: canonical
+    }
+
+    return CommentNameIndex(canonicalToDisplay, aliasToCanonical)
+}
+
+fun canonicalComment(comment: String?, index: CommentNameIndex): String {
+    val raw = comment?.takeIf { it.isNotBlank() } ?: return NO_COMMENT_KEY
+    val norm = normalizeName(raw)
+    return index.aliasToCanonical[norm] ?: norm
+}
+
+// Per-comment/tag pattern: total, share, monthly average over active months, transaction count.
+fun commentPatterns(dataset: PatternDataset): List<CommentPattern> {
+    if (dataset.spends.isEmpty()) return emptyList()
+    val zero = BigDecimal.ZERO
+    val names = dataset.spends.mapNotNull { it.comment?.takeIf { c -> c.isNotBlank() } }.distinct()
+    val index = commentNameIndex(names)
+    val allMonths = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct()
+    val grandTotal = dataset.spends.fold(zero) { acc, spend -> acc + spend.value }
+
+    return dataset.spends
+        .groupBy { canonicalComment(it.comment, index) }
+        .filterKeys { it != NO_COMMENT_KEY }
+        .map { (key, groupSpends) ->
+            val total = groupSpends.fold(zero) { acc, spend -> acc + spend.value }
+            val percent = if (grandTotal > zero) {
+                total.multiply(BigDecimal(100)).divide(grandTotal, 0, RoundingMode.HALF_UP).toInt()
+            } else {
+                0
+            }
+            val activeMonths = groupSpends
+                .map { YearMonth.from(it.date.toLocalDate()) }
+                .distinct()
+                .size
+            val monthlyAverage = if (activeMonths > 0) {
+                total.divide(activeMonths.toBigDecimal(), 2, RoundingMode.HALF_UP)
+            } else {
+                total
+            }
+            CommentPattern(
+                key = key,
+                displayName = index.canonicalToDisplay[key] ?: key,
+                total = total,
+                percent = percent,
+                monthlyAverage = monthlyAverage,
+                transactionCount = groupSpends.size,
+                activeMonths = activeMonths,
+            )
+        }
+        .sortedWith(compareByDescending<CommentPattern> { it.total }.thenBy { it.key })
 }
 
 // --- Step 0.5: analysis window -------------------------------------------------
@@ -693,6 +797,131 @@ fun forecast(dataset: PatternDataset, dailyBudget: BigDecimal): Forecast {
     )
 }
 
+// Enhanced forecast: confidence intervals from per-month variance, overspend-day estimate,
+// and per-category projections.
+fun enhancedForecast(
+    dataset: PatternDataset,
+    dailyBudget: BigDecimal,
+): EnhancedForecast {
+    val base = forecast(dataset, dailyBudget)
+    val completed = completedPoints(monthlyTotals(dataset)).takeLast(6)
+
+    // Confidence interval from standard deviation of completed months
+    val confidenceLow: BigDecimal?
+    val confidenceHigh: BigDecimal?
+    val estimatedOverspendDays: Int?
+    if (completed.size >= 2) {
+        val values = completed.map { it.spent }
+        val mean = values.fold(BigDecimal.ZERO) { acc, v -> acc + v }
+            .divide(values.size.toBigDecimal(), 4, RoundingMode.HALF_UP)
+        val variance = values.fold(BigDecimal.ZERO) { acc, v ->
+            val diff = v.subtract(mean)
+            acc + diff.multiply(diff)
+        }.divide(values.size.toBigDecimal(), 4, RoundingMode.HALF_UP)
+        // stddev approximation: use Newton's method for sqrt on BigDecimal
+        val stddev = bigDecimalSqrt(variance)
+        val projected = base.projectedThisMonth ?: mean
+        confidenceLow = projected.subtract(stddev).coerceAtLeast(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP)
+        confidenceHigh = projected.add(stddev).setScale(2, RoundingMode.HALF_UP)
+
+        // Estimate overspend days: days where projected daily spend exceeds daily budget
+        if (dailyBudget > BigDecimal.ZERO && base.projectedThisMonth != null) {
+            val currentMonth = YearMonth.from(dataset.today)
+            val daysInMonth = currentMonth.lengthOfMonth()
+            val dailyProjected = base.projectedThisMonth
+                .divide(daysInMonth.toBigDecimal(), 4, RoundingMode.HALF_UP)
+            val dailyStddev = stddev.divide(daysInMonth.toBigDecimal(), 4, RoundingMode.HALF_UP)
+            // Count days where (dailyProjected + dailyStddev) > dailyBudget
+            val excessRatio = dailyProjected.add(dailyStddev).subtract(dailyBudget)
+                .divide(dailyStddev.coerceAtLeast(BigDecimal("0.01")), 4, RoundingMode.HALF_UP)
+            estimatedOverspendDays = if (excessRatio > BigDecimal.ZERO) {
+                (excessRatio * daysInMonth.toBigDecimal() / BigDecimal("2")).toInt()
+                    .coerceIn(0, daysInMonth)
+            } else {
+                0
+            }
+        } else {
+            estimatedOverspendDays = null
+        }
+    } else {
+        confidenceLow = null
+        confidenceHigh = null
+        estimatedOverspendDays = null
+    }
+
+    // Per-category forecasts
+    val catForecasts = categoryForecasts(dataset, completed)
+
+    return EnhancedForecast(
+        base = base,
+        confidenceLow = confidenceLow,
+        confidenceHigh = confidenceHigh,
+        estimatedOverspendDays = estimatedOverspendDays,
+        categoryForecasts = catForecasts,
+    )
+}
+
+private fun bigDecimalSqrt(value: BigDecimal): BigDecimal {
+    if (value <= BigDecimal.ZERO) return BigDecimal.ZERO
+    // Newton's method: x_{n+1} = (x_n + value/x_n) / 2
+    var x = BigDecimal(sqrt(value.toDouble()))
+    val two = BigDecimal(2)
+    repeat(10) {
+        val next = x.add(value.divide(x, 10, RoundingMode.HALF_UP)).divide(two, 10, RoundingMode.HALF_UP)
+        if (next == x) return@repeat
+        x = next
+    }
+    return x.setScale(2, RoundingMode.HALF_UP)
+}
+
+// Per-category projected end-of-month and next-month.
+private fun categoryForecasts(
+    dataset: PatternDataset,
+    completed: List<MonthlyPoint>,
+): List<CategoryForecast> {
+    if (completed.isEmpty() || dataset.spends.isEmpty()) return emptyList()
+    val zero = BigDecimal.ZERO
+    val names = dataset.spends.mapNotNull { it.category?.takeIf { c -> c.isNotBlank() } }.distinct()
+    val index = categoryNameIndex(names)
+    val currentMonth = YearMonth.from(dataset.today)
+    val daysInMonth = currentMonth.lengthOfMonth()
+    val daysLeft = (daysInMonth - dataset.today.dayOfMonth).coerceAtLeast(0)
+
+    return dataset.spends
+        .groupBy { canonicalCategory(it.category, index) }
+        .mapNotNull { (key, groupSpends) ->
+            if (key == UNCATEGORIZED_KEY) return@mapNotNull null
+            val total = groupSpends.fold(zero) { acc, s -> acc + s.value }
+            val activeMonths = groupSpends
+                .map { YearMonth.from(it.date.toLocalDate()) }
+                .distinct()
+                .size
+            val monthlyAverage = if (activeMonths > 0) {
+                total.divide(activeMonths.toBigDecimal(), 2, RoundingMode.HALF_UP)
+            } else {
+                total
+            }
+            val currentSpent = groupSpends
+                .filter { YearMonth.from(it.date.toLocalDate()) == currentMonth }
+                .fold(zero) { acc, s -> acc + s.value }
+            val dailyProjection = monthlyAverage.divide(daysInMonth.toBigDecimal(), 2, RoundingMode.HALF_UP)
+            val projectedThisMonth = currentSpent + dailyProjection.multiply(daysLeft.toBigDecimal())
+                .setScale(2, RoundingMode.HALF_UP)
+
+            CategoryForecast(
+                key = key,
+                displayName = index.canonicalToDisplay[key]
+                    ?: if (key == UNCATEGORIZED_KEY) UNCATEGORIZED_DISPLAY else key,
+                projectedThisMonth = projectedThisMonth,
+                nextMonth = monthlyAverage,
+                monthlyAverage = monthlyAverage,
+            )
+        }
+        .sortedWith(compareByDescending<CategoryForecast> { it.monthlyAverage }.thenBy { it.key })
+        .take(6)
+}
+
 // --- Recurring charges (comment-carrying, on-device only) ---------------------
 
 // Groups charges by their NORMALIZED comment (so "Netflix ", "netflix" and "Netflix" are one
@@ -722,6 +951,60 @@ fun recurringCharges(charges: List<PatternCharge>): List<RecurringCharge> =
 
 private fun majoritySpelling(raws: List<String>): String =
     raws.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: ""
+
+// --- Recurring template forecast -----------------------------------------------
+
+// Computes upcoming payments (next 3 occurrences based on day_of_month) and annual projection
+// for each enabled recurring template.
+fun recurringTemplateForecasts(
+    templates: List<PatternRecurringTemplate>,
+    today: LocalDate,
+): List<RecurringForecast> {
+    return templates
+        .filter { it.enabled && it.amount > BigDecimal.ZERO && it.dayOfMonth in 1..31 }
+        .map { template ->
+            val upcoming = generateSequence(today) { it.plusMonths(1) }
+                .drop(1)
+                .take(3)
+                .map { nextMonth: LocalDate ->
+                    val yearMonth = YearMonth.from(nextMonth)
+                    val maxDay = yearMonth.lengthOfMonth()
+                    val day = template.dayOfMonth.coerceAtMost(maxDay)
+                    yearMonth.atDay(day)
+                }
+                .toList()
+            val monthly = template.amount
+            val annual = monthly.multiply(BigDecimal(12)).setScale(2, RoundingMode.HALF_UP)
+            RecurringForecast(
+                template = template,
+                upcomingPayments = upcoming,
+                annualTotal = annual,
+            )
+        }
+        .sortedByDescending { it.annualTotal }
+}
+
+// --- Comment-spend correlation -------------------------------------------------
+
+fun commentCleanupSuggestions(commentPatterns: List<CommentPattern>): List<InsightSuggestion> {
+    if (commentPatterns.isEmpty()) return emptyList()
+    val suggestions = mutableListOf<InsightSuggestion>()
+
+    val top = commentPatterns.sortedByDescending { it.total }.firstOrNull()
+    if (top != null && top.percent > 30 && top.transactionCount >= 3) {
+        suggestions += InsightSuggestion(
+            severity = Severity.LOW,
+            title = "${top.displayName} is your biggest tag",
+            body = "${top.displayName} accounts for ${top.percent}% of tagged spending " +
+                "(${top.transactionCount} transactions). Consider reviewing if it " +
+                "should be split into sub-categories.",
+            categoryKey = null,
+            actionable = true,
+        )
+    }
+
+    return suggestions
+}
 
 // --- Step 7: optimization suggestions -----------------------------------------
 
@@ -950,9 +1233,13 @@ fun analyzePatterns(
 ): PatternMetrics {
     val monthly = monthlyTotals(dataset)
     val completed = completedPoints(monthly)
-    val forecast = forecast(dataset, dailyBudget)
+    val baseForecast = forecast(dataset, dailyBudget)
+    val enhanced = enhancedForecast(dataset, dailyBudget)
     val recurring = recurringCharges(recurringCharges)
-    val suggestions = buildSuggestions(dataset, forecast, recurring)
+    val commentPats = commentPatterns(dataset)
+    val recurringForecasts = recurringTemplateForecasts(dataset.recurringTemplates, dataset.today)
+    val commentCleanup = commentCleanupSuggestions(commentPats)
+    val suggestions = buildSuggestions(dataset, baseForecast, recurring) + commentCleanup
     return PatternMetrics(
         monthlyPoints = monthly,
         trendDirection = trendDirection(monthly),
@@ -970,9 +1257,12 @@ fun analyzePatterns(
         busiestDay = busiestDay(dataset),
         compliance = budgetCompliance(dataset),
         anomalies = findAnomalies(dataset),
-        forecast = forecast,
+        forecast = baseForecast,
+        enhancedForecast = enhanced,
         recurring = recurring,
+        commentPatterns = commentPats,
+        recurringForecasts = recurringForecasts,
         suggestions = suggestions,
-        report = buildPatternReport(dataset, suggestions, forecast),
+        report = buildPatternReport(dataset, suggestions, baseForecast),
     )
 }
