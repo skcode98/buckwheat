@@ -138,6 +138,7 @@ fun History(
                     state = animatedList.value,
                 ) { _, row ->
                     DayCard(
+                        modifier = Modifier.padding(vertical = 6.dp),
                         day = row.day,
                         transactions = row.transactions,
                         dayTotal = row.dayTotal ?: BigDecimal.ZERO,

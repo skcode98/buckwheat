@@ -187,7 +187,7 @@ internal fun TimelineRowContent(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryFlipContainer(
