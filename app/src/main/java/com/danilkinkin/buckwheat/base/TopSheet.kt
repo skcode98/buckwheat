@@ -28,7 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,7 +89,7 @@ fun TopSheetLayout(
     val localDensity = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    val tutorial by appViewModel.getTutorialStage(TUTORS.OPEN_HISTORY).observeAsState(TUTORIAL_STAGE.NONE)
+    val tutorial by appViewModel.getTutorialStage(TUTORS.OPEN_HISTORY).collectAsStateWithLifecycle()
 
     var lock by remember { mutableStateOf(false) }
     var scroll by remember { mutableStateOf(false) }

@@ -11,7 +11,6 @@ import androidx.glance.appwidget.*
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.unit.ColorProvider
-import androidx.lifecycle.asFlow
 import com.danilkinkin.buckwheat.analytics.dailySpendTotals
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.di.SettingsRepository
@@ -185,7 +184,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                     roundToDay(startPeriodDate),
                 )
                 val chartSeries = dailySpendTotals(
-                    spends = databaseRepository.getSpendsInRange(windowStart, today).asFlow().first(),
+                    spends = databaseRepository.getSpendsInRange(windowStart, today).first(),
                     startDate = windowStart,
                     finishDate = today,
                 )
@@ -195,7 +194,6 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                 // render-ready pills and capped so tiny widgets don't get over-long state.
                 val categorySpends = databaseRepository
                     .getSpendsInRange(startPeriodDate, finishDate)
-                    .asFlow()
                     .first()
                 val categoryCaps = settingsRepository.getCategoryCaps().first()
                 val categoryPills = categoryWidgetPills(

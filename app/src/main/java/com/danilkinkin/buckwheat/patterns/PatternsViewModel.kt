@@ -1,10 +1,7 @@
 package com.danilkinkin.buckwheat.patterns
 
 import android.content.Context
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.ai.AiInsightResult
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
@@ -16,6 +13,8 @@ import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.toLocalDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.math.BigDecimal
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -59,8 +58,8 @@ class PatternsViewModel @Inject constructor(
     private val spendsRepository: SpendsRepository,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) : ViewModel() {
-    private val _state = MutableLiveData<PatternsUiState>(PatternsUiState.Idle)
-    val state: LiveData<PatternsUiState> = _state
+    private val _state = MutableStateFlow<PatternsUiState>(PatternsUiState.Idle)
+    val state: StateFlow<PatternsUiState> = _state
 
     private var lastAiWindow: PatternWindow? = null
 
@@ -183,9 +182,9 @@ class PatternsViewModel @Inject constructor(
 
     private suspend fun loadInputs(): PatternDataLoad {
         val today = getCurrentDateUseCase().toLocalDate()
-        val spends = spendsRepository.getAllSpends().asFlow().first()
-        val archived = spendsRepository.getAllArchivedTransactions().asFlow().first()
-        val periods = spendsRepository.getAllBudgetPeriods().asFlow().first()
+        val spends = spendsRepository.getAllSpends().first()
+        val archived = spendsRepository.getAllArchivedTransactions().first()
+        val periods = spendsRepository.getAllBudgetPeriods().first()
         val currency = spendsRepository.getCurrency().first().value ?: ""
 
         val currentSpends = spends.map { toPatternSpend(it) }

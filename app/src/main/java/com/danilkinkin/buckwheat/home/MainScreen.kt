@@ -70,9 +70,10 @@ import com.danilkinkin.buckwheat.ui.colorBackground
 import com.danilkinkin.buckwheat.ui.colorEditor
 import com.danilkinkin.buckwheat.ui.colorOnEditor
 import com.danilkinkin.buckwheat.ui.isNightMode
-import com.danilkinkin.buckwheat.util.observeLiveData
 import com.danilkinkin.buckwheat.util.setSystemStyle
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.collect
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -106,36 +107,46 @@ fun MainScreen(
         key = nightMode.value,
     )
 
-    observeLiveData(spendsViewModel.lastRemovedTransaction) {
-        appViewModel.showSnackbar(
-            message = snackBarMessage,
-            actionLabel = snackBarAction,
-            duration = SnackbarDuration.Long,
-        ) { snackbarResult ->
-            if (snackbarResult == SnackbarResult.ActionPerformed) {
-                spendsViewModel.undoRemoveSpent()
+    LaunchedEffect(Unit) {
+        spendsViewModel.lastRemovedTransaction.collect {
+            appViewModel.showSnackbar(
+                message = snackBarMessage,
+                actionLabel = snackBarAction,
+                duration = SnackbarDuration.Long,
+            ) { snackbarResult ->
+                if (snackbarResult == SnackbarResult.ActionPerformed) {
+                    spendsViewModel.undoRemoveSpent()
+                }
             }
         }
     }
 
-    observeLiveData(spendsViewModel.requireDistributionRestedBudget) {
-        if (it) appViewModel.openSheet(PathState(RECALCULATE_DAILY_BUDGET_SHEET))
-    }
-
-    observeLiveData(spendsViewModel.pendingRecurringCharges) { pending ->
-        if (pending.isNotEmpty()) appViewModel.openSheet(PathState(RECURRING_CHARGE_CONFIRM_SHEET))
-    }
-
-    observeLiveData(spendsViewModel.requireSetBudget) {
-        if (it) {
-            appViewModel.openSheet(PathState(ON_BOARDING_SHEET))
-        } else {
-            appViewModel.closeSheet(ON_BOARDING_SHEET)
+    LaunchedEffect(Unit) {
+        spendsViewModel.requireDistributionRestedBudget.collect {
+            if (it) appViewModel.openSheet(PathState(RECALCULATE_DAILY_BUDGET_SHEET))
         }
     }
 
-    observeLiveData(spendsViewModel.periodFinished) {
-        if (it) appViewModel.openSheet(PathState(ANALYTICS_SHEET))
+    LaunchedEffect(Unit) {
+        spendsViewModel.pendingRecurringCharges.collect { pending ->
+            if (pending.isNotEmpty()) appViewModel.openSheet(PathState(RECURRING_CHARGE_CONFIRM_SHEET))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        spendsViewModel.requireSetBudget.collect {
+            if (it) {
+                appViewModel.openSheet(PathState(ON_BOARDING_SHEET))
+            } else {
+                appViewModel.closeSheet(ON_BOARDING_SHEET)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        spendsViewModel.periodFinished.collect {
+            if (it) appViewModel.openSheet(PathState(ANALYTICS_SHEET))
+        }
     }
 
     BoxWithConstraints(

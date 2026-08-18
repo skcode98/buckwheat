@@ -21,7 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,7 +47,7 @@ fun RowScope.CancelEditSpent(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
-    val mode by editorViewModel.mode.observeAsState(EditMode.ADD)
+    val mode by editorViewModel.mode.collectAsStateWithLifecycle()
 
     val coroutineScope = rememberCoroutineScope()
     var predictiveBackProgress by remember {

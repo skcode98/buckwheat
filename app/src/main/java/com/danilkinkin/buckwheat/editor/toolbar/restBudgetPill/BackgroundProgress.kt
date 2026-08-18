@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -39,8 +39,8 @@ fun BackgroundProgress(
     harmonizedColor: HarmonizedColorPalette,
     restBudgetPillViewModel: RestBudgetPillViewModel = hiltViewModel(),
 ) {
-    val percentWithNewSpent by restBudgetPillViewModel.percentWithNewSpent.observeAsState(1f)
-    val percentWithoutNewSpent by restBudgetPillViewModel.percentWithoutNewSpent.observeAsState(1f)
+    val percentWithNewSpent by restBudgetPillViewModel.percentWithNewSpent.collectAsStateWithLifecycle()
+    val percentWithoutNewSpent by restBudgetPillViewModel.percentWithoutNewSpent.collectAsStateWithLifecycle()
 
     val percentWithoutNewSpentAnimated by animateFloatAsState(
         label = "percentRealAnim",

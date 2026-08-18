@@ -11,7 +11,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -57,11 +57,11 @@ fun BudgetConstructor(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val budget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
-    val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
-    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
+    val budget by spendsViewModel.budget.collectAsStateWithLifecycle()
+    val spent by spendsViewModel.spent.collectAsStateWithLifecycle()
+    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.collectAsStateWithLifecycle()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
 
     var rawBudget by remember(budget) {
         if (budget.isZero()) {

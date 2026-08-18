@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -18,9 +18,9 @@ fun ValueLabel(
     harmonizedColor: HarmonizedColorPalette,
     restBudgetPillViewModel: RestBudgetPillViewModel = hiltViewModel(),
 ) {
-    val budgetState by restBudgetPillViewModel.state.observeAsState(DaileBudgetState.NORMAL)
-    val todayBudget by restBudgetPillViewModel.todayBudget.observeAsState("")
-    val newDailyBudget by restBudgetPillViewModel.newDailyBudget.observeAsState("")
+    val budgetState by restBudgetPillViewModel.state.collectAsStateWithLifecycle()
+    val todayBudget by restBudgetPillViewModel.todayBudget.collectAsStateWithLifecycle()
+    val newDailyBudget by restBudgetPillViewModel.newDailyBudget.collectAsStateWithLifecycle()
 
     AnimatedContent(
         label = "Budget animated content",

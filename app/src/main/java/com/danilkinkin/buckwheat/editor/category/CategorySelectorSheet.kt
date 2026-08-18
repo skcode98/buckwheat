@@ -11,7 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +41,8 @@ fun CategorySelectorSheet(
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
-    val selected by editorViewModel.currentCategory.observeAsState(null)
-    val categories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val selected by editorViewModel.currentCategory.collectAsStateWithLifecycle()
+    val categories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),

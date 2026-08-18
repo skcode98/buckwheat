@@ -19,7 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,8 +53,8 @@ fun BalloonProvider(
 ) {
     val localDensity = LocalDensity.current
 
-    val balloons by appViewModel.balloonController.balloons.observeAsState(initial = emptyMap())
-    val showedBalloons by appViewModel.balloonController.showedBalloons.observeAsState(initial = emptySet())
+    val balloons by appViewModel.balloonController.balloons.collectAsStateWithLifecycle()
+    val showedBalloons by appViewModel.balloonController.showedBalloons.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier

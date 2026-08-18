@@ -1,6 +1,6 @@
 package com.danilkinkin.buckwheat.data.dao
 
-import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -13,16 +13,16 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 @Dao
 interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY date ASC")
-    fun getAll(): LiveData<List<Transaction>>
+    fun getAll(): Flow<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE type = :type ORDER BY date ASC")
-    fun getAll(type: TransactionType): LiveData<List<Transaction>>
+    fun getAll(type: TransactionType): Flow<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE type = :type AND date >= :startDate AND date <= :endDate ORDER BY date ASC")
-    fun getAll(type: TransactionType, startDate: Long, endDate: Long): LiveData<List<Transaction>>
+    fun getAll(type: TransactionType, startDate: Long, endDate: Long): Flow<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC")
-    fun getAll(startDate: Long, endDate: Long): LiveData<List<Transaction>>
+    fun getAll(startDate: Long, endDate: Long): Flow<List<Transaction>>
 
     @Query("SELECT * FROM transactions WHERE uid = :uid")
     suspend fun getById(uid: Int): Transaction?
@@ -34,7 +34,7 @@ interface TransactionDao {
     suspend fun getAllNow(type: TransactionType, startDate: Long, endDate: Long): List<Transaction>
 
     @Query("SELECT COUNT(*) FROM transactions WHERE type = 'SPENT' AND (category IS NULL OR category = '')")
-    fun getUncategorizedCount(): LiveData<Int>
+    fun getUncategorizedCount(): Flow<Int>
 
     @Insert
     suspend fun insert(vararg transaction: Transaction)

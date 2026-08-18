@@ -1,6 +1,6 @@
 package com.danilkinkin.buckwheat.data.dao
 
-import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -11,7 +11,7 @@ import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 @Dao
 interface SavingsGoalDao {
     @Query("SELECT * FROM savings_goals ORDER BY created_at DESC")
-    fun getAll(): LiveData<List<SavingsGoal>>
+    fun getAll(): Flow<List<SavingsGoal>>
 
     @Query("SELECT * FROM savings_goals WHERE id = :id")
     suspend fun getById(id: Long): SavingsGoal?

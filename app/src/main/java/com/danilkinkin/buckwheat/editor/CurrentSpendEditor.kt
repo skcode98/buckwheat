@@ -2,7 +2,8 @@ package com.danilkinkin.buckwheat.editor
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -39,8 +40,8 @@ fun CurrentSpendEditor(
     val localDensity = LocalDensity.current
     val focusManager = LocalFocusManager.current
 
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val mode by editorViewModel.mode.observeAsState(EditMode.ADD)
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle(ExtendCurrency.none())
+    val mode by editorViewModel.mode.collectAsStateWithLifecycle(EditMode.ADD)
 
     var spentValue by remember { mutableStateOf("0") }
     var stage by remember { mutableStateOf(AnimState.IDLE) }
@@ -54,47 +55,55 @@ fun CurrentSpendEditor(
         requestFocus = true
     }
 
-    observeLiveData(appViewModel.sheetStates) {
-        if (it.isEmpty()) {
-            requestFocus = true
-            hide = false
-        } else {
-            hide = editorViewModel.rawSpentValue.value == ""
+    LaunchedEffect(Unit) {
+        appViewModel.sheetStates.collect {
+            if (it.isEmpty()) {
+                requestFocus = true
+                hide = false
+            } else {
+                hide = editorViewModel.rawSpentValue.value == ""
+            }
         }
     }
 
-    observeLiveData(spendsViewModel.dailyBudget) {
-        calculateValues()
+    LaunchedEffect(Unit) {
+        spendsViewModel.dailyBudget.collect {
+            calculateValues()
+        }
     }
 
-    observeLiveData(spendsViewModel.spentFromDailyBudget) {
-        calculateValues()
+    LaunchedEffect(Unit) {
+        spendsViewModel.spentFromDailyBudget.collect {
+            calculateValues()
+        }
     }
 
-    observeLiveData(editorViewModel.stage) {
-        when (it) {
-            EditStage.IDLE -> {
-                if (currState === AnimState.EDITING) {
-                    stage = AnimState.RESET
+    LaunchedEffect(Unit) {
+        editorViewModel.stage.collect {
+            when (it) {
+                EditStage.IDLE -> {
+                    if (currState === AnimState.EDITING) {
+                        stage = AnimState.RESET
+                    }
+                    calculateValues()
                 }
-                calculateValues()
-            }
-            EditStage.CREATING_SPENT -> {
-                calculateValues()
+                EditStage.CREATING_SPENT -> {
+                    calculateValues()
 
-                stage = AnimState.EDITING
-            }
-            EditStage.EDIT_SPENT -> {
-                calculateValues()
+                    stage = AnimState.EDITING
+                }
+                EditStage.EDIT_SPENT -> {
+                    calculateValues()
 
-                stage = AnimState.EDITING
+                    stage = AnimState.EDITING
+                }
+                EditStage.COMMITTING_SPENT -> {
+                    stage = AnimState.COMMIT
+                }
             }
-            EditStage.COMMITTING_SPENT -> {
-                stage = AnimState.COMMIT
-            }
+
+            currState = stage
         }
-
-        currState = stage
     }
 
     LaunchedEffect(focusController) {

@@ -6,7 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -48,8 +48,8 @@ fun RecalcBudget(
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val navigationBarHeight = LocalWindowInsets.current.calculateBottomPadding().coerceAtLeast(16.dp)
 
-    val howMuchNotSpent by recalcBudgetViewModel.howMuchNotSpent.observeAsState(BigDecimal.ZERO)
-    val isLastDay by recalcBudgetViewModel.isLastDay.observeAsState(false)
+    val howMuchNotSpent by recalcBudgetViewModel.howMuchNotSpent.collectAsState()
+    val isLastDay by recalcBudgetViewModel.isLastDay.collectAsState()
 
     var rememberChoice by remember { mutableStateOf(false) }
     var contentHeight by remember { mutableFloatStateOf(0f) }

@@ -3,7 +3,8 @@ package com.danilkinkin.buckwheat.recalcBudget
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -26,11 +27,9 @@ fun SplitToRestDaysButton(
     onSet: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val isDebug by appViewModel.isDebug.observeAsState(false)
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val newDailyBudgetIfSplitPerDay by recalcBudgetViewModel.newDailyBudgetIfSplitPerDay.observeAsState(
-        BigDecimal.ZERO
-    )
+    val isDebug by appViewModel.isDebug.collectAsStateWithLifecycle()
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val newDailyBudgetIfSplitPerDay by recalcBudgetViewModel.newDailyBudgetIfSplitPerDay.collectAsState()
 
     DescriptionButton(
         title = { Text(stringResource(R.string.split_rest_days_title)) },

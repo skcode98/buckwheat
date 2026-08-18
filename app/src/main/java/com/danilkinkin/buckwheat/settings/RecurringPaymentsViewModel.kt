@@ -1,14 +1,16 @@
 package com.danilkinkin.buckwheat.settings
 
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import javax.inject.Inject
@@ -18,9 +20,11 @@ class RecurringPaymentsViewModel @Inject constructor(
     private val recurringDao: RecurringDao,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    val templates: LiveData<List<RecurringTemplate>> = recurringDao.getAll()
-    val autoApplyMode: LiveData<RecurringAutoApplyMode> =
-        settingsRepository.getRecurringAutoApplyMode().asLiveData()
+    val templates: StateFlow<List<RecurringTemplate>> = recurringDao.getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val autoApplyMode: StateFlow<RecurringAutoApplyMode> =
+        settingsRepository.getRecurringAutoApplyMode()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecurringAutoApplyMode.SILENT)
 
     fun setAutoApplyMode(mode: RecurringAutoApplyMode) {
         viewModelScope.launch {

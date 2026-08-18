@@ -5,11 +5,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.base.BottomSheetWrapper
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.di.TUTORS
@@ -47,11 +48,11 @@ fun BottomSheets(
     appViewModel: AppViewModel = hiltViewModel(),
     spendsViewModel: SpendsViewModel = hiltViewModel(),
 ) {
-    val isDebug = appViewModel.isDebug.observeAsState(false)
+    val isDebug = appViewModel.isDebug.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
-    val requireSetBudget by spendsViewModel.requireSetBudget.observeAsState(false)
-    val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
+    val requireSetBudget by spendsViewModel.requireSetBudget.collectAsStateWithLifecycle()
+    val periodFinished by spendsViewModel.periodFinished.collectAsStateWithLifecycle()
 
     BottomSheetWrapper(
         name = WALLET_SHEET,
@@ -338,7 +339,8 @@ fun BottomSheets(
     BottomSheetWrapper(
         name = GOALS_SHEET,
     ) {
-        GoalsSheet()
+        val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+        GoalsSheet(currency = currency ?: ExtendCurrency.none())
     }
 
     BottomSheetWrapper(

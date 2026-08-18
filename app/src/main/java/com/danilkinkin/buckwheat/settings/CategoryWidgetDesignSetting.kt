@@ -10,7 +10,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
@@ -53,7 +52,7 @@ suspend fun switchCategoryWidgetDesign(context: Context, design: CategoryWidgetD
 class CategoryWidgetDesignViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    var design = settingsRepository.getCategoryWidgetDesign().asLiveData()
+    var design = settingsRepository.getCategoryWidgetDesign()
 
     fun setDesign(context: Context, design: CategoryWidgetDesign) {
         viewModelScope.launch {
@@ -67,7 +66,7 @@ fun CategoryWidgetDesignSetting(
     appViewModel: AppViewModel = hiltViewModel(),
     viewModel: CategoryWidgetDesignViewModel = hiltViewModel(),
 ) {
-    val design by viewModel.design.observeAsState(CategoryWidgetDesign.BATTERY)
+    val design by viewModel.design.collectAsStateWithLifecycle(CategoryWidgetDesign.BATTERY)
 
     ButtonRow(
         icon = painterResource(R.drawable.ic_widgets),
@@ -88,7 +87,7 @@ fun CategoryWidgetDesignSetting(
 fun CategoryWidgetDesignSettingDialog(onClose: () -> Unit) {
     val context = LocalContext.current
     val viewModel: CategoryWidgetDesignViewModel = hiltViewModel()
-    val design by viewModel.design.observeAsState(CategoryWidgetDesign.BATTERY)
+    val design by viewModel.design.collectAsStateWithLifecycle(CategoryWidgetDesign.BATTERY)
 
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val navigationBarHeight = androidx.compose.ui.unit.max(

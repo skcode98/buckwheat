@@ -1,13 +1,13 @@
 package com.danilkinkin.buckwheat.data.dao
 
-import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
 import androidx.room.*
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 
 @Dao
 interface SavedTagDao {
     @Query("SELECT * FROM saved_tags ORDER BY name ASC")
-    fun getAll(): LiveData<List<SavedTag>>
+    fun getAll(): Flow<List<SavedTag>>
 
     @Query("SELECT * FROM saved_tags WHERE id = :id")
     suspend fun getById(id: Int): SavedTag?

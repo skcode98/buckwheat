@@ -6,14 +6,17 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.base.balloon.BalloonController
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.TUTORS
+import com.danilkinkin.buckwheat.di.TUTORIAL_STAGE
 import com.danilkinkin.buckwheat.effects.ConfettiController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -77,13 +80,16 @@ class AppViewModel @Inject constructor(
 
     var statusBarStack: MutableList<() -> SystemBarState> = emptyList<() -> SystemBarState>().toMutableList()
 
-    var sheetStates: MutableLiveData<Map<String, PathState>> = MutableLiveData(emptyMap())
+    var sheetStates: MutableStateFlow<Map<String, PathState>> = MutableStateFlow(emptyMap())
 
-    var isDebug = settingsRepository.isDebug().asLiveData()
+    val isDebug: StateFlow<Boolean> = settingsRepository.isDebug()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    var showSpentCardByDefault = settingsRepository.isShowSpentCardByDefault().asLiveData()
+    val showSpentCardByDefault: StateFlow<Boolean> = settingsRepository.isShowSpentCardByDefault()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    fun getTutorialStage(name: TUTORS) = settingsRepository.getTutorialStage(name).asLiveData()
+    fun getTutorialStage(name: TUTORS): StateFlow<TUTORIAL_STAGE> = settingsRepository.getTutorialStage(name)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TUTORIAL_STAGE.NONE)
 
     fun setShowSpentCardByDefault(showByDefault: Boolean) {
         viewModelScope.launch {
@@ -98,11 +104,11 @@ class AppViewModel @Inject constructor(
     }
 
     fun openSheet(state: PathState) {
-        sheetStates.value = sheetStates.value!!.plus(Pair(state.name, state))
+        sheetStates.value = sheetStates.value.plus(Pair(state.name, state))
     }
 
     fun closeSheet(name: String) {
-        sheetStates.value = sheetStates.value!!.minus(name)
+        sheetStates.value = sheetStates.value.minus(name)
     }
 
     fun passTutorial(name: TUTORS) {

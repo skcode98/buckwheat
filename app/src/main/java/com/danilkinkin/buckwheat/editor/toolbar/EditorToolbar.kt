@@ -11,8 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -30,7 +31,6 @@ import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.RestBudgetPill
 import com.danilkinkin.buckwheat.settings.SETTINGS_SHEET
-import com.danilkinkin.buckwheat.util.observeLiveData
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,28 +40,30 @@ fun EditorToolbar(
     editorViewModel: EditorViewModel = hiltViewModel(),
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val isDebug = appViewModel.isDebug.observeAsState(false)
-    val mode by editorViewModel.mode.observeAsState(EditMode.ADD)
+    val isDebug = appViewModel.isDebug.collectAsStateWithLifecycle(false)
+    val mode by editorViewModel.mode.collectAsStateWithLifecycle(EditMode.ADD)
 
     val spendsCountScale = remember { Animatable(1f) }
 
-    observeLiveData(editorViewModel.stage) {
-        if (it === EditStage.COMMITTING_SPENT) {
-            coroutineScope.launch {
-                spendsCountScale.animateTo(
-                    1.05f,
-                    animationSpec = tween(
-                        durationMillis = 20,
-                        easing = LinearEasing
+    LaunchedEffect(Unit) {
+        editorViewModel.stage.collect {
+            if (it === EditStage.COMMITTING_SPENT) {
+                coroutineScope.launch {
+                    spendsCountScale.animateTo(
+                        1.05f,
+                        animationSpec = tween(
+                            durationMillis = 20,
+                            easing = LinearEasing
+                        )
                     )
-                )
-                spendsCountScale.animateTo(
-                    1f,
-                    animationSpec = tween(
-                        durationMillis = 120,
-                        easing = LinearEasing,
+                    spendsCountScale.animateTo(
+                        1f,
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = LinearEasing,
+                        )
                     )
-                )
+                }
             }
         }
     }

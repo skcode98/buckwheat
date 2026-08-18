@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,7 +37,7 @@ fun Editor(
     onOpenHistory: (() -> Unit)? = null,
 ) {
     val focusController = remember { FocusController() }
-    val mode by editorViewModel.mode.observeAsState(EditMode.ADD)
+    val mode by editorViewModel.mode.collectAsStateWithLifecycle()
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(

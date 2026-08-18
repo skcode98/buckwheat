@@ -1,7 +1,5 @@
 package com.danilkinkin.buckwheat.settings
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
@@ -9,8 +7,13 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 // A category as shown in the Categories Management sheet and the editor picker.
 // `id == null` means it is a built-in predefined category (read-only) or a category
@@ -29,22 +32,12 @@ class CategoriesManagementViewModel @Inject constructor(
 ) : ViewModel() {
     // Built-in categories always first, then saved custom ones, then transaction-only
     // categories that were deleted from the saved list.
-    val allCategories: LiveData<List<CategoryItem>> = MediatorLiveData<List<CategoryItem>>().apply {
-        val transactionCategories = spendsRepository.getAllCategories()
-        val savedCategoriesLive = savedCategoryDao.getAll()
-
-        var lastTransactionCategories: List<String> = emptyList()
-        var lastSavedCategories: List<SavedCategory> = emptyList()
-
-        addSource(transactionCategories) { categories ->
-            lastTransactionCategories = categories
-            value = mergeCategories(lastTransactionCategories, lastSavedCategories)
-        }
-        addSource(savedCategoriesLive) { categories ->
-            lastSavedCategories = categories
-            value = mergeCategories(lastTransactionCategories, lastSavedCategories)
-        }
-    }
+    val allCategories: StateFlow<List<CategoryItem>> = combine(
+        spendsRepository.getAllCategories(),
+        savedCategoryDao.getAll(),
+    ) { transactionCategories, savedCategories ->
+        mergeCategories(transactionCategories, savedCategories)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addCategory(name: String, emoji: String = "") {
         val trimmed = name.trim()

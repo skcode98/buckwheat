@@ -21,7 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,8 +57,8 @@ fun CategoryCapsSheet(
     capsViewModel: CategoryCapsViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
-    val categories by categoriesViewModel.allCategories.observeAsState(emptyList())
-    val caps by capsViewModel.caps.observeAsState(emptyMap())
+    val categories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
+    val caps by capsViewModel.caps.collectAsStateWithLifecycle()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),

@@ -13,7 +13,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -41,7 +41,7 @@ fun BudgetIsOverDescription(
         16.dp,
     )
 
-    val hideOverspendingWarn by spendsViewModel.hideOverspendingWarn.observeAsState(false)
+    val hideOverspendingWarn by spendsViewModel.hideOverspendingWarn.collectAsStateWithLifecycle()
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column(modifier = Modifier.padding(bottom = navigationBarHeight)) {

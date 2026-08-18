@@ -1,9 +1,7 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.content.Context
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
@@ -23,7 +21,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -33,8 +35,8 @@ class CategoryCapsViewModel @Inject constructor(
     private val transactionDao: TransactionDao,
     private val budgetPeriodDao: BudgetPeriodDao,
 ) : ViewModel() {
-    val caps: LiveData<Map<String, BigDecimal>> =
-        settingsRepository.getCategoryCaps().asLiveData()
+    val caps: StateFlow<Map<String, BigDecimal>> = settingsRepository.getCategoryCaps()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // `amount == null` or non-positive clears the cap for the category.
     fun setCap(name: String, amount: BigDecimal?) {

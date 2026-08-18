@@ -7,7 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,8 +37,8 @@ fun rememberExportCSV(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState()
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
 
     val snackBarExportToCSVSuccess = stringResource(R.string.export_to_csv_success)
     val snackBarExportToCSVFailed = stringResource(R.string.export_to_csv_failed)

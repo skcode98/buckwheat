@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.asFlow
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -70,7 +69,6 @@ class SpendDigestReceiver : BroadcastReceiver() {
         val toMillis = to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
         val spends = transactionDao
             .getAll(TransactionType.SPENT, fromMillis, toMillis)
-            .asFlow()
             .first()
         val digest = buildSpendDigest(spends, from, to)
         if (digest.transactionCount == 0) return

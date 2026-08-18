@@ -11,7 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -47,19 +47,19 @@ fun DebugMenu(
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val navigationBarHeight = LocalWindowInsets.current.calculateBottomPadding().coerceAtLeast(16.dp)
 
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState()
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState()
-    val lastChangeDailyBudgetDate by spendsViewModel.lastChangeDailyBudgetDate.observeAsState()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
+    val lastChangeDailyBudgetDate by spendsViewModel.lastChangeDailyBudgetDate.collectAsStateWithLifecycle()
 
     val wholeDays = startPeriodDate?.let { start -> finishPeriodDate?.let { finish -> countDays(finish, start) } } ?: 0
     val restDays = finishPeriodDate?.let { countDaysToToday(it) } ?: 0
     val spentDays = wholeDays - restDays
     val countDaysFromLastChangeDailyBudget = lastChangeDailyBudgetDate?.let { countDaysToToday(it) } ?: 0
 
-    val budget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
-    val spent by spendsViewModel.spent.observeAsState(BigDecimal.ZERO)
-    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.observeAsState(BigDecimal.ZERO)
-    val howMuchBudgetRest by spendsViewModel.howMuchBudgetRest().observeAsState(BigDecimal.ZERO)
+    val budget by spendsViewModel.budget.collectAsStateWithLifecycle()
+    val spent by spendsViewModel.spent.collectAsStateWithLifecycle()
+    val spentFromDailyBudget by spendsViewModel.spentFromDailyBudget.collectAsStateWithLifecycle()
+    val howMuchBudgetRest by spendsViewModel.howMuchBudgetRest().collectAsStateWithLifecycle()
 
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {

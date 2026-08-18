@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,11 +43,11 @@ fun RestAndSpentBudgetCard(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val showSpentCard by appViewModel.showSpentCardByDefault.observeAsState(false)
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val showSpentCard by appViewModel.showSpentCardByDefault.collectAsStateWithLifecycle()
 
-    val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
-    val restBudget by spendsViewModel.howMuchBudgetRest().observeAsState(BigDecimal.ZERO)
+    val wholeBudget by spendsViewModel.budget.collectAsStateWithLifecycle()
+    val restBudget by spendsViewModel.howMuchBudgetRest().collectAsStateWithLifecycle()
 
     val percent = remember (restBudget) { restBudget.divide(wholeBudget, 4, RoundingMode.HALF_EVEN) }
 

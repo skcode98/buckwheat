@@ -11,7 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.EditorViewModel
@@ -32,8 +32,8 @@ fun DateTimeEditPill(
     var isPickTime by remember { mutableStateOf(false) }
     var isPickDate by remember { mutableStateOf(false) }
 
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState()
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
 
     Row(
         modifier = Modifier

@@ -7,7 +7,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,9 +37,9 @@ fun RecurringPaymentsSheet(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val templates by viewModel.templates.observeAsState(emptyList())
-    val autoApplyMode by viewModel.autoApplyMode.observeAsState(RecurringAutoApplyMode.SILENT)
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val templates by viewModel.templates.collectAsStateWithLifecycle()
+    val autoApplyMode by viewModel.autoApplyMode.collectAsStateWithLifecycle()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),

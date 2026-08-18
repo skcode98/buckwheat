@@ -18,8 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,7 +33,6 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.editor.FocusController
-import com.danilkinkin.buckwheat.util.observeLiveData
 
 @Composable
 fun TaggingToolbar(
@@ -42,14 +42,16 @@ fun TaggingToolbar(
 ) {
     val localDensity = LocalDensity.current
 
-    val tags by spendsViewModel.tags.observeAsState(emptyList())
-    val currentComment by editorViewModel.currentComment.observeAsState("")
+    val tags by spendsViewModel.tags.collectAsStateWithLifecycle(emptyList())
+    val currentComment by editorViewModel.currentComment.collectAsStateWithLifecycle("")
 
     var showAddComment by remember { mutableStateOf(false) }
     var isEdit by remember { mutableStateOf(false) }
 
-    observeLiveData(editorViewModel.stage) {
-        showAddComment = it === EditStage.EDIT_SPENT
+    LaunchedEffect(Unit) {
+        editorViewModel.stage.collect {
+            showAddComment = it === EditStage.EDIT_SPENT
+        }
     }
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {

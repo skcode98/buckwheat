@@ -1,12 +1,8 @@
 package com.danilkinkin.buckwheat.data
 
 import android.content.Context
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -21,7 +17,13 @@ import java.util.Calendar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,117 +46,69 @@ class SpendsViewModel @Inject constructor(
     private val recurringDao: RecurringDao,
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    var tags = spendsRepository.getAllTags()
-    var transactions = spendsRepository.getAllTransactions()
-    var spends = spendsRepository.getAllSpends()
-    var archivedTransactions = spendsRepository.getAllArchivedTransactions()
-    var budgetPeriods = spendsRepository.getAllBudgetPeriods()
-    var budget = spendsRepository.getBudget().asLiveData()
-    var spent = spendsRepository.getSpent().asLiveData()
-    var dailyBudget = spendsRepository.getDailyBudget().asLiveData()
-    var spentFromDailyBudget = spendsRepository.getSpentFromDailyBudget().asLiveData()
-    var startPeriodDate = spendsRepository.getStartPeriodDate().asLiveData()
-    var finishPeriodDate = spendsRepository.getFinishPeriodDate().asLiveData()
-    var finishPeriodActualDate = spendsRepository.getFinishPeriodActualDate().asLiveData()
-    var lastChangeDailyBudgetDate = spendsRepository.getLastChangeDailyBudgetDate().asLiveData()
+    var tags: Flow<List<String>> = spendsRepository.getAllTags()
+    var transactions: Flow<List<Transaction>> = spendsRepository.getAllTransactions()
+    var spends: Flow<List<Transaction>> = spendsRepository.getAllSpends()
+    val archivedTransactions: StateFlow<List<com.danilkinkin.buckwheat.data.entities.ArchivedTransaction>> =
+        spendsRepository.getAllArchivedTransactions()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val budgetPeriods: StateFlow<List<com.danilkinkin.buckwheat.data.entities.BudgetPeriod>> =
+        spendsRepository.getAllBudgetPeriods()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val budget: StateFlow<BigDecimal> = spendsRepository.getBudget()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+    val spent: StateFlow<BigDecimal> = spendsRepository.getSpent()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+    val dailyBudget: StateFlow<BigDecimal> = spendsRepository.getDailyBudget()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+    val spentFromDailyBudget: StateFlow<BigDecimal> = spendsRepository.getSpentFromDailyBudget()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+    val startPeriodDate: StateFlow<Date> = spendsRepository.getStartPeriodDate()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Date())
+    val finishPeriodDate: StateFlow<Date?> = spendsRepository.getFinishPeriodDate()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val finishPeriodActualDate: StateFlow<Date?> = spendsRepository.getFinishPeriodActualDate()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val lastChangeDailyBudgetDate: StateFlow<Date?> = spendsRepository.getLastChangeDailyBudgetDate()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val periodSpends: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
-        value = emptyList()
+    val periodSpends: StateFlow<List<Transaction>> = combine(
+        spends,
+        startPeriodDate,
+        finishPeriodDate,
+    ) { list, start, finish ->
+        filterByPeriod(list, start, finish)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        var lastSpends: List<Transaction> = emptyList()
-        var lastStart: Date? = null
-        var lastFinish: Date? = null
+    val periodTransactions: StateFlow<List<Transaction>> = combine(
+        transactions,
+        startPeriodDate,
+        finishPeriodDate,
+    ) { list, start, finish ->
+        filterByPeriod(list, start, finish)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-        addSource(spends) { list ->
-            lastSpends = list
-            if (lastStart != null && lastFinish != null) {
-                value = filterByPeriod(list, lastStart, lastFinish)
-            }
-        }
-        addSource(startPeriodDate) { date ->
-            lastStart = date
-            if (lastFinish != null) {
-                value = filterByPeriod(lastSpends, date, lastFinish)
-            }
-        }
-        addSource(finishPeriodDate) { date ->
-            lastFinish = date
-            if (lastStart != null) {
-                value = filterByPeriod(lastSpends, lastStart, date)
-            }
-        }
-    }
+    val currency: StateFlow<ExtendCurrency> = spendsRepository.getCurrency()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ExtendCurrency.none())
+    val restedBudgetDistributionMethod: StateFlow<RestedBudgetDistributionMethod> =
+        spendsRepository.getRestedBudgetDistributionMethod()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RestedBudgetDistributionMethod.REST)
+    val hideOverspendingWarn: StateFlow<Boolean> = spendsRepository.getHideOverspendingWarn()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val periodTransactions: LiveData<List<Transaction>> = MediatorLiveData<List<Transaction>>().apply {
-        value = emptyList()
+    val restBudget: StateFlow<BigDecimal> = combine(
+        budget,
+        spent,
+        spentFromDailyBudget,
+    ) { b, s, sFromDaily ->
+        b - s - sFromDaily
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
 
-        var lastTransactions: List<Transaction> = emptyList()
-        var lastStart: Date? = null
-        var lastFinish: Date? = null
-
-        addSource(transactions) { list ->
-            lastTransactions = list
-            if (lastStart != null && lastFinish != null) {
-                value = filterByPeriod(list, lastStart, lastFinish)
-            }
-        }
-        addSource(startPeriodDate) { date ->
-            lastStart = date
-            if (lastFinish != null) {
-                value = filterByPeriod(lastTransactions, date, lastFinish)
-            }
-        }
-        addSource(finishPeriodDate) { date ->
-            lastFinish = date
-            if (lastStart != null) {
-                value = filterByPeriod(lastTransactions, lastStart, date)
-            }
-        }
-    }
-
-    var currency = spendsRepository.getCurrency().asLiveData()
-    var restedBudgetDistributionMethod =
-        spendsRepository.getRestedBudgetDistributionMethod().asLiveData()
-    var hideOverspendingWarn = spendsRepository.getHideOverspendingWarn().asLiveData()
-
-    var restBudget: LiveData<BigDecimal> = MediatorLiveData<BigDecimal>().apply {
-        // Emit nothing until every source has produced its first value, so the widget
-        // never flashes an intermediate (wrong) "rest" while the DataStore flows stream in.
-        var budgetReady = false
-        var spentReady = false
-        var spentFromDailyBudgetReady = false
-        var lastBudget: BigDecimal = BigDecimal.ZERO
-        var lastSpent: BigDecimal = BigDecimal.ZERO
-        var lastSpentFromDailyBudget: BigDecimal = BigDecimal.ZERO
-
-        fun update() {
-            if (budgetReady && spentReady && spentFromDailyBudgetReady) {
-                value = lastBudget - lastSpent - lastSpentFromDailyBudget
-            }
-        }
-
-        addSource(budget) { b ->
-            lastBudget = b
-            budgetReady = true
-            update()
-        }
-        addSource(spent) { s ->
-            lastSpent = s
-            spentReady = true
-            update()
-        }
-        addSource(spentFromDailyBudget) { s ->
-            lastSpentFromDailyBudget = s
-            spentFromDailyBudgetReady = true
-            update()
-        }
-    }
-
-    var requireDistributionRestedBudget = MutableLiveData(false)
-    var requireSetBudget = MutableLiveData(false)
-    var periodFinished = MutableLiveData(false)
-    var lastRemovedTransaction: MutableLiveData<Transaction> = MutableLiveData()
-    var pendingRecurringCharges: MutableLiveData<List<Transaction>> = MutableLiveData(emptyList())
+    var requireDistributionRestedBudget = MutableStateFlow(false)
+    var requireSetBudget = MutableStateFlow(false)
+    var periodFinished = MutableStateFlow(false)
+    var lastRemovedTransaction: MutableStateFlow<Transaction?> = MutableStateFlow(null)
+    var pendingRecurringCharges: MutableStateFlow<List<Transaction>> = MutableStateFlow(emptyList())
 
     private val changeDayMutex = Mutex()
 
@@ -276,7 +230,7 @@ class SpendsViewModel @Inject constructor(
 
     // Need to be refactored
 
-    fun howMuchBudgetRest(): LiveData<BigDecimal> = restBudget
+    fun howMuchBudgetRest(): StateFlow<BigDecimal> = restBudget
 
     // Background tasks
     private fun runChangeDayAction() {

@@ -1,6 +1,6 @@
 package com.danilkinkin.buckwheat.recalcBudget
 
-import androidx.lifecycle.MutableLiveData
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,11 +18,11 @@ class RecalcBudgetViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val spendsRepository: SpendsRepository,
 ) : ViewModel() {
-    val newDailyBudgetIfSplitPerDay: MutableLiveData<BigDecimal> = MutableLiveData()
-    val newDailyBudgetIfAddToday: MutableLiveData<BigDecimal> = MutableLiveData()
-    val howMuchNotSpent: MutableLiveData<BigDecimal> = MutableLiveData()
-    val nextDayBudget: MutableLiveData<BigDecimal> = MutableLiveData()
-    val isLastDay: MutableLiveData<Boolean> = MutableLiveData()
+    val newDailyBudgetIfSplitPerDay: MutableStateFlow<BigDecimal> = MutableStateFlow(BigDecimal.ZERO)
+    val newDailyBudgetIfAddToday: MutableStateFlow<BigDecimal> = MutableStateFlow(BigDecimal.ZERO)
+    val howMuchNotSpent: MutableStateFlow<BigDecimal> = MutableStateFlow(BigDecimal.ZERO)
+    val nextDayBudget: MutableStateFlow<BigDecimal> = MutableStateFlow(BigDecimal.ZERO)
+    val isLastDay: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     fun calculate() = viewModelScope.launch {
         isLastDay.value = spendsRepository.getFinishPeriodDate().first()

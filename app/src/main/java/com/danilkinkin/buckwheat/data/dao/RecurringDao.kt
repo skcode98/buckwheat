@@ -1,6 +1,6 @@
 package com.danilkinkin.buckwheat.data.dao
 
-import androidx.lifecycle.LiveData
+import kotlinx.coroutines.flow.Flow
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -11,7 +11,7 @@ import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 @Dao
 interface RecurringDao {
     @Query("SELECT * FROM recurring_templates ORDER BY day_of_month ASC")
-    fun getAll(): LiveData<List<RecurringTemplate>>
+    fun getAll(): Flow<List<RecurringTemplate>>
 
     @Query("SELECT * FROM recurring_templates WHERE enabled = 1 AND day_of_month = :day")
     suspend fun getDueOnDay(day: Int): List<RecurringTemplate>

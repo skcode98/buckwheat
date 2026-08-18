@@ -3,7 +3,8 @@ package com.danilkinkin.buckwheat.recalcBudget
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -24,8 +25,8 @@ fun StartLastDayButton(
 ) {
     val context = LocalContext.current
 
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val budgetPerDayAdd by recalcBudgetViewModel.newDailyBudgetIfAddToday.observeAsState(BigDecimal.ZERO)
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val budgetPerDayAdd by recalcBudgetViewModel.newDailyBudgetIfAddToday.collectAsState()
 
 
     DescriptionButton(

@@ -1,13 +1,13 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.util.Log
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.ai.modelsEndpoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -28,11 +28,11 @@ data class FreeModel(
 
 @HiltViewModel
 class VoiceAiSettingsViewModel @Inject constructor() : ViewModel() {
-    private val _freeModels = MutableLiveData<List<FreeModel>>(emptyList())
-    val freeModels: LiveData<List<FreeModel>> = _freeModels
+    private val _freeModels = MutableStateFlow<List<FreeModel>>(emptyList())
+    val freeModels: StateFlow<List<FreeModel>> = _freeModels
 
-    private val _modelsError = MutableLiveData<String?>(null)
-    val modelsError: LiveData<String?> = _modelsError
+    private val _modelsError = MutableStateFlow<String?>(null)
+    val modelsError: StateFlow<String?> = _modelsError
 
     fun refreshFreeModels(apiKey: String, providerUrl: String) {
         viewModelScope.launch {

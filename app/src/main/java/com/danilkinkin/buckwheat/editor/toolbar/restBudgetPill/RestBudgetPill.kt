@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -47,23 +47,29 @@ fun RowScope.RestBudgetPill(
 ) {
     val context = LocalContext.current
 
-    val hideOverspendingWarn by spendsViewModel.hideOverspendingWarn.observeAsState(false)
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val budgetState by restBudgetPillViewModel.state.observeAsState(DaileBudgetState.NOT_SET)
+    val hideOverspendingWarn by spendsViewModel.hideOverspendingWarn.collectAsStateWithLifecycle(false)
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle(ExtendCurrency.none())
+    val budgetState by restBudgetPillViewModel.state.collectAsStateWithLifecycle(DaileBudgetState.NOT_SET)
     val editorIsNotVisible by appViewModel.topSheetDown
-    val percentWithNewSpent by restBudgetPillViewModel.percentWithNewSpent.observeAsState(1f)
-    val tutorial by appViewModel.getTutorialStage(TUTORS.OPEN_WALLET).observeAsState(TUTORIAL_STAGE.NONE)
+    val percentWithNewSpent by restBudgetPillViewModel.percentWithNewSpent.collectAsStateWithLifecycle(1f)
+    val tutorial by appViewModel.getTutorialStage(TUTORS.OPEN_WALLET).collectAsStateWithLifecycle(TUTORIAL_STAGE.NONE)
 
-    observeLiveData(spendsViewModel.dailyBudget) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+    LaunchedEffect(Unit) {
+        spendsViewModel.dailyBudget.collect {
+            restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        }
     }
 
-    observeLiveData(spendsViewModel.spentFromDailyBudget) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+    LaunchedEffect(Unit) {
+        spendsViewModel.spentFromDailyBudget.collect {
+            restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        }
     }
 
-    observeLiveData(editorViewModel.stage) {
-        restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+    LaunchedEffect(Unit) {
+        editorViewModel.stage.collect {
+            restBudgetPillViewModel.calculateValues(context, editorViewModel.currentSpent)
+        }
     }
 
     DisposableEffect(currency) {

@@ -6,10 +6,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
-import androidx.lifecycle.asFlow
-import androidx.lifecycle.map
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -22,14 +20,9 @@ import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.TransactionType
-import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
-import com.danilkinkin.buckwheat.data.categories.categoryCapBucket
-import com.danilkinkin.buckwheat.data.categories.categoryKey
-import com.danilkinkin.buckwheat.data.categories.highestNewlyReachedCapBucket
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
-import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.countDays
@@ -41,7 +34,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.firstOrNull
-import java.lang.Long.min
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.YearMonth
@@ -82,73 +74,35 @@ class SpendsRepository @Inject constructor(
     private val budgetPeriodDao: BudgetPeriodDao,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
     private val categoryAssignmentScheduler: CategoryAssignmentScheduler,
+    private val categoryCapTracker: CategoryCapTracker,
+    private val budgetCalculator: BudgetCalculator,
 ) {
-    fun getAllTransactions(): LiveData<List<Transaction>> = transactionDao.getAll()
-    fun getAllArchivedTransactions(): LiveData<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
-    fun getAllBudgetPeriods(): LiveData<List<BudgetPeriod>> = budgetPeriodDao.getAll()
-    fun getAllSpends(): LiveData<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
-    fun getTransactionsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
+    fun getAllTransactions(): Flow<List<Transaction>> = transactionDao.getAll()
+    fun getAllArchivedTransactions(): Flow<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
+    fun getAllBudgetPeriods(): Flow<List<BudgetPeriod>> = budgetPeriodDao.getAll()
+    fun getAllSpends(): Flow<List<Transaction>> = transactionDao.getAll(TransactionType.SPENT)
+    fun getTransactionsInRange(startDate: Date, endDate: Date): Flow<List<Transaction>> =
         transactionDao.getAll(startDate.time, endDate.time)
-    fun getSpendsInRange(startDate: Date, endDate: Date): LiveData<List<Transaction>> =
+    fun getSpendsInRange(startDate: Date, endDate: Date): Flow<List<Transaction>> =
         transactionDao.getAll(TransactionType.SPENT, startDate.time, endDate.time)
 
-    fun getAllTags(): LiveData<List<String>> {
-        val merged = MediatorLiveData<List<String>>()
-        val transactionSource = transactionDao.getAll().map { transactions ->
-            deriveTags(transactions.map { it.comment })
-        }
-        // Archived transactions (past periods and imported historical data) must
-        // contribute their comments as well, otherwise tags restored via CSV import
-        // never show up in the tag picker or the Tags Management sheet.
-        val archivedSource = budgetPeriodDao.getAllArchived().map { archived ->
-            deriveTags(archived.map { it.comment })
-        }
-        val savedSource = savedTagDao.getAll().map { tags -> tags.map { it.name } }
-
-        var lastTransactionTags: List<String> = emptyList()
-        var lastArchivedTags: List<String> = emptyList()
-        var lastSavedTags: List<String> = emptyList()
-
-        merged.addSource(transactionSource) { tags ->
-            lastTransactionTags = tags
-            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
-        }
-        merged.addSource(archivedSource) { tags ->
-            lastArchivedTags = tags
-            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
-        }
-        merged.addSource(savedSource) { tags ->
-            lastSavedTags = tags
-            merged.value = (lastTransactionTags + lastArchivedTags + lastSavedTags).distinct()
-        }
-
-        return merged
+    fun getAllTags(): Flow<List<String>> = combine(
+        transactionDao.getAll().map { deriveTags(it.map { t -> t.comment }) },
+        budgetPeriodDao.getAllArchived().map { deriveTags(it.map { a -> a.comment }) },
+        savedTagDao.getAll().map { tags -> tags.map { it.name } },
+    ) { transactionTags, archivedTags, savedTags ->
+        (transactionTags + archivedTags + savedTags).distinct()
     }
 
     // Distinct non-null category values referenced by transactions (current period only —
     // archived records don't carry a category column) merged with the user's saved custom
     // categories. Categories that exist only on transactions (e.g. a saved category that was
     // later deleted) surface here so the management sheet can offer to re-save them.
-    fun getAllCategories(): LiveData<List<String>> {
-        val merged = MediatorLiveData<List<String>>()
-        val transactionSource = transactionDao.getAll().map { transactions ->
-            transactions.mapNotNull { it.category }.distinct()
-        }
-        val savedSource = savedCategoryDao.getAll().map { categories -> categories.map { it.name } }
-
-        var lastTransactionCategories: List<String> = emptyList()
-        var lastSavedCategories: List<String> = emptyList()
-
-        merged.addSource(transactionSource) { categories ->
-            lastTransactionCategories = categories
-            merged.value = (lastTransactionCategories + lastSavedCategories).distinct()
-        }
-        merged.addSource(savedSource) { categories ->
-            lastSavedCategories = categories
-            merged.value = (lastTransactionCategories + lastSavedCategories).distinct()
-        }
-
-        return merged
+    fun getAllCategories(): Flow<List<String>> = combine(
+        transactionDao.getAll().map { it.mapNotNull { t -> t.category }.distinct() },
+        savedCategoryDao.getAll().map { categories -> categories.map { it.name } },
+    ) { transactionCategories, savedCategories ->
+        (transactionCategories + savedCategories).distinct()
     }
 
     private fun deriveTags(comments: List<String>): List<String> =
@@ -253,7 +207,7 @@ class SpendsRepository @Inject constructor(
         newStartDate: Date? = null,
     ) {
         val oldSpent = getSpent().firstOrNull() ?: BigDecimal.ZERO
-        val hasStoredTransactions = transactionDao.getAll().asFlow().first()
+        val hasStoredTransactions = transactionDao.getAll().first()
             .any { it.type == TransactionType.SPENT }
         val startDate = roundToDay(newStartDate ?: getCurrentDateUseCase())
         if (oldSpent > BigDecimal.ZERO || hasStoredTransactions) {
@@ -294,11 +248,11 @@ class SpendsRepository @Inject constructor(
 
         // New period: reset per-category cap crossing bookkeeping so the 80%/100% alerts
         // can fire again against the fresh period's spend totals.
-        clearCategoryCapNotifiedNow()
+        categoryCapTracker.clearCategoryCapNotifiedNow()
     }
 
     private suspend fun archiveCurrentPeriod(newPeriodStartDate: Date) {
-        val transactions = transactionDao.getAll().asFlow().firstOrNull() ?: emptyList()
+        val transactions = transactionDao.getAll().firstOrNull() ?: emptyList()
         if (transactions.isEmpty()) return
 
         val startDate = getStartPeriodDate().firstOrNull()
@@ -386,7 +340,7 @@ class SpendsRepository @Inject constructor(
             )
         }
 
-        transactionDao.getAll(TransactionType.INCOME).asFlow().first().firstOrNull()
+        transactionDao.getAll(TransactionType.INCOME).first().firstOrNull()
             ?.let { incomeTransaction ->
                 transactionDao.update(incomeTransaction.copy(value = newBudget))
             }
@@ -429,7 +383,7 @@ class SpendsRepository @Inject constructor(
         }
 
 
-        transactionDao.getAll(TransactionType.SET_DAILY_BUDGET).asFlow().first().lastOrNull()
+        transactionDao.getAll(TransactionType.SET_DAILY_BUDGET).first().lastOrNull()
             ?.let { setDailyBudgetTransaction ->
                 transactionDao.update(setDailyBudgetTransaction.copy(value = newDailyBudget))
             }
@@ -469,234 +423,19 @@ class SpendsRepository @Inject constructor(
         excludeCurrentDay: Boolean = false,
         applyTodaySpends: Boolean = false,
         notCommittedSpent: BigDecimal = BigDecimal.ZERO
-    ): BigDecimal {
-        val budget = getBudget().first()
-        val spent = getSpent().first()
-        val dailyBudget = getDailyBudget().first()
-        val spentFromDailyBudget = getSpentFromDailyBudget().first()
-        val finishPeriodDate =
-            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
+    ): BigDecimal = budgetCalculator.whatBudgetForDay(excludeCurrentDay, applyTodaySpends, notCommittedSpent)
 
-        val restDays =
-            countDays(finishPeriodDate, getCurrentDateUseCase()) - if (excludeCurrentDay) 1 else 0
-        var restBudget = budget - spent
-
-        restBudget -= notCommittedSpent
-
-        if (applyTodaySpends) {
-            restBudget -= spentFromDailyBudget
-        } else if (excludeCurrentDay) {
-            restBudget -= dailyBudget
-        }
-
-        val whatBudgetForDay = restBudget
-            .divide(
-                restDays.toBigDecimal().coerceAtLeast(BigDecimal(1)),
-                2,
-                RoundingMode.HALF_EVEN
-            )
-
-        Log.d(
-            "SpendsRepository",
-            "Check what budget for day ["
-                    + "date: ${getCurrentDateUseCase()} "
-                    + "what budget for day: $whatBudgetForDay "
-                    + "excludeCurrentDay: $excludeCurrentDay "
-                    + "applyTodaySpends: $applyTodaySpends "
-                    + "notCommittedSpent: $notCommittedSpent "
-                    + "budget: $budget "
-                    + "spent: $spent "
-                    + "daily budget: $dailyBudget "
-                    + "spent from daily budget: $spentFromDailyBudget "
-                    + "rest budget: $restBudget "
-                    + "rest days: $restDays"
-                    + "]"
-        )
-
-        return whatBudgetForDay
-    }
-
-    suspend fun howMuchBudgetRest(): BigDecimal {
-        val budget = getBudget().first()
-        val spent = getSpent().first()
-        val spentFromDailyBudget = getSpentFromDailyBudget().first()
-
-        return budget - spent - spentFromDailyBudget
-    }
+    suspend fun howMuchBudgetRest(): BigDecimal = budgetCalculator.howMuchBudgetRest()
 
     suspend fun howMuchNotSpent(
         excludeSkippedPart: Boolean = false,
-    ): BigDecimal {
-        val budget = getBudget().first()
-        val spent = getSpent().first()
-        val dailyBudget = getDailyBudget().first()
-        val spentFromDailyBudget = getSpentFromDailyBudget().first()
-        val finishPeriodDate =
-            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
-        val lastChangeDailyBudgetDate =
-            getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
-
-
-        val restDays = countDays(finishPeriodDate, getCurrentDateUseCase()).coerceAtLeast(0)
-        val skippedDays = countDays(
-            Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
-            lastChangeDailyBudgetDate
-        ) - 1
-
-        var restBudget = budget - spent
-
-        val howMuchNotSpent = if (restDays == 0) {
-            restBudget - spentFromDailyBudget
-        } else if (excludeSkippedPart) {
-            restBudget
-                .minus(dailyBudget * skippedDays.toBigDecimal())
-                .divide(
-                    (restDays).coerceAtLeast(1).toBigDecimal(),
-                    2,
-                    RoundingMode.HALF_EVEN,
-                )
-                .multiply((skippedDays).coerceAtLeast(0).toBigDecimal())
-                .plus(dailyBudget - spentFromDailyBudget)
-        } else {
-            restBudget
-                .minus(dailyBudget)
-                .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
-                    2,
-                    RoundingMode.HALF_EVEN,
-                )
-                .multiply((skippedDays).coerceAtLeast(0).toBigDecimal())
-                .plus(dailyBudget - spentFromDailyBudget)
-        }
-
-        Log.d(
-            "SpendsRepository",
-            "How much not spent check ["
-                    + "how much not spent: $howMuchNotSpent "
-                    + "rest budget: $restBudget "
-                    + "restDays: $restDays "
-                    + "skippedDays: $skippedDays "
-                    + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
-                    + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
-                    + "dailyBudget: $dailyBudget "
-                    + "spentFromDailyBudget: $spentFromDailyBudget "
-                    + "]"
-        )
-
-        return howMuchNotSpent
-    }
+    ): BigDecimal = budgetCalculator.howMuchNotSpent(excludeSkippedPart)
 
     suspend fun nextDayBudget(
         excludeSkippedPart: Boolean = false,
-    ): BigDecimal {
-        val budget = getBudget().first()
-        val spent = getSpent().first()
-        val dailyBudget = getDailyBudget().first()
-        val spentFromDailyBudget = getSpentFromDailyBudget().first()
-        val finishPeriodDate =
-            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
-        val lastChangeDailyBudgetDate =
-            getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
+    ): BigDecimal = budgetCalculator.nextDayBudget(excludeSkippedPart)
 
-
-        val restDays = countDays(finishPeriodDate, getCurrentDateUseCase()).coerceAtLeast(0)
-        val skippedDays = countDays(
-            Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
-            lastChangeDailyBudgetDate
-        ) - 1
-
-        var restBudget = budget - spent
-
-        val nextDailyBudget = if (restDays == 0) {
-            restBudget - spentFromDailyBudget
-        } else if (excludeSkippedPart) {
-            restBudget
-                .minus(dailyBudget * skippedDays.toBigDecimal())
-                .divide(
-                    (restDays).coerceAtLeast(1).toBigDecimal(),
-                    2,
-                    RoundingMode.HALF_EVEN,
-                )
-        } else {
-            restBudget
-                .minus(dailyBudget)
-                .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
-                    2,
-                    RoundingMode.HALF_EVEN,
-                )
-        }
-
-        Log.d(
-            "SpendsRepository",
-            "Next day budget ["
-                    + "next daily budget: $nextDailyBudget "
-                    + "rest budget: $restBudget "
-                    + "restDays: $restDays "
-                    + "skippedDays: $skippedDays "
-                    + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
-                    + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
-                    + "dailyBudget: $dailyBudget "
-                    + "spentFromDailyBudget: $spentFromDailyBudget "
-                    + "]"
-        )
-
-        return nextDailyBudget
-    }
-
-    // The amount the user actually saved over the elapsed days, i.e. the leftover that
-    // carries forward to today. Equal to `howMuchNotSpent() - nextDayBudget()` for
-    // skippedDays >= 1, but correct also for skippedDays == 0 (the daily-budget
-    // redistribution was already marked handled for today), where that subtraction
-    // spuriously turns a positive leftover negative.
-    suspend fun howMuchSaved(): BigDecimal {
-        val budget = getBudget().first()
-        val spent = getSpent().first()
-        val dailyBudget = getDailyBudget().first()
-        val spentFromDailyBudget = getSpentFromDailyBudget().first()
-        val finishPeriodDate =
-            getFinishPeriodDate().first() ?: return BigDecimal.ZERO
-        val lastChangeDailyBudgetDate =
-            getLastChangeDailyBudgetDate().first() ?: getStartPeriodDate().first()
-
-        val restDays = countDays(finishPeriodDate, getCurrentDateUseCase()).coerceAtLeast(0)
-        val skippedDays = countDays(
-            Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
-            lastChangeDailyBudgetDate
-        ) - 1
-
-        val restBudget = budget - spent
-
-        val howMuchSaved = if (restDays == 0) {
-            restBudget - spentFromDailyBudget
-        } else {
-            restBudget
-                .minus(dailyBudget)
-                .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
-                    2,
-                    RoundingMode.HALF_EVEN,
-                )
-                .multiply((skippedDays - 1).coerceAtLeast(0).toBigDecimal())
-                .plus(dailyBudget - spentFromDailyBudget)
-        }
-
-        Log.d(
-            "SpendsRepository",
-            "How much saved check ["
-                    + "how much saved: $howMuchSaved "
-                    + "rest budget: $restBudget "
-                    + "restDays: $restDays "
-                    + "skippedDays: $skippedDays "
-                    + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
-                    + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
-                    + "dailyBudget: $dailyBudget "
-                    + "spentFromDailyBudget: $spentFromDailyBudget "
-                    + "]"
-        )
-
-        return howMuchSaved
-    }
+    suspend fun howMuchSaved(): BigDecimal = budgetCalculator.howMuchSaved()
 
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
@@ -770,7 +509,7 @@ class SpendsRepository @Inject constructor(
             OverspendingNotifier.notify(context, dailyBudget, spentFromDailyBudget, currency)
         }
 
-        checkCategoryCapAlert(newTransaction)
+        categoryCapTracker.checkCategoryCapAlert(newTransaction)
 
         // Auto-assign a category (offline keywords, then the AI model) to records that have
         // none. Runs in the background on an application-scoped coroutine so the app never
@@ -786,7 +525,7 @@ class SpendsRepository @Inject constructor(
         // creates duplicate transactions. Already-archived rows (from a previous import)
         // are part of the existing set too.
         val existingKeys = buildSet {
-            transactionDao.getAll().asFlow().first().forEach { tx ->
+            transactionDao.getAll().first().forEach { tx ->
                 add("${tx.type}|${tx.value}|${tx.date.time}|${tx.comment}")
             }
             budgetPeriodDao.getAllArchivedNow().forEach { tx ->
@@ -983,98 +722,6 @@ class SpendsRepository @Inject constructor(
             }
         }
 
-        resyncCategoryCapNotified(transactionForRemove)
-    }
-
-    // Reads a transaction's category the same way the analytics categories card does
-    // (offline keyword fallback), sums the category's spend over the current budget period,
-    // and posts the 80%/100% cap alert once per newly reached level.
-    private suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
-        if (newTransaction.type != TransactionType.SPENT) return
-        val prefs = context.budgetDataStore.data.first()
-        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
-        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
-        if (newTransaction.date.before(start) || newTransaction.date.after(finish)) return
-
-        val key = categoryKey(newTransaction)
-        val categoryName = categoryNameOf(key)
-        val caps = parseCategoryCaps(
-            context.settingsDataStore.data.first()[categoryCapsStoreKey]
-        )
-        val cap = caps[categoryName] ?: return
-        val total = periodCategoryTotal(start, finish, key)
-
-        val newBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotified(
-            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
-        )
-        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
-        if (newlyReached == 0) return
-
-        val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
-            ?: ExtendCurrency.none()
-        CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
-        setCategoryCapNotifiedNow(notified + (categoryName to newlyReached))
-    }
-
-    // Lowers a category's announced cap level when a removal drops the period spend back
-    // under it, so a later crossing announces again (mirrors the overspend flag resync).
-    private suspend fun resyncCategoryCapNotified(removed: Transaction) {
-        if (removed.type != TransactionType.SPENT) return
-        val prefs = context.budgetDataStore.data.first()
-        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
-        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
-        if (removed.date.before(start) || removed.date.after(finish)) return
-
-        val key = categoryKey(removed)
-        val categoryName = categoryNameOf(key)
-        val caps = parseCategoryCaps(
-            context.settingsDataStore.data.first()[categoryCapsStoreKey]
-        )
-        val cap = caps[categoryName] ?: return
-        val total = periodCategoryTotal(start, finish, key)
-        val currentBucket = categoryCapBucket(total, cap)
-        val notified = parseCategoryCapNotified(
-            context.settingsDataStore.data.first()[categoryCapNotifiedStoreKey]
-        )
-        val storedBucket = notified[categoryName] ?: 0
-        if (currentBucket >= storedBucket) return
-
-        val updated = notified.toMutableMap()
-        if (currentBucket == 0) {
-            updated.remove(categoryName)
-        } else {
-            updated[categoryName] = currentBucket
-        }
-        setCategoryCapNotifiedNow(updated)
-    }
-
-    private fun categoryNameOf(key: CategoryKey): String = when (key) {
-        is CategoryKey.BuiltIn -> key.category.name
-        is CategoryKey.Custom -> key.name
-    }
-
-    private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
-        transactionDao.getAllNow(TransactionType.SPENT, start.time, finish.time)
-            .filter { categoryKey(it) == key }
-            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
-
-    // New period: reset the announced cap levels so the 80%/100% alerts can fire again
-    // against the fresh period's spend totals.
-    private suspend fun clearCategoryCapNotifiedNow() {
-        context.settingsDataStore.edit {
-            it.remove(categoryCapNotifiedStoreKey)
-        }
-    }
-
-    private suspend fun setCategoryCapNotifiedNow(notified: Map<String, Int>) {
-        val serialized = serializeCategoryCapNotified(notified)
-        context.settingsDataStore.edit {
-            if (serialized.isEmpty()) {
-                it.remove(categoryCapNotifiedStoreKey)
-            } else {
-                it[categoryCapNotifiedStoreKey] = serialized
-            }
-        }
+        categoryCapTracker.resyncCategoryCapNotified(transactionForRemove)
     }
 }

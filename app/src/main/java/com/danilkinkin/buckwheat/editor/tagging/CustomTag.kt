@@ -45,7 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -88,7 +88,6 @@ import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.editor.FocusController
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.util.observeLiveData
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -104,7 +103,7 @@ fun CustomTag(
     val focusManager = LocalFocusManager.current
     val localDensity = LocalDensity.current
 
-    val tags by spendsViewModel.tags.observeAsState(emptyList())
+    val tags by spendsViewModel.tags.collectAsStateWithLifecycle(emptyList())
 
     var isEdit by remember { mutableStateOf(false) }
     var value by remember {
@@ -118,24 +117,28 @@ fun CustomTag(
     var isShowSuggestions by remember { mutableStateOf(false) }
     var renderPopup by remember { mutableStateOf(false) }
 
-    observeLiveData(editorViewModel.stage) {
-        if (it === EditStage.CREATING_SPENT) {
-            value = TextFieldValue(
-                "",
-                TextRange(0),
-            )
+    LaunchedEffect(Unit) {
+        editorViewModel.stage.collect {
+            if (it === EditStage.CREATING_SPENT) {
+                value = TextFieldValue(
+                    "",
+                    TextRange(0),
+                )
+            }
         }
     }
 
-    observeLiveData(editorViewModel.currentComment) {
-        // Only overwrite the field when the comment came from outside (e.g. a tag
-        // pill tap). The write-through in onChange already keeps the ViewModel in
-        // sync, so rewriting the same text here would reset the cursor while typing.
-        if (value.text != (it ?: "")) {
-            value = TextFieldValue(
-                it ?: "",
-                TextRange((it ?: "").length),
-            )
+    LaunchedEffect(Unit) {
+        editorViewModel.currentComment.collect {
+            // Only overwrite the field when the comment came from outside (e.g. a tag
+            // pill tap). The write-through in onChange already keeps the ViewModel in
+            // sync, so rewriting the same text here would reset the cursor while typing.
+            if (value.text != (it ?: "")) {
+                value = TextFieldValue(
+                    it ?: "",
+                    TextRange((it ?: "").length),
+                )
+            }
         }
     }
 

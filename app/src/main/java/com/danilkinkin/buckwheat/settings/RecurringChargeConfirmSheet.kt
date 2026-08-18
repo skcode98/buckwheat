@@ -6,7 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,8 +36,8 @@ fun RecurringChargeConfirmSheet(
 ) {
     val context = LocalContext.current
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
-    val pending by spendsViewModel.pendingRecurringCharges.observeAsState(emptyList())
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
+    val pending by spendsViewModel.pendingRecurringCharges.collectAsStateWithLifecycle()
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
         16.dp,

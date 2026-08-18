@@ -1,13 +1,16 @@
 package com.danilkinkin.buckwheat.data.categories
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
+import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 // Triggers the shared background category assignment pass and surfaces its running state plus the
 // number of spends still missing a category (active + archived). The actual work runs in
@@ -19,26 +22,15 @@ class SpendCategoriesViewModel @Inject constructor(
     transactionDao: TransactionDao,
     budgetPeriodDao: BudgetPeriodDao,
 ) : ViewModel() {
-    val isCategorizing: LiveData<Boolean> = scheduler.isRunning.asLiveData()
+    val isCategorizing: StateFlow<Boolean> = scheduler.isRunning
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val uncategorizedCount: LiveData<Int> = MediatorLiveData<Int>().apply {
-        value = 0
-
-        var active = 0
-        var archived = 0
-        fun recalc() {
-            value = active + archived
-        }
-
-        addSource(transactionDao.getUncategorizedCount()) { count ->
-            active = count ?: 0
-            recalc()
-        }
-        addSource(budgetPeriodDao.getArchivedUncategorizedCount()) { count ->
-            archived = count ?: 0
-            recalc()
-        }
-    }
+    val uncategorizedCount: StateFlow<Int> = combine(
+        transactionDao.getUncategorizedCount(),
+        budgetPeriodDao.getArchivedUncategorizedCount(),
+    ) { active, archived ->
+        (active ?: 0) + (archived ?: 0)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun categorizeUncategorized() = scheduler.schedule()
 }

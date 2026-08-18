@@ -2,7 +2,7 @@ package com.danilkinkin.buckwheat.base.balloon
 
 import android.graphics.PointF
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.MutableLiveData
+import kotlinx.coroutines.flow.MutableStateFlow
 
 data class BalloonData(
     val id: Int,
@@ -12,9 +12,9 @@ data class BalloonData(
 )
 
 class BalloonController {
-    var balloons = MutableLiveData<Map<Int, BalloonData>>(mapOf())
+    var balloons = MutableStateFlow<Map<Int, BalloonData>>(mapOf())
         private set
-    var showedBalloons = MutableLiveData<Set<Int>>(setOf())
+    var showedBalloons = MutableStateFlow<Set<Int>>(setOf())
         private set
     private var nextId = 0
 
@@ -23,7 +23,7 @@ class BalloonController {
         anchor: PointF = PointF(0f, 0f),
         onClose: () -> Unit = { },
     ): Int {
-        balloons.value = balloons.value?.plus(
+        balloons.value = balloons.value.plus(
             nextId to BalloonData(
                 id = nextId,
                 content = content,
@@ -38,19 +38,19 @@ class BalloonController {
     fun show(
         tooltipId: Int,
     ) {
-        showedBalloons.value = showedBalloons.value?.plus(tooltipId)
+        showedBalloons.value = showedBalloons.value.plus(tooltipId)
     }
 
     fun hide(
         tooltipId: Int,
     ) {
-        showedBalloons.value = showedBalloons.value?.minus(tooltipId)
-        balloons.value!![tooltipId]?.onClose()
+        showedBalloons.value = showedBalloons.value.minus(tooltipId)
+        balloons.value[tooltipId]?.onClose()
     }
 
     fun destroy(
         tooltipId: Int,
     ) {
-        balloons.value = balloons.value?.minus(tooltipId)
+        balloons.value = balloons.value.minus(tooltipId)
     }
 }

@@ -22,7 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
@@ -68,16 +68,16 @@ fun Analytics(
     onCreateNewPeriod: () -> Unit = {},
     onClose: () -> Unit = {},
 ) {
-    val periodFinished by spendsViewModel.periodFinished.observeAsState(false)
-    val transactions by spendsViewModel.periodTransactions.observeAsState(emptyList())
-    val spends by spendsViewModel.periodSpends.observeAsState(emptyList())
-    val wholeBudget by spendsViewModel.budget.observeAsState(BigDecimal.ZERO)
-    val dailyBudget by spendsViewModel.dailyBudget.observeAsState(BigDecimal.ZERO)
-    val currency by spendsViewModel.currency.observeAsState(ExtendCurrency.none())
-    val startPeriodDate by spendsViewModel.startPeriodDate.observeAsState(Date())
-    val finishPeriodDate by spendsViewModel.finishPeriodDate.observeAsState(Date())
-    val budgetPeriods by spendsViewModel.budgetPeriods.observeAsState(emptyList())
-    val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
+    val periodFinished by spendsViewModel.periodFinished.collectAsStateWithLifecycle()
+    val transactions by spendsViewModel.periodTransactions.collectAsStateWithLifecycle()
+    val spends by spendsViewModel.periodSpends.collectAsStateWithLifecycle()
+    val wholeBudget by spendsViewModel.budget.collectAsStateWithLifecycle()
+    val dailyBudget by spendsViewModel.dailyBudget.collectAsStateWithLifecycle()
+    val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
+    val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
+    val budgetPeriods by spendsViewModel.budgetPeriods.collectAsStateWithLifecycle()
+    val archivedTransactions by spendsViewModel.archivedTransactions.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
     val previousPeriod = remember(budgetPeriods, startPeriodDate) {
@@ -91,22 +91,22 @@ fun Analytics(
     }
 
     val spendCategoriesViewModel: SpendCategoriesViewModel = hiltViewModel()
-    val isCategorizing by spendCategoriesViewModel.isCategorizing.observeAsState(false)
+    val isCategorizing by spendCategoriesViewModel.isCategorizing.collectAsStateWithLifecycle()
 
     val categoriesViewModel: CategoriesManagementViewModel = hiltViewModel()
-    val allCategories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val allCategories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
     }
 
     val categoryCapsViewModel: CategoryCapsViewModel = hiltViewModel()
-    val categoryCaps by categoryCapsViewModel.caps.observeAsState(emptyMap())
+    val categoryCaps by categoryCapsViewModel.caps.collectAsStateWithLifecycle()
 
     LaunchedEffect(spends) {
         spendCategoriesViewModel.categorizeUncategorized()
     }
 
-    val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.observeAsState(null)
+    val finishPeriodActualDate by spendsViewModel.finishPeriodActualDate.collectAsStateWithLifecycle()
 
     // Need to hide calendar after migration to transactions,
     // because after migration can't restore some transactions like INCOME & SET_DAILY_BUDGET

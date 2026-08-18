@@ -17,7 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,9 +50,9 @@ fun PeriodDetailSheet(
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val period by archivesViewModel.selectedPeriod.observeAsState(null)
-    val transactions by archivesViewModel.selectedPeriodTransactions.observeAsState(emptyList())
-    val allCategories by categoriesManagementViewModel.allCategories.observeAsState(emptyList())
+    val period by archivesViewModel.selectedPeriod.collectAsStateWithLifecycle()
+    val transactions by archivesViewModel.selectedPeriodTransactions.collectAsStateWithLifecycle()
+    val allCategories by categoriesManagementViewModel.allCategories.collectAsStateWithLifecycle()
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
     }

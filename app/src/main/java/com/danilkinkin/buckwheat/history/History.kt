@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -61,22 +61,22 @@ fun History(
     val clipboard = LocalClipboardManager.current
 
     val categoriesViewModel: CategoriesManagementViewModel = hiltViewModel()
-    val allCategories by categoriesViewModel.allCategories.observeAsState(emptyList())
+    val allCategories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
     }
 
     var historyList by remember { mutableStateOf<List<RowEntity>>(emptyList()) }
-    val budget = spendsViewModel.budget.observeAsState(initial = BigDecimal.ZERO)
-    val currency = spendsViewModel.currency.observeAsState(initial = ExtendCurrency.none())
-    val startPeriodDate = spendsViewModel.startPeriodDate.observeAsState(initial = Date())
-    val finishPeriodDate = spendsViewModel.finishPeriodDate.observeAsState(initial = Date())
+    val budget = spendsViewModel.budget.collectAsStateWithLifecycle()
+    val currency = spendsViewModel.currency.collectAsStateWithLifecycle()
+    val startPeriodDate = spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
+    val finishPeriodDate = spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
     val scrollToBottom = remember { mutableStateOf(true) }
-    val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).observeAsState(TUTORIAL_STAGE.NONE)
+    val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).collectAsStateWithLifecycle()
     var isUserTrySwipe by remember { mutableStateOf(false) }
 
-    val periodSpends by spendsViewModel.periodSpends.observeAsState(emptyList())
-    val archivedTransactions by spendsViewModel.archivedTransactions.observeAsState(emptyList())
+    val periodSpends by spendsViewModel.periodSpends.collectAsStateWithLifecycle()
+    val archivedTransactions by spendsViewModel.archivedTransactions.collectAsStateWithLifecycle()
 
     LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, periodSpends, archivedTransactions) {
         historyList = composeHistoryRows(

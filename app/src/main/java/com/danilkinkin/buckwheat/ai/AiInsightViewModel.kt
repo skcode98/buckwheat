@@ -1,10 +1,7 @@
 package com.danilkinkin.buckwheat.ai
 
 import android.content.Context
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.analytics.findPreviousPeriod
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -15,6 +12,8 @@ import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.toLocalDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -44,8 +43,8 @@ class AiInsightViewModel @Inject constructor(
     private val spendsRepository: SpendsRepository,
     private val getCurrentDateUseCase: GetCurrentDateUseCase,
 ) : ViewModel() {
-    private val _state = MutableLiveData<AiInsightUiState>(AiInsightUiState.Idle)
-    val state: LiveData<AiInsightUiState> = _state
+    private val _state = MutableStateFlow<AiInsightUiState>(AiInsightUiState.Idle)
+    val state: StateFlow<AiInsightUiState> = _state
 
     fun generate() {
         val current = _state.value
@@ -98,9 +97,9 @@ class AiInsightViewModel @Inject constructor(
             ?: spendsRepository.getFinishPeriodDate().first()
             ?: getCurrentDateUseCase()
         val spent = spendsRepository.getSpent().first()
-        val spends = spendsRepository.getAllSpends().asFlow().first()
-        val transactions = spendsRepository.getAllTransactions().asFlow().first()
-        val periods = spendsRepository.getAllBudgetPeriods().asFlow().first()
+        val spends = spendsRepository.getAllSpends().first()
+        val transactions = spendsRepository.getAllTransactions().first()
+        val periods = spendsRepository.getAllBudgetPeriods().first()
         val dailyBudget = spendsRepository.getDailyBudget().first()
         val previousPeriodTotal = findPreviousPeriod(periods, startPeriodDate)?.totalSpent
         val biggest = spends.maxByOrNull { it.value }

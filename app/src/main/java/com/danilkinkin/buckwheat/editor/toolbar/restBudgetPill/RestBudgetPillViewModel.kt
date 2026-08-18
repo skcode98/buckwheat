@@ -1,7 +1,7 @@
 package com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill
 
 import android.content.Context
-import androidx.lifecycle.MutableLiveData
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,15 +26,15 @@ class RestBudgetPillViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val spendsRepository: SpendsRepository,
 ) : ViewModel() {
-    var state = MutableLiveData(DaileBudgetState.NOT_SET)
+    var state = MutableStateFlow(DaileBudgetState.NOT_SET)
         private set
-    var percentWithNewSpent = MutableLiveData(1f)
+    var percentWithNewSpent = MutableStateFlow(1f)
         private set
-    var percentWithoutNewSpent = MutableLiveData(1f)
+    var percentWithoutNewSpent = MutableStateFlow(1f)
         private set
-    var todayBudget = MutableLiveData("")
+    var todayBudget = MutableStateFlow("")
         private set
-    var newDailyBudget = MutableLiveData("")
+    var newDailyBudget = MutableStateFlow("")
         private set
 
     fun calculateValues(context: Context, currentSpent: BigDecimal) {
