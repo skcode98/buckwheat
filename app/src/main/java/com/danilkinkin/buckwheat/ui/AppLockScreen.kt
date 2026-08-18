@@ -109,16 +109,12 @@ fun AppLockScreen(
     }
 
     fun buildPromptInfo(): BiometricPrompt.PromptInfo {
-        val builder = BiometricPrompt.PromptInfo.Builder()
+        return BiometricPrompt.PromptInfo.Builder()
             .setTitle(context.getString(R.string.app_lock_biometric_prompt_title))
             .setSubtitle(context.getString(R.string.app_lock_biometric_prompt_subtitle))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setAllowedAuthenticators(allowedAuthenticators)
-        } else {
-            builder.setAllowedAuthenticators(allowedAuthenticators)
-                .setNegativeButtonText(context.getString(R.string.app_lock_biometric_prompt_cancel))
-        }
-        return builder.build()
+            .setAllowedAuthenticators(allowedAuthenticators)
+            .setNegativeButtonText(context.getString(R.string.app_lock_biometric_prompt_cancel))
+            .build()
     }
 
     fun promptBiometric() {
