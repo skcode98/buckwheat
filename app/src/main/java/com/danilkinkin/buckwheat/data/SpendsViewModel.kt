@@ -249,11 +249,9 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
-    fun undoRemoveSpent() {
+    fun undoRemoveSpent(transaction: Transaction) {
         viewModelScope.launch {
-            lastRemovedTransaction.value?.let {
-                spendsRepository.addSpent(it)
-            }
+            spendsRepository.addSpent(transaction)
         }
     }
 

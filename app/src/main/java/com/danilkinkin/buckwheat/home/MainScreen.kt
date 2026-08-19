@@ -109,13 +109,17 @@ fun MainScreen(
 
     LaunchedEffect(Unit) {
         spendsViewModel.lastRemovedTransaction.collect {
-            appViewModel.showSnackbar(
-                message = snackBarMessage,
-                actionLabel = snackBarAction,
-                duration = SnackbarDuration.Long,
-            ) { snackbarResult ->
-                if (snackbarResult == SnackbarResult.ActionPerformed) {
-                    spendsViewModel.undoRemoveSpent()
+            if (it != null) {
+                spendsViewModel.lastRemovedTransaction.value = null
+                val removedTx = it
+                appViewModel.showSnackbar(
+                    message = snackBarMessage,
+                    actionLabel = snackBarAction,
+                    duration = SnackbarDuration.Long,
+                ) { snackbarResult ->
+                    if (snackbarResult == SnackbarResult.ActionPerformed) {
+                        spendsViewModel.undoRemoveSpent(removedTx)
+                    }
                 }
             }
         }
