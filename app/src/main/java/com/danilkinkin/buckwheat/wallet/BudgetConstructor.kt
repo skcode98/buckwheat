@@ -40,6 +40,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.util.*
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.DecimalFormat
 import java.time.LocalDate
 import java.util.*
 
@@ -119,6 +120,8 @@ fun BudgetConstructor(
 
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    val suggestedBudget by spendsViewModel.suggestedBudget.collectAsStateWithLifecycle()
+
     Column {
         val days = if (dateToValue.value != null) countDaysToToday(dateToValue.value!!) else 0
 
@@ -150,6 +153,16 @@ fun BudgetConstructor(
                     finishDate,
                 )
 
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        )
+
+        SuggestedBudgetChip(
+            suggested = suggestedBudget,
+            onClick = { amount ->
+                rawBudget = tryConvertStringToNumber(amount.toString()).join(third = false)
+                budgetCache = amount
+                onChange(budgetCache, startDateToValue.value, dateToValue.value)
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         )
@@ -299,6 +312,65 @@ fun UseLastSuggestionChip(
                 },
                 onClick = {
                     onClick()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun SuggestedBudgetChip(
+    suggested: BigDecimal?,
+    onClick: (BigDecimal) -> Unit,
+) {
+    val localDensity = LocalDensity.current
+    val currency by hiltViewModel<SpendsViewModel>().currency.collectAsStateWithLifecycle()
+    val formatted = remember(suggested, currency) {
+        if (suggested == null) return@remember ""
+        val df = DecimalFormat("#,##0.##")
+        val symbol = try {
+            if (currency.value != null) java.util.Currency.getInstance(currency.value)?.symbol ?: "" else ""
+        } catch (_: Exception) { "" }
+        if (symbol.isNotEmpty()) "$symbol${df.format(suggested)}" else df.format(suggested)
+    }
+
+    Row(
+        modifier = Modifier
+            .padding(start = 16.dp)
+            .height(32.dp)
+    ) {
+        AnimatedVisibility(
+            visible = suggested != null && suggested > BigDecimal.ZERO,
+            enter = fadeIn(
+                tween(durationMillis = 150)
+            ) + slideInHorizontally(
+                tween(
+                    durationMillis = 150,
+                    easing = EaseInOutQuad,
+                )
+            ) { with(localDensity) { 10.dp.toPx().toInt() } },
+            exit = fadeOut(
+                tween(durationMillis = 150)
+            ) + slideOutHorizontally(
+                tween(
+                    durationMillis = 150,
+                    easing = EaseInOutQuad,
+                )
+            ) { with(localDensity) { 10.dp.toPx().toInt() } },
+        ) {
+            SuggestionChip(
+                icon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_equalizer),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        contentDescription = null,
+                    )
+                },
+                label = {
+                    Text(text = stringResource(R.string.suggested_budget, formatted))
+                },
+                onClick = {
+                    if (suggested != null) onClick(suggested)
                 }
             )
         }

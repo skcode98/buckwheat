@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -113,6 +115,13 @@ fun Analytics(
     val afterMigrationToTransactions =
         remember(transactions) { mutableStateOf(transactions.none { it.type == TransactionType.INCOME }) }
 
+    val allTags by spendsViewModel.tags.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedTags by spendsViewModel.selectedTags.collectAsStateWithLifecycle()
+    val availableTags = remember(allTags, spends) {
+        val commentTags = spends.map { it.comment.trim() }.filter { it.isNotEmpty() }.distinct()
+        (commentTags + allTags).distinct()
+    }
+
 
     val navigationBarHeight =
         LocalWindowInsets.current.calculateBottomPadding().coerceAtLeast(16.dp)
@@ -136,6 +145,43 @@ fun Analytics(
                             scrollState = scrollState,
                             hasSpends = spends.isNotEmpty(),
                         )
+                    }
+                    if (availableTags.isNotEmpty() && spends.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                        ) {
+                            FilterChip(
+                                selected = selectedTags.isNullOrEmpty(),
+                                onClick = { spendsViewModel.selectedTags.value = null },
+                                label = { Text(stringResource(R.string.filter_all)) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                ),
+                            )
+                            availableTags.forEach { tag ->
+                                Spacer(modifier = Modifier.width(8.dp))
+                                FilterChip(
+                                    selected = selectedTags?.contains(tag) == true,
+                                    onClick = {
+                                        val current = spendsViewModel.selectedTags.value
+                                        spendsViewModel.selectedTags.value = if (current.isNullOrEmpty()) {
+                                            setOf(tag)
+                                        } else if (tag in current) {
+                                            val next = current - tag
+                                            if (next.isEmpty()) null else next
+                                        } else {
+                                            current + tag
+                                        }
+                                    },
+                                    label = { Text(tag) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    ),
+                                )
+                            }
+                        }
                     }
                     Column(Modifier.fillMaxWidth()) {
                         WholeBudgetCard(

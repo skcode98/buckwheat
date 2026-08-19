@@ -10,6 +10,10 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
+import com.danilkinkin.buckwheat.patterns.PatternDataset
+import com.danilkinkin.buckwheat.patterns.PatternPeriod
+import com.danilkinkin.buckwheat.patterns.PatternSpend
+import com.danilkinkin.buckwheat.patterns.forecast
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
 import com.danilkinkin.buckwheat.util.roundToDay
@@ -72,20 +76,28 @@ class SpendsViewModel @Inject constructor(
     val lastChangeDailyBudgetDate: StateFlow<Date?> = spendsRepository.getLastChangeDailyBudgetDate()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    var selectedTags: MutableStateFlow<Set<String>?> = MutableStateFlow(null)
+
     val periodSpends: StateFlow<List<Transaction>> = combine(
         spends,
         startPeriodDate,
         finishPeriodDate,
-    ) { list, start, finish ->
-        filterByPeriod(list, start, finish)
+        selectedTags,
+    ) { list, start, finish, tags ->
+        val periodFiltered = filterByPeriod(list, start, finish)
+        if (tags.isNullOrEmpty()) periodFiltered
+        else periodFiltered.filter { it.comment.trim() in tags }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val periodTransactions: StateFlow<List<Transaction>> = combine(
         transactions,
         startPeriodDate,
         finishPeriodDate,
-    ) { list, start, finish ->
-        filterByPeriod(list, start, finish)
+        selectedTags,
+    ) { list, start, finish, tags ->
+        val periodFiltered = filterByPeriod(list, start, finish)
+        if (tags.isNullOrEmpty()) periodFiltered
+        else periodFiltered.filter { it.comment.trim() in tags }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val currency: StateFlow<ExtendCurrency> = spendsRepository.getCurrency()
@@ -103,6 +115,63 @@ class SpendsViewModel @Inject constructor(
     ) { b, s, sFromDaily ->
         b - s - sFromDaily
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+
+    val suggestedBudget: StateFlow<BigDecimal?> = combine(
+        budgetPeriods,
+        archivedTransactions,
+        spends,
+        currency,
+    ) { periods, archived, currentSpends, cur ->
+        if (periods.isEmpty()) return@combine null
+
+        val today = java.time.LocalDate.now()
+        val allTransactions = archived.map { tx ->
+            PatternSpend(
+                date = tx.date,
+                value = tx.value,
+                category = tx.category,
+                comment = tx.comment,
+            )
+        } + currentSpends.filter { it.type == TransactionType.SPENT }.map { tx ->
+            PatternSpend(
+                date = tx.date,
+                value = tx.value,
+                category = tx.category,
+                comment = tx.comment,
+            )
+        }
+
+        val patternPeriods = periods.map { p ->
+            PatternPeriod(
+                start = p.startDate,
+                finish = p.finishDate,
+                budget = p.budget,
+                totalSpent = p.totalSpent,
+                isImported = p.isImported,
+            )
+        }
+
+        val dataset = PatternDataset(
+            spends = allTransactions,
+            periods = patternPeriods,
+            currencyCode = cur.value ?: "",
+            today = today,
+        )
+
+        val fc = forecast(dataset, BigDecimal.ZERO)
+        val avg = fc.monthlyAverage ?: return@combine null
+        if (avg <= BigDecimal.ZERO) return@combine null
+
+        val scaled = avg.setScale(0, java.math.RoundingMode.CEILING)
+        val magnitude = if (scaled >= BigDecimal(1000)) {
+            BigDecimal(100)
+        } else if (scaled >= BigDecimal(100)) {
+            BigDecimal(10)
+        } else {
+            BigDecimal(5)
+        }
+        (scaled / magnitude).setScale(0, java.math.RoundingMode.CEILING) * magnitude
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     var requireDistributionRestedBudget = MutableStateFlow(false)
     var requireSetBudget = MutableStateFlow(false)

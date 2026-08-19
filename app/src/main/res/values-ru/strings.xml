@@ -35,6 +35,8 @@
     <item quantity="other">%1$s дней</item>
   </plurals>
   <string name="export_to_csv">Выгрузить в CSV</string>
+  <string name="filter_all">Все</string>
+  <string name="suggested_budget">Рекомендуется: %1$s</string>
   <string name="finish_date_not_select">Дата окончания не выбрана</string>
   <string name="in_currency_label">Валюта</string>
   <string name="currency_from_list">Мировая валюта</string>
