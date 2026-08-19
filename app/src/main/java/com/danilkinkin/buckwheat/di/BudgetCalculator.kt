@@ -122,7 +122,7 @@ class BudgetCalculator @Inject constructor(
         val skippedDays = com.danilkinkin.buckwheat.util.countDays(
             Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
             lastChangeDailyBudgetDate
-        ) - 1
+        ).coerceAtLeast(0) - 1
 
         var restBudget = budget - spent
 
@@ -184,7 +184,7 @@ class BudgetCalculator @Inject constructor(
         val skippedDays = com.danilkinkin.buckwheat.util.countDays(
             Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
             lastChangeDailyBudgetDate
-        ) - 1
+        ).coerceAtLeast(0) - 1
 
         var restBudget = budget - spent
 
@@ -240,7 +240,7 @@ class BudgetCalculator @Inject constructor(
         val skippedDays = com.danilkinkin.buckwheat.util.countDays(
             Date(min(getCurrentDateUseCase().time, finishPeriodDate.time)),
             lastChangeDailyBudgetDate
-        ) - 1
+        ).coerceAtLeast(0) - 1
         val restBudget = budget - spent
 
         val howMuchSaved = if (restDays == 0) {

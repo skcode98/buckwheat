@@ -12,7 +12,7 @@ import com.danilkinkin.buckwheat.R
 object VoiceWidgetNotifications {
 
     const val CHANNEL_ID = "voice_widget"
-    const val NOTIFICATION_ID_LISTENING = 300
+    const val NOTIFICATION_ID_LISTENING = 400
     const val NOTIFICATION_ID_RESULT = 301
     const val EXTRA_REQUEST_MIC_PERMISSION = "request_mic_permission"
 

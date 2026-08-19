@@ -228,8 +228,8 @@ class SpendsRepository @Inject constructor(
                 "SpendsRepository",
                 "Set budget ["
                         + "budget: ${it[budgetStoreKey]} "
-                        + "start date: ${Date(it[startPeriodDateStoreKey]!!)} "
-                        + "finish date: ${Date(it[finishPeriodDateStoreKey]!!)}"
+                        + "start date: ${it[startPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"} "
+                        + "finish date: ${it[finishPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"}"
                         + "]"
             )
         }
@@ -325,7 +325,7 @@ class SpendsRepository @Inject constructor(
             it[budgetStoreKey] = newBudget.toString()
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
-            if (newStartDate !== null) {
+            if (newStartDate != null) {
                 it[startPeriodDateStoreKey] = roundToDay(newStartDate).time
             }
             it.remove(finishPeriodActualDateStoreKey)
@@ -334,8 +334,8 @@ class SpendsRepository @Inject constructor(
                 "SpendsRepository",
                 "Change budget ["
                         + "budget: ${it[budgetStoreKey]} "
-                        + "start date: ${Date(it[startPeriodDateStoreKey]!!)} "
-                        + "finish date: ${Date(it[finishPeriodDateStoreKey]!!)}"
+                        + "start date: ${it[startPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"} "
+                        + "finish date: ${it[finishPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"}"
                         + "]"
             )
         }
@@ -356,9 +356,9 @@ class SpendsRepository @Inject constructor(
                 "SpendsRepository",
                 "Finish budget ["
                         + "budget: ${it[budgetStoreKey]} "
-                        + "start date: ${Date(it[startPeriodDateStoreKey]!!)} "
-                        + "actual finish date: ${Date(it[finishPeriodActualDateStoreKey]!!)}"
-                        + "finish date: ${Date(it[finishPeriodDateStoreKey]!!)}"
+                        + "start date: ${it[startPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"} "
+                        + "actual finish date: ${it[finishPeriodActualDateStoreKey]?.let { d -> Date(d) } ?: "null"}"
+                        + "finish date: ${it[finishPeriodDateStoreKey]?.let { d -> Date(d) } ?: "null"}"
                         + "]"
             )
         }

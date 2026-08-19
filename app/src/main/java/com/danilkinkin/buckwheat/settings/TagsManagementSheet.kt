@@ -100,7 +100,7 @@ fun TagsManagementSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 24.dp),
             ) {
-                items(tags) { tag ->
+                items(tags, key = { "${it.id}_${it.name}" }) { tag ->
                     if (tag.id != null && editingId == tag.id) {
                         EditingTagRow(
                             currentName = editingText,

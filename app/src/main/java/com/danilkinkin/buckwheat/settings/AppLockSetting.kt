@@ -52,6 +52,7 @@ import com.danilkinkin.buckwheat.util.combineColors
 import com.danilkinkin.buckwheat.util.generatePinHash
 import com.danilkinkin.buckwheat.util.isLegacyPinHash
 import com.danilkinkin.buckwheat.util.verifyPinHash
+import com.danilkinkin.buckwheat.util.appLockLockoutMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -499,19 +500,30 @@ private fun PinChangeDialog(
             TextButton(onClick = {
                 when (step) {
                     0 -> {
-                        if (storedHash != null && verifyPinHash(pin, storedHash)) {
-                            if (isLegacyPinHash(storedHash)) {
-                                val upgraded = generatePinHash(pin)
-                                storedHash = upgraded
-                                coroutineScope.launch {
+                        coroutineScope.launch {
+                            val lockoutUntil = repository.getLockoutUntil()
+                            if (lockoutUntil > System.currentTimeMillis()) {
+                                val secs = ((lockoutUntil - System.currentTimeMillis()) / 1000).toInt()
+                                error = context.getString(R.string.app_lock_too_many_attempts, secs)
+                            } else if (storedHash != null && verifyPinHash(pin, storedHash)) {
+                                if (isLegacyPinHash(storedHash)) {
+                                    val upgraded = generatePinHash(pin)
+                                    storedHash = upgraded
                                     repository.setPinHash(upgraded)
                                 }
+                                repository.setFailedAttempts(0)
+                                pin = ""
+                                step = 1
+                                error = null
+                            } else {
+                                val attempts = repository.getFailedAttempts() + 1
+                                repository.setFailedAttempts(attempts)
+                                val lockoutMs = appLockLockoutMillis(attempts)
+                                if (lockoutMs > 0) {
+                                    repository.setLockoutUntil(System.currentTimeMillis() + lockoutMs)
+                                }
+                                error = context.getString(R.string.app_lock_pin_wrong)
                             }
-                            pin = ""
-                            step = 1
-                            error = null
-                        } else {
-                            error = context.getString(R.string.app_lock_pin_wrong)
                         }
                     }
 

@@ -186,7 +186,7 @@ private fun PastPeriodCard(
                 }
                 Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { (period.totalSpent.toFloat() / period.budget.toFloat()).coerceIn(0f, 1f) },
+                    progress = { if (period.budget > BigDecimal.ZERO) (period.totalSpent.toFloat() / period.budget.toFloat()).coerceIn(0f, 1f) else 0f },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp),

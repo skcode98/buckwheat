@@ -125,12 +125,12 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
             val widgetDesign = settingsRepository.getVoiceWidgetDesign().first()
             val categoryWidgetDesign = settingsRepository.getCategoryWidgetDesign().first()
 
-            val finishDateReached = finishDate !== null && finishDate.time <= Date().time
+            val finishDateReached = finishDate != null && finishDate.time <= Date().time
             val earlyFinishDateReached =
-                actualFinishDate !== null && actualFinishDate.time <= Date().time
+                actualFinishDate != null && actualFinishDate.time <= Date().time
 
             if (
-                finishDate === null
+                finishDate == null
                 || finishDateReached
                 || earlyFinishDateReached
             ) {

@@ -29,21 +29,12 @@ class RecalcBudgetViewModel @Inject constructor(
             ?.let { countDaysToToday(it) == 1 }
             ?: false
 
-        calculateSplitOnRestDays()
-        calculateAddToToday()
-    }
-
-    private fun calculateSplitOnRestDays() = viewModelScope.launch {
         val whatBudgetForDay = spendsRepository.whatBudgetForDay(applyTodaySpends = true)
-
         newDailyBudgetIfSplitPerDay.value = whatBudgetForDay.setScale(0, RoundingMode.HALF_EVEN)
-    }
 
-    private fun calculateAddToToday() = viewModelScope.launch {
         val budgetPerDayAdd = spendsRepository.howMuchNotSpent(
             excludeSkippedPart = true,
         )
-
         howMuchNotSpent.value = spendsRepository.howMuchSaved()
         nextDayBudget.value = spendsRepository.nextDayBudget()
         newDailyBudgetIfAddToday.value = budgetPerDayAdd.setScale(0, RoundingMode.HALF_EVEN)

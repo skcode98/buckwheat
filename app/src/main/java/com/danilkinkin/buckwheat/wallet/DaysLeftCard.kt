@@ -41,7 +41,9 @@ fun DaysLeftCard(
 
     var size by remember { mutableStateOf(0.dp) }
 
-    val days = countDays(finishDate!!, startDate)
+    if (finishDate == null) return
+
+    val days = countDays(finishDate, startDate)
     val restDays = countDaysToToday(finishDate)
 
     Box(

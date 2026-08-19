@@ -59,7 +59,7 @@ fun NumberedRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (subtitle !== null) {
+            if (subtitle != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,

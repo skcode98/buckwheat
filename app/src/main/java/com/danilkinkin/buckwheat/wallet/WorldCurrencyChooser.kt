@@ -192,7 +192,7 @@ fun WorldCurrencyChooserContent(
                         filteredList.forEach {
                             itemsCurrency(
                                 currency = it,
-                                selected = selectCurrency.value?.currencyCode === it.currencyCode,
+                                selected = selectCurrency.value?.currencyCode == it.currencyCode,
                                 onClick = {
                                     selectCurrency.value = it
                                 },

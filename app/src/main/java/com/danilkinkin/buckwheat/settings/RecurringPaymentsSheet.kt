@@ -195,7 +195,7 @@ fun RecurringPaymentsSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 24.dp),
             ) {
-                items(templates) { template ->
+                items(templates, key = { it.id }) { template ->
                     RecurringTemplateRow(
                         template = template,
                         currency = currency,

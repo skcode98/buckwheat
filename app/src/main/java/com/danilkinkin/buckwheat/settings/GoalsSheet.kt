@@ -164,7 +164,7 @@ fun GoalsSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 24.dp),
             ) {
-                items(goals) { goal ->
+                items(goals, key = { it.id }) { goal ->
                     GoalRow(
                         goal = goal,
                         currency = currency,

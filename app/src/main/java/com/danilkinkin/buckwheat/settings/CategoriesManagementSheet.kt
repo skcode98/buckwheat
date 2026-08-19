@@ -116,7 +116,7 @@ fun CategoriesManagementSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 24.dp),
             ) {
-                items(categories) { item ->
+                items(categories, key = { "${it.id}_${it.name}" }) { item ->
                     val isBuiltIn = item.id == null && SpendCategory.fromStored(item.name) != null
                     if (item.id != null && editingId == item.id) {
                         EditingCategoryRow(

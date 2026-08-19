@@ -149,7 +149,7 @@ internal fun buildPatternAiUserPrompt(summary: PatternAiSummary): String {
     } else {
         summary.recurringForecasts.joinToString("\n") { rf ->
             val nextDate = rf.upcomingPayments.firstOrNull()?.format(PATTERN_DATE_FORMAT) ?: "unknown"
-            "  - ${rf.template.comment}: ${patternPromptAmount(rf.template.amount)}/month, " +
+            "  - recurring_${rf.template.dayOfMonth}: ${patternPromptAmount(rf.template.amount)}/month, " +
                 "next payment $nextDate, annual ${patternPromptAmount(rf.annualTotal)}"
         }
     }

@@ -15,5 +15,5 @@ class RoomConverters {
     fun bigDecimalToString(input: BigDecimal): String = input.toPlainString()
 
     @TypeConverter
-    fun stringToBigDecimal(input: String): BigDecimal = BigDecimal(input)
+    fun stringToBigDecimal(input: String): BigDecimal = input.toBigDecimalOrNull() ?: BigDecimal.ZERO
 }

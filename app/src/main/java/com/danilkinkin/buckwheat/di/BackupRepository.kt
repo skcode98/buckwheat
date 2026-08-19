@@ -91,9 +91,7 @@ class BackupRepository @Inject constructor(
 
                 // Insert in FK-safe order, preserving ids so archived_transactions keep their period link.
                 budgetPeriodDao.insertAll(backup.budgetPeriods)
-                backup.archivedTransactions.forEach {
-                    budgetPeriodDao.insertArchivedTransactions(listOf(it))
-                }
+                budgetPeriodDao.insertArchivedTransactions(backup.archivedTransactions)
                 transactionDao.insertAll(backup.transactions)
                 savedTagDao.insertAll(backup.savedTags)
                 savedCategoryDao.insertAll(backup.savedCategories)
