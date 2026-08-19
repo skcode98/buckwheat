@@ -88,6 +88,7 @@
   <string name="goal_deadline_format">До: %1$s</string>
   <string name="goal_days_remaining">Осталось %1$d дн.</string>
   <string name="goal_overdue">Просрочено на %1$d дн.</string>
+  <string name="goal_per_week">Откладывать %1$s / нед.</string>
   <string name="goals_progress_title">Сберегательные цели</string>
   <string name="goals_active_count">Активных: %1$d</string>
   <string name="spend_digest_setting_title">Дайджест расходов</string>
@@ -188,4 +189,11 @@
   <string name="confirm_finish_budget_title">Завершить бюджет</string>
   <string name="confirm_finish_budget_description">Ваш текущий бюджет будет завершен, в него больше нельзя будет вносить траты</string>
   <string name="confirm_finish_budget">Завершить бюджет</string>
+  <string name="patterns_category_breakdown">Расходы по категориям</string>
+  <string name="patterns_category_breakdown_detail">%1$s · %2$d%% · в среднем %3$s/мес · %4$s</string>
+  <string name="patterns_comment_pattern_detail_avg">%1$d транз. · в среднем %2$s/мес · %3$d мес.</string>
+  <string name="patterns_comment_predicted_next">Прогноз на след. месяц: %1$s</string>
+  <string name="patterns_detected_recurring">Обнаружены повторяющиеся траты</string>
+  <string name="patterns_detected_recurring_desc">Траты, которые повторяются ежемесячно по вашей истории</string>
+  <string name="patterns_detected_recurring_detail">%1$d мес. · последняя %2$s</string>
 </resources>

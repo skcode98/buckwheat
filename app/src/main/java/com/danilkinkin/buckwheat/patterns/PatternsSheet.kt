@@ -332,6 +332,11 @@ private fun PatternsBody(
             },
         )
 
+        if (metrics.categories.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            CategoryBreakdownCard(metrics.categories, context, currency)
+        }
+
         Spacer(Modifier.height(16.dp))
         CategorySparklines(categorySeries, currency)
 
@@ -384,6 +389,11 @@ private fun PatternsBody(
         if (metrics.commentPatterns.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             CommentPatternsCard(metrics.commentPatterns, context, currency)
+        }
+
+        if (metrics.recurring.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            DetectedRecurringCard(metrics.recurring, context, currency)
         }
 
         if (metrics.recurringForecasts.isNotEmpty()) {
@@ -560,6 +570,84 @@ private fun CategorySparklines(
                         } else {
                             Spacer(Modifier.weight(1f))
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Full category breakdown: name, total, percent, monthly average, trend, active months.
+@Composable
+private fun CategoryBreakdownCard(
+    categories: List<CategoryPattern>,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_category_breakdown),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_comment_patterns_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            categories.forEach { cat ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = cat.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val trendArrow = when (cat.trend) {
+                            TrendDirection.UP -> "▲"
+                            TrendDirection.DOWN -> "▼"
+                            TrendDirection.STABLE -> "→"
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_category_breakdown_detail,
+                                cat.percent,
+                                numberFormat(context, cat.monthlyAverage, currency),
+                                trendArrow,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = numberFormat(context, cat.total, currency),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_comment_pattern_detail,
+                                cat.activeMonths,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -1003,13 +1091,34 @@ private fun CommentPatternsCard(
                         )
                         Text(
                             text = stringResource(
-                                R.string.patterns_comment_pattern_detail,
+                                R.string.patterns_comment_pattern_detail_avg,
                                 pattern.transactionCount,
+                                numberFormat(context, pattern.monthlyAverage, currency),
+                                pattern.activeMonths,
                             ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                         )
+                        if (pattern.monthSeries.size >= 2 && pattern.activeMonths >= 2) {
+                            val lastMonth = pattern.monthSeries.last()
+                            val prevMonth = pattern.monthSeries[pattern.monthSeries.size - 2]
+                            val predicted = if (prevMonth > BigDecimal.ZERO) {
+                                lastMonth.add(lastMonth.minus(prevMonth).coerceAtLeast(BigDecimal.ZERO))
+                                    .coerceAtLeast(BigDecimal.ZERO)
+                            } else {
+                                pattern.monthlyAverage
+                            }
+                            Text(
+                                text = stringResource(
+                                    R.string.patterns_comment_predicted_next,
+                                    numberFormat(context, predicted, currency),
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                            )
+                        }
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(horizontalAlignment = Alignment.End) {
@@ -1024,6 +1133,15 @@ private fun CommentPatternsCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                if (pattern.monthSeries.size >= 2) {
+                    Spacer(Modifier.height(6.dp))
+                    MiniSpark(
+                        values = pattern.monthSeries,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp),
+                    )
                 }
             }
         }
@@ -1100,6 +1218,75 @@ private fun RecurringForecastCard(
                             ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Pattern-detected recurring charges: comment-based charges that repeat monthly.
+@Composable
+private fun DetectedRecurringCard(
+    charges: List<RecurringCharge>,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_detected_recurring),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_detected_recurring_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            charges.forEach { charge ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = charge.normalizedComment,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_detected_recurring_detail,
+                                charge.monthsApart,
+                                prettyDate(
+                                    charge.lastDate.toDate(),
+                                    showTime = false,
+                                    forceShowDate = true,
+                                    shortMonth = true,
+                                ),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "${numberFormat(context, charge.monthlyAmount, currency)}/mo",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
                         )
                     }
                 }

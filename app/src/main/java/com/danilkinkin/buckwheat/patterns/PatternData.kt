@@ -195,6 +195,7 @@ data class CommentPattern(
     val monthlyAverage: BigDecimal,
     val transactionCount: Int,
     val activeMonths: Int,
+    val monthSeries: List<BigDecimal> = emptyList(),
 )
 
 // A recurring template's upcoming payments and annual projection.

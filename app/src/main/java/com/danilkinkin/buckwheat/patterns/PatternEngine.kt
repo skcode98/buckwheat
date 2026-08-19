@@ -205,7 +205,7 @@ fun commentPatterns(dataset: PatternDataset): List<CommentPattern> {
     val zero = BigDecimal.ZERO
     val names = dataset.spends.mapNotNull { it.comment?.takeIf { c -> c.isNotBlank() } }.distinct()
     val index = commentNameIndex(names)
-    val allMonths = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct()
+    val months = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct().sorted()
     val grandTotal = dataset.spends.fold(zero) { acc, spend -> acc + spend.value }
 
     return dataset.spends
@@ -227,6 +227,7 @@ fun commentPatterns(dataset: PatternDataset): List<CommentPattern> {
             } else {
                 total
             }
+            val groupedByMonth = groupSpends.groupBy { YearMonth.from(it.date.toLocalDate()) }
             CommentPattern(
                 key = key,
                 displayName = index.canonicalToDisplay[key] ?: key,
@@ -235,6 +236,9 @@ fun commentPatterns(dataset: PatternDataset): List<CommentPattern> {
                 monthlyAverage = monthlyAverage,
                 transactionCount = groupSpends.size,
                 activeMonths = activeMonths,
+                monthSeries = months.map { month ->
+                    groupedByMonth[month]?.fold(zero) { acc, spend -> acc + spend.value } ?: zero
+                },
             )
         }
         .sortedWith(compareByDescending<CommentPattern> { it.total }.thenBy { it.key })
