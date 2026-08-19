@@ -79,6 +79,12 @@ fun CurrentSpendEditor(
     }
 
     LaunchedEffect(Unit) {
+        editorViewModel.rawSpentValue.collect {
+            calculateValues()
+        }
+    }
+
+    LaunchedEffect(Unit) {
         editorViewModel.stage.collect {
             when (it) {
                 EditStage.IDLE -> {
