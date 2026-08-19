@@ -114,7 +114,7 @@ fun CategoryCapsSheet(
                     .padding(bottom = navigationBarHeight),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
             ) {
-                items(categories, key = { it }) { item ->
+                items(categories, key = { "${it.id}_${it.name}" }) { item ->
                     CategoryCapRow(
                         name = item.name,
                         emoji = SpendCategory.emojiFor(item.name, item.emoji),
