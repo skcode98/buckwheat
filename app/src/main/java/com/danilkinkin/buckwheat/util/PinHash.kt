@@ -71,12 +71,7 @@ private fun String.fromHexOrNull(): ByteArray? {
     }
 }
 
-// Exponential backoff for failed unlock attempts: 30s, 1m, 2m, 4m, capped at 5m. A short
-// numeric PIN is the app's weakest point, so lockouts must make in-app brute force infeasible.
+// 3 failed attempts → 5-minute lockout. No progressive backoff.
 fun appLockLockoutMillis(failedAttempts: Int): Long {
-    if (failedAttempts <= 0) return 0L
-    val base = 30_000L
-    val cap = 5 * 60_000L
-    val shift = (failedAttempts - 1).coerceAtMost(4)
-    return minOf(base * (1L shl shift), cap)
+    return if (failedAttempts >= 3) 5 * 60_000L else 0L
 }

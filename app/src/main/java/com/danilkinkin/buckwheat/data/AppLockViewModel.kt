@@ -143,10 +143,15 @@ class AppLockViewModel @Inject constructor(
             } else {
                 val attempts = repository.getFailedAttempts() + 1
                 repository.setFailedAttempts(attempts)
-                lockoutUntilMillis = now + appLockLockoutMillis(attempts)
-                repository.setLockoutUntil(lockoutUntilMillis)
-                lockoutSecondsLeft = (appLockLockoutMillis(attempts) / 1000L).toInt()
-                unlockError = "Invalid PIN"
+                if (attempts >= 3) {
+                    lockoutUntilMillis = now + appLockLockoutMillis(attempts)
+                    repository.setLockoutUntil(lockoutUntilMillis)
+                    lockoutSecondsLeft = (appLockLockoutMillis(attempts) / 1000L).toInt()
+                    unlockError = "Too many attempts. Locked for 5 minutes."
+                } else {
+                    val remaining = 3 - attempts
+                    unlockError = "Invalid PIN. $remaining attempt${if (remaining > 1) "s" else ""} left."
+                }
                 pinInput = ""
             }
         }
