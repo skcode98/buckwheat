@@ -499,14 +499,18 @@ fun categoryMonthlySeries(dataset: PatternDataset, top: Int = 4): List<CategoryM
 
 // Per-month transaction count series for the top-N categories (by total), for the frequency
 // card. The series aligns to the dataset's spend months (oldest first).
-fun categoryTransactionSeries(dataset: PatternDataset, top: Int = 4): List<CategoryTransactionSeries> {
+fun categoryTransactionSeries(
+    dataset: PatternDataset,
+    categories: List<CategoryPattern> = categoryPatterns(dataset),
+    top: Int = 4,
+): List<CategoryTransactionSeries> {
     if (dataset.spends.isEmpty()) return emptyList()
-    val categories = categoryPatterns(dataset).take(top)
-    if (categories.isEmpty()) return emptyList()
+    val topCategories = categories.take(top)
+    if (topCategories.isEmpty()) return emptyList()
     val months = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct().sorted()
     val names = dataset.spends.mapNotNull { it.category?.takeIf { c -> c.isNotBlank() } }.distinct()
     val index = categoryNameIndex(names)
-    return categories.map { category ->
+    return topCategories.map { category ->
         val groupSpends = dataset.spends
             .filter { canonicalCategory(it.category, index) == category.key }
             .groupBy { YearMonth.from(it.date.toLocalDate()) }
@@ -1387,7 +1391,7 @@ fun analyzePatterns(
     val recurringForecasts = recurringTemplateForecasts(dataset.recurringTemplates, dataset.today)
     val commentCleanup = commentCleanupSuggestions(commentPats)
     val categories = categoryPatterns(dataset)
-    val txSeries = categoryTransactionSeries(dataset)
+    val txSeries = categoryTransactionSeries(dataset, categories)
     val freqCandidates = detectFrequencyRecurringCandidates(dataset, categories)
     val suggestions = buildSuggestions(dataset, baseForecast, recurring) + commentCleanup + buildFrequencySuggestions(freqCandidates)
     return PatternMetrics(
