@@ -45,6 +45,8 @@ data class PatternAiSummary(
     val commentPatterns: List<CommentPattern>,
     val recurringForecasts: List<RecurringForecast>,
     val suggestions: List<InsightSuggestion>,
+    val categoryTransactionSeries: List<CategoryTransactionSeries>,
+    val frequencyRecurringCandidates: List<FrequencyRecurringCandidate>,
 )
 
 // Builds the AI-safe aggregate from the pure engine's metrics. The recurring-charge suggestion
@@ -75,6 +77,8 @@ fun buildPatternAiSummary(
         suggestions = metrics.suggestions.filterNot { suggestion ->
             suggestion.title.contains("recurring", ignoreCase = true)
         },
+        categoryTransactionSeries = metrics.categoryTransactionSeries,
+        frequencyRecurringCandidates = metrics.frequencyRecurringCandidates,
     )
 }
 
@@ -143,6 +147,26 @@ internal fun buildPatternAiUserPrompt(summary: PatternAiSummary): String {
         }
     }
 
+    // Category transaction count series section
+    val frequencyLines = if (summary.categoryTransactionSeries.isEmpty()) {
+        "  none"
+    } else {
+        summary.categoryTransactionSeries.joinToString("\n") { series ->
+            "  - ${series.displayName}: " + series.points.joinToString(", ") { it.toString() } + " txns/month"
+        }
+    }
+
+    // Frequency recurring candidates section
+    val freqRecurringLines = if (summary.frequencyRecurringCandidates.isEmpty()) {
+        "  none"
+    } else {
+        summary.frequencyRecurringCandidates.joinToString("\n") { fc ->
+            "  - ${fc.displayName}: ~${patternPromptAmount(fc.avgTransactionsPerMonth)} txns/month, " +
+                "suggested day ${fc.suggestedDayOfMonth}, avg ${patternPromptAmount(fc.suggestedAmount)}, " +
+                "confidence ${fc.confidence}"
+        }
+    }
+
     // Recurring template forecasts section
     val recurringTemplateLines = if (summary.recurringForecasts.isEmpty()) {
         "  none"
@@ -195,6 +219,10 @@ internal fun buildPatternAiUserPrompt(summary: PatternAiSummary): String {
         append(recurringTemplateLines)
         append("\nComment/tag patterns:\n")
         append(commentLines)
+        append("\nCategory transaction counts (txns per month):\n")
+        append(frequencyLines)
+        append("\nFrequency-based recurring candidates:\n")
+        append(freqRecurringLines)
         append("\nNo-spend days: ${summary.noSpendDays}")
         append("\nCurrent suggestions:\n")
         append(suggestionLines)

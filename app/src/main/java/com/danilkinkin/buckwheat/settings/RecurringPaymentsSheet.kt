@@ -27,6 +27,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
+import java.math.BigDecimal
 
 const val RECURRING_PAYMENTS_SHEET = "recurringPayments"
 
@@ -35,6 +36,9 @@ const val RECURRING_PAYMENTS_SHEET = "recurringPayments"
 fun RecurringPaymentsSheet(
     viewModel: RecurringPaymentsViewModel = hiltViewModel(),
     spendsViewModel: SpendsViewModel = hiltViewModel(),
+    suggestedAmount: BigDecimal? = null,
+    suggestedComment: String? = null,
+    suggestedDay: Int? = null,
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val currency by spendsViewModel.currency.collectAsStateWithLifecycle()
@@ -46,9 +50,9 @@ fun RecurringPaymentsSheet(
         16.dp,
     )
 
-    var amountText by remember { mutableStateOf("") }
-    var commentText by remember { mutableStateOf("") }
-    var dayText by remember { mutableStateOf("") }
+    var amountText by remember { mutableStateOf(suggestedAmount?.toPlainString() ?: "") }
+    var commentText by remember { mutableStateOf(suggestedComment ?: "") }
+    var dayText by remember { mutableStateOf(suggestedDay?.toString() ?: "") }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {

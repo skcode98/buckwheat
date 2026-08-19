@@ -376,7 +376,8 @@ fun trendPercent(from: BigDecimal, to: BigDecimal): Int {
 // --- Step 2: category analysis ------------------------------------------------
 
 // Per-category pattern: total, share, monthly average over the months it was active, and a
-// first-half vs second-half split trend. Sorted by total desc (tie: key asc).
+// first-half vs second-half split trend. Sorted by total desc (tie: key asc). Also includes
+// transaction counts for frequency analysis.
 fun categoryPatterns(dataset: PatternDataset): List<CategoryPattern> {
     if (dataset.spends.isEmpty()) return emptyList()
     val zero = BigDecimal.ZERO
@@ -403,6 +404,36 @@ fun categoryPatterns(dataset: PatternDataset): List<CategoryPattern> {
             } else {
                 total
             }
+            val transactionCount = groupSpends.size
+            val monthlyTransactionAverage = if (activeMonths > 0) {
+                BigDecimal(transactionCount).divide(activeMonths.toBigDecimal(), 2, RoundingMode.HALF_UP)
+            } else {
+                BigDecimal(transactionCount)
+            }
+            val months = groupSpends.map { YearMonth.from(it.date.toLocalDate()) }.distinct().sorted()
+            val freqTrend = if (months.size >= 2) {
+                val firstHalf = months.subList(0, months.size / 2).toSet()
+                var firstCount = 0
+                var secondCount = 0
+                groupSpends.forEach { spend ->
+                    val m = YearMonth.from(spend.date.toLocalDate())
+                    if (m in firstHalf) firstCount++ else secondCount++
+                }
+                val firstAvg = firstCount.toBigDecimal().divide((months.size / 2).coerceAtLeast(1).toBigDecimal(), 2, RoundingMode.HALF_UP)
+                val secondAvg = secondCount.toBigDecimal().divide((months.size - months.size / 2).coerceAtLeast(1).toBigDecimal(), 2, RoundingMode.HALF_UP)
+                when {
+                    secondAvg > firstAvg.multiply(BigDecimal("1.1")) -> TrendDirection.UP
+                    secondAvg < firstAvg.multiply(BigDecimal("0.9")) -> TrendDirection.DOWN
+                    else -> TrendDirection.STABLE
+                }
+            } else {
+                TrendDirection.STABLE
+            }
+            val transactionSeriesMonths = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct().sorted()
+            val groupedByMonth = groupSpends.groupBy { YearMonth.from(it.date.toLocalDate()) }
+            val transactionSeries = transactionSeriesMonths.map { month ->
+                groupedByMonth[month]?.size ?: 0
+            }
             CategoryPattern(
                 key = key,
                 displayName = index.canonicalToDisplay[key]
@@ -413,6 +444,10 @@ fun categoryPatterns(dataset: PatternDataset): List<CategoryPattern> {
                 trend = categoryTrend(groupSpends),
                 monthCount = allMonths.size,
                 activeMonths = activeMonths,
+                transactionCount = transactionCount,
+                monthlyTransactionAverage = monthlyTransactionAverage,
+                transactionSeries = transactionSeries,
+                frequencyTrend = freqTrend,
             )
         }
         .sortedWith(compareByDescending<CategoryPattern> { it.total }.thenBy { it.key })
@@ -460,6 +495,94 @@ fun categoryMonthlySeries(dataset: PatternDataset, top: Int = 4): List<CategoryM
             },
         )
     }
+}
+
+// Per-month transaction count series for the top-N categories (by total), for the frequency
+// card. The series aligns to the dataset's spend months (oldest first).
+fun categoryTransactionSeries(dataset: PatternDataset, top: Int = 4): List<CategoryTransactionSeries> {
+    if (dataset.spends.isEmpty()) return emptyList()
+    val categories = categoryPatterns(dataset).take(top)
+    if (categories.isEmpty()) return emptyList()
+    val months = dataset.spends.map { YearMonth.from(it.date.toLocalDate()) }.distinct().sorted()
+    val names = dataset.spends.mapNotNull { it.category?.takeIf { c -> c.isNotBlank() } }.distinct()
+    val index = categoryNameIndex(names)
+    return categories.map { category ->
+        val groupSpends = dataset.spends
+            .filter { canonicalCategory(it.category, index) == category.key }
+            .groupBy { YearMonth.from(it.date.toLocalDate()) }
+        CategoryTransactionSeries(
+            key = category.key,
+            displayName = category.displayName,
+            points = months.map { month ->
+                groupSpends[month]?.size ?: 0
+            },
+        )
+    }
+}
+
+// Detects categories with stable purchase frequency that look like recurring payments.
+// A category qualifies when it has 3+ active months and an average of 4+ transactions/month
+// with low variance (coefficient of variation < 0.5).
+fun detectFrequencyRecurringCandidates(
+    dataset: PatternDataset,
+    categories: List<CategoryPattern>,
+): List<FrequencyRecurringCandidate> {
+    if (categories.isEmpty()) return emptyList()
+    val names = dataset.spends.mapNotNull { it.category?.takeIf { c -> c.isNotBlank() } }.distinct()
+    val index = categoryNameIndex(names)
+    val zero = BigDecimal.ZERO
+
+    return categories
+        .filter { it.activeMonths >= 3 && it.monthlyTransactionAverage >= BigDecimal("4") }
+        .mapNotNull { category ->
+            val groupSpends = dataset.spends
+                .filter { canonicalCategory(it.category, index) == category.key }
+            if (groupSpends.isEmpty()) return@mapNotNull null
+
+            val monthlyCounts = groupSpends
+                .groupBy { YearMonth.from(it.date.toLocalDate()) }
+                .mapValues { (_, spends) -> spends.size }
+                .values
+            val variance = if (monthlyCounts.size >= 2) {
+                val mean = monthlyCounts.map { it.toBigDecimal() }.fold(zero) { a, b -> a + b }
+                    .divide(monthlyCounts.size.toBigDecimal(), 4, RoundingMode.HALF_UP)
+                val sumSq = monthlyCounts.map { it.toBigDecimal() }.fold(zero) { a, b ->
+                    val diff = b.subtract(mean)
+                    a + diff.multiply(diff)
+                }.divide(monthlyCounts.size.toBigDecimal(), 4, RoundingMode.HALF_UP)
+                val stddev = bigDecimalSqrt(sumSq)
+                if (mean > zero) stddev.divide(mean, 4, RoundingMode.HALF_UP) else BigDecimal.ZERO
+            } else {
+                BigDecimal.ZERO
+            }
+
+            if (variance > BigDecimal("0.5")) return@mapNotNull null
+
+            val amounts = groupSpends.map { it.value }.sorted()
+            val medianAmount = amounts[amounts.size / 2]
+            val dayOfMonths = groupSpends.map { it.date.toLocalDate().dayOfMonth }
+            val mostCommonDay = dayOfMonths.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+                ?: 1
+
+            val confidence = when {
+                category.activeMonths >= 5 && variance < BigDecimal("0.3") -> "high"
+                category.activeMonths >= 4 && variance < BigDecimal("0.4") -> "medium"
+                else -> "low"
+            }
+
+            FrequencyRecurringCandidate(
+                categoryKey = category.key,
+                displayName = category.displayName,
+                avgTransactionsPerMonth = category.monthlyTransactionAverage,
+                activeMonths = category.activeMonths,
+                suggestedDayOfMonth = mostCommonDay,
+                suggestedAmount = medianAmount.setScale(2, RoundingMode.HALF_UP),
+                totalTransactions = category.transactionCount,
+                confidence = confidence,
+            )
+        }
+        .sortedWith(compareByDescending<FrequencyRecurringCandidate> { it.avgTransactionsPerMonth }.thenBy { it.displayName })
+        .take(3)
 }
 
 // Spend concentration: top category + Herfindahl index (sum of squared 0..1 shares).
@@ -1145,6 +1268,26 @@ fun buildSuggestions(
         .take(5)
 }
 
+// Builds actionable suggestions for frequency-based recurring candidates.
+fun buildFrequencySuggestions(
+    freqCandidates: List<FrequencyRecurringCandidate>,
+): List<InsightSuggestion> {
+    if (freqCandidates.isEmpty()) return emptyList()
+    val suggestions = mutableListOf<InsightSuggestion>()
+    freqCandidates.take(2).forEach { candidate ->
+        suggestions += InsightSuggestion(
+            severity = Severity.MEDIUM,
+            title = "${candidate.displayName} looks like a subscription",
+            body = "You buy ${candidate.displayName} ~${patternAmount(candidate.avgTransactionsPerMonth)} times/month " +
+                "(${candidate.totalTransactions} total over ${candidate.activeMonths} months). " +
+                "Set up a recurring payment to track it automatically.",
+            categoryKey = candidate.categoryKey,
+            actionable = true,
+        )
+    }
+    return suggestions
+}
+
 private fun totalDaysInRange(dataset: PatternDataset): Int {
     val spends = dataset.spends
     if (spends.isEmpty()) return 0
@@ -1243,7 +1386,10 @@ fun analyzePatterns(
     val commentPats = commentPatterns(dataset)
     val recurringForecasts = recurringTemplateForecasts(dataset.recurringTemplates, dataset.today)
     val commentCleanup = commentCleanupSuggestions(commentPats)
-    val suggestions = buildSuggestions(dataset, baseForecast, recurring) + commentCleanup
+    val categories = categoryPatterns(dataset)
+    val txSeries = categoryTransactionSeries(dataset)
+    val freqCandidates = detectFrequencyRecurringCandidates(dataset, categories)
+    val suggestions = buildSuggestions(dataset, baseForecast, recurring) + commentCleanup + buildFrequencySuggestions(freqCandidates)
     return PatternMetrics(
         monthlyPoints = monthly,
         trendDirection = trendDirection(monthly),
@@ -1252,7 +1398,7 @@ fun analyzePatterns(
         } else {
             0
         },
-        categories = categoryPatterns(dataset),
+        categories = categories,
         concentration = concentrationIndex(dataset),
         weekdayPoints = weekdayPatterns(dataset),
         weekendDeltaPercent = weekendVsWeekdayDelta(dataset),
@@ -1268,5 +1414,7 @@ fun analyzePatterns(
         recurringForecasts = recurringForecasts,
         suggestions = suggestions,
         report = buildPatternReport(dataset, suggestions, baseForecast),
+        categoryTransactionSeries = txSeries,
+        frequencyRecurringCandidates = freqCandidates,
     )
 }

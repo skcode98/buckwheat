@@ -61,6 +61,7 @@ import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.settings.RECURRING_PAYMENTS_SHEET
 import com.danilkinkin.buckwheat.ui.colorBad
 import com.danilkinkin.buckwheat.ui.colorGood
 import com.danilkinkin.buckwheat.ui.colorMax
@@ -339,6 +340,30 @@ private fun PatternsBody(
 
         Spacer(Modifier.height(16.dp))
         CategorySparklines(categorySeries, currency)
+
+        Spacer(Modifier.height(16.dp))
+        CategoryFrequencyCard(metrics.categoryTransactionSeries, context, currency)
+
+        Spacer(Modifier.height(16.dp))
+        if (metrics.frequencyRecurringCandidates.isNotEmpty()) {
+            FrequencyRecurringSuggestionCard(
+                candidates = metrics.frequencyRecurringCandidates,
+                context = context,
+                currency = currency,
+                onAddRecurring = { candidate ->
+                    appViewModel.openSheet(
+                        PathState(
+                            name = RECURRING_PAYMENTS_SHEET,
+                            args = mapOf(
+                                "suggestedAmount" to candidate.suggestedAmount,
+                                "suggestedComment" to candidate.displayName,
+                                "suggestedDay" to candidate.suggestedDayOfMonth,
+                            ),
+                        )
+                    )
+                },
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
         SpendsWeekdayCard(
@@ -648,6 +673,168 @@ private fun CategoryBreakdownCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Transaction count trends per category: shows how many times you buy each top category per month.
+@Composable
+private fun CategoryFrequencyCard(
+    series: List<CategoryTransactionSeries>,
+    context: Context,
+    currency: ExtendCurrency,
+) {
+    if (series.isEmpty()) return
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_frequency_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_frequency_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            series.forEach { s ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = s.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val totalTxns = s.points.sum()
+                        val avgMonthly = if (s.points.isNotEmpty()) {
+                            BigDecimal(totalTxns).divide(s.points.size.toBigDecimal(), 1, RoundingMode.HALF_UP)
+                        } else {
+                            BigDecimal.ZERO
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_frequency_detail,
+                                totalTxns,
+                                avgMonthly,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "${s.points.sum()}",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                    )
+                }
+                if (s.points.size >= 2) {
+                    Spacer(Modifier.height(6.dp))
+                    val maxVal = s.points.maxOrNull()?.coerceAtLeast(1) ?: 1
+                    val barColor = MaterialTheme.colorScheme.primary
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp),
+                    ) {
+                        val slotWidth = size.width / s.points.size
+                        val maxBarHeight = size.height - 4.dp.toPx()
+                        s.points.forEachIndexed { index, count ->
+                            val barHeight = (count.toFloat() / maxVal * maxBarHeight).coerceAtLeast(2.dp.toPx())
+                            val x = index * slotWidth + slotWidth * 0.15f
+                            val barW = slotWidth * 0.7f
+                            drawRoundRect(
+                                color = barColor.copy(alpha = if (count > 0) 0.7f else 0.12f),
+                                topLeft = Offset(x, size.height - barHeight),
+                                size = Size(barW, barHeight),
+                                cornerRadius = CornerRadius(barW / 2f, barW / 2f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Actionable suggestions to set up recurring payments for categories with stable high frequency.
+@Composable
+private fun FrequencyRecurringSuggestionCard(
+    candidates: List<FrequencyRecurringCandidate>,
+    context: Context,
+    currency: ExtendCurrency,
+    onAddRecurring: (FrequencyRecurringCandidate) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.patterns_frequency_recurring_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.patterns_frequency_recurring_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            candidates.forEach { candidate ->
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = candidate.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_frequency_recurring_detail,
+                                candidate.avgTransactionsPerMonth.setScale(1, RoundingMode.HALF_UP),
+                                candidate.activeMonths,
+                                candidate.totalTransactions,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.patterns_frequency_recurring_suggested,
+                                candidate.suggestedDayOfMonth,
+                                numberFormat(context, candidate.suggestedAmount, currency),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    TextButton(onClick = { onAddRecurring(candidate) }) {
+                        Text(stringResource(R.string.patterns_frequency_recurring_add))
                     }
                 }
             }

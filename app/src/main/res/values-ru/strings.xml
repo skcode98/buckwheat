@@ -197,4 +197,12 @@
   <string name="patterns_detected_recurring">Обнаружены повторяющиеся траты</string>
   <string name="patterns_detected_recurring_desc">Траты, которые повторяются ежемесячно по вашей истории</string>
   <string name="patterns_detected_recurring_detail">%1$d мес. · последняя %2$s</string>
+  <string name="patterns_frequency_title">Частота покупок</string>
+  <string name="patterns_frequency_desc">Сколько раз вы покупаете каждую категорию в месяц</string>
+  <string name="patterns_frequency_detail">%1$d всего · avg %2$s/мес</string>
+  <string name="patterns_frequency_recurring_title">Настроить повторяющиеся платежи</string>
+  <string name="patterns_frequency_recurring_desc">Категории со стабильной частотой покупок</string>
+  <string name="patterns_frequency_recurring_detail">~%1$s трат/мес · %2$d мес. · %3$d всего</string>
+  <string name="patterns_frequency_recurring_suggested">Предложено: день %1$d · %2$s avg</string>
+  <string name="patterns_frequency_recurring_add">Добавить</string>
 </resources>

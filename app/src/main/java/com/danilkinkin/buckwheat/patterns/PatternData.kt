@@ -84,6 +84,30 @@ data class CategoryPattern(
     val trend: TrendDirection,
     val monthCount: Int,
     val activeMonths: Int,
+    val transactionCount: Int,
+    val monthlyTransactionAverage: BigDecimal,
+    val transactionSeries: List<Int> = emptyList(),
+    val frequencyTrend: TrendDirection = TrendDirection.STABLE,
+)
+
+// Per-category transaction count series for the frequency card. Points align with the dataset's
+// spend months (oldest first); months the category was quiet in are zero-filled.
+data class CategoryTransactionSeries(
+    val key: String,
+    val displayName: String,
+    val points: List<Int>,
+)
+
+// A category whose purchase frequency looks like a subscription — stable count across months.
+data class FrequencyRecurringCandidate(
+    val categoryKey: String,
+    val displayName: String,
+    val avgTransactionsPerMonth: BigDecimal,
+    val activeMonths: Int,
+    val suggestedDayOfMonth: Int,
+    val suggestedAmount: BigDecimal,
+    val totalTransactions: Int,
+    val confidence: String,
 )
 
 // One month slice of the monthly-trend chart.
@@ -244,4 +268,6 @@ data class PatternMetrics(
     val recurringForecasts: List<RecurringForecast>,
     val suggestions: List<InsightSuggestion>,
     val report: String,
+    val categoryTransactionSeries: List<CategoryTransactionSeries>,
+    val frequencyRecurringCandidates: List<FrequencyRecurringCandidate>,
 )

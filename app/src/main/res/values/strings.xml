@@ -539,4 +539,12 @@
   <string name="patterns_detected_recurring">Detected recurring charges</string>
   <string name="patterns_detected_recurring_desc">Charges that repeat monthly based on your history</string>
   <string name="patterns_detected_recurring_detail">%1$d months · last %2$s</string>
+  <string name="patterns_frequency_title">Purchase frequency</string>
+  <string name="patterns_frequency_desc">How many times you buy each category per month</string>
+  <string name="patterns_frequency_detail">%1$d total · avg %2$s/mo</string>
+  <string name="patterns_frequency_recurring_title">Set up recurring payments</string>
+  <string name="patterns_frequency_recurring_desc">Categories with stable purchase frequency</string>
+  <string name="patterns_frequency_recurring_detail">~%1$s txns/mo · %2$d months · %3$d total</string>
+  <string name="patterns_frequency_recurring_suggested">Suggested: day %1$d · %2$s avg</string>
+  <string name="patterns_frequency_recurring_add">Add</string>
 </resources>

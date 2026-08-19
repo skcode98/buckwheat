@@ -889,4 +889,152 @@ class PatternEngineTest {
         assertEquals(1, series.size)
         assertEquals(listOf("10", "20"), series.single().points.map { it.toPlainString() })
     }
+
+    // --- categoryPatterns transaction counts ----------------------------------
+
+    @Test
+    fun categoryPatternsTracksTransactionCounts() {
+        val categories = categoryPatterns(
+            dataset(
+                spends = listOf(
+                    spend(2026, 5, 1, "100", "Food"),
+                    spend(2026, 5, 2, "50", "Food"),
+                    spend(2026, 6, 1, "80", "Food"),
+                ),
+            ),
+        )
+        val food = categories.first { it.key == "food" }
+        assertEquals(3, food.transactionCount)
+        assertAmount("50", food.monthlyTransactionAverage)
+        assertEquals(3, food.transactionSeries.size)
+        assertEquals(listOf(2, 1, 0), food.transactionSeries)
+    }
+
+    @Test
+    fun categoryPatternsFrequencyTrendStable() {
+        val categories = categoryPatterns(
+            dataset(
+                spends = listOf(
+                    spend(2026, 5, 1, "100", "Food"),
+                    spend(2026, 5, 2, "100", "Food"),
+                    spend(2026, 6, 1, "100", "Food"),
+                    spend(2026, 6, 2, "100", "Food"),
+                ),
+            ),
+        )
+        val food = categories.first { it.key == "food" }
+        assertEquals(TrendDirection.STABLE, food.frequencyTrend)
+    }
+
+    // --- categoryTransactionSeries -------------------------------------------
+
+    @Test
+    fun categoryTransactionSeriesEmptyWithoutSpends() {
+        assertTrue(categoryTransactionSeries(dataset()).isEmpty())
+    }
+
+    @Test
+    fun categoryTransactionSeriesAlignsToSpendMonthsWithZeroFill() {
+        val d = dataset(
+            spends = listOf(
+                spend(2026, 6, 3, "30", "Food"),
+                spend(2026, 7, 3, "20", "Food"),
+                spend(2026, 8, 3, "50", "Food"),
+                spend(2026, 8, 4, "40", "Transport"),
+            ),
+        )
+        val series = categoryTransactionSeries(d)
+        assertEquals(2, series.size)
+        val food = series.first { it.key == "food" }
+        assertEquals(listOf(1, 1, 1), food.points)
+        val transport = series.first { it.key == "transport" }
+        assertEquals(listOf(0, 0, 1), transport.points)
+    }
+
+    // --- detectFrequencyRecurringCandidates ----------------------------------
+
+    @Test
+    fun detectFrequencyRecurringCandidatesEmptyWhenNoSpends() {
+        assertTrue(detectFrequencyRecurringCandidates(dataset(), emptyList()).isEmpty())
+    }
+
+    @Test
+    fun detectFrequencyRecurringCandidatesFindsStableFrequency() {
+        val categories = categoryPatterns(
+            dataset(
+                spends = buildList {
+                    repeat(5) { month ->
+                        repeat(4) { day ->
+                            add(spend(2026, month + 1, day + 1, "10", "Milk"))
+                        }
+                    }
+                },
+            ),
+        )
+        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        assertEquals(1, candidates.size)
+        val candidate = candidates.first()
+        assertEquals("milk", candidate.categoryKey)
+        assertAmount("4.0", candidate.avgTransactionsPerMonth)
+        assertEquals(5, candidate.activeMonths)
+        assertEquals(20, candidate.totalTransactions)
+    }
+
+    @Test
+    fun detectFrequencyRecurringCandidatesIgnoresLowFrequency() {
+        val categories = categoryPatterns(
+            dataset(
+                spends = listOf(
+                    spend(2026, 5, 1, "100", "Food"),
+                    spend(2026, 6, 1, "100", "Food"),
+                    spend(2026, 7, 1, "100", "Food"),
+                ),
+            ),
+        )
+        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        assertTrue(candidates.isEmpty())
+    }
+
+    @Test
+    fun detectFrequencyRecurringCandidatesIgnoresHighVariance() {
+        val categories = categoryPatterns(
+            dataset(
+                spends = buildList {
+                    repeat(4) { month ->
+                        val count = if (month % 2 == 0) 8 else 1
+                        repeat(count) { day ->
+                            add(spend(2026, month + 1, day + 1, "10", "Snacks"))
+                        }
+                    }
+                },
+            ),
+        )
+        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        assertTrue(candidates.isEmpty())
+    }
+
+    // --- buildFrequencySuggestions -------------------------------------------
+
+    @Test
+    fun buildFrequencySuggestionsEmptyWhenNoCandidates() {
+        assertTrue(buildFrequencySuggestions(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun buildFrequencySuggestionsCreatesActionableSuggestion() {
+        val candidate = FrequencyRecurringCandidate(
+            categoryKey = "milk",
+            displayName = "Milk",
+            avgTransactionsPerMonth = BigDecimal("4.5"),
+            activeMonths = 5,
+            suggestedDayOfMonth = 3,
+            suggestedAmount = BigDecimal("10.00"),
+            totalTransactions = 22,
+            confidence = "high",
+        )
+        val suggestions = buildFrequencySuggestions(listOf(candidate))
+        assertEquals(1, suggestions.size)
+        assertTrue(suggestions.first().actionable)
+        assertEquals("milk", suggestions.first().categoryKey)
+    }
 }

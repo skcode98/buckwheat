@@ -38,6 +38,7 @@ import com.danilkinkin.buckwheat.recalcBudget.RecalcBudget
 import com.danilkinkin.buckwheat.settings.*
 import com.danilkinkin.buckwheat.wallet.*
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
 
@@ -321,8 +322,12 @@ fun BottomSheets(
 
     BottomSheetWrapper(
         name = RECURRING_PAYMENTS_SHEET,
-    ) {
-        RecurringPaymentsSheet()
+    ) { state ->
+        RecurringPaymentsSheet(
+            suggestedAmount = (state.args["suggestedAmount"] as? BigDecimal),
+            suggestedComment = state.args["suggestedComment"] as? String,
+            suggestedDay = (state.args["suggestedDay"] as? Int),
+        )
     }
 
     BottomSheetWrapper(
