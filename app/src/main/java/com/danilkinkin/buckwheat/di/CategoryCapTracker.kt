@@ -80,6 +80,16 @@ class CategoryCapTracker @Inject constructor(
         settingsRepository.clearCategoryCapNotified()
     }
 
+    suspend fun getPeriodCategorySpends(): Map<String, BigDecimal> {
+        val prefs = context.budgetDataStore.data.first()
+        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return emptyMap()
+        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return emptyMap()
+
+        return transactionDao.getAllNow(TransactionType.SPENT, start.time, finish.time)
+            .groupBy { categoryNameOf(categoryKey(it)) }
+            .mapValues { (_, txs) -> txs.fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value } }
+    }
+
     private suspend fun periodCategoryTotal(start: Date, finish: Date, key: CategoryKey): BigDecimal =
         transactionDao.getAllNow(TransactionType.SPENT, start.time, finish.time)
             .filter { categoryKey(it) == key }

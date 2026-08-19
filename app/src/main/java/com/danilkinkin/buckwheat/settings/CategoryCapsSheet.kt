@@ -37,7 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.analytics.categoriesChart.CategoryBatteryChip
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
@@ -59,6 +61,8 @@ fun CategoryCapsSheet(
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val categories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
     val caps by capsViewModel.caps.collectAsStateWithLifecycle()
+    val categorySpends by capsViewModel.categorySpends.collectAsStateWithLifecycle()
+    val currency by capsViewModel.currency.collectAsStateWithLifecycle()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -115,6 +119,8 @@ fun CategoryCapsSheet(
                         name = item.name,
                         emoji = SpendCategory.emojiFor(item.name, item.emoji),
                         cap = caps[item.name],
+                        spent = categorySpends[item.name] ?: BigDecimal.ZERO,
+                        currency = currency,
                         onSave = { capsViewModel.setCap(item.name, it) },
                         onClear = { capsViewModel.setCap(item.name, null) },
                     )
@@ -129,6 +135,8 @@ private fun CategoryCapRow(
     name: String,
     emoji: String,
     cap: BigDecimal?,
+    spent: BigDecimal,
+    currency: ExtendCurrency,
     onSave: (BigDecimal) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -139,49 +147,63 @@ private fun CategoryCapRow(
         ?: cap?.toPlainString()
     var capText by remember(name, cap) { mutableStateOf(capDisplay ?: "") }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "$emoji  ${categoryDisplayName(name)}",
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        OutlinedTextField(
-            value = capText,
-            onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
-            modifier = Modifier.width(132.dp),
-            singleLine = true,
-            label = { Text(stringResource(R.string.category_caps_hint)) },
-            placeholder = { Text(stringResource(R.string.category_caps_hint)) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Decimal,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    capText.trim().toBigDecimalOrNull()?.takeIf { it > BigDecimal.ZERO }
-                        ?.let(onSave)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "$emoji  ${categoryDisplayName(name)}",
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            OutlinedTextField(
+                value = capText,
+                onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
+                modifier = Modifier.width(132.dp),
+                singleLine = true,
+                label = { Text(stringResource(R.string.category_caps_hint)) },
+                placeholder = { Text(stringResource(R.string.category_caps_hint)) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        capText.trim().toBigDecimalOrNull()?.takeIf { it > BigDecimal.ZERO }
+                            ?.let(onSave)
+                    }
+                ),
+            )
+            if (cap != null) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = {
+                    capText = ""
+                    onClear()
+                }) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_delete_forever),
+                        contentDescription = stringResource(R.string.category_caps_remove),
+                    )
                 }
-            ),
-        )
-        if (cap != null) {
-            Spacer(Modifier.width(4.dp))
-            IconButton(onClick = {
-                capText = ""
-                onClear()
-            }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_delete_forever),
-                    contentDescription = stringResource(R.string.category_caps_remove),
-                )
             }
+        }
+        if (cap != null && cap > BigDecimal.ZERO) {
+            CategoryBatteryChip(
+                name = categoryDisplayName(name),
+                emoji = emoji,
+                amount = spent,
+                currency = currency,
+                cap = cap,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            )
         }
     }
 }

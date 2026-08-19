@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.budgetDataStore
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.autoAssignCategoryCaps
 import com.danilkinkin.buckwheat.data.categories.categoryTotals
@@ -12,8 +13,10 @@ import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
+import com.danilkinkin.buckwheat.di.CategoryCapTracker
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.budgetStoreKey
+import com.danilkinkin.buckwheat.di.currencyStoreKey
 import com.danilkinkin.buckwheat.di.finishPeriodDateStoreKey
 import com.danilkinkin.buckwheat.di.startPeriodDateStoreKey
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +25,7 @@ import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -32,11 +36,37 @@ import kotlinx.coroutines.launch
 class CategoryCapsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    private val categoryCapTracker: CategoryCapTracker,
     private val transactionDao: TransactionDao,
     private val budgetPeriodDao: BudgetPeriodDao,
 ) : ViewModel() {
     val caps: StateFlow<Map<String, BigDecimal>> = settingsRepository.getCategoryCaps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private val _categorySpends = MutableStateFlow<Map<String, BigDecimal>>(emptyMap())
+    val categorySpends: StateFlow<Map<String, BigDecimal>> = _categorySpends
+
+    private val _currency = MutableStateFlow(ExtendCurrency.none())
+    val currency: StateFlow<ExtendCurrency> = _currency
+
+    init {
+        loadCategorySpends()
+        loadCurrency()
+    }
+
+    fun loadCategorySpends() {
+        viewModelScope.launch {
+            _categorySpends.value = categoryCapTracker.getPeriodCategorySpends()
+        }
+    }
+
+    private fun loadCurrency() {
+        viewModelScope.launch {
+            val prefs = context.budgetDataStore.data.first()
+            _currency.value = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
+                ?: ExtendCurrency.none()
+        }
+    }
 
     // `amount == null` or non-positive clears the cap for the category.
     fun setCap(name: String, amount: BigDecimal?) {
