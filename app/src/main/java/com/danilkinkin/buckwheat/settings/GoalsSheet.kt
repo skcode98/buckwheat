@@ -1,6 +1,5 @@
 package com.danilkinkin.buckwheat.settings
 
-import android.app.DatePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,12 +24,15 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
+import com.danilkinkin.buckwheat.editor.dateTimeEdit.DatePickerDialog
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 const val GOALS_SHEET = "goals"
 
@@ -56,6 +58,7 @@ fun GoalsSheet(
 
     var deadlineMillis by remember { mutableStateOf<Long?>(null) }
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+    var showDatePickerDialog by remember { mutableStateOf(false) }
 
     fun createGoal() {
         val target = targetText.toBigDecimalOrNull()
@@ -66,24 +69,6 @@ fun GoalsSheet(
             targetText = ""
             deadlineMillis = null
         }
-    }
-
-    fun showDatePicker() {
-        val cal = Calendar.getInstance()
-        deadlineMillis?.let { cal.timeInMillis = it }
-        DatePickerDialog(
-            context,
-            { _, year, month, day ->
-                val selected = Calendar.getInstance().apply {
-                    set(year, month, day, 23, 59, 59)
-                    set(Calendar.MILLISECOND, 999)
-                }
-                deadlineMillis = selected.timeInMillis
-            },
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH),
-            cal.get(Calendar.DAY_OF_MONTH),
-        ).show()
     }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
@@ -123,7 +108,7 @@ fun GoalsSheet(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(
-                        onDone = { showDatePicker() }
+                        onDone = { showDatePickerDialog = true }
                     ),
                 )
                 Spacer(Modifier.width(8.dp))
@@ -156,7 +141,7 @@ fun GoalsSheet(
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { showDatePicker() },
+                        .clickable { showDatePickerDialog = true },
                 )
                 if (deadlineMillis != null) {
                     IconButton(
@@ -239,6 +224,26 @@ fun GoalsSheet(
                     Text(stringResource(R.string.cancel))
                 }
             },
+        )
+    }
+
+    if (showDatePickerDialog) {
+        val initDate = deadlineMillis?.let {
+            val cal = Calendar.getInstance().apply { timeInMillis = it }
+            LocalDate.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+        } ?: LocalDate.now()
+
+        DatePickerDialog(
+            initDate = initDate,
+            onSelect = { date ->
+                val cal = Calendar.getInstance().apply {
+                    set(date.year, date.monthValue - 1, date.dayOfMonth, 23, 59, 59)
+                    set(Calendar.MILLISECOND, 999)
+                }
+                deadlineMillis = cal.timeInMillis
+                showDatePickerDialog = false
+            },
+            onClose = { showDatePickerDialog = false },
         )
     }
 }
@@ -333,6 +338,24 @@ private fun GoalRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = deadlineColor,
             )
+            if (!goal.completed && daysRemaining > 0) {
+                val remaining = goal.targetAmount - goal.currentAmount
+                if (remaining > BigDecimal.ZERO) {
+                    val weeksRemaining = TimeUnit.MILLISECONDS.toDays(deadlineTime - now).toDouble() / 7.0
+                    val perWeek = if (weeksRemaining > 0) {
+                        remaining.divide(
+                            BigDecimal.valueOf(weeksRemaining),
+                            2,
+                            RoundingMode.HALF_UP,
+                        )
+                    } else remaining
+                    Text(
+                        text = stringResource(R.string.goal_per_week, numberFormat(context, perWeek, currency).trim()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
         }
     }
 }
