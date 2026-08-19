@@ -76,28 +76,20 @@ class SpendsViewModel @Inject constructor(
     val lastChangeDailyBudgetDate: StateFlow<Date?> = spendsRepository.getLastChangeDailyBudgetDate()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    var selectedTags: MutableStateFlow<Set<String>?> = MutableStateFlow(null)
-
     val periodSpends: StateFlow<List<Transaction>> = combine(
         spends,
         startPeriodDate,
         finishPeriodDate,
-        selectedTags,
-    ) { list, start, finish, tags ->
-        val periodFiltered = filterByPeriod(list, start, finish)
-        if (tags.isNullOrEmpty()) periodFiltered
-        else periodFiltered.filter { it.comment.trim() in tags }
+    ) { list, start, finish ->
+        filterByPeriod(list, start, finish)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val periodTransactions: StateFlow<List<Transaction>> = combine(
         transactions,
         startPeriodDate,
         finishPeriodDate,
-        selectedTags,
-    ) { list, start, finish, tags ->
-        val periodFiltered = filterByPeriod(list, start, finish)
-        if (tags.isNullOrEmpty()) periodFiltered
-        else periodFiltered.filter { it.comment.trim() in tags }
+    ) { list, start, finish ->
+        filterByPeriod(list, start, finish)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val currency: StateFlow<ExtendCurrency> = spendsRepository.getCurrency()

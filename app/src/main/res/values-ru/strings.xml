@@ -35,7 +35,6 @@
     <item quantity="other">%1$s дней</item>
   </plurals>
   <string name="export_to_csv">Выгрузить в CSV</string>
-  <string name="filter_all">Все</string>
   <string name="suggested_budget">Рекомендуется: %1$s</string>
   <string name="finish_date_not_select">Дата окончания не выбрана</string>
   <string name="in_currency_label">Валюта</string>
@@ -192,7 +191,7 @@
   <string name="confirm_finish_budget_description">Ваш текущий бюджет будет завершен, в него больше нельзя будет вносить траты</string>
   <string name="confirm_finish_budget">Завершить бюджет</string>
   <string name="patterns_category_breakdown">Расходы по категориям</string>
-  <string name="patterns_category_breakdown_detail">%1$s · %2$d%% · в среднем %3$s/мес · %4$s</string>
+  <string name="patterns_category_breakdown_detail">%1$d%% · в среднем %2$s/мес · %3$s</string>
   <string name="patterns_comment_pattern_detail_avg">%1$d транз. · в среднем %2$s/мес · %3$d мес.</string>
   <string name="patterns_comment_predicted_next">Прогноз на след. месяц: %1$s</string>
   <string name="patterns_detected_recurring">Обнаружены повторяющиеся траты</string>
