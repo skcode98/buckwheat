@@ -24,13 +24,13 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.editor.dateTimeEdit.DatePickerDialog
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
-import java.time.LocalDate
+import java.time.Month
+import java.time.format.TextStyle
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -228,22 +228,105 @@ fun GoalsSheet(
     }
 
     if (showDatePickerDialog) {
-        val initDate = deadlineMillis?.let {
-            val cal = Calendar.getInstance().apply { timeInMillis = it }
-            LocalDate.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
-        } ?: LocalDate.now()
+        val initCal = deadlineMillis?.let {
+            Calendar.getInstance().apply { timeInMillis = it }
+        } ?: Calendar.getInstance()
+        val initMonth = initCal.get(Calendar.MONTH)
+        val initYear = initCal.get(Calendar.YEAR)
 
-        DatePickerDialog(
-            initDate = initDate,
-            onSelect = { date ->
-                val cal = Calendar.getInstance().apply {
-                    set(date.year, date.monthValue - 1, date.dayOfMonth, 23, 59, 59)
-                    set(Calendar.MILLISECOND, 999)
+        var selectedMonth by remember { mutableIntStateOf(initMonth) }
+        var selectedYear by remember { mutableIntStateOf(initYear) }
+        var monthExpanded by remember { mutableStateOf(false) }
+        var yearExpanded by remember { mutableStateOf(false) }
+
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val monthNames = Month.entries.map { it.getDisplayName(TextStyle.FULL, Locale.getDefault()) }
+        val years = (currentYear..currentYear + 10).toList()
+
+        AlertDialog(
+            onDismissRequest = { showDatePickerDialog = false },
+            title = { Text(stringResource(R.string.change_date)) },
+            text = {
+                Column {
+                    ExposedDropdownMenuBox(
+                        expanded = monthExpanded,
+                        onExpandedChange = { monthExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = monthNames[selectedMonth],
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.goal_deadline_hint)) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = monthExpanded,
+                            onDismissRequest = { monthExpanded = false },
+                        ) {
+                            monthNames.forEachIndexed { index, name ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        selectedMonth = index
+                                        monthExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = yearExpanded,
+                        onExpandedChange = { yearExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedYear.toString(),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Year") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = yearExpanded,
+                            onDismissRequest = { yearExpanded = false },
+                        ) {
+                            years.forEach { year ->
+                                DropdownMenuItem(
+                                    text = { Text(year.toString()) },
+                                    onClick = {
+                                        selectedYear = year
+                                        yearExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
-                deadlineMillis = cal.timeInMillis
-                showDatePickerDialog = false
             },
-            onClose = { showDatePickerDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cal = Calendar.getInstance().apply {
+                        set(selectedYear, selectedMonth, 1, 23, 59, 59)
+                        set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+                        set(Calendar.MILLISECOND, 999)
+                    }
+                    deadlineMillis = cal.timeInMillis
+                    showDatePickerDialog = false
+                }) {
+                    Text(stringResource(R.string.apply))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePickerDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
 }
