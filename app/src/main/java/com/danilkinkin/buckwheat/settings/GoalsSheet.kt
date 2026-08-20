@@ -1,30 +1,69 @@
 package com.danilkinkin.buckwheat.settings
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -51,14 +90,14 @@ fun GoalsSheet(
         16.dp,
     )
 
+    var showCreateForm by remember { mutableStateOf(false) }
     var nameText by remember { mutableStateOf("") }
     var targetText by remember { mutableStateOf("") }
-    var showAllocateDialog by remember { mutableStateOf<Long?>(null) }
-    var allocateAmount by remember { mutableStateOf("") }
-
     var deadlineMillis by remember { mutableStateOf<Long?>(null) }
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
+    var showAllocateDialog by remember { mutableStateOf<Long?>(null) }
+    var allocateAmount by remember { mutableStateOf("") }
 
     fun createGoal() {
         val target = targetText.toBigDecimalOrNull()
@@ -68,6 +107,7 @@ fun GoalsSheet(
             nameText = ""
             targetText = ""
             deadlineMillis = null
+            showCreateForm = false
         }
     }
 
@@ -85,92 +125,48 @@ fun GoalsSheet(
                 )
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value = nameText,
-                    onValueChange = { nameText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.goal_name_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                )
-                Spacer(Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = targetText,
-                    onValueChange = { targetText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.goal_target_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(
-                        onDone = { showDatePickerDialog = true }
-                    ),
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledIconButton(
-                    onClick = { createGoal() },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_add),
-                        contentDescription = null,
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val deadlineText = deadlineMillis?.let { dateFormat.format(Date(it)) }
-                    ?: stringResource(R.string.goal_deadline_hint)
-
-                Text(
-                    text = deadlineText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (deadlineMillis != null) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { showDatePickerDialog = true },
-                )
-                if (deadlineMillis != null) {
-                    IconButton(
-                        onClick = { deadlineMillis = null },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_close),
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-            }
-
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .padding(bottom = navigationBarHeight),
-                contentPadding = PaddingValues(horizontal = 24.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(goals, key = { it.id }) { goal ->
-                    GoalRow(
+                    GoalCard(
                         goal = goal,
                         currency = currency,
                         onAllocate = { showAllocateDialog = goal.id },
                         onDelete = { viewModel.deleteGoal(goal.id) },
                     )
+                }
+
+                item {
+                    if (showCreateForm) {
+                        CreateGoalCard(
+                            nameText = nameText,
+                            onNameChange = { nameText = it },
+                            targetText = targetText,
+                            onTargetChange = { targetText = it },
+                            deadlineText = deadlineMillis?.let { dateFormat.format(Date(it)) }
+                                ?: stringResource(R.string.goal_deadline_hint),
+                            hasDeadline = deadlineMillis != null,
+                            onDeadlineClick = { showDatePickerDialog = true },
+                            onClearDeadline = { deadlineMillis = null },
+                            onConfirm = { createGoal() },
+                            onCancel = {
+                                showCreateForm = false
+                                nameText = ""
+                                targetText = ""
+                                deadlineMillis = null
+                            },
+                        )
+                    } else {
+                        AddCardButton(
+                            title = stringResource(R.string.goals_title),
+                            onClick = { showCreateForm = true },
+                        )
+                    }
                 }
             }
         }
@@ -267,7 +263,7 @@ fun GoalsSheet(
                             onDismissRequest = { monthExpanded = false },
                         ) {
                             monthNames.forEachIndexed { index, name ->
-                                DropdownMenuItem(
+                                androidx.compose.material3.DropdownMenuItem(
                                     text = { Text(name) },
                                     onClick = {
                                         selectedMonth = index
@@ -297,7 +293,7 @@ fun GoalsSheet(
                             onDismissRequest = { yearExpanded = false },
                         ) {
                             years.forEach { year ->
-                                DropdownMenuItem(
+                                androidx.compose.material3.DropdownMenuItem(
                                     text = { Text(year.toString()) },
                                     onClick = {
                                         selectedYear = year
@@ -332,7 +328,7 @@ fun GoalsSheet(
 }
 
 @Composable
-private fun GoalRow(
+private fun GoalCard(
     goal: SavingsGoal,
     currency: ExtendCurrency,
     onAllocate: () -> Unit,
@@ -348,105 +344,323 @@ private fun GoalRow(
 
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+    val ringColor = when {
+        goal.completed -> Color(0xFF2E7D32)
+        progress >= 1f -> Color(0xFF2E7D32)
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = goal.name,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
+            GoalRing(
+                progress = progress,
+                color = ringColor,
+                modifier = Modifier.size(64.dp),
             )
-            if (goal.completed) {
-                Text(
-                    text = stringResource(R.string.goal_completed),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(
-                    R.string.goal_progress,
-                    numberFormat(context, goal.currentAmount, currency).trim(),
-                    numberFormat(context, goal.targetAmount, currency).trim(),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.weight(1f),
-            )
-            if (!goal.completed) {
-                TextButton(onClick = onAllocate) {
-                    Text(stringResource(R.string.goal_allocate))
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_delete_forever),
-                    contentDescription = stringResource(R.string.goal_delete_desc),
-                )
-            }
-        }
-        goal.deadline?.let { deadline ->
-            val now = System.currentTimeMillis()
-            val deadlineTime = deadline.time
-            val daysRemaining = ((deadlineTime - now) / (1000 * 60 * 60 * 24)).toInt()
-            val deadlineColor = if (daysRemaining < 0) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-            }
-            val deadlineLabel = if (daysRemaining < 0) {
-                stringResource(R.string.goal_overdue, -daysRemaining)
-            } else {
-                stringResource(R.string.goal_days_remaining, daysRemaining)
-            }
-            Text(
-                text = "${stringResource(R.string.goal_deadline_format, dateFormat.format(deadline))} · $deadlineLabel",
-                style = MaterialTheme.typography.labelSmall,
-                color = deadlineColor,
-            )
-            if (!goal.completed && daysRemaining > 0) {
-                val remaining = goal.targetAmount - goal.currentAmount
-                if (remaining > BigDecimal.ZERO) {
-                    val weeksRemaining = TimeUnit.MILLISECONDS.toDays(deadlineTime - now).toDouble() / 7.0
-                    val perWeek = if (weeksRemaining > 0) {
-                        remaining.divide(
-                            BigDecimal.valueOf(weeksRemaining),
-                            2,
-                            RoundingMode.HALF_UP,
-                        )
-                    } else remaining
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = stringResource(R.string.goal_per_week, numberFormat(context, perWeek, currency).trim()),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        text = goal.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (goal.completed) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.goal_completed),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF2E7D32),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = stringResource(
+                        R.string.goal_progress,
+                        numberFormat(context, goal.currentAmount, currency).trim(),
+                        numberFormat(context, goal.targetAmount, currency).trim(),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                )
+
+                goal.deadline?.let { deadline ->
+                    val now = System.currentTimeMillis()
+                    val deadlineTime = deadline.time
+                    val daysRemaining = ((deadlineTime - now) / (1000 * 60 * 60 * 24)).toInt()
+                    val deadlineColor = if (daysRemaining < 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    }
+                    val deadlineLabel = if (daysRemaining < 0) {
+                        stringResource(R.string.goal_overdue, -daysRemaining)
+                    } else {
+                        stringResource(R.string.goal_days_remaining, daysRemaining)
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${stringResource(R.string.goal_deadline_format, dateFormat.format(deadline))} · $deadlineLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = deadlineColor,
+                    )
+                    if (!goal.completed && daysRemaining > 0) {
+                        val remaining = goal.targetAmount - goal.currentAmount
+                        if (remaining > BigDecimal.ZERO) {
+                            val weeksRemaining = TimeUnit.MILLISECONDS.toDays(deadlineTime - now).toDouble() / 7.0
+                            val perWeek = if (weeksRemaining > 0) {
+                                remaining.divide(
+                                    BigDecimal.valueOf(weeksRemaining),
+                                    2,
+                                    RoundingMode.HALF_UP,
+                                )
+                            } else remaining
+                            Text(
+                                text = stringResource(R.string.goal_per_week, numberFormat(context, perWeek, currency).trim()),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Row {
+                    if (!goal.completed) {
+                        OutlinedButton(
+                            onClick = onAllocate,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.goal_allocate),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_delete_forever),
+                            contentDescription = stringResource(R.string.goal_delete_desc),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Preview
 @Composable
-private fun PreviewGoals() {
-    BuckwheatTheme {
-        GoalsSheet()
+private fun GoalRing(
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val strokeWidth = 6.dp
+    val sweepAngle = progress * 360f
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxWidth()) {
+            val stroke = strokeWidth.toPx()
+            val diameter = size.minDimension - stroke
+            val topLeft = Offset(stroke / 2f, stroke / 2f)
+            val arcSize = Size(diameter, diameter)
+
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+            if (sweepAngle > 0f) {
+                drawArc(
+                    color = color,
+                    startAngle = -90f,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+        }
+        Text(
+            text = "${(progress * 100).toInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun CreateGoalCard(
+    nameText: String,
+    onNameChange: (String) -> Unit,
+    targetText: String,
+    onTargetChange: (String) -> Unit,
+    deadlineText: String,
+    hasDeadline: Boolean,
+    onDeadlineClick: () -> Unit,
+    onClearDeadline: () -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = onNameChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.goal_name_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = targetText,
+                    onValueChange = onTargetChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.goal_target_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onConfirm() }),
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = deadlineText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (hasDeadline) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onDeadlineClick),
+                )
+                if (hasDeadline) {
+                    IconButton(
+                        onClick = onClearDeadline,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onCancel) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onConfirm) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_add),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.goals_title))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddCardButton(
+    title: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 80.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_add),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                )
+            }
+        }
     }
 }

@@ -439,6 +439,7 @@
   <string name="search_history_hint">Search by tag…</string>
   <string name="search_history_title">Search History</string>
   <string name="recurring_payments_title">Recurring Payments</string>
+  <string name="recurring_add_new">Add new payment</string>
   <string name="recurring_auto_apply_title">Auto-add payments</string>
   <string name="recurring_auto_apply_description">How new recurring payments are recorded as spends</string>
   <string name="recurring_auto_apply_off">Off</string>
@@ -449,6 +450,7 @@
   <string name="recurring_charge_confirm_add">Add</string>
   <string name="recurring_charge_confirm_skip">Skip</string>
   <string name="goals_title">Goals</string>
+  <string name="goal_add_new">Add new goal</string>
   <string name="goal_name_hint">Goal name</string>
   <string name="goal_target_hint">Target</string>
   <string name="goal_allocate_title">Allocate to Goal</string>

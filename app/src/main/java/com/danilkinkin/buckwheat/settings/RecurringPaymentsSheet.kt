@@ -1,22 +1,57 @@
 package com.danilkinkin.buckwheat.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
@@ -50,17 +85,30 @@ fun RecurringPaymentsSheet(
         16.dp,
     )
 
+    var showCreateForm by remember { mutableStateOf(false) }
     var amountText by remember { mutableStateOf(suggestedAmount?.toPlainString() ?: "") }
     var commentText by remember { mutableStateOf(suggestedComment ?: "") }
     var dayText by remember { mutableStateOf(suggestedDay?.toString() ?: "") }
+
+    fun submitTemplate() {
+        val amount = amountText.toBigDecimalOrNull()
+        val day = dayText.toIntOrNull()
+        if (amount != null && day != null && commentText.isNotBlank()) {
+            viewModel.addTemplate(amount, commentText, day)
+            amountText = ""
+            commentText = ""
+            dayText = ""
+            showCreateForm = false
+        }
+    }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
+                    .padding(top = 12.dp, bottom = 20.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = stringResource(R.string.recurring_payments_title),
@@ -68,144 +116,115 @@ fun RecurringPaymentsSheet(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.recurring_auto_apply_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.recurring_auto_apply_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RecurringAutoApplyMode.values().forEach { mode ->
-                        FilterChip(
-                            selected = autoApplyMode == mode,
-                            onClick = { viewModel.setAutoApplyMode(mode) },
-                            label = {
-                                Text(
-                                    stringResource(
-                                        when (mode) {
-                                            RecurringAutoApplyMode.OFF ->
-                                                R.string.recurring_auto_apply_off
-
-                                            RecurringAutoApplyMode.ASK ->
-                                                R.string.recurring_auto_apply_ask
-
-                                            RecurringAutoApplyMode.SILENT ->
-                                                R.string.recurring_auto_apply_silent
-                                        }
-                                    )
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.recurring_amount_hint)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(
-                        value = dayText,
-                        onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
-                        modifier = Modifier.width(80.dp),
-                        placeholder = { Text(stringResource(R.string.recurring_day_hint)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                val amount = amountText.toBigDecimalOrNull()
-                                val day = dayText.toIntOrNull()
-                                if (amount != null && day != null && commentText.isNotBlank()) {
-                                    viewModel.addTemplate(amount, commentText, day)
-                                    amountText = ""
-                                    commentText = ""
-                                    dayText = ""
-                                }
-                            }
-                        ),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilledIconButton(
-                        onClick = {
-                            val amount = amountText.toBigDecimalOrNull()
-                            val day = dayText.toIntOrNull()
-                            if (amount != null && day != null && commentText.isNotBlank()) {
-                                viewModel.addTemplate(amount, commentText, day)
-                                amountText = ""
-                                commentText = ""
-                                dayText = ""
-                            }
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_add),
-                            contentDescription = null,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = commentText,
-                    onValueChange = { commentText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.recurring_comment_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            val amount = amountText.toBigDecimalOrNull()
-                            val day = dayText.toIntOrNull()
-                            if (amount != null && day != null && commentText.isNotBlank()) {
-                                viewModel.addTemplate(amount, commentText, day)
-                                amountText = ""
-                                commentText = ""
-                                dayText = ""
-                            }
-                        }
-                    ),
-                )
-            }
-
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
                     .padding(bottom = navigationBarHeight),
-                contentPadding = PaddingValues(horizontal = 24.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Auto-apply section
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.recurring_auto_apply_title),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.recurring_auto_apply_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                RecurringAutoApplyMode.values().forEach { mode ->
+                                    FilterChip(
+                                        selected = autoApplyMode == mode,
+                                        onClick = { viewModel.setAutoApplyMode(mode) },
+                                        label = {
+                                            Text(
+                                                stringResource(
+                                                    when (mode) {
+                                                        RecurringAutoApplyMode.OFF ->
+                                                            R.string.recurring_auto_apply_off
+                                                        RecurringAutoApplyMode.ASK ->
+                                                            R.string.recurring_auto_apply_ask
+                                                        RecurringAutoApplyMode.SILENT ->
+                                                            R.string.recurring_auto_apply_silent
+                                                    }
+                                                ),
+                                                style = MaterialTheme.typography.labelMedium,
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Recurring payment cards
                 items(templates, key = { it.id }) { template ->
-                    RecurringTemplateRow(
+                    RecurringPaymentCard(
                         template = template,
                         currency = currency,
                         onToggle = { viewModel.toggleEnabled(template) },
                         onDelete = { viewModel.deleteTemplate(template.id) },
                     )
+                }
+
+                // Create new payment
+                if (!showCreateForm) {
+                    item {
+                        OutlinedButton(
+                            onClick = { showCreateForm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                            contentPadding = PaddingValues(vertical = 16.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_add),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.recurring_add_new))
+                        }
+                    }
+                }
+
+                if (showCreateForm) {
+                    item {
+                        CreatePaymentCard(
+                            amountText = amountText,
+                            commentText = commentText,
+                            dayText = dayText,
+                            onAmountChange = { amountText = it },
+                            onCommentChange = { commentText = it },
+                            onDayChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
+                            onSubmit = { submitTemplate() },
+                            onCancel = {
+                                showCreateForm = false
+                                amountText = ""
+                                commentText = ""
+                                dayText = ""
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -213,58 +232,166 @@ fun RecurringPaymentsSheet(
 }
 
 @Composable
-private fun RecurringTemplateRow(
+private fun RecurringPaymentCard(
     template: RecurringTemplate,
     currency: ExtendCurrency,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val context = LocalContext.current
-    Row(
+    val alpha = if (template.enabled) 1f else 0.5f
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(56.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .alpha(alpha),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+        Row(
             modifier = Modifier
-                .height(44.dp)
-                .weight(1f),
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                Modifier.padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // Day badge
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                modifier = Modifier.size(56.dp),
             ) {
-                Text(
-                    text = numberFormat(context, template.amount, currency),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(Modifier.width(8.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = template.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(14.dp))
+
+            // Details
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = template.comment,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = numberFormat(context, template.amount, currency),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = stringResource(R.string.recurring_day_label, template.dayOfMonth),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Toggle
+            Switch(
+                checked = template.enabled,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                ),
+            )
+
+            // Delete
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_delete_forever),
+                    contentDescription = stringResource(R.string.tags_management_delete),
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
-        Switch(
-            checked = template.enabled,
-            onCheckedChange = { onToggle() },
-        )
-        IconButton(onClick = onDelete) {
-            Icon(
-                painter = painterResource(R.drawable.ic_delete_forever),
-                contentDescription = stringResource(R.string.tags_management_delete),
+    }
+}
+
+@Composable
+private fun CreatePaymentCard(
+    amountText: String,
+    commentText: String,
+    dayText: String,
+    onAmountChange: (String) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onDayChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = onAmountChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.recurring_amount_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+                OutlinedTextField(
+                    value = dayText,
+                    onValueChange = onDayChange,
+                    modifier = Modifier.width(72.dp),
+                    placeholder = { Text(stringResource(R.string.recurring_day_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = commentText,
+                onValueChange = onCommentChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.recurring_comment_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onSubmit() }),
             )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onCancel) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = { onSubmit() }) {
+                    Text(stringResource(R.string.apply))
+                }
+            }
         }
     }
 }
