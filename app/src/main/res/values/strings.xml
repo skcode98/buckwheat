@@ -554,4 +554,13 @@
   <string name="tag_suggestion_reason_day">Often on %1$s</string>
   <string name="tag_suggestion_reason_day_time">Habit on %1$ss %2$ss</string>
   <string name="tag_suggestion_reason_frequency">Bought %1$d times</string>
+  <string name="past_periods_delete_title">Delete Period</string>
+  <string name="past_periods_delete_message">Delete all records for %1$s — %2$s?</string>
+  <string name="past_periods_deleted">Period deleted</string>
+  <string name="past_periods_delete_period">Delete this period</string>
+  <string name="period_budget_label">Budget</string>
+  <string name="period_budget_not_set">Not set</string>
+  <string name="period_budget_updated">Budget updated</string>
+  <string name="edit">Edit</string>
+  <string name="delete">Delete</string>
 </resources>

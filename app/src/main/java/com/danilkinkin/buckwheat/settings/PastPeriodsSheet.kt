@@ -7,10 +7,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,10 +42,44 @@ fun PastPeriodsSheet(
     val periods by archivesViewModel.periods.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    var periodToDelete by remember { mutableStateOf<BudgetPeriod?>(null) }
+
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
         16.dp,
     )
+
+    periodToDelete?.let { period ->
+        AlertDialog(
+            onDismissRequest = { periodToDelete = null },
+            title = { Text(stringResource(R.string.past_periods_delete_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.past_periods_delete_message,
+                        prettyDate(period.startDate, showTime = false, forceShowDate = true),
+                        prettyDate(period.finishDate, showTime = false, forceShowDate = true),
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        archivesViewModel.deletePeriod(period.id)
+                        periodToDelete = null
+                        appViewModel.showSnackbar(context.getString(R.string.past_periods_deleted))
+                    }
+                ) {
+                    Text(stringResource(R.string.history_actions_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { periodToDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
@@ -89,6 +124,7 @@ fun PastPeriodsSheet(
                                 archivesViewModel.selectPeriod(period.id)
                                 appViewModel.openSheet(PathState(PERIOD_DETAIL_SHEET))
                             },
+                            onDelete = { periodToDelete = period },
                         )
                     }
                 }
@@ -102,6 +138,7 @@ private fun PastPeriodCard(
     period: BudgetPeriod,
     currency: ExtendCurrency,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -127,14 +164,31 @@ private fun PastPeriodCard(
         ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(
-                    R.string.past_periods_date_range,
-                    prettyDate(period.startDate, showTime = false, forceShowDate = true),
-                    prettyDate(period.finishDate, showTime = false, forceShowDate = true),
-                ),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.past_periods_date_range,
+                        prettyDate(period.startDate, showTime = false, forceShowDate = true),
+                        prettyDate(period.finishDate, showTime = false, forceShowDate = true),
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_delete_forever),
+                        contentDescription = stringResource(R.string.history_actions_delete),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(8.dp))
             if (period.isImported) {
                 Row(

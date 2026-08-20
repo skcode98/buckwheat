@@ -45,8 +45,14 @@ interface BudgetPeriodDao {
     @Query("UPDATE budget_periods SET total_spent = :totalSpent WHERE id = :periodId")
     suspend fun updateTotalSpent(periodId: Int, totalSpent: BigDecimal)
 
+    @Query("UPDATE budget_periods SET budget = :budget WHERE id = :id")
+    suspend fun updateBudget(id: Int, budget: BigDecimal)
+
     @Query("UPDATE budget_periods SET start_date = :startDate, finish_date = :finishDate WHERE id = :id")
     suspend fun updateDates(id: Int, startDate: Date, finishDate: Date)
+
+    @Query("DELETE FROM budget_periods WHERE id = :id")
+    suspend fun deleteById(id: Int)
 
     @Query("UPDATE archived_transactions SET category = :category WHERE uid = :uid")
     suspend fun updateCategory(uid: Int, category: String?)

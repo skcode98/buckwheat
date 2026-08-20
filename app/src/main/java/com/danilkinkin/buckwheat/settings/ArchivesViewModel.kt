@@ -6,6 +6,7 @@ import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -41,5 +42,16 @@ class ArchivesViewModel @Inject constructor(
 
     fun updatePeriodDates(periodId: Int, startDate: Date, finishDate: Date) = viewModelScope.launch {
         budgetPeriodDao.updateDates(periodId, startDate, finishDate)
+    }
+
+    fun updatePeriodBudget(periodId: Int, budget: BigDecimal) = viewModelScope.launch {
+        budgetPeriodDao.updateBudget(periodId, budget)
+    }
+
+    fun deletePeriod(periodId: Int) = viewModelScope.launch {
+        if (_selectedPeriodId.value == periodId) {
+            _selectedPeriodId.value = null
+        }
+        budgetPeriodDao.deleteById(periodId)
     }
 }
