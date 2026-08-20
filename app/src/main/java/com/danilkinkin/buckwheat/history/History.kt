@@ -75,12 +75,14 @@ fun History(
     val tutorial by appViewModel.getTutorialStage(TUTORS.SWIPE_EDIT_SPENT).collectAsStateWithLifecycle()
     var isUserTrySwipe by remember { mutableStateOf(false) }
 
+    val allSpends by spendsViewModel.spends.collectAsStateWithLifecycle(emptyList())
     val periodSpends by spendsViewModel.periodSpends.collectAsStateWithLifecycle()
     val archivedTransactions by spendsViewModel.archivedTransactions.collectAsStateWithLifecycle()
 
-    LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, periodSpends, archivedTransactions) {
+    LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, allSpends, periodSpends, archivedTransactions) {
+        val sourceSpends = if (onlyCategoryKey != null) allSpends else periodSpends
         historyList = composeHistoryRows(
-            periodSpends,
+            sourceSpends,
             archivedTransactions,
             searchQuery,
             onlyDay,
@@ -273,7 +275,7 @@ internal fun composeHistoryRows(
                 )
             )
         }
-        if (searching) {
+        if (searching || onlyCategoryKey != null) {
             archivedTransactions.forEach { tx ->
                 add(
                     HistoryEntry(
