@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
@@ -24,6 +25,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -33,6 +41,7 @@ import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.editor.FocusController
+import com.danilkinkin.buckwheat.patterns.TagSuggestion
 
 @Composable
 fun TaggingToolbar(
@@ -43,6 +52,7 @@ fun TaggingToolbar(
     val localDensity = LocalDensity.current
 
     val tags by spendsViewModel.tags.collectAsStateWithLifecycle(emptyList())
+    val tagSuggestions by spendsViewModel.tagSuggestions.collectAsStateWithLifecycle(emptyList())
     val currentComment by editorViewModel.currentComment.collectAsStateWithLifecycle("")
 
     var showAddComment by remember { mutableStateOf(false) }
@@ -70,6 +80,25 @@ fun TaggingToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
+            if (showAddComment && tagSuggestions.isNotEmpty()) {
+                tagSuggestions.take(3).forEach { suggestion ->
+                    val isSelected = suggestion.tag == currentComment
+                    TagSuggestionChip(
+                        tag = suggestion.tag,
+                        reasonRes = suggestion.reasonRes,
+                        reasonArgs = suggestion.reasonArgs,
+                        isSelected = isSelected,
+                        onClick = {
+                            if (isSelected) {
+                                editorViewModel.currentComment.value = ""
+                            } else {
+                                editorViewModel.currentComment.value = suggestion.tag
+                            }
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
             tags.take(5).reversed().forEach { tag ->
                 val isSelected = tag == currentComment
                 AnimatedVisibility(
@@ -139,6 +168,49 @@ fun TaggingToolbar(
                     onEdit = { isEdit = it },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun TagSuggestionChip(
+    tag: String,
+    reasonRes: Int,
+    reasonArgs: List<Any>,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = tag,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
