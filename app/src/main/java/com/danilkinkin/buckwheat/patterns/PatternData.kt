@@ -222,6 +222,14 @@ data class CommentPattern(
     val monthSeries: List<BigDecimal> = emptyList(),
 )
 
+data class TagSuggestion(
+    val tag: String,
+    val reasonRes: Int,
+    val reasonArgs: List<Any>,
+    val strength: Float,
+    val matchCount: Int,
+)
+
 // A recurring template's upcoming payments and annual projection.
 data class RecurringForecast(
     val template: PatternRecurringTemplate,
