@@ -188,7 +188,11 @@ private fun postBackend(
 
         val errorBody = runCatching {
             conn.errorStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
-        }.getOrNull().orEmpty().trim().take(200)
+        }.getOrNull().orEmpty()
+            .replace(Regex("<[^>]*>"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(200)
         val suffix = if (errorBody.isNotEmpty()) " — $errorBody" else ""
         val backoffMs = if (code == 429) {
             conn.getHeaderField("Retry-After")?.toLongOrNull()?.let { it * 1000L }
@@ -291,7 +295,6 @@ internal fun cleanAiOutput(raw: String): String =
     raw.replace(CODE_FENCE, "")
         .replace(SCRIPT_TAG, "")
         .replace(THINK_BLOCK, "")
-        .replace(Regex("</?html[^>]*>", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("</?body[^>]*>", RegexOption.IGNORE_CASE), "")
         .replace(Regex("<!DOCTYPE[^>]*>", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("<[^>]*>"), "")
         .trim()
