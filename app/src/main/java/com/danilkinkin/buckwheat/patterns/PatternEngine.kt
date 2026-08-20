@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.patterns
 
+import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import java.math.BigDecimal
@@ -8,7 +9,9 @@ import java.text.Normalizer
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
@@ -1373,6 +1376,131 @@ fun buildPatternReport(
 // Formats an amount the same way in the report and in tests: deterministic, locale-independent.
 private fun patternAmount(value: BigDecimal): String =
     value.setScale(2, RoundingMode.HALF_EVEN).stripTrailingZeros().toPlainString()
+
+// --- Tag suggestions (comment-based) -------------------------------------------
+
+enum class TimeWindow(val label: String, val startHour: Int, val endHour: Int) {
+    MORNING("morning", 6, 10),
+    LUNCH("lunch", 11, 14),
+    AFTERNOON("afternoon", 14, 17),
+    EVENING("evening", 17, 21),
+    NIGHT("night", 21, 6),
+}
+
+private fun hourToWindow(hour: Int): TimeWindow = when (hour) {
+    in 6..10 -> TimeWindow.MORNING
+    in 11..14 -> TimeWindow.LUNCH
+    in 15..17 -> TimeWindow.AFTERNOON
+    in 18..20 -> TimeWindow.EVENING
+    else -> TimeWindow.NIGHT
+}
+
+private fun dayOfWeekFrom(date: Date): DayOfWeek =
+    date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().dayOfWeek
+
+fun buildTagSuggestions(
+    dataset: PatternDataset,
+    maxSuggestions: Int = 4,
+): List<TagSuggestion> {
+    if (dataset.spends.isEmpty()) return emptyList()
+
+    val commentNames = dataset.spends
+        .mapNotNull { it.comment?.takeIf { c -> c.isNotBlank() } }
+        .distinct()
+    if (commentNames.isEmpty()) return emptyList()
+
+    val index = commentNameIndex(commentNames)
+
+    val byComment = dataset.spends
+        .filter { !it.comment.isNullOrBlank() }
+        .groupBy { canonicalComment(it.comment, index) }
+
+    if (byComment.isEmpty()) return emptyList()
+
+    val allMonths = dataset.spends
+        .map { YearMonth.from(it.date.toLocalDate()) }
+        .distinct()
+        .size
+        .coerceAtLeast(1)
+
+    val suggestions = byComment.map { (commentKey, spends) ->
+        if (spends.size < 3) return@map null
+
+        val displayName = index.canonicalToDisplay[commentKey] ?: commentKey
+
+        val freqScore = (spends.size.toFloat() / allMonths).coerceIn(0f, 1f)
+
+        val byWindow = spends.groupBy {
+            hourToWindow(it.date.toInstant().atZone(ZoneId.systemDefault()).hour)
+        }
+        val topWindow = byWindow.maxByOrNull { it.value.size }
+        val windowConcentration = if (topWindow != null) {
+            topWindow.value.size.toFloat() / spends.size
+        } else 0f
+        val timeScore = if (windowConcentration >= 0.5f && topWindow!!.value.size >= 3) {
+            windowConcentration
+        } else 0f
+
+        val byDay = spends.groupBy { dayOfWeekFrom(it.date) }
+        val topDay = byDay.maxByOrNull { it.value.size }
+        val dayConcentration = if (topDay != null) {
+            topDay.value.size.toFloat() / spends.size
+        } else 0f
+        val dayScore = if (dayConcentration >= 0.4f && topDay!!.value.size >= 2) {
+            dayConcentration * 0.9f
+        } else 0f
+
+        val comboScore = if (topWindow != null && topDay != null && timeScore > 0f && dayScore > 0f) {
+            val comboCount = spends.count {
+                hourToWindow(it.date.toInstant().atZone(ZoneId.systemDefault()).hour) == topWindow.key &&
+                dayOfWeekFrom(it.date) == topDay.key
+            }
+            if (comboCount >= 2) {
+                (comboCount.toFloat() / spends.size) * 1.1f
+            } else 0f
+        } else 0f
+
+        val bestScore = maxOf(freqScore, timeScore, dayScore, comboScore)
+        if (bestScore < 0.15f) return@map null
+
+        val reasonRes: Int
+        val reasonArgs: List<Any>
+        when {
+            comboScore == bestScore -> {
+                reasonRes = R.string.tag_suggestion_reason_day_time
+                reasonArgs = listOf(
+                    topDay!!.key.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                    topWindow!!.label
+                )
+            }
+            timeScore == bestScore -> {
+                reasonRes = R.string.tag_suggestion_reason_time
+                reasonArgs = listOf(topWindow!!.label)
+            }
+            dayScore == bestScore -> {
+                reasonRes = R.string.tag_suggestion_reason_day
+                reasonArgs = listOf(topDay!!.key.getDisplayName(TextStyle.FULL, Locale.getDefault()))
+            }
+            else -> {
+                reasonRes = R.string.tag_suggestion_reason_frequency
+                reasonArgs = listOf(spends.size)
+            }
+        }
+
+        TagSuggestion(
+            tag = displayName,
+            reasonRes = reasonRes,
+            reasonArgs = reasonArgs,
+            strength = bestScore,
+            matchCount = spends.size,
+        )
+    }
+
+    return suggestions
+        .filterNotNull()
+        .sortedByDescending { it.strength }
+        .take(maxSuggestions)
+}
 
 // --- Orchestration ------------------------------------------------------------
 
