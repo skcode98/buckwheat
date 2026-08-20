@@ -1381,17 +1381,17 @@ private fun patternAmount(value: BigDecimal): String =
 
 enum class TimeWindow(val label: String, val startHour: Int, val endHour: Int) {
     MORNING("morning", 6, 10),
-    LUNCH("lunch", 11, 14),
-    AFTERNOON("afternoon", 14, 17),
-    EVENING("evening", 17, 21),
-    NIGHT("night", 21, 6),
+    LUNCH("lunch", 11, 13),
+    AFTERNOON("afternoon", 14, 16),
+    EVENING("evening", 17, 20),
+    NIGHT("night", 21, 5),
 }
 
 private fun hourToWindow(hour: Int): TimeWindow = when (hour) {
     in 6..10 -> TimeWindow.MORNING
-    in 11..14 -> TimeWindow.LUNCH
-    in 15..17 -> TimeWindow.AFTERNOON
-    in 18..20 -> TimeWindow.EVENING
+    in 11..13 -> TimeWindow.LUNCH
+    in 14..16 -> TimeWindow.AFTERNOON
+    in 17..20 -> TimeWindow.EVENING
     else -> TimeWindow.NIGHT
 }
 
