@@ -1,10 +1,12 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +33,24 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.rememberImportCSV
 
 const val SETTINGS_SHEET = "settings"
+
+@Composable
+private fun SettingsSection(title: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 4.dp),
+        )
+    }
+}
 
 @Composable
 fun Settings(
@@ -63,10 +83,13 @@ fun Settings(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = navigationBarHeight)
             ) {
+                SettingsSection(stringResource(R.string.settings_section_appearance))
                 ThemeSwitcher()
                 LangSwitcher()
                 RoundValuesSetting()
                 AppLockSetting(viewModel = appLockViewModel)
+
+                SettingsSection(stringResource(R.string.settings_section_features))
                 TextRow(
                     icon = painterResource(R.drawable.ic_notifications),
                     text = stringResource(R.string.notifications_title),
@@ -172,6 +195,8 @@ fun Settings(
                         )
                     },
                 )
+
+                SettingsSection(stringResource(R.string.settings_section_data))
                 TextRow(
                     icon = painterResource(R.drawable.ic_search),
                     text = stringResource(R.string.search_history_title),
