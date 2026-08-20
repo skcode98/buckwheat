@@ -1380,19 +1380,27 @@ private fun patternAmount(value: BigDecimal): String =
 // --- Tag suggestions (comment-based) -------------------------------------------
 
 enum class TimeWindow(val label: String, val startHour: Int, val endHour: Int) {
-    MORNING("morning", 6, 10),
-    LUNCH("lunch", 11, 13),
-    AFTERNOON("afternoon", 14, 16),
-    EVENING("evening", 17, 20),
-    NIGHT("night", 21, 5),
+    EARLY_MORNING("early morning", 6, 8),
+    MORNING("morning", 8, 10),
+    LATE_MORNING("late morning", 10, 12),
+    AFTERNOON("afternoon", 12, 14),
+    LATE_AFTERNOON("late afternoon", 14, 16),
+    EVENING("evening", 16, 18),
+    LATE_EVENING("late evening", 18, 20),
+    NIGHT("night", 20, 22),
+    LATE_NIGHT("late night", 22, 6),
 }
 
 private fun hourToWindow(hour: Int): TimeWindow = when (hour) {
-    in 6..10 -> TimeWindow.MORNING
-    in 11..13 -> TimeWindow.LUNCH
-    in 14..16 -> TimeWindow.AFTERNOON
-    in 17..20 -> TimeWindow.EVENING
-    else -> TimeWindow.NIGHT
+    in 6..8 -> TimeWindow.EARLY_MORNING
+    in 8..10 -> TimeWindow.MORNING
+    in 10..12 -> TimeWindow.LATE_MORNING
+    in 12..14 -> TimeWindow.AFTERNOON
+    in 14..16 -> TimeWindow.LATE_AFTERNOON
+    in 16..18 -> TimeWindow.EVENING
+    in 18..20 -> TimeWindow.LATE_EVENING
+    in 20..22 -> TimeWindow.NIGHT
+    else -> TimeWindow.LATE_NIGHT
 }
 
 private fun dayOfWeekFrom(date: Date): DayOfWeek =

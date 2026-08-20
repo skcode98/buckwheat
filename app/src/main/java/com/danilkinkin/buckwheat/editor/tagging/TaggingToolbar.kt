@@ -61,6 +61,16 @@ fun TaggingToolbar(
     var showAddComment by remember { mutableStateOf(false) }
     var isEdit by remember { mutableStateOf(false) }
 
+    val filteredSuggestions = remember(tagSuggestions, currentComment) {
+        if (currentComment.isBlank()) {
+            tagSuggestions.take(3)
+        } else {
+            tagSuggestions.filter {
+                it.tag.contains(currentComment, ignoreCase = true)
+            }.take(3)
+        }
+    }
+
     LaunchedEffect(Unit) {
         editorViewModel.stage.collect {
             showAddComment = it === EditStage.EDIT_SPENT
@@ -83,25 +93,6 @@ fun TaggingToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
-            if (showAddComment && tagSuggestions.isNotEmpty()) {
-                tagSuggestions.take(3).forEach { suggestion ->
-                    val isSelected = suggestion.tag == currentComment
-                    TagSuggestionChip(
-                        tag = suggestion.tag,
-                        reasonRes = suggestion.reasonRes,
-                        reasonArgs = suggestion.reasonArgs,
-                        isSelected = isSelected,
-                        onClick = {
-                            if (isSelected) {
-                                editorViewModel.currentComment.value = ""
-                            } else {
-                                editorViewModel.currentComment.value = suggestion.tag
-                            }
-                        },
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
             tags.take(5).reversed().forEach { tag ->
                 val isSelected = tag == currentComment
                 AnimatedVisibility(
@@ -139,6 +130,25 @@ fun TaggingToolbar(
                 }
             }
             Spacer(modifier = Modifier.width(24.dp))
+            if (showAddComment && filteredSuggestions.isNotEmpty()) {
+                filteredSuggestions.forEach { suggestion ->
+                    val isSelected = suggestion.tag == currentComment
+                    TagSuggestionChip(
+                        tag = suggestion.tag,
+                        reasonRes = suggestion.reasonRes,
+                        reasonArgs = suggestion.reasonArgs,
+                        isSelected = isSelected,
+                        onClick = {
+                            if (isSelected) {
+                                editorViewModel.currentComment.value = ""
+                            } else {
+                                editorViewModel.currentComment.value = suggestion.tag
+                            }
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
             AnimatedVisibility(
                 visible = showAddComment,
                 enter = fadeIn(
