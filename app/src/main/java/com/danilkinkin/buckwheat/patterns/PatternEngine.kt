@@ -1470,12 +1470,12 @@ fun buildTagSuggestions(
                 reasonRes = R.string.tag_suggestion_reason_day_time
                 reasonArgs = listOf(
                     topDay!!.key.getDisplayName(TextStyle.FULL, Locale.getDefault()),
-                    topWindow!!.label
+                    topWindow!!.key.label
                 )
             }
             timeScore == bestScore -> {
                 reasonRes = R.string.tag_suggestion_reason_time
-                reasonArgs = listOf(topWindow!!.label)
+                reasonArgs = listOf(topWindow!!.key.label)
             }
             dayScore == bestScore -> {
                 reasonRes = R.string.tag_suggestion_reason_day

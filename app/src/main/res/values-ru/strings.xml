@@ -205,4 +205,8 @@
   <string name="patterns_frequency_recurring_detail">~%1$s трат/мес · %2$d мес. · %3$d всего</string>
   <string name="patterns_frequency_recurring_suggested">Предложено: день %1$d · %2$s avg</string>
   <string name="patterns_frequency_recurring_add">Добавить</string>
+  <string name="tag_suggestion_reason_time">Обычно в %1$s</string>
+  <string name="tag_suggestion_reason_day">Часто по %1$s</string>
+  <string name="tag_suggestion_reason_day_time">Привычка по %1$s в %2$s</string>
+  <string name="tag_suggestion_reason_frequency">Куплено %1$d раз</string>
 </resources>
