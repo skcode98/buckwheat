@@ -48,6 +48,10 @@ fun rememberImportCSV(
             try {
                 val stream = context.contentResolver.openInputStream(uri)
                 val reader = BufferedReader(InputStreamReader(stream))
+                reader.mark(1)
+                if (reader.read() != '\uFEFF'.code) {
+                    reader.reset()
+                }
 
                 val parser = CSVFormat.Builder.create()
                     .setHeader("amount", "comment", "commit_time")
