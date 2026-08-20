@@ -297,6 +297,8 @@
   <string name="hello">Hello!</string>
   <string name="onboarding_title">Welcome to Buckwheat, let\'s save money together</string>
   <string name="set_period_title">Set up a budget</string>
+  <string name="onboarding_restore_title">Restore from backup</string>
+  <string name="onboarding_restore_description">Already have a backup file? Restore it to skip setup and get started right away</string>
   <string name="help_set_budget_title">Establish a budget</string>
   <string name="help_set_budget_description">Calculate approximately how much money you need for a certain period, such as a month, and enter it in the application. If you can’t calculate, indicate it very approximately, for example, half of the salary, over time you will indicate it more and more accurately</string>
   <string name="help_record_spends_title">Record every expense</string>
@@ -539,6 +541,12 @@
   <string name="patterns_tag_monthly_spend">Monthly spend</string>
   <string name="patterns_tag_transactions">Transactions (%1$d)</string>
   <string name="patterns_tag_showing_of">Showing %1$d of %2$d</string>
+  <string name="sort_amount">Amount</string>
+  <string name="sort_frequency">Frequency</string>
+  <string name="sort_recent">Recent</string>
+  <string name="sort_trending">Trending</string>
+  <string name="sort_alpha">A–Z</string>
+  <string name="patterns_tag_all_shown">All %1$d tags shown</string>
   <string name="patterns_detected_recurring">Detected recurring charges</string>
   <string name="patterns_detected_recurring_desc">Charges that repeat monthly based on your history</string>
   <string name="patterns_detected_recurring_detail">%1$d months · last %2$s</string>

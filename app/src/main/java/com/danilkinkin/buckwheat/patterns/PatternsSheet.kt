@@ -1253,7 +1253,47 @@ private fun CommentPatternsCard(
     currency: ExtendCurrency,
 ) {
     var selectedKey by remember { mutableStateOf<String?>(null) }
+    var sortMode by remember { mutableStateOf(CommentSortMode.AMOUNT) }
+    var showAll by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
+
+    val sortedPatterns = remember(patterns, sortMode) {
+        when (sortMode) {
+            CommentSortMode.AMOUNT -> patterns.sortedByDescending { it.total }
+            CommentSortMode.FREQUENCY -> patterns.sortedByDescending { it.transactionCount }
+            CommentSortMode.RECENT -> patterns.sortedByDescending { it.activeMonths }
+            CommentSortMode.TRENDING -> patterns.sortedByDescending { p ->
+                if (p.monthSeries.size >= 2 && p.monthSeries[p.monthSeries.size - 2] > BigDecimal.ZERO) {
+                    p.monthSeries.last()
+                        .minus(p.monthSeries[p.monthSeries.size - 2])
+                } else {
+                    BigDecimal.ZERO
+                }
+            }
+            CommentSortMode.ALPHA -> patterns.sortedBy { it.displayName.lowercase() }
+        }
+    }
+
+    val maxTotal = remember(sortedPatterns) {
+        sortedPatterns.maxOfOrNull { it.total } ?: BigDecimal.ONE
+    }
+
+    val visiblePatterns = if (showAll) sortedPatterns else sortedPatterns.take(8)
+
+    val TAG_COLORS = remember {
+        listOf(
+            0xFF7c6aef.toInt(),
+            0xFFe06a5e.toInt(),
+            0xFF4ecdc4.toInt(),
+            0xFFf7b731.toInt(),
+            0xFFa55eea.toInt(),
+            0xFF26de81.toInt(),
+            0xFFfd9644.toInt(),
+            0xFF778ca3.toInt(),
+            0xFFfc5c65.toInt(),
+            0xFF45aaf2.toInt(),
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1274,10 +1314,45 @@ private fun CommentPatternsCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            patterns.take(8).forEach { pattern ->
-                Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
+            // Sort chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val sortEntries = listOf(
+                    CommentSortMode.AMOUNT to stringResource(R.string.sort_amount),
+                    CommentSortMode.FREQUENCY to stringResource(R.string.sort_frequency),
+                    CommentSortMode.RECENT to stringResource(R.string.sort_recent),
+                    CommentSortMode.TRENDING to stringResource(R.string.sort_trending),
+                    CommentSortMode.ALPHA to stringResource(R.string.sort_alpha),
+                )
+                sortEntries.forEach { (mode, label) ->
+                    val isActive = sortMode == mode
+                    Surface(
+                        onClick = { sortMode = mode },
+                        shape = CircleShape,
+                        color = if (isActive) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        contentColor = if (isActive) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+
+            // Tag rows
+            visiblePatterns.forEachIndexed { index, pattern ->
+                Spacer(Modifier.height(8.dp))
                 val isSelected = selectedKey == pattern.key
+                val colorInt = TAG_COLORS[index % TAG_COLORS.size]
 
                 Column(
                     modifier = Modifier
@@ -1293,6 +1368,24 @@ private fun CommentPatternsCard(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Rank
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(20.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                        // Color dot
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    color = androidx.compose.ui.graphics.Color(colorInt),
+                                    shape = CircleShape,
+                                ),
+                        )
+                        Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = pattern.displayName,
@@ -1311,6 +1404,21 @@ private fun CommentPatternsCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                             )
+                            // Progress bar
+                            val fraction = pattern.total
+                                .divide(maxTotal, 4, RoundingMode.HALF_EVEN)
+                                .toFloat()
+                                .coerceIn(0f, 1f)
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { fraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp),
+                                color = androidx.compose.ui.graphics.Color(colorInt),
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                            // Predicted
                             if (pattern.monthSeries.size >= 2 && pattern.activeMonths >= 2) {
                                 val lastMonth = pattern.monthSeries.last()
                                 val prevMonth = pattern.monthSeries[pattern.monthSeries.size - 2]
@@ -1344,14 +1452,12 @@ private fun CommentPatternsCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    }
-                    if (pattern.monthSeries.size >= 2) {
-                        Spacer(Modifier.height(6.dp))
-                        MiniSpark(
-                            values = pattern.monthSeries,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(32.dp),
+                        // Expand chevron
+                        Text(
+                            text = if (isSelected) "▾" else "▸",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp),
                         )
                     }
 
@@ -1378,10 +1484,12 @@ private fun CommentPatternsCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.height(6.dp))
-                            months.forEachIndexed { index, month ->
-                                if (index < pattern.monthSeries.size) {
-                                    val value = pattern.monthSeries[index]
-                                    val fraction = value.divide(maxMonthValue, 4, RoundingMode.HALF_EVEN).toFloat()
+                            months.forEachIndexed { index2, month ->
+                                if (index2 < pattern.monthSeries.size) {
+                                    val value = pattern.monthSeries[index2]
+                                    val barFraction = value
+                                        .divide(maxMonthValue, 4, RoundingMode.HALF_EVEN)
+                                        .toFloat()
                                     Row(
                                         Modifier
                                             .fillMaxWidth()
@@ -1389,13 +1497,14 @@ private fun CommentPatternsCard(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Text(
-                                            text = SimpleDateFormat("MMM", Locale.getDefault()).format(month.atDay(1).toDate()),
+                                            text = SimpleDateFormat("MMM", Locale.getDefault())
+                                                .format(month.atDay(1).toDate()),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.width(40.dp),
                                         )
                                         LinearProgressIndicator(
-                                            progress = { fraction },
+                                            progress = { barFraction },
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .height(8.dp),
@@ -1449,7 +1558,9 @@ private fun CommentPatternsCard(
                                         style = MaterialTheme.typography.labelSmall,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 8.dp),
                                     )
                                     Text(
                                         text = numberFormat(context, spend.value, currency),
@@ -1460,13 +1571,33 @@ private fun CommentPatternsCard(
                             if (tagSpends.size > 20) {
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = stringResource(R.string.patterns_tag_showing_of, 20, tagSpends.size),
+                                    text = stringResource(
+                                        R.string.patterns_tag_showing_of, 20, tagSpends.size,
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
+                }
+            }
+
+            // Show more / show all
+            if (sortedPatterns.size > 8) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = { showAll = !showAll },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (showAll) {
+                            stringResource(R.string.patterns_tag_all_shown, sortedPatterns.size)
+                        } else {
+                            "Show all ${sortedPatterns.size} tags ▾"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                 }
             }
         }

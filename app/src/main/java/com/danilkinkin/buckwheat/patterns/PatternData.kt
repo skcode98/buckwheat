@@ -222,6 +222,14 @@ data class CommentPattern(
     val monthSeries: List<BigDecimal> = emptyList(),
 )
 
+enum class CommentSortMode {
+    AMOUNT,
+    FREQUENCY,
+    RECENT,
+    TRENDING,
+    ALPHA,
+}
+
 data class TagSuggestion(
     val tag: String,
     val reasonRes: Int,
