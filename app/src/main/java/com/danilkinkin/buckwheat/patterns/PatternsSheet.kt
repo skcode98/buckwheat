@@ -3,6 +3,7 @@ package com.danilkinkin.buckwheat.patterns
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -71,8 +74,12 @@ import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.smoothPath
 import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toLocalDate
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.SimpleDateFormat
+import java.time.YearMonth
+import java.util.Locale
 
 const val PATTERN_INSIGHTS_SHEET = "patterns"
 
@@ -413,7 +420,7 @@ private fun PatternsBody(
 
         if (metrics.commentPatterns.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
-            CommentPatternsCard(metrics.commentPatterns, context, currency)
+            CommentPatternsCard(metrics.commentPatterns, dataset, context, currency)
         }
 
         if (metrics.recurring.isNotEmpty()) {
@@ -1241,9 +1248,13 @@ private fun SuggestionsCard(suggestions: List<InsightSuggestion>) {
 @Composable
 private fun CommentPatternsCard(
     patterns: List<CommentPattern>,
+    dataset: PatternDataset,
     context: Context,
     currency: ExtendCurrency,
 ) {
+    var selectedKey by remember { mutableStateOf<String?>(null) }
+    val dateFormat = remember { SimpleDateFormat("MMM yyyy", Locale.getDefault()) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
@@ -1265,70 +1276,197 @@ private fun CommentPatternsCard(
             )
             patterns.take(8).forEach { pattern ->
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+
+                val isSelected = selectedKey == pattern.key
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            selectedKey = if (selectedKey == pattern.key) null else pattern.key
+                        },
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = pattern.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.patterns_comment_pattern_detail_avg,
-                                pattern.transactionCount,
-                                numberFormat(context, pattern.monthlyAverage, currency),
-                                pattern.activeMonths,
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                        if (pattern.monthSeries.size >= 2 && pattern.activeMonths >= 2) {
-                            val lastMonth = pattern.monthSeries.last()
-                            val prevMonth = pattern.monthSeries[pattern.monthSeries.size - 2]
-                            val predicted = if (prevMonth > BigDecimal.ZERO) {
-                                lastMonth.add(lastMonth.minus(prevMonth).coerceAtLeast(BigDecimal.ZERO))
-                                    .coerceAtLeast(BigDecimal.ZERO)
-                            } else {
-                                pattern.monthlyAverage
-                            }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = pattern.displayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text(
                                 text = stringResource(
-                                    R.string.patterns_comment_predicted_next,
-                                    numberFormat(context, predicted, currency),
+                                    R.string.patterns_comment_pattern_detail_avg,
+                                    pattern.transactionCount,
+                                    numberFormat(context, pattern.monthlyAverage, currency),
+                                    pattern.activeMonths,
                                 ),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
+                            )
+                            if (pattern.monthSeries.size >= 2 && pattern.activeMonths >= 2) {
+                                val lastMonth = pattern.monthSeries.last()
+                                val prevMonth = pattern.monthSeries[pattern.monthSeries.size - 2]
+                                val predicted = if (prevMonth > BigDecimal.ZERO) {
+                                    lastMonth.add(lastMonth.minus(prevMonth).coerceAtLeast(BigDecimal.ZERO))
+                                        .coerceAtLeast(BigDecimal.ZERO)
+                                } else {
+                                    pattern.monthlyAverage
+                                }
+                                Text(
+                                    text = stringResource(
+                                        R.string.patterns_comment_predicted_next,
+                                        numberFormat(context, predicted, currency),
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = numberFormat(context, pattern.total, currency),
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = "${pattern.percent}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = numberFormat(context, pattern.total, currency),
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = "${pattern.percent}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (pattern.monthSeries.size >= 2) {
+                        Spacer(Modifier.height(6.dp))
+                        MiniSpark(
+                            values = pattern.monthSeries,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp),
                         )
                     }
-                }
-                if (pattern.monthSeries.size >= 2) {
-                    Spacer(Modifier.height(6.dp))
-                    MiniSpark(
-                        values = pattern.monthSeries,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(32.dp),
-                    )
+
+                    // Expanded detail section
+                    if (isSelected) {
+                        Spacer(Modifier.height(12.dp))
+
+                        // Monthly spend bars
+                        val maxMonthValue = remember(pattern) {
+                            pattern.monthSeries.maxOfOrNull { it } ?: BigDecimal.ZERO
+                        }
+                        val months = remember(pattern) {
+                            val allMonths = dataset.spends
+                                .map { YearMonth.from(it.date.toLocalDate()) }
+                                .distinct()
+                                .sorted()
+                            allMonths.takeLast(pattern.monthSeries.size)
+                        }
+
+                        if (months.isNotEmpty() && maxMonthValue > BigDecimal.ZERO) {
+                            Text(
+                                text = stringResource(R.string.patterns_tag_monthly_spend),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            months.forEachIndexed { index, month ->
+                                if (index < pattern.monthSeries.size) {
+                                    val value = pattern.monthSeries[index]
+                                    val fraction = value.divide(maxMonthValue, 4, RoundingMode.HALF_EVEN).toFloat()
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = SimpleDateFormat("MMM", Locale.getDefault()).format(month.atDay(1).toDate()),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.width(40.dp),
+                                        )
+                                        LinearProgressIndicator(
+                                            progress = { fraction },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(8.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = numberFormat(context, value, currency),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.width(70.dp),
+                                            textAlign = TextAlign.End,
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+
+                        // Transactions for this tag
+                        val tagSpends = remember(pattern, dataset) {
+                            dataset.spends.filter { spend ->
+                                val spendComment = spend.comment?.trim() ?: ""
+                                val patternKey = pattern.key.trim()
+                                spendComment.equals(patternKey, ignoreCase = true) ||
+                                    spendComment.contains(patternKey, ignoreCase = true)
+                            }.sortedByDescending { it.date }
+                        }
+
+                        if (tagSpends.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.patterns_tag_transactions, tagSpends.size),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            tagSpends.take(20).forEach { spend ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        text = dateFormat.format(spend.date),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text = spend.comment ?: "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                    )
+                                    Text(
+                                        text = numberFormat(context, spend.value, currency),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                            if (tagSpends.size > 20) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(R.string.patterns_tag_showing_of, 20, tagSpends.size),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

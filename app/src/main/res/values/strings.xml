@@ -536,6 +536,9 @@
   <string name="patterns_category_breakdown_detail">%1$d%% · avg %2$s/mo · %3$s</string>
   <string name="patterns_comment_pattern_detail_avg">%1$d txns · avg %2$s/mo · %3$d months</string>
   <string name="patterns_comment_predicted_next">Predicted next month: %1$s</string>
+  <string name="patterns_tag_monthly_spend">Monthly spend</string>
+  <string name="patterns_tag_transactions">Transactions (%1$d)</string>
+  <string name="patterns_tag_showing_of">Showing %1$d of %2$d</string>
   <string name="patterns_detected_recurring">Detected recurring charges</string>
   <string name="patterns_detected_recurring_desc">Charges that repeat monthly based on your history</string>
   <string name="patterns_detected_recurring_detail">%1$d months · last %2$s</string>

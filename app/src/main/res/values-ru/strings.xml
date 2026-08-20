@@ -194,6 +194,9 @@
   <string name="patterns_category_breakdown_detail">%1$d%% · в среднем %2$s/мес · %3$s</string>
   <string name="patterns_comment_pattern_detail_avg">%1$d транз. · в среднем %2$s/мес · %3$d мес.</string>
   <string name="patterns_comment_predicted_next">Прогноз на след. месяц: %1$s</string>
+  <string name="patterns_tag_monthly_spend">Расходы по месяцам</string>
+  <string name="patterns_tag_transactions">Транзакции (%1$d)</string>
+  <string name="patterns_tag_showing_of">Показано %1$d из %2$d</string>
   <string name="patterns_detected_recurring">Обнаружены повторяющиеся траты</string>
   <string name="patterns_detected_recurring_desc">Траты, которые повторяются ежемесячно по вашей истории</string>
   <string name="patterns_detected_recurring_detail">%1$d мес. · последняя %2$s</string>
