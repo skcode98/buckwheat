@@ -185,6 +185,7 @@ fun BottomSheets(
     BottomSheetWrapper(name = CATEGORY_HISTORY_SHEET) { state ->
         ViewerHistory(
             onlyCategoryKey = state.args["onlyCategoryKey"] as? CategoryKey?,
+            showAllPeriods = state.args["showAllPeriods"] as? Boolean ?: false,
             onClose = {
                 coroutineScope.launch { state.hide() }
             }

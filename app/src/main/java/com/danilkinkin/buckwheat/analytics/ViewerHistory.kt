@@ -39,6 +39,7 @@ fun ViewerHistory(
     appViewModel: AppViewModel = hiltViewModel(),
     onlyDay: LocalDate? = null,
     onlyCategoryKey: CategoryKey? = null,
+    showAllPeriods: Boolean = false,
     onClose: () -> Unit = {},
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -85,6 +86,7 @@ fun ViewerHistory(
                 readOnly = true,
                 onlyDay = onlyDay,
                 onlyCategoryKey = onlyCategoryKey,
+                showAllPeriods = showAllPeriods,
             )
         }
     }

@@ -53,6 +53,7 @@ fun History(
     searchQuery: String = "",
     onlyDay: LocalDate? = null,
     onlyCategoryKey: CategoryKey? = null,
+    showAllPeriods: Boolean = false,
 ) {
     val scrollState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -80,7 +81,7 @@ fun History(
     val archivedTransactions by spendsViewModel.archivedTransactions.collectAsStateWithLifecycle()
 
     LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, allSpends, periodSpends, archivedTransactions) {
-        val sourceSpends = if (onlyCategoryKey != null) allSpends else periodSpends
+        val sourceSpends = if (onlyCategoryKey != null && showAllPeriods) allSpends else periodSpends
         historyList = composeHistoryRows(
             sourceSpends,
             archivedTransactions,

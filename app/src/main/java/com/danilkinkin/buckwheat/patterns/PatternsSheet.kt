@@ -334,7 +334,7 @@ private fun PatternsBody(
                 appViewModel.openSheet(
                     PathState(
                         name = CATEGORY_HISTORY_SHEET,
-                        args = mapOf("onlyCategoryKey" to key),
+                        args = mapOf("onlyCategoryKey" to key, "showAllPeriods" to true),
                     )
                 )
             },
