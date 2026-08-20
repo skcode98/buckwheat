@@ -13,6 +13,8 @@ import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
 import com.danilkinkin.buckwheat.patterns.PatternDataset
 import com.danilkinkin.buckwheat.patterns.PatternPeriod
 import com.danilkinkin.buckwheat.patterns.PatternSpend
+import com.danilkinkin.buckwheat.patterns.TagSuggestion
+import com.danilkinkin.buckwheat.patterns.buildTagSuggestions
 import com.danilkinkin.buckwheat.patterns.forecast
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
@@ -32,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.util.Date
 import javax.inject.Inject
 
@@ -164,6 +167,36 @@ class SpendsViewModel @Inject constructor(
         }
         (scaled / magnitude).setScale(0, java.math.RoundingMode.CEILING) * magnitude
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val tagSuggestions: StateFlow<List<TagSuggestion>> = combine(
+        spends,
+        archivedTransactions,
+        budgetPeriods,
+    ) { currentSpends, archived, periods ->
+        val allSpends = archived.map { tx ->
+            PatternSpend(date = tx.date, value = tx.value, category = tx.category, comment = tx.comment)
+        } + currentSpends.filter { it.type == TransactionType.SPENT }.map { tx ->
+            PatternSpend(date = tx.date, value = tx.value, category = tx.category, comment = tx.comment)
+        }
+
+        val allPeriods = periods.map {
+            PatternPeriod(it.startDate, it.finishDate, it.budget, it.totalSpent, it.isImported)
+        }
+
+        val today = LocalDate.now()
+        val dataset = PatternDataset(
+            spends = allSpends,
+            periods = allPeriods,
+            currencyCode = currency.value.value ?: "",
+            today = today,
+        )
+
+        buildTagSuggestions(dataset)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
 
     var requireDistributionRestedBudget = MutableStateFlow(false)
     var requireSetBudget = MutableStateFlow(false)
