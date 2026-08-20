@@ -62,6 +62,9 @@ fun rememberImportCSV(
                     DateTimeFormatter.ISO_LOCAL_DATE_TIME,
                     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
                     DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"),
+                    DateTimeFormatter.ofPattern("dd/MM/yy, h:mm a"),
+                    DateTimeFormatter.ofPattern("dd/MM/yy HH:mm"),
+                    DateTimeFormatter.ofPattern("MM/dd/yy, h:mm a"),
                 )
 
                 for (record in parser) {
