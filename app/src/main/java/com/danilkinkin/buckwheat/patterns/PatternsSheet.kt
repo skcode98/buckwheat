@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -346,65 +347,6 @@ private fun PatternsBody(
         }
 
         Spacer(Modifier.height(16.dp))
-        CategorySparklines(categorySeries, currency)
-
-        Spacer(Modifier.height(16.dp))
-        CategoryFrequencyCard(metrics.categoryTransactionSeries, context, currency)
-
-        Spacer(Modifier.height(16.dp))
-        if (metrics.frequencyRecurringCandidates.isNotEmpty()) {
-            FrequencyRecurringSuggestionCard(
-                candidates = metrics.frequencyRecurringCandidates,
-                context = context,
-                currency = currency,
-                onAddRecurring = { candidate ->
-                    appViewModel.openSheet(
-                        PathState(
-                            name = RECURRING_PAYMENTS_SHEET,
-                            args = mapOf(
-                                "suggestedAmount" to candidate.suggestedAmount,
-                                "suggestedComment" to candidate.displayName,
-                                "suggestedDay" to candidate.suggestedDayOfMonth,
-                            ),
-                        )
-                    )
-                },
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        SpendsWeekdayCard(
-            modifier = Modifier.fillMaxWidth(),
-            spends = spendTx,
-            startDate = windowStart,
-            finishDate = dataset.today.toDate(),
-            currency = currency,
-        )
-        metrics.weekendDeltaPercent?.let { delta ->
-            Spacer(Modifier.height(8.dp))
-            val weekendText: String
-            val weekendColor = when {
-                delta > 0 -> {
-                    weekendText = stringResource(R.string.patterns_weekend_delta_up, delta)
-                    colorBad
-                }
-                delta < 0 -> {
-                    weekendText = stringResource(R.string.patterns_weekend_delta_down, -delta)
-                    colorGood
-                }
-                else -> {
-                    weekendText = stringResource(R.string.patterns_weekend_delta_flat)
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            }
-            Text(
-                text = weekendText,
-                style = MaterialTheme.typography.labelMedium,
-                color = weekendColor,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
         DayOfMonthBars(metrics.dayOfMonthPoints, context, currency)
 
         Spacer(Modifier.height(16.dp))
@@ -413,19 +355,9 @@ private fun PatternsBody(
         Spacer(Modifier.height(16.dp))
         AnomaliesCard(metrics, context, currency)
 
-        if (metrics.suggestions.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            SuggestionsCard(metrics.suggestions)
-        }
-
+        Spacer(Modifier.height(16.dp))
         if (metrics.commentPatterns.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
             CommentPatternsCard(metrics.commentPatterns, dataset, context, currency)
-        }
-
-        if (metrics.recurring.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            DetectedRecurringCard(metrics.recurring, context, currency)
         }
 
         if (metrics.recurringForecasts.isNotEmpty()) {
@@ -1348,8 +1280,13 @@ private fun CommentPatternsCard(
             }
             Spacer(Modifier.height(4.dp))
 
-            // Tag rows
-            visiblePatterns.forEachIndexed { index, pattern ->
+            // Tag rows — scrollable with max height for large tag sets
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier.heightIn(max = 400.dp),
+                userScrollEnabled = true,
+            ) {
+                items(visiblePatterns.size) { index ->
+                    val pattern = visiblePatterns[index]
                 Spacer(Modifier.height(8.dp))
                 val isSelected = selectedKey == pattern.key
                 val colorInt = TAG_COLORS[index % TAG_COLORS.size]
@@ -1580,6 +1517,7 @@ private fun CommentPatternsCard(
                             }
                         }
                     }
+                }
                 }
             }
 
