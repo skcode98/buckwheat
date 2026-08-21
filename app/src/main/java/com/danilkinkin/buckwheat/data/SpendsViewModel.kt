@@ -493,8 +493,12 @@ class SpendsViewModel @Inject constructor(
         startDate: Date?,
         finishDate: Date?,
     ): List<Transaction> {
-        if (startDate == null || finishDate == null) return list
-        return list.filter { !it.date.before(startDate) && !it.date.after(finishDate) }
+        if (startDate == null && finishDate == null) return list
+        return list.filter { tx ->
+            val afterStart = startDate == null || !tx.date.before(startDate)
+            val beforeFinish = finishDate == null || !tx.date.after(finishDate)
+            afterStart && beforeFinish
+        }
     }
 
     private fun runScheduledDetectChangeDayTask() {

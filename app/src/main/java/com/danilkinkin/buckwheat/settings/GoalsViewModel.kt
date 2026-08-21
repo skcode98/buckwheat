@@ -39,6 +39,9 @@ class GoalsViewModel @Inject constructor(
     private val _goalCompletedEvents = MutableSharedFlow<SavingsGoal>(extraBufferCapacity = 1)
     val goalCompletedEvents: SharedFlow<SavingsGoal> = _goalCompletedEvents
 
+    private val _allocationErrors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val allocationErrors: SharedFlow<String> = _allocationErrors
+
     fun addGoal(name: String, targetAmount: BigDecimal, deadline: Date? = null) {
         if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
         viewModelScope.launch {
@@ -64,7 +67,10 @@ class GoalsViewModel @Inject constructor(
             allocationMutex.withLock {
                 val goal = savingsGoalDao.getById(goalId) ?: return@withLock
                 val budgetRest = spendsRepository.howMuchBudgetRest()
-                if (budgetRest < amount) return@withLock
+                if (budgetRest < amount) {
+                    _allocationErrors.tryEmit(appContext.getString(com.danilkinkin.buckwheat.R.string.goal_allocate_insufficient_budget))
+                    return@withLock
+                }
                 val newAmount = goal.currentAmount + amount
                 val completed = newAmount >= goal.targetAmount
                 val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)

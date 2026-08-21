@@ -67,11 +67,15 @@ import java.math.RoundingMode
 
 const val CATEGORY_CAPS_SHEET = "categoryCaps"
 
-private val categoryColors: List<Color> = baseColors.map { color ->
-    harmonizeWithColor(color, Color(0xFFCC4C08))
+@Composable
+private fun rememberCategoryColors(): List<Color> {
+    val primary = MaterialTheme.colorScheme.primary
+    return remember(primary) {
+        baseColors.map { color -> harmonizeWithColor(color, primary) }
+    }
 }
 
-private fun categoryColorByName(name: String, builtInCategory: SpendCategory?): Color {
+private fun categoryColorByName(categoryColors: List<Color>, name: String, builtInCategory: SpendCategory?): Color {
     return if (builtInCategory != null && builtInCategory != SpendCategory.OTHER) {
         categoryColors[builtInCategory.ordinal % categoryColors.size]
     } else {
@@ -89,6 +93,7 @@ fun CategoryCapsSheet(
     val caps by capsViewModel.caps.collectAsStateWithLifecycle()
     val categorySpends by capsViewModel.categorySpends.collectAsStateWithLifecycle()
     val currency by capsViewModel.currency.collectAsStateWithLifecycle()
+    val categoryColors = rememberCategoryColors()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -143,7 +148,7 @@ fun CategoryCapsSheet(
             ) {
                 items(categories, key = { "${it.id}_${it.name}" }) { item ->
                     val builtIn = SpendCategory.fromStored(item.name)
-                    val catColor = categoryColorByName(item.name, builtIn)
+                    val catColor = categoryColorByName(categoryColors, item.name, builtIn)
                     CategoryCapCard(
                         name = item.name,
                         emoji = SpendCategory.emojiFor(item.name, item.emoji),

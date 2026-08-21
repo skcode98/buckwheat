@@ -51,7 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import com.danilkinkin.buckwheat.ui.colorGood
+import com.danilkinkin.buckwheat.ui.colorSuccess
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -102,6 +102,12 @@ fun GoalsSheet(
                 ejectForceCoefficient = 6f,
                 lifetime = 2000L to 5000L,
             )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.allocationErrors.collect { message ->
+            appViewModel.showSnackbar(message)
         }
     }
 
@@ -608,8 +614,8 @@ private fun GoalCard(
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
 
     val ringColor = when {
-        goal.completed -> colorGood
-        progress >= 1f -> colorGood
+        goal.completed -> colorSuccess
+        progress >= 1f -> colorSuccess
         else -> MaterialTheme.colorScheme.primary
     }
 
@@ -649,7 +655,7 @@ private fun GoalCard(
                         Text(
                             text = stringResource(R.string.goal_completed),
                             style = MaterialTheme.typography.labelSmall,
-                            color = colorGood,
+                            color = colorSuccess,
                         )
                     }
                 }

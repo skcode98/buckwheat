@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import com.danilkinkin.buckwheat.util.combineColors
+import com.danilkinkin.buckwheat.util.harmonizeWithColor
 
 val colorSeed = Color(0xFFCC4C08)
 val colorGood = Color(0xFF40AC02)
@@ -53,3 +54,8 @@ val colorOnEditor
     @Composable
     @ReadOnlyComposable
     get() = MaterialTheme.colorScheme.onSurface
+
+val colorSuccess
+    @Composable
+    @ReadOnlyComposable
+    get() = harmonizeWithColor(colorGood, MaterialTheme.colorScheme.primary)
