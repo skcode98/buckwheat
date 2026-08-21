@@ -1,6 +1,11 @@
 package com.danilkinkin.buckwheat.settings
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -183,12 +188,17 @@ fun RecurringPaymentsSheet(
                         currency = currency,
                         onToggle = { viewModel.toggleEnabled(template) },
                         onDelete = { viewModel.deleteTemplate(template.id) },
+                        modifier = Modifier.animateItem(),
                     )
                 }
 
                 // Create new payment
-                if (!showCreateForm) {
-                    item {
+                item(key = "add_button") {
+                    AnimatedVisibility(
+                        visible = !showCreateForm,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         OutlinedButton(
                             onClick = { showCreateForm = true },
                             modifier = Modifier.fillMaxWidth(),
@@ -207,8 +217,12 @@ fun RecurringPaymentsSheet(
                     }
                 }
 
-                if (showCreateForm) {
-                    item {
+                item(key = "create_form") {
+                    AnimatedVisibility(
+                        visible = showCreateForm,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         CreatePaymentCard(
                             amountText = amountText,
                             commentText = commentText,
@@ -237,12 +251,13 @@ private fun RecurringPaymentCard(
     currency: ExtendCurrency,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val alpha = if (template.enabled) 1f else 0.5f
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .alpha(alpha),
         shape = RoundedCornerShape(22.dp),
@@ -288,6 +303,12 @@ private fun RecurringPaymentCard(
                     text = numberFormat(context, template.amount, currency),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = nextChargeText(context, template.dayOfMonth),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
             }
 
@@ -392,6 +413,25 @@ private fun CreatePaymentCard(
                     Text(stringResource(R.string.apply))
                 }
             }
+        }
+    }
+}
+
+private fun nextChargeText(context: android.content.Context, dayOfMonth: Int): String {
+    val now = java.util.Calendar.getInstance()
+    val today = now.get(java.util.Calendar.DAY_OF_MONTH)
+    val target = dayOfMonth.coerceAtMost(now.getActualMaximum(java.util.Calendar.DAY_OF_MONTH))
+
+    return when {
+        today == target -> context.getString(R.string.recurring_next_charge_today)
+        today < target -> context.getString(R.string.recurring_next_charge_days, target - today)
+        else -> {
+            val nextMonth = java.util.Calendar.getInstance().apply {
+                add(java.util.Calendar.MONTH, 1)
+            }
+            val maxNext = nextMonth.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+            val nextTarget = dayOfMonth.coerceAtMost(maxNext)
+            context.getString(R.string.recurring_next_charge_days, nextTarget + (now.getActualMaximum(java.util.Calendar.DAY_OF_MONTH) - today))
         }
     }
 }

@@ -1,6 +1,12 @@
 package com.danilkinkin.buckwheat.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,33 +23,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.analytics.categoriesChart.baseColors
@@ -53,12 +59,9 @@ import com.danilkinkin.buckwheat.data.categories.CATEGORY_CAP_NEAR_PERCENT
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.data.categories.categoryCapPercent
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
-import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import com.danilkinkin.buckwheat.util.HarmonizedColorPalette
 import com.danilkinkin.buckwheat.util.NumberDisplayConfig
 import com.danilkinkin.buckwheat.util.harmonizeWithColor
 import com.danilkinkin.buckwheat.util.numberFormat
-import com.danilkinkin.buckwheat.util.toPalette
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -75,10 +78,6 @@ private fun categoryColorByName(name: String, builtInCategory: SpendCategory?): 
         categoryColors[Math.floorMod(name.hashCode(), categoryColors.size)]
     }
 }
-
-private val statusGood = Color(0xFF40AC02)
-private val statusWarn = Color(0xFFFABC20)
-private val statusBad = Color(0xFFC70909)
 
 @Composable
 fun CategoryCapsSheet(
@@ -139,13 +138,13 @@ fun CategoryCapsSheet(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(bottom = navigationBarHeight),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(categories, key = { "${it.id}_${it.name}" }) { item ->
                     val builtIn = SpendCategory.fromStored(item.name)
                     val catColor = categoryColorByName(item.name, builtIn)
-                    CategoryCapRow(
+                    CategoryCapCard(
                         name = item.name,
                         emoji = SpendCategory.emojiFor(item.name, item.emoji),
                         cap = caps[item.name],
@@ -162,7 +161,7 @@ fun CategoryCapsSheet(
 }
 
 @Composable
-private fun CategoryCapRow(
+private fun CategoryCapCard(
     name: String,
     emoji: String,
     cap: BigDecimal?,
@@ -178,6 +177,8 @@ private fun CategoryCapRow(
         ?.setScale(0, RoundingMode.HALF_EVEN)
         ?.toPlainString()
         ?: cap?.toPlainString()
+
+    var isEditing by remember(name, cap) { mutableStateOf(false) }
     var capText by remember(name, cap) { mutableStateOf(capDisplay ?: "") }
 
     val hasCap = cap != null && cap > BigDecimal.ZERO
@@ -186,200 +187,187 @@ private fun CategoryCapRow(
     val fractionDisplay = (fraction * 100).toInt()
 
     val barColor = when {
-        !hasCap -> Color.Transparent
-        percent >= 100 -> statusBad
-        percent >= CATEGORY_CAP_NEAR_PERCENT -> statusWarn
+        !hasCap -> categoryColor
+        percent >= 100 -> MaterialTheme.colorScheme.error
+        percent >= CATEGORY_CAP_NEAR_PERCENT -> MaterialTheme.colorScheme.tertiary
         else -> categoryColor
     }
-    val textColor = categoryColor
 
-    val cardShape = RoundedCornerShape(22.dp)
-
-    Surface(
-        shape = cardShape,
-        color = Color.Transparent,
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(cardShape)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            categoryColor.copy(alpha = 0.18f),
-                            categoryColor.copy(alpha = 0.03f),
-                        )
-                    )
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header row: emoji + name + cap amount / action
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = emoji,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
-                .padding(14.dp),
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
-                ) {
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = emoji,
-                        style = MaterialTheme.typography.headlineSmall,
+                        text = categoryDisplayName(name),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                    if (hasCap) {
                         Text(
-                            text = categoryDisplayName(name),
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (hasCap) {
-                            Text(
-                                text = "${numberFormat(context, spent, currency)} spent",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    if (!hasCap) {
-                        OutlinedTextField(
-                            value = capText,
-                            onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
-                            modifier = Modifier.width(120.dp),
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.category_caps_hint)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    capText.trim().toBigDecimalOrNull()
-                                        ?.takeIf { it > BigDecimal.ZERO }
-                                        ?.let(onSave)
-                                }
-                            ),
-                        )
-                    } else {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "${stringResource(R.string.category_caps_hint)} ${numberFormat(context, cap!!, currency)}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                            )
-                            Text(
-                                text = categoryDisplayName(name).lowercase(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                if (hasCap) {
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(categoryColor.copy(alpha = 0.12f)),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(fraction)
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(barColor),
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = "$fractionDisplay% used",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = barColor,
-                        )
-                        val remaining = cap!! - spent
-                        val remainingDisplay = if (remaining > BigDecimal.ZERO) remaining else BigDecimal.ZERO
-                        Text(
-                            text = "${numberFormat(context, remainingDisplay, currency)} left",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "${numberFormat(context, spent, currency)} ${stringResource(R.string.category_caps_spent).lowercase()}",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = capText,
-                            onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.category_caps_hint)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    capText.trim().toBigDecimalOrNull()
-                                        ?.takeIf { it > BigDecimal.ZERO }
-                                        ?.let(onSave)
-                                }
-                            ),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        IconButton(onClick = {
-                            capText = ""
-                            onClear()
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_delete_forever),
-                                contentDescription = stringResource(R.string.category_caps_remove),
-                            )
-                        }
+                }
+                if (hasCap && !isEditing) {
+                    Text(
+                        text = numberFormat(context, cap!!, currency),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = barColor,
+                    )
+                } else if (!hasCap && !isEditing) {
+                    TextButton(onClick = {
+                        isEditing = true
+                        capText = ""
+                    }) {
+                        Text(stringResource(R.string.category_caps_set))
                     }
-                } else {
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = capText,
-                            onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.category_caps_hint)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    capText.trim().toBigDecimalOrNull()
-                                        ?.takeIf { it > BigDecimal.ZERO }
-                                        ?.let(onSave)
-                                }
-                            ),
+                }
+            }
+
+            // Progress bar
+            if (hasCap && !isEditing) {
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(categoryColor.copy(alpha = 0.12f)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(barColor),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "$fractionDisplay% ${stringResource(R.string.category_caps_used)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = barColor,
+                    )
+                    val remaining = cap!! - spent
+                    val remainingDisplay = if (remaining > BigDecimal.ZERO) remaining else BigDecimal.ZERO
+                    Text(
+                        text = "${numberFormat(context, remainingDisplay, currency)} ${stringResource(R.string.category_caps_left)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // Edit + delete actions
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = {
+                        isEditing = true
+                        capText = capDisplay ?: ""
+                    }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_edit),
+                            contentDescription = stringResource(R.string.history_actions_edit),
+                            modifier = Modifier.height(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    IconButton(onClick = {
+                        capText = ""
+                        onClear()
+                    }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_delete_forever),
+                            contentDescription = stringResource(R.string.category_caps_remove),
+                            modifier = Modifier.height(18.dp),
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         )
                     }
                 }
             }
-        }
-    }
-}
 
-@Preview
-@Composable
-private fun PreviewCategoryCaps() {
-    BuckwheatTheme {
-        CategoryCapsSheet()
+            // Edit mode: inline field
+            AnimatedVisibility(
+                visible = isEditing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = if (hasCap) 0.dp else 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = capText,
+                        onValueChange = { capText = it.filter { c -> c.isDigit() || c == '.' } },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.category_caps_hint)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                capText.trim().toBigDecimalOrNull()
+                                    ?.takeIf { it > BigDecimal.ZERO }
+                                    ?.let {
+                                        onSave(it)
+                                        isEditing = false
+                                    }
+                            }
+                        ),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    TextButton(onClick = {
+                        if (hasCap) {
+                            isEditing = false
+                            capText = capDisplay ?: ""
+                        } else {
+                            isEditing = false
+                        }
+                    }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            }
+
+            // No cap: show set prompt inline
+            if (!hasCap && !isEditing) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.category_caps_no_cap),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.clickable {
+                        isEditing = true
+                        capText = ""
+                    },
+                )
+            }
+        }
     }
 }

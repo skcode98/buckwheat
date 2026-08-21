@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -33,6 +35,9 @@ class GoalsViewModel @Inject constructor(
 ) : ViewModel() {
     val goals: StateFlow<List<SavingsGoal>> = savingsGoalDao.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _goalCompletedEvents = MutableSharedFlow<SavingsGoal>(extraBufferCapacity = 1)
+    val goalCompletedEvents: SharedFlow<SavingsGoal> = _goalCompletedEvents
 
     fun addGoal(name: String, targetAmount: BigDecimal, deadline: Date? = null) {
         if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
@@ -64,6 +69,9 @@ class GoalsViewModel @Inject constructor(
                 val completed = newAmount >= goal.targetAmount
                 val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
                 savingsGoalDao.update(updatedGoal)
+                if (completed && !goal.completed) {
+                    _goalCompletedEvents.tryEmit(updatedGoal)
+                }
                 spendsRepository.addSpent(
                     Transaction(
                         type = TransactionType.SPENT,
@@ -100,6 +108,22 @@ class GoalsViewModel @Inject constructor(
             if (notified.containsKey(id)) {
                 settingsRepository.setGoalNotifiedMilestones(notified - id)
             }
+        }
+    }
+
+    fun updateGoal(id: Long, name: String, targetAmount: BigDecimal, deadline: Date?) {
+        if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
+        viewModelScope.launch {
+            val goal = savingsGoalDao.getById(id) ?: return@launch
+            val completed = goal.currentAmount >= targetAmount
+            savingsGoalDao.update(
+                goal.copy(
+                    name = name.trim(),
+                    targetAmount = targetAmount,
+                    deadline = deadline,
+                    completed = completed,
+                )
+            )
         }
     }
 }

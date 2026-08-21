@@ -35,8 +35,8 @@ fun typography(context: Context): Typography {
             fontSize = 45.sp
         ),
         displaySmall = TextStyle(
-            fontFamily = getFont(600),
-            fontSize = 22.sp
+            fontFamily = getFont(650),
+            fontSize = 28.sp
         ),
         headlineLarge = TextStyle(
             fontFamily = getFont(800),
@@ -75,8 +75,8 @@ fun typography(context: Context): Typography {
             fontSize = 14.sp
         ),
         labelLarge = TextStyle(
-            fontFamily = getFont(700),
-            fontSize = 14.sp
+            fontFamily = getFont(500),
+            fontSize = 13.sp
         ),
         labelMedium = TextStyle(
             fontFamily = getFont(700),

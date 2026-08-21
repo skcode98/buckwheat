@@ -1,8 +1,5 @@
 package com.danilkinkin.buckwheat.onboarding
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,11 +18,8 @@ import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
-import com.danilkinkin.buckwheat.data.AppViewModel
-import com.danilkinkin.buckwheat.errorForReport
-import com.danilkinkin.buckwheat.settings.BackupRestoreViewModel
+import com.danilkinkin.buckwheat.settings.restoreBackupFlow
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
-import kotlinx.coroutines.launch
 
 const val ON_BOARDING_SHEET = "onBoarding"
 
@@ -38,84 +32,9 @@ fun Onboarding(
     val navigationBarHeight = LocalWindowInsets.current.calculateBottomPadding()
         .coerceAtLeast(16.dp)
 
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val appViewModel: AppViewModel = hiltViewModel()
-    val backupRestoreViewModel: BackupRestoreViewModel = hiltViewModel()
-
-    val snackBarRestoreSuccess = stringResource(R.string.restore_success)
-    val snackBarRestoreFailed = stringResource(R.string.restore_failed)
-    val snackBarRestoreInvalid = stringResource(R.string.restore_invalid)
-
-    var showRestoreConfirm by remember { mutableStateOf(false) }
-    var pendingRestoreJson by remember { mutableStateOf<String?>(null) }
-
-    val openBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-
-        coroutineScope.launch {
-            try {
-                val json = context.contentResolver.openInputStream(uri)
-                    ?.bufferedReader(Charsets.UTF_8)
-                    ?.use { it.readText() }
-                    ?: return@launch
-
-                pendingRestoreJson = json
-                showRestoreConfirm = true
-            } catch (e: Exception) {
-                context.errorForReport = e.stackTraceToString()
-                appViewModel.showSnackbar(snackBarRestoreFailed)
-            }
-        }
-    }
-
-    if (showRestoreConfirm) {
-        AlertDialog(
-            onDismissRequest = {
-                showRestoreConfirm = false
-                pendingRestoreJson = null
-            },
-            title = { Text(stringResource(R.string.restore_confirm_title)) },
-            text = { Text(stringResource(R.string.restore_confirm_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val json = pendingRestoreJson
-                        showRestoreConfirm = false
-                        pendingRestoreJson = null
-                        coroutineScope.launch {
-                            try {
-                                val restored = json != null && backupRestoreViewModel.restoreBackup(json)
-                                if (restored) {
-                                    appViewModel.showSnackbar(snackBarRestoreSuccess)
-                                    onClose()
-                                } else {
-                                    appViewModel.showSnackbar(snackBarRestoreInvalid)
-                                }
-                            } catch (e: Exception) {
-                                context.errorForReport = e.stackTraceToString()
-                                appViewModel.showSnackbar(snackBarRestoreFailed)
-                            }
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.restore_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showRestoreConfirm = false
-                        pendingRestoreJson = null
-                    },
-                ) {
-                    Text(stringResource(R.string.restore_cancel))
-                }
-            },
-        )
-    }
+    val launchRestore = restoreBackupFlow(
+        onRestoreSuccess = onClose,
+    )
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column(
@@ -174,11 +93,7 @@ fun Onboarding(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 ),
-                onClick = {
-                    openBackupLauncher.launch(
-                        arrayOf("application/json", "application/octet-stream", "text/*", "*/*")
-                    )
-                },
+                onClick = { launchRestore() },
             )
         }
     }

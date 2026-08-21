@@ -1,5 +1,10 @@
 package com.danilkinkin.buckwheat.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import com.danilkinkin.buckwheat.ui.colorGood
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
+import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.util.numberFormat
@@ -80,10 +88,22 @@ const val GOALS_SHEET = "goals"
 fun GoalsSheet(
     currency: ExtendCurrency = ExtendCurrency.none(),
     viewModel: GoalsViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val goals by viewModel.goals.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.goalCompletedEvents.collect {
+            appViewModel.confettiController.spawn(
+                count = 80 to 120,
+                ejectAngle = 120,
+                ejectForceCoefficient = 6f,
+                lifetime = 2000L to 5000L,
+            )
+        }
+    }
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -97,6 +117,11 @@ fun GoalsSheet(
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var showAllocateDialog by remember { mutableStateOf<Long?>(null) }
+    var editingGoalId by remember { mutableStateOf<Long?>(null) }
+    var editNameText by remember { mutableStateOf("") }
+    var editTargetText by remember { mutableStateOf("") }
+    var editDeadlineMillis by remember { mutableStateOf<Long?>(null) }
+    var showEditDatePickerDialog by remember { mutableStateOf(false) }
     var allocateAmount by remember { mutableStateOf("") }
 
     fun createGoal() {
@@ -138,11 +163,22 @@ fun GoalsSheet(
                         currency = currency,
                         onAllocate = { showAllocateDialog = goal.id },
                         onDelete = { viewModel.deleteGoal(goal.id) },
+                        onEdit = {
+                            editingGoalId = goal.id
+                            editNameText = goal.name
+                            editTargetText = goal.targetAmount.toPlainString()
+                            editDeadlineMillis = goal.deadline?.time
+                        },
+                        modifier = Modifier.animateItem(),
                     )
                 }
 
-                item {
-                    if (showCreateForm) {
+                item(key = "create_form") {
+                    AnimatedVisibility(
+                        visible = showCreateForm,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         CreateGoalCard(
                             nameText = nameText,
                             onNameChange = { nameText = it },
@@ -161,7 +197,15 @@ fun GoalsSheet(
                                 deadlineMillis = null
                             },
                         )
-                    } else {
+                    }
+                }
+
+                item(key = "add_button") {
+                    AnimatedVisibility(
+                        visible = !showCreateForm,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         AddCardButton(
                             title = stringResource(R.string.goals_title),
                             onClick = { showCreateForm = true },
@@ -325,6 +369,198 @@ fun GoalsSheet(
             },
         )
     }
+
+    if (editingGoalId != null) {
+        AlertDialog(
+            onDismissRequest = {
+                editingGoalId = null
+                editNameText = ""
+                editTargetText = ""
+                editDeadlineMillis = null
+            },
+            title = { Text(stringResource(R.string.history_actions_edit)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editNameText,
+                        onValueChange = { editNameText = it },
+                        label = { Text(stringResource(R.string.goal_name_hint)) },
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editTargetText,
+                        onValueChange = {
+                            editTargetText = it.filter { c -> c.isDigit() || c == '.' }
+                        },
+                        label = { Text(stringResource(R.string.goal_target_hint)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = editDeadlineMillis?.let { dateFormat.format(Date(it)) }
+                                ?: stringResource(R.string.goal_deadline_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showEditDatePickerDialog = true }
+                                .padding(vertical = 8.dp),
+                        )
+                        if (editDeadlineMillis != null) {
+                            IconButton(onClick = { editDeadlineMillis = null }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_close),
+                                    contentDescription = stringResource(R.string.cancel),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = editTargetText.toBigDecimalOrNull()
+                        val goalId = editingGoalId
+                        if (target != null && goalId != null && editNameText.isNotBlank()) {
+                            viewModel.updateGoal(
+                                goalId,
+                                editNameText,
+                                target,
+                                editDeadlineMillis?.let { Date(it) },
+                            )
+                            editingGoalId = null
+                            editNameText = ""
+                            editTargetText = ""
+                            editDeadlineMillis = null
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.apply))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        editingGoalId = null
+                        editNameText = ""
+                        editTargetText = ""
+                        editDeadlineMillis = null
+                    },
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (showEditDatePickerDialog && editingGoalId != null) {
+        val initCal = editDeadlineMillis?.let {
+            Calendar.getInstance().apply { timeInMillis = it }
+        } ?: Calendar.getInstance()
+        val initMonth = initCal.get(Calendar.MONTH)
+        val initYear = initCal.get(Calendar.YEAR)
+
+        var selectedMonth by remember { mutableIntStateOf(initMonth) }
+        var selectedYear by remember { mutableIntStateOf(initYear) }
+        var monthExpanded by remember { mutableStateOf(false) }
+        var yearExpanded by remember { mutableStateOf(false) }
+
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val monthNames = Month.entries.map { it.getDisplayName(TextStyle.FULL, Locale.getDefault()) }
+        val years = (currentYear..currentYear + 10).toList()
+
+        AlertDialog(
+            onDismissRequest = { showEditDatePickerDialog = false },
+            title = { Text(stringResource(R.string.change_date)) },
+            text = {
+                Column {
+                    ExposedDropdownMenuBox(
+                        expanded = monthExpanded,
+                        onExpandedChange = { monthExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = monthNames[selectedMonth],
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(stringResource(R.string.goal_deadline_hint)) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = monthExpanded,
+                            onDismissRequest = { monthExpanded = false },
+                        ) {
+                            monthNames.forEachIndexed { index, name ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        selectedMonth = index
+                                        monthExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = yearExpanded,
+                        onExpandedChange = { yearExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = selectedYear.toString(),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Year") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = yearExpanded,
+                            onDismissRequest = { yearExpanded = false },
+                        ) {
+                            years.forEach { year ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(year.toString()) },
+                                    onClick = {
+                                        selectedYear = year
+                                        yearExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cal = Calendar.getInstance().apply {
+                        set(selectedYear, selectedMonth, 1, 23, 59, 59)
+                        set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+                        set(Calendar.MILLISECOND, 999)
+                    }
+                    editDeadlineMillis = cal.timeInMillis
+                    showEditDatePickerDialog = false
+                }) {
+                    Text(stringResource(R.string.apply))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDatePickerDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -333,6 +569,8 @@ private fun GoalCard(
     currency: ExtendCurrency,
     onAllocate: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val progress = if (goal.targetAmount > BigDecimal.ZERO) {
@@ -345,13 +583,13 @@ private fun GoalCard(
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
 
     val ringColor = when {
-        goal.completed -> Color(0xFF2E7D32)
-        progress >= 1f -> Color(0xFF2E7D32)
+        goal.completed -> colorGood
+        progress >= 1f -> colorGood
         else -> MaterialTheme.colorScheme.primary
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -386,7 +624,7 @@ private fun GoalCard(
                         Text(
                             text = stringResource(R.string.goal_completed),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32),
+                            color = colorGood,
                         )
                     }
                 }
@@ -469,6 +707,19 @@ private fun GoalCard(
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         )
+                    }
+                    if (!goal.completed) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_edit),
+                                contentDescription = stringResource(R.string.history_actions_edit),
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
                     }
                 }
             }

@@ -119,6 +119,11 @@
   <string name="category_caps_remove">Remove cap</string>
   <string name="category_caps_auto_assign">Auto-assign budget</string>
   <string name="category_caps_auto_assign_hint">Splits your budget across categories by your typical monthly spending — adjust any cap afterwards.</string>
+  <string name="category_caps_spent">spent</string>
+  <string name="category_caps_used">used</string>
+  <string name="category_caps_left">left</string>
+  <string name="category_caps_set">+ Set cap</string>
+  <string name="category_caps_no_cap">Tap to set a cap</string>
   <string name="category_cap_progress">%1$d%% of cap</string>
   <string name="category_cap_reached_label">Cap reached</string>
   <string name="category_battery_percent">%1$d%%</string>
@@ -471,6 +476,9 @@
   <string name="recurring_comment_hint">Description (e.g. Netflix)</string>
   <string name="recurring_day_label">Day %1$s</string>
   <string name="recurring_amount_label">%1$s %2$s</string>
+  <string name="recurring_next_charge_today">Charges today</string>
+  <string name="recurring_next_charge_days">Charges in %1$d days</string>
+  <string name="recurring_next_charge_months">Charges in %1$d months</string>
   <string name="patterns_title">Spending patterns</string>
   <string name="patterns_subtitle_range">%1$s - %2$s · %3$d mo</string>
   <string name="patterns_window_3m">3M</string>
