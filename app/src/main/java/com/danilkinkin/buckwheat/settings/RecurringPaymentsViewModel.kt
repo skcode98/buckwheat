@@ -51,6 +51,19 @@ class RecurringPaymentsViewModel @Inject constructor(
         }
     }
 
+    fun updateTemplate(template: RecurringTemplate, amount: BigDecimal, comment: String, dayOfMonth: Int) {
+        if (amount <= BigDecimal.ZERO || comment.isBlank() || dayOfMonth !in 1..31) return
+        viewModelScope.launch {
+            recurringDao.update(
+                template.copy(
+                    amount = amount,
+                    comment = comment.trim(),
+                    dayOfMonth = dayOfMonth,
+                )
+            )
+        }
+    }
+
     fun deleteTemplate(id: Int) {
         viewModelScope.launch {
             recurringDao.deleteById(id)

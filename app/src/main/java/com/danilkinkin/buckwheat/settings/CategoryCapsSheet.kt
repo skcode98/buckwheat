@@ -16,24 +16,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.DismissState
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,49 +42,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
-import com.danilkinkin.buckwheat.analytics.categoriesChart.baseColors
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
-import com.danilkinkin.buckwheat.data.categories.CATEGORY_CAP_NEAR_PERCENT
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
-import com.danilkinkin.buckwheat.data.categories.categoryCapPercent
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
+import com.danilkinkin.buckwheat.history.SwipeActions
+import com.danilkinkin.buckwheat.history.SwipeActionsConfig
 import com.danilkinkin.buckwheat.util.NumberDisplayConfig
-import com.danilkinkin.buckwheat.util.harmonizeWithColor
 import com.danilkinkin.buckwheat.util.numberFormat
 import java.math.BigDecimal
 import java.math.RoundingMode
 
 const val CATEGORY_CAPS_SHEET = "categoryCaps"
 
-@Composable
-private fun rememberCategoryColors(): List<Color> {
-    val primary = MaterialTheme.colorScheme.primary
-    return remember(primary) {
-        baseColors.map { color -> harmonizeWithColor(color, primary) }
-    }
-}
-
-private fun categoryColorByName(categoryColors: List<Color>, name: String, builtInCategory: SpendCategory?): Color {
-    return if (builtInCategory != null && builtInCategory != SpendCategory.OTHER) {
-        categoryColors[builtInCategory.ordinal % categoryColors.size]
-    } else {
-        categoryColors[Math.floorMod(name.hashCode(), categoryColors.size)]
-    }
-}
-
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun CategoryCapsSheet(
     categoriesViewModel: CategoriesManagementViewModel = hiltViewModel(),
@@ -94,12 +78,13 @@ fun CategoryCapsSheet(
     val caps by capsViewModel.caps.collectAsStateWithLifecycle()
     val categorySpends by capsViewModel.categorySpends.collectAsStateWithLifecycle()
     val currency by capsViewModel.currency.collectAsStateWithLifecycle()
-    val categoryColors = rememberCategoryColors()
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
         16.dp,
     )
+
+    var editingCategoryName by remember { mutableStateOf<String?>(null) }
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
@@ -114,6 +99,15 @@ fun CategoryCapsSheet(
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
+            Text(
+                text = stringResource(R.string.swipe_edit_delete_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+            )
             Text(
                 text = stringResource(R.string.category_caps_description),
                 style = MaterialTheme.typography.bodyMedium,
@@ -148,24 +142,48 @@ fun CategoryCapsSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(categories, key = { "${it.id}_${it.name}" }) { item ->
-                    val builtIn = SpendCategory.fromStored(item.name)
-                    val catColor = categoryColorByName(categoryColors, item.name, builtIn)
-                    CategoryCapCard(
-                        name = item.name,
-                        emoji = SpendCategory.emojiFor(item.name, item.emoji),
-                        cap = caps[item.name],
-                        spent = categorySpends[item.name] ?: BigDecimal.ZERO,
-                        currency = currency,
-                        categoryColor = catColor,
-                        onSave = { capsViewModel.setCap(item.name, it) },
-                        onClear = { capsViewModel.setCap(item.name, null) },
-                    )
+                    SwipeActions(
+                        startActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.tertiaryContainer,
+                            backgroundActive = MaterialTheme.colorScheme.tertiary,
+                            iconTint = MaterialTheme.colorScheme.onTertiary,
+                            icon = painterResource(R.drawable.ic_edit),
+                            stayDismissed = false,
+                            onDismiss = { editingCategoryName = item.name },
+                        ),
+                        endActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.errorContainer,
+                            backgroundActive = MaterialTheme.colorScheme.error,
+                            iconTint = MaterialTheme.colorScheme.onError,
+                            icon = painterResource(R.drawable.ic_delete_forever),
+                            stayDismissed = false,
+                            onDismiss = { capsViewModel.setCap(item.name, null) },
+                        ),
+                        modifier = Modifier.animateItem(),
+                    ) { state ->
+                        CategoryCapCard(
+                            name = item.name,
+                            emoji = SpendCategory.emojiFor(item.name, item.emoji),
+                            cap = caps[item.name],
+                            spent = categorySpends[item.name] ?: BigDecimal.ZERO,
+                            currency = currency,
+                            isEditing = editingCategoryName == item.name,
+                            onSetEditing = {
+                                editingCategoryName = if (it) item.name else null
+                            },
+                            onSave = { capsViewModel.setCap(item.name, it) },
+                            state = state,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun CategoryCapCard(
     name: String,
@@ -173,9 +191,10 @@ private fun CategoryCapCard(
     cap: BigDecimal?,
     spent: BigDecimal,
     currency: ExtendCurrency,
-    categoryColor: Color,
+    isEditing: Boolean,
+    onSetEditing: (Boolean) -> Unit,
     onSave: (BigDecimal) -> Unit,
-    onClear: () -> Unit,
+    state: DismissState,
 ) {
     val context = LocalContext.current
     val capDisplay = cap
@@ -184,23 +203,18 @@ private fun CategoryCapCard(
         ?.toPlainString()
         ?: cap?.toPlainString()
 
-    var isEditing by remember(name, cap) { mutableStateOf(false) }
     var capText by remember(name, cap) { mutableStateOf(capDisplay ?: "") }
 
+    LaunchedEffect(isEditing) {
+        if (isEditing) capText = capDisplay ?: ""
+    }
+
     val hasCap = cap != null && cap > BigDecimal.ZERO
-    val percent = if (hasCap) categoryCapPercent(spent, cap!!) else 0
     val fraction = if (hasCap) (spent.toFloat() / cap!!.toFloat()).coerceIn(0f, 1f) else 0f
     val fractionDisplay = (fraction * 100).toInt()
 
-    val barColor = when {
-        !hasCap -> categoryColor
-        percent >= 100 -> MaterialTheme.colorScheme.error
-        percent >= CATEGORY_CAP_NEAR_PERCENT -> MaterialTheme.colorScheme.tertiary
-        else -> categoryColor
-    }
-
     Card(
-        shape = RoundedCornerShape(22.dp),
+        shape = swipeAnimatedCardShape(state),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -235,12 +249,12 @@ private fun CategoryCapCard(
                     Text(
                         text = numberFormat(context, cap!!, currency),
                         style = MaterialTheme.typography.titleMedium,
-                        color = barColor,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 } else if (!hasCap && !isEditing) {
                     TextButton(onClick = {
-                        isEditing = true
                         capText = ""
+                        onSetEditing(true)
                     }) {
                         Text(stringResource(R.string.category_caps_set))
                     }
@@ -255,14 +269,14 @@ private fun CategoryCapCard(
                         .fillMaxWidth()
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(categoryColor.copy(alpha = 0.12f)),
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(fraction)
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(barColor),
+                            .background(MaterialTheme.colorScheme.primary),
                     )
                 }
                 Spacer(Modifier.height(6.dp))
@@ -273,7 +287,7 @@ private fun CategoryCapCard(
                     Text(
                         text = "$fractionDisplay% ${stringResource(R.string.category_caps_used)}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = barColor,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     val remaining = cap!! - spent
                     val remainingDisplay = if (remaining > BigDecimal.ZERO) remaining else BigDecimal.ZERO
@@ -282,35 +296,6 @@ private fun CategoryCapCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                // Edit + delete actions
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    IconButton(onClick = {
-                        isEditing = true
-                        capText = capDisplay ?: ""
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_edit),
-                            contentDescription = stringResource(R.string.history_actions_edit),
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    IconButton(onClick = {
-                        capText = ""
-                        onClear()
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete_forever),
-                            contentDescription = stringResource(R.string.category_caps_remove),
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                        )
-                    }
                 }
             }
 
@@ -342,19 +327,15 @@ private fun CategoryCapCard(
                                     ?.takeIf { it > BigDecimal.ZERO }
                                     ?.let {
                                         onSave(it)
-                                        isEditing = false
+                                        onSetEditing(false)
                                     }
                             }
                         ),
                     )
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = {
-                        if (hasCap) {
-                            isEditing = false
-                            capText = capDisplay ?: ""
-                        } else {
-                            isEditing = false
-                        }
+                        onSetEditing(false)
+                        capText = capDisplay ?: ""
                     }) {
                         Text(stringResource(R.string.cancel))
                     }
@@ -369,8 +350,8 @@ private fun CategoryCapCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.clickable {
-                        isEditing = true
                         capText = ""
+                        onSetEditing(true)
                     },
                 )
             }

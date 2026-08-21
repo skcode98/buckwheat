@@ -124,6 +124,7 @@
   <string name="category_caps_left">left</string>
   <string name="category_caps_set">+ Set cap</string>
   <string name="category_caps_no_cap">Tap to set a cap</string>
+  <string name="swipe_edit_delete_hint">Swipe right to edit · swipe left to delete</string>
   <string name="category_cap_progress">%1$d%% of cap</string>
   <string name="category_cap_reached_label">Cap reached</string>
   <string name="category_battery_percent">%1$d%%</string>

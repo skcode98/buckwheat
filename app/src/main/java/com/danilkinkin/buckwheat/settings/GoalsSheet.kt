@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.DismissState
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -51,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import com.danilkinkin.buckwheat.history.SwipeActions
+import com.danilkinkin.buckwheat.history.SwipeActionsConfig
 import com.danilkinkin.buckwheat.ui.colorSuccess
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -83,7 +87,7 @@ import java.util.concurrent.TimeUnit
 
 const val GOALS_SHEET = "goals"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun GoalsSheet(
     currency: ExtendCurrency = ExtendCurrency.none(),
@@ -156,6 +160,16 @@ fun GoalsSheet(
                 )
             }
 
+            Text(
+                text = stringResource(R.string.swipe_edit_delete_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+            )
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -189,19 +203,39 @@ fun GoalsSheet(
                 }
 
                 items(goals, key = { it.id }) { goal ->
-                    GoalCard(
-                        goal = goal,
-                        currency = currency,
-                        onAllocate = { showAllocateDialog = goal.id },
-                        onDelete = { viewModel.deleteGoal(goal.id) },
-                        onEdit = {
-                            editingGoalId = goal.id
-                            editNameText = goal.name
-                            editTargetText = goal.targetAmount.toPlainString()
-                            editDeadlineMillis = goal.deadline?.time
-                        },
+                    SwipeActions(
+                        startActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.tertiaryContainer,
+                            backgroundActive = MaterialTheme.colorScheme.tertiary,
+                            iconTint = MaterialTheme.colorScheme.onTertiary,
+                            icon = painterResource(R.drawable.ic_edit),
+                            stayDismissed = false,
+                            onDismiss = {
+                                editingGoalId = goal.id
+                                editNameText = goal.name
+                                editTargetText = goal.targetAmount.toPlainString()
+                                editDeadlineMillis = goal.deadline?.time
+                            },
+                        ),
+                        endActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.errorContainer,
+                            backgroundActive = MaterialTheme.colorScheme.error,
+                            iconTint = MaterialTheme.colorScheme.onError,
+                            icon = painterResource(R.drawable.ic_delete_forever),
+                            stayDismissed = true,
+                            onDismiss = { viewModel.deleteGoal(goal.id) },
+                        ),
                         modifier = Modifier.animateItem(),
-                    )
+                    ) { state ->
+                        GoalCard(
+                            goal = goal,
+                            currency = currency,
+                            onAllocate = { showAllocateDialog = goal.id },
+                            state = state,
+                        )
+                    }
                 }
 
                 item(key = "create_form") {
@@ -594,14 +628,13 @@ fun GoalsSheet(
     }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun GoalCard(
     goal: SavingsGoal,
     currency: ExtendCurrency,
     onAllocate: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit = {},
-    modifier: Modifier = Modifier,
+    state: DismissState,
 ) {
     val context = LocalContext.current
     val progress = if (goal.targetAmount > BigDecimal.ZERO) {
@@ -620,8 +653,8 @@ private fun GoalCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = swipeAnimatedCardShape(state),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -715,42 +748,15 @@ private fun GoalCard(
 
                 Spacer(Modifier.height(8.dp))
 
-                Row {
-                    if (!goal.completed) {
-                        OutlinedButton(
-                            onClick = onAllocate,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.goal_allocate),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(32.dp),
+                if (!goal.completed) {
+                    OutlinedButton(
+                        onClick = onAllocate,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete_forever),
-                            contentDescription = stringResource(R.string.goal_delete_desc),
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        Text(
+                            text = stringResource(R.string.goal_allocate),
+                            style = MaterialTheme.typography.labelMedium,
                         )
-                    }
-                    if (!goal.completed) {
-                        IconButton(
-                            onClick = onEdit,
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_edit),
-                                contentDescription = stringResource(R.string.history_actions_edit),
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            )
-                        }
                     }
                 }
             }

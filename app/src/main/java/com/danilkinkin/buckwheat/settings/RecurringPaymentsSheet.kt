@@ -23,12 +23,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.DismissState
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -64,13 +67,15 @@ import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
+import com.danilkinkin.buckwheat.history.SwipeActions
+import com.danilkinkin.buckwheat.history.SwipeActionsConfig
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.util.numberFormat
 import java.math.BigDecimal
 
 const val RECURRING_PAYMENTS_SHEET = "recurringPayments"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun RecurringPaymentsSheet(
     viewModel: RecurringPaymentsViewModel = hiltViewModel(),
@@ -93,6 +98,10 @@ fun RecurringPaymentsSheet(
     var amountText by remember { mutableStateOf(suggestedAmount?.toPlainString() ?: "") }
     var commentText by remember { mutableStateOf(suggestedComment ?: "") }
     var dayText by remember { mutableStateOf(suggestedDay?.toString() ?: "") }
+    var editingTemplate by remember { mutableStateOf<RecurringTemplate?>(null) }
+    var editAmountText by remember { mutableStateOf("") }
+    var editCommentText by remember { mutableStateOf("") }
+    var editDayText by remember { mutableStateOf("") }
 
     fun submitTemplate() {
         val amount = amountText.toBigDecimalOrNull()
@@ -119,6 +128,16 @@ fun RecurringPaymentsSheet(
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
+
+            Text(
+                text = stringResource(R.string.swipe_edit_delete_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+            )
 
             LazyColumn(
                 modifier = Modifier
@@ -207,13 +226,39 @@ fun RecurringPaymentsSheet(
                 }
 
                 items(templates, key = { it.id }) { template ->
-                    RecurringPaymentCard(
-                        template = template,
-                        currency = currency,
-                        onToggle = { viewModel.toggleEnabled(template) },
-                        onDelete = { viewModel.deleteTemplate(template.id) },
+                    SwipeActions(
+                        startActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.tertiaryContainer,
+                            backgroundActive = MaterialTheme.colorScheme.tertiary,
+                            iconTint = MaterialTheme.colorScheme.onTertiary,
+                            icon = painterResource(R.drawable.ic_edit),
+                            stayDismissed = false,
+                            onDismiss = {
+                                editingTemplate = template
+                                editAmountText = template.amount.toPlainString()
+                                editCommentText = template.comment
+                                editDayText = template.dayOfMonth.toString()
+                            },
+                        ),
+                        endActionsConfig = SwipeActionsConfig(
+                            threshold = 0.4f,
+                            background = MaterialTheme.colorScheme.errorContainer,
+                            backgroundActive = MaterialTheme.colorScheme.error,
+                            iconTint = MaterialTheme.colorScheme.onError,
+                            icon = painterResource(R.drawable.ic_delete_forever),
+                            stayDismissed = true,
+                            onDismiss = { viewModel.deleteTemplate(template.id) },
+                        ),
                         modifier = Modifier.animateItem(),
-                    )
+                    ) { state ->
+                        RecurringPaymentCard(
+                            template = template,
+                            currency = currency,
+                            onToggle = { viewModel.toggleEnabled(template) },
+                            state = state,
+                        )
+                    }
                 }
 
                 // Create new payment
@@ -282,24 +327,86 @@ fun RecurringPaymentsSheet(
             }
         }
     }
+
+    editingTemplate?.let { template ->
+        AlertDialog(
+            onDismissRequest = { editingTemplate = null },
+            title = { Text(stringResource(R.string.history_actions_edit)) },
+            text = {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = editAmountText,
+                            onValueChange = { editAmountText = it },
+                            modifier = Modifier.weight(1f),
+                            label = { Text(stringResource(R.string.recurring_amount_hint)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        )
+                        OutlinedTextField(
+                            value = editDayText,
+                            onValueChange = { editDayText = it.filter { c -> c.isDigit() }.take(2) },
+                            modifier = Modifier.width(72.dp),
+                            label = { Text(stringResource(R.string.recurring_day_hint)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editCommentText,
+                        onValueChange = { editCommentText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.recurring_comment_hint)) },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val amount = editAmountText.toBigDecimalOrNull()
+                        val day = editDayText.toIntOrNull()
+                        if (amount != null && amount > BigDecimal.ZERO &&
+                            day != null && day in 1..31 &&
+                            editCommentText.isNotBlank()
+                        ) {
+                            viewModel.updateTemplate(template, amount, editCommentText, day)
+                            editingTemplate = null
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.apply))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingTemplate = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun RecurringPaymentCard(
     template: RecurringTemplate,
     currency: ExtendCurrency,
     onToggle: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
+    state: DismissState,
 ) {
     val context = LocalContext.current
     val alpha = if (template.enabled) 1f else 0.5f
 
     Card(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .alpha(alpha),
-        shape = RoundedCornerShape(22.dp),
+        shape = swipeAnimatedCardShape(state),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
@@ -364,19 +471,6 @@ private fun RecurringPaymentCard(
                     uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                 ),
             )
-
-            // Delete
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_delete_forever),
-                    contentDescription = stringResource(R.string.tags_management_delete),
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
         }
     }
 }
