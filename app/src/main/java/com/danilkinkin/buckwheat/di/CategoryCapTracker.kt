@@ -15,6 +15,8 @@ import com.danilkinkin.buckwheat.notifications.CategoryCapNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
@@ -26,7 +28,10 @@ class CategoryCapTracker @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val transactionDao: TransactionDao,
 ) {
+    private val notificationMutex = Mutex()
+
     suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
+        notificationMutex.withLock {
         if (newTransaction.type != TransactionType.SPENT) return
         val prefs = context.budgetDataStore.data.first()
         val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
@@ -48,32 +53,35 @@ class CategoryCapTracker @Inject constructor(
             ?: ExtendCurrency.none()
         CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
         settingsRepository.setCategoryCapNotified(notified + (categoryName to newlyReached))
+        }
     }
 
     suspend fun resyncCategoryCapNotified(removed: Transaction) {
-        if (removed.type != TransactionType.SPENT) return
-        val prefs = context.budgetDataStore.data.first()
-        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
-        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
-        if (removed.date.before(start) || removed.date.after(finish)) return
+        notificationMutex.withLock {
+            if (removed.type != TransactionType.SPENT) return@withLock
+            val prefs = context.budgetDataStore.data.first()
+            val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return@withLock
+            val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return@withLock
+            if (removed.date.before(start) || removed.date.after(finish)) return@withLock
 
-        val key = categoryKey(removed)
-        val categoryName = categoryNameOf(key)
-        val caps = settingsRepository.getCategoryCaps().first()
-        val cap = caps[categoryName] ?: return
-        val total = periodCategoryTotal(start, finish, key)
-        val currentBucket = categoryCapBucket(total, cap)
-        val notified = settingsRepository.getCategoryCapNotified()
-        val storedBucket = notified[categoryName] ?: 0
-        if (currentBucket >= storedBucket) return
+            val key = categoryKey(removed)
+            val categoryName = categoryNameOf(key)
+            val caps = settingsRepository.getCategoryCaps().first()
+            val cap = caps[categoryName] ?: return@withLock
+            val total = periodCategoryTotal(start, finish, key)
+            val currentBucket = categoryCapBucket(total, cap)
+            val notified = settingsRepository.getCategoryCapNotified()
+            val storedBucket = notified[categoryName] ?: 0
+            if (currentBucket >= storedBucket) return@withLock
 
-        val updated = notified.toMutableMap()
-        if (currentBucket == 0) {
-            updated.remove(categoryName)
-        } else {
-            updated[categoryName] = currentBucket
+            val updated = notified.toMutableMap()
+            if (currentBucket == 0) {
+                updated.remove(categoryName)
+            } else {
+                updated[categoryName] = currentBucket
+            }
+            settingsRepository.setCategoryCapNotified(updated)
         }
-        settingsRepository.setCategoryCapNotified(updated)
     }
 
     suspend fun clearCategoryCapNotifiedNow() {

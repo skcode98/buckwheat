@@ -15,6 +15,7 @@ import com.danilkinkin.buckwheat.di.finishPeriodActualDateStoreKey
 import com.danilkinkin.buckwheat.di.finishPeriodDateStoreKey
 import com.danilkinkin.buckwheat.di.spentFromDailyBudgetStoreKey
 import com.danilkinkin.buckwheat.di.spentStoreKey
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -32,6 +33,8 @@ class PeriodFinishReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 postNotification(context)
+            } catch (e: Exception) {
+                Log.e("PeriodFinishReceiver", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }

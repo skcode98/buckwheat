@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -295,7 +296,7 @@ private fun CategoryCapCard(
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),
                             contentDescription = stringResource(R.string.history_actions_edit),
-                            modifier = Modifier.height(18.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
@@ -306,7 +307,7 @@ private fun CategoryCapCard(
                         Icon(
                             painter = painterResource(R.drawable.ic_delete_forever),
                             contentDescription = stringResource(R.string.category_caps_remove),
-                            modifier = Modifier.height(18.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         )
                     }

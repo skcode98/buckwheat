@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import android.util.Log
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -33,9 +34,9 @@ class OnTrackAlertReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 postAlert(context)
-                // setWindow is one-shot: re-arm the next day's alert at the stored time while
-                // the toggle is still on.
                 rearmNextDay(context)
+            } catch (e: Exception) {
+                Log.e("OnTrackAlertReceiver", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }

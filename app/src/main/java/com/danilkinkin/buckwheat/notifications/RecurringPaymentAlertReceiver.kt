@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import android.util.Log
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -41,8 +42,9 @@ class RecurringPaymentAlertReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 postDuePaymentAlert(context)
-                // One-shot: re-arm the next day's alert at the stored time.
                 rearmNextDay(context)
+            } catch (e: Exception) {
+                Log.e("RecurringAlertReceiver", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }

@@ -122,7 +122,7 @@ fun SpendsCalendar(
         }.toMutableMap()
     }
 
-    val calendarState by remember {
+    val calendarState by remember(startDate, actualFinishDate, finishDate) {
         mutableStateOf(
             CalendarState(
                 context = context,

@@ -34,6 +34,7 @@ import com.danilkinkin.buckwheat.util.roundToDay
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Date
 
 data class PeriodComparison(
@@ -48,7 +49,8 @@ data class PeriodComparison(
         get() = if (previousSpent.signum() == 0) {
             null
         } else {
-            (currentSpent - previousSpent) * 100.toBigDecimal() / previousSpent
+            (currentSpent - previousSpent).multiply(BigDecimal(100))
+                .divide(previousSpent, 2, RoundingMode.HALF_EVEN)
         }
 }
 

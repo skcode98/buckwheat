@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import android.util.Log
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -42,6 +43,8 @@ class SpendDigestReceiver : BroadcastReceiver() {
             try {
                 postDigest(context)
                 rearm(context)
+            } catch (e: Exception) {
+                Log.e("SpendDigestReceiver", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }

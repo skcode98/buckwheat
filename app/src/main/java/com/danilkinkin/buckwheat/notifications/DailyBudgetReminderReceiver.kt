@@ -11,11 +11,13 @@ import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.di.currencyStoreKey
 import com.danilkinkin.buckwheat.di.dailyBudgetStoreKey
+import com.danilkinkin.buckwheat.di.reminderEnabledStoreKey
 import com.danilkinkin.buckwheat.di.reminderHourStoreKey
 import com.danilkinkin.buckwheat.di.reminderMinuteStoreKey
 import com.danilkinkin.buckwheat.di.spentFromDailyBudgetStoreKey
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.numberFormat
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -31,8 +33,9 @@ class DailyBudgetReminderReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 postNotification(context)
-                // setWindow is one-shot: re-arm the next day's reminder at the stored time.
                 rearmNextDay(context)
+            } catch (e: Exception) {
+                Log.e("DailyBudgetReminder", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }
@@ -41,6 +44,7 @@ class DailyBudgetReminderReceiver : BroadcastReceiver() {
 
     private suspend fun rearmNextDay(context: Context) {
         val prefs = context.settingsDataStore.data.first()
+        if (prefs[reminderEnabledStoreKey] != true) return
         val hour = prefs[reminderHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
         val minute = prefs[reminderMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
         DailyBudgetReminderScheduler.schedule(context, hour, minute)

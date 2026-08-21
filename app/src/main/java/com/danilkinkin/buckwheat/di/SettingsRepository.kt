@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.di
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -68,14 +69,14 @@ fun serializeCategoryCaps(caps: Map<String, BigDecimal>): String =
     caps.entries
         .filter { it.value > BigDecimal.ZERO }
         .sortedBy { it.key }
-        .joinToString(";") { "${it.key}:${it.value.toPlainString()}" }
+        .joinToString(";") { "${Uri.encode(it.key)}:${it.value.toPlainString()}" }
 
 fun parseCategoryCaps(raw: String?): Map<String, BigDecimal> {
     if (raw.isNullOrBlank()) return emptyMap()
     return raw.split(';').mapNotNull { entry ->
         val parts = entry.split(':', limit = 2)
         if (parts.size != 2) return@mapNotNull null
-        val name = parts[0].trim()
+        val name = Uri.decode(parts[0].trim())
         val amount = parts[1].toBigDecimalOrNull() ?: return@mapNotNull null
         if (name.isBlank() || amount <= BigDecimal.ZERO) return@mapNotNull null
         name to amount
@@ -88,7 +89,7 @@ fun serializeCategoryCapNotified(notified: Map<String, Int>): String =
     notified.entries
         .filter { it.value > 0 }
         .sortedBy { it.key }
-        .joinToString(";") { "${it.key}:${it.value}" }
+        .joinToString(";") { "${Uri.encode(it.key)}:${it.value}" }
 
 // Parses the plain "name:bucket" form and tolerates legacy entries that carry an interleaved
 // window suffix ("name:bucket@windowStartEpochDay" — the "@..." part is ignored).
@@ -97,7 +98,7 @@ fun parseCategoryCapNotified(raw: String?): Map<String, Int> {
     return raw.split(';').mapNotNull { entry ->
         val parts = entry.split(':', limit = 2)
         if (parts.size != 2) return@mapNotNull null
-        val name = parts[0].trim()
+        val name = Uri.decode(parts[0].trim())
         val bucket = parts[1].trim().substringBefore('@').toIntOrNull() ?: return@mapNotNull null
         if (name.isBlank() || bucket <= 0) return@mapNotNull null
         name to bucket
@@ -144,7 +145,7 @@ class SettingsRepository @Inject constructor(
     }
     fun getTutorialStage(name: TUTORS) = context.settingsDataStore.data.map {
         it[name.key]?.let { value ->
-            TUTORIAL_STAGE.valueOf(value)
+            runCatching { TUTORIAL_STAGE.valueOf(value) }.getOrNull()
         } ?: TUTORIAL_STAGE.NONE
     }
 

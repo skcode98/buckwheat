@@ -38,7 +38,6 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -73,7 +72,6 @@ import com.danilkinkin.buckwheat.ui.isNightMode
 import com.danilkinkin.buckwheat.util.setSystemStyle
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.flow.collect
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -84,7 +82,6 @@ fun MainScreen(
 ) {
     val topSheetState = rememberSwipeableState(TopSheetValue.HalfExpanded)
     val coroutineScope = rememberCoroutineScope()
-    val nightMode = remember { mutableStateOf(false) }
 
     val localDensity = LocalDensity.current
     val windowSizeClass = LocalWindowSize.current
@@ -93,18 +90,18 @@ fun MainScreen(
     val snackBarMessage = stringResource(R.string.remove_spent)
     val snackBarAction = stringResource(R.string.remove_spent_undo)
 
-    nightMode.value = isNightMode()
+    val nightMode = isNightMode()
 
     setSystemStyle(
         style = {
             SystemBarState(
                 statusBarColor = Color.Transparent,
-                statusBarDarkIcons = !nightMode.value,
-                navigationBarDarkIcons = !nightMode.value,
+                statusBarDarkIcons = !nightMode,
+                navigationBarDarkIcons = !nightMode,
                 navigationBarColor = Color.Transparent,
             )
         },
-        key = nightMode.value,
+        key = nightMode,
     )
 
     LaunchedEffect(Unit) {
@@ -288,7 +285,7 @@ fun MainScreen(
                 if (windowSizeClass == WindowWidthSizeClass.Compact) {
                     val currentEditorHeight = with(localDensity) {
                         if (isRequestedShowSystemKeyboard) {
-                            val halfExpanedOffset = (
+                            val halfExpandedOffset = (
                                     -contentHeight +
                                             navigationBarOffset.toPx() +
                                             16.dp.toPx() +
@@ -296,7 +293,7 @@ fun MainScreen(
                                     ).coerceAtMost(0f)
 
                             (topSheetState.offset.value.coerceIn(
-                                halfExpanedOffset,
+                                halfExpandedOffset,
                                 0f
                             ) + contentHeight - navigationBarOffset.toPx() - 16.dp.toPx()).toDp()
                         } else {
@@ -365,7 +362,7 @@ fun BoxScope.SnackbarHost(
             .fillMaxWidth()
             .navigationBarsPadding(),
     ) {
-        SwipeableSnackbarHost(hostState = remember { appViewModel._snackbarHostState })
+        SwipeableSnackbarHost(hostState = remember { appViewModel.snackbarHostState })
     }
 }
 

@@ -456,12 +456,15 @@
   <string name="recurring_charge_confirm_add">Add</string>
   <string name="recurring_charge_confirm_skip">Skip</string>
   <string name="goals_title">Goals</string>
+  <string name="goals_add_button">Add goal</string>
+  <string name="goals_create_button">Create</string>
   <string name="goal_add_new">Add new goal</string>
   <string name="goals_empty">No goals yet. Set a savings target to start tracking progress.</string>
   <string name="goal_name_hint">Goal name</string>
   <string name="goal_target_hint">Target</string>
   <string name="goal_allocate_title">Allocate to Goal</string>
   <string name="goal_allocate_prompt">How much to allocate?</string>
+  <string name="goal_allocate_hint">Amount</string>
   <string name="goal_allocate">Allocate</string>
   <string name="goal_allocate_insufficient_budget">Not enough budget remaining</string>
   <string name="goal_completed">Completed!</string>
@@ -588,4 +591,7 @@
   <string name="period_budget_updated">Budget updated</string>
   <string name="edit">Edit</string>
   <string name="delete">Delete</string>
+  <string name="categories_chart_no_categories">We can\'t split your spends by categories</string>
+  <string name="categories_chart_use_tags">Use tags to see chart by categories</string>
+  <string name="patterns_show_all_tags">Show all %1$d tags ▾</string>
 </resources>

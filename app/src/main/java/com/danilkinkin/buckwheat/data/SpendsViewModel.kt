@@ -437,7 +437,8 @@ class SpendsViewModel @Inject constructor(
         val dueTransactions: MutableList<Transaction> = mutableListOf()
         while (cursor.time < today.time && guard < maxBackfillDays) {
             val calendar = Calendar.getInstance().apply { time = cursor }
-            val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+            val maxDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val dayOfMonth = minOf(calendar.get(Calendar.DAY_OF_MONTH), maxDay)
             val dueTemplates = recurringDao.getDueOnDay(dayOfMonth)
             if (dueTemplates.isNotEmpty()) {
                 dueTemplates.forEach { template ->
@@ -478,9 +479,10 @@ class SpendsViewModel @Inject constructor(
 
     fun confirmRecurringCharges() {
         val pending = pendingRecurringCharges.value.orEmpty()
+        if (pending.isEmpty()) return
+        pendingRecurringCharges.value = emptyList()
         viewModelScope.launch {
             pending.forEach { spendsRepository.addSpent(it) }
-            pendingRecurringCharges.value = emptyList()
         }
     }
 

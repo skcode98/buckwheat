@@ -195,24 +195,26 @@ fun Analytics(
                             )
                             if (!afterMigrationToTransactions.value) {
                                 Spacer(modifier = Modifier.height(36.dp))
-                                SpendsCalendar(
-                                    modifier = Modifier.zIndex(-1f),
-                                    budget = wholeBudget,
-                                    transactions = transactions,
-                                    startDate = startPeriodDate,
-                                    finishDate = finishPeriodDate!!,
-                                    actualFinishDate = finishPeriodActualDate,
-                                    currency = currency,
-                                    dailyBudget = dailyBudget,
-                                    onDayClick = { date ->
-                                        appViewModel.openSheet(
-                                            PathState(
-                                                name = VIEWER_HISTORY_SHEET,
-                                                args = mapOf("onlyDay" to date),
+                                if (finishPeriodDate != null) {
+                                    SpendsCalendar(
+                                        modifier = Modifier.zIndex(-1f),
+                                        budget = wholeBudget,
+                                        transactions = transactions,
+                                        startDate = startPeriodDate,
+                                        finishDate = finishPeriodDate!!,
+                                        actualFinishDate = finishPeriodActualDate,
+                                        currency = currency,
+                                        dailyBudget = dailyBudget,
+                                        onDayClick = { date ->
+                                            appViewModel.openSheet(
+                                                PathState(
+                                                    name = VIEWER_HISTORY_SHEET,
+                                                    args = mapOf("onlyDay" to date),
+                                                )
                                             )
-                                        )
-                                    },
-                                )
+                                        },
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(36.dp))
                             SpendCategoriesCard(
@@ -238,22 +240,25 @@ fun Analytics(
                                 currency = currency,
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            SpendsTrendCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                spends = spends,
-                                startDate = startPeriodDate,
-                                finishDate = finishPeriodDate!!,
-                                currency = currency,
-                                periods = budgetPeriods,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            SpendsWeekdayCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                spends = spends,
-                                startDate = startPeriodDate,
-                                finishDate = finishPeriodDate!!,
-                                currency = currency,
-                            )
+                            if (finishPeriodDate != null) {
+                                SpendsTrendCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    spends = spends,
+                                    startDate = startPeriodDate,
+                                    finishDate = finishPeriodDate!!,
+                                    currency = currency,
+                                    periods = budgetPeriods,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                SpendsWeekdayCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    spends = spends,
+                                    startDate = startPeriodDate,
+                                    finishDate = finishPeriodDate!!,
+                                    currency = currency,
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
                             CompareToLastPeriodCard(
                                 modifier = Modifier.fillMaxWidth(),

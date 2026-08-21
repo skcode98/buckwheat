@@ -3,6 +3,7 @@ package com.danilkinkin.buckwheat.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_MINUTE
@@ -76,6 +77,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     }
                 }
                 WidgetRefreshScheduler.schedule(context)
+            } catch (e: Exception) {
+                Log.e("ReminderBootReceiver", "Receiver failed", e)
             } finally {
                 pendingResult.finish()
             }

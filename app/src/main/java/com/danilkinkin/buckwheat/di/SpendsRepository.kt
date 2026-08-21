@@ -340,10 +340,10 @@ class SpendsRepository @Inject constructor(
             )
         }
 
-        transactionDao.getAll(TransactionType.INCOME).first().firstOrNull()
-            ?.let { incomeTransaction ->
-                transactionDao.update(incomeTransaction.copy(value = newBudget))
-            }
+        val incomeTransactions = transactionDao.getAll(TransactionType.INCOME).first()
+        incomeTransactions.forEach { incomeTransaction ->
+            transactionDao.update(incomeTransaction.copy(value = newBudget))
+        }
 
         updateDailyBudget(whatBudgetForDay())
     }
@@ -495,6 +495,7 @@ class SpendsRepository @Inject constructor(
                     it[overspendNotifiedStoreKey] = false
                 }
             } catch (e: Exception) {
+                Log.e("SpendsRepository", "addSpent DataStore update failed", e)
                 context.errorForReport = e.stackTraceToString()
             }
         }
@@ -648,7 +649,8 @@ class SpendsRepository @Inject constructor(
     }
 
     suspend fun removeSpent(transactionForRemove: Transaction) {
-        this.transactionDao.deleteById(transactionForRemove.uid)
+        val deletedRows = this.transactionDao.deleteById(transactionForRemove.uid)
+        if (deletedRows == 0) return
 
         context.budgetDataStore.edit {
             val startPeriodDate = it[startPeriodDateStoreKey]

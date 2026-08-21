@@ -238,7 +238,7 @@ fun GoalsSheet(
                         exit = shrinkVertically() + fadeOut(),
                     ) {
                         AddCardButton(
-                            title = stringResource(R.string.goals_title),
+                            title = stringResource(R.string.goals_add_button),
                             onClick = { showCreateForm = true },
                         )
                     }
@@ -264,7 +264,7 @@ fun GoalsSheet(
                     OutlinedTextField(
                         value = allocateAmount,
                         onValueChange = { allocateAmount = it },
-                        placeholder = { Text(stringResource(R.string.goal_target_hint)) },
+                        placeholder = { Text(stringResource(R.string.goal_allocate_hint)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
@@ -903,7 +903,7 @@ private fun CreateGoalCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.goals_title))
+                    Text(stringResource(R.string.goals_create_button))
                 }
             }
         }

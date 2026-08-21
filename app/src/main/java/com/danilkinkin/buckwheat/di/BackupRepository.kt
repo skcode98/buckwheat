@@ -27,7 +27,11 @@ import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.notifications.DAILY_REMINDER_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.notifications.DailyBudgetReminderScheduler
+import com.danilkinkin.buckwheat.notifications.OnTrackAlertScheduler
 import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
+import com.danilkinkin.buckwheat.notifications.RecurringPaymentAlertScheduler
+import com.danilkinkin.buckwheat.notifications.SpendDigestFrequency
+import com.danilkinkin.buckwheat.notifications.SpendDigestScheduler
 import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.data.appLockEnabledStoreKey
 import com.danilkinkin.buckwheat.data.appLockPinHashStoreKey
@@ -147,6 +151,39 @@ class BackupRepository @Inject constructor(
             }
         } else {
             PeriodFinishScheduler.cancel(context)
+        }
+
+        // Re-arm the recurring-payment alert from restored settings.
+        val recurringAlertEnabled = restoredSettings[recurringAlertEnabledStoreKey] ?: false
+        if (recurringAlertEnabled) {
+            val hour = restoredSettings[recurringAlertHourStoreKey] ?: RECURRING_ALERT_DEFAULT_HOUR
+            val minute = restoredSettings[recurringAlertMinuteStoreKey] ?: RECURRING_ALERT_DEFAULT_MINUTE
+            RecurringPaymentAlertScheduler.schedule(context, hour, minute)
+        } else {
+            RecurringPaymentAlertScheduler.cancel(context)
+        }
+
+        // Re-arm the on-track alert from restored settings.
+        val onTrackEnabled = restoredSettings[onTrackAlertEnabledStoreKey] ?: false
+        if (onTrackEnabled) {
+            val hour = restoredSettings[onTrackAlertHourStoreKey] ?: DAILY_REMINDER_DEFAULT_HOUR
+            val minute = restoredSettings[onTrackAlertMinuteStoreKey] ?: DAILY_REMINDER_DEFAULT_MINUTE
+            OnTrackAlertScheduler.schedule(context, hour, minute)
+        } else {
+            OnTrackAlertScheduler.cancel(context)
+        }
+
+        // Re-arm the spend-digest alert from restored settings.
+        val digestEnabled = restoredSettings[spendDigestEnabledStoreKey] ?: false
+        if (digestEnabled) {
+            val hour = restoredSettings[spendDigestHourStoreKey] ?: SPEND_DIGEST_DEFAULT_HOUR
+            val minute = restoredSettings[spendDigestMinuteStoreKey] ?: SPEND_DIGEST_DEFAULT_MINUTE
+            val frequency = runCatching {
+                SpendDigestFrequency.valueOf(restoredSettings[spendDigestFrequencyStoreKey] ?: "")
+            }.getOrDefault(SpendDigestFrequency.WEEKLY)
+            SpendDigestScheduler.schedule(context, hour, minute, frequency)
+        } else {
+            SpendDigestScheduler.cancel(context)
         }
 
         return true

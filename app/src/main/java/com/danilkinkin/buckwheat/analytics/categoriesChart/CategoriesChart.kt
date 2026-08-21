@@ -50,7 +50,7 @@ data class TagUsage(
     var emoji: String = "",
 )
 
-var baseColors = listOf(
+internal val baseColors = listOf(
     Color(0xFFF86BAE),
     Color(0xFFF36FFF),
     Color(0xFFAB96FF),
@@ -86,8 +86,8 @@ fun CategoriesChartCard(
             sourceColor = MaterialTheme.colorScheme.primary
         ),
     ).copy(
-        main = if (isNightMode) Color(0xFFF0F0F0) else Color(0xFF222222),
-        onSurface = if (isNightMode) Color(0xFF1A1A1A) else Color(0xFFF4F4F4)
+        main = MaterialTheme.colorScheme.onSurface,
+        onSurface = MaterialTheme.colorScheme.surface
     )
     val stubColor = toPalette(
         color = harmonize(
@@ -95,12 +95,12 @@ fun CategoriesChartCard(
             sourceColor = MaterialTheme.colorScheme.primary
         ),
     ).copy(
-        main = if (isNightMode) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFCCCCCC),
+        main = MaterialTheme.colorScheme.surfaceVariant,
     )
 
     var offsetColor = 0
 
-    val tags by remember {
+    val tags by remember(spends, labelWithoutTag, labelRest) {
         // Convert to TagUsage, group by tag and sum amounts
         var result = spends
             .map { it.copy(comment = it.comment.ifEmpty { labelWithoutTag }) }
@@ -177,7 +177,7 @@ fun CategoriesChartCard(
                         )
                         Column {
                             Text(
-                                text = "We can't split your spends by categories",
+                                text = stringResource(R.string.categories_chart_no_categories),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 ),
@@ -187,7 +187,7 @@ fun CategoriesChartCard(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
-                                    text = "Use tags to see chart by categories ",
+                                    text = stringResource(R.string.categories_chart_use_tags),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f),
                                     ),

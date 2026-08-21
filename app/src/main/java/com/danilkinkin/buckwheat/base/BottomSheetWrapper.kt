@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -73,11 +74,13 @@ fun BottomSheetWrapper(
         onDispose { }
     }
 
+    var seenFirstValue by remember { mutableStateOf(false) }
     DisposableEffect(state.currentValue) {
-        if (state.currentValue === ModalBottomSheetValue.Hidden) {
+        if (seenFirstValue && state.currentValue === ModalBottomSheetValue.Hidden) {
             state.render = false
             appViewModel.closeSheet(name)
         }
+        seenFirstValue = true
 
         onDispose { }
     }

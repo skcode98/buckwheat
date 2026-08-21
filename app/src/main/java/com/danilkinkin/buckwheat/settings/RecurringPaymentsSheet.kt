@@ -153,7 +153,7 @@ fun RecurringPaymentsSheet(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                RecurringAutoApplyMode.values().forEach { mode ->
+                                RecurringAutoApplyMode.entries.forEach { mode ->
                                     FilterChip(
                                         selected = autoApplyMode == mode,
                                         onClick = { viewModel.setAutoApplyMode(mode) },

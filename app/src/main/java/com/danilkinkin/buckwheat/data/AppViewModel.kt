@@ -41,8 +41,7 @@ class AppViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
-    var _snackbarHostState = SnackbarHostState()
-        private set
+    val snackbarHostState = SnackbarHostState()
     fun showSnackbar(
         message: String,
         actionLabel: String? = null,
@@ -51,9 +50,9 @@ class AppViewModel @Inject constructor(
         snackbarResult: (SnackbarResult) -> Unit = {},
     ) {
         viewModelScope.launch {
-            _snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.currentSnackbarData?.dismiss()
 
-            val result = _snackbarHostState.showSnackbar(
+            val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = actionLabel,
                 duration = duration,

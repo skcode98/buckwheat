@@ -1251,7 +1251,7 @@ private fun CommentPatternsCard(
                         text = if (showAll) {
                             stringResource(R.string.patterns_tag_all_shown, sortedPatterns.size)
                         } else {
-                            "Show all ${sortedPatterns.size} tags ▾"
+                            stringResource(R.string.patterns_show_all_tags, sortedPatterns.size)
                         },
                         style = MaterialTheme.typography.labelMedium,
                     )

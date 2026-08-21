@@ -102,7 +102,7 @@ fun isNightMode(): Boolean = when (LocalContext.current.appTheme) {
 @Composable
 fun BuckwheatTheme(
     darkTheme: Boolean = isNightMode(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
 
@@ -134,9 +134,11 @@ suspend fun switchTheme(context: Context, mode: ThemeMode) {
 suspend fun syncTheme(context: Context) {
     val currentValue = context.settingsDataStore.data.first()
 
-    val mode = ThemeMode.valueOf(
-        currentValue[stringPreferencesKey("theme")] ?: ThemeMode.SYSTEM.toString()
-    )
+    val mode = runCatching {
+        ThemeMode.valueOf(
+            currentValue[stringPreferencesKey("theme")] ?: ThemeMode.SYSTEM.toString()
+        )
+    }.getOrDefault(ThemeMode.SYSTEM)
 
     context.appTheme = mode
 }
