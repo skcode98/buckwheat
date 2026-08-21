@@ -445,6 +445,7 @@
   <string name="search_history_title">Search History</string>
   <string name="recurring_payments_title">Recurring Payments</string>
   <string name="recurring_add_new">Add new payment</string>
+  <string name="recurring_empty">No recurring payments yet. Add one to automate your tracking.</string>
   <string name="recurring_auto_apply_title">Auto-add payments</string>
   <string name="recurring_auto_apply_description">How new recurring payments are recorded as spends</string>
   <string name="recurring_auto_apply_off">Off</string>
@@ -456,6 +457,7 @@
   <string name="recurring_charge_confirm_skip">Skip</string>
   <string name="goals_title">Goals</string>
   <string name="goal_add_new">Add new goal</string>
+  <string name="goals_empty">No goals yet. Set a savings target to start tracking progress.</string>
   <string name="goal_name_hint">Goal name</string>
   <string name="goal_target_hint">Target</string>
   <string name="goal_allocate_title">Allocate to Goal</string>
@@ -534,6 +536,7 @@
   <string name="patterns_empty">No spending history yet in this window.</string>
   <string name="patterns_comment_patterns">Tag patterns</string>
   <string name="patterns_comment_patterns_desc">How your spending breaks down by tag</string>
+  <string name="patterns_comment_patterns_empty">No tag patterns yet. Add tags to your spends to see patterns here.</string>
   <string name="patterns_comment_pattern_detail">%1$d transactions</string>
   <string name="patterns_recurring_forecast">Recurring forecast</string>
   <string name="patterns_recurring_forecast_desc">Upcoming scheduled payments</string>

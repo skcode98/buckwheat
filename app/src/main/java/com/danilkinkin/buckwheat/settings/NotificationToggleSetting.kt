@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,22 +45,25 @@ import kotlinx.coroutines.launch
 import java.time.LocalTime
 
 /**
- * Shared composable for notification toggle settings with optional time picker.
+ * Shared composable for notification toggle settings with optional time picker
+ * and optional extra content slot.
  *
- * Renders a toggle row (icon + title + Switch) and, when enabled, a time picker row.
+ * When [hourKey]/[minuteKey] are null, the time picker row is hidden (toggle-only mode).
+ * When [extraContent] is provided, it renders below the toggle row when enabled.
  */
 @Composable
 fun NotificationToggleSetting(
     iconRes: Int,
     @androidx.annotation.StringRes titleRes: Int,
-    @androidx.annotation.StringRes timeLabelRes: Int,
     enabledKey: Preferences.Key<Boolean>,
-    hourKey: Preferences.Key<Int>,
-    minuteKey: Preferences.Key<Int>,
-    defaultHour: Int,
-    defaultMinute: Int,
-    schedule: (android.content.Context, Int, Int) -> Unit,
-    cancel: (android.content.Context) -> Unit,
+    @androidx.annotation.StringRes timeLabelRes: Int = 0,
+    hourKey: Preferences.Key<Int>? = null,
+    minuteKey: Preferences.Key<Int>? = null,
+    defaultHour: Int = 0,
+    defaultMinute: Int = 0,
+    schedule: ((android.content.Context, Int, Int) -> Unit)? = null,
+    cancel: ((android.content.Context) -> Unit)? = null,
+    extraContent: @Composable (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -67,12 +71,15 @@ fun NotificationToggleSetting(
     var hour by remember { mutableIntStateOf(defaultHour) }
     var minute by remember { mutableIntStateOf(defaultMinute) }
     var showTimePicker by remember { mutableStateOf(false) }
+    val hasTime = hourKey != null && minuteKey != null
 
     LaunchedEffect(Unit) {
         val prefs = context.settingsDataStore.data.first()
         enabled = prefs[enabledKey] ?: false
-        hour = prefs[hourKey] ?: defaultHour
-        minute = prefs[minuteKey] ?: defaultMinute
+        if (hasTime) {
+            hour = prefs[hourKey!!] ?: defaultHour
+            minute = prefs[minuteKey!!] ?: defaultMinute
+        }
     }
 
     fun enable() {
@@ -80,7 +87,7 @@ fun NotificationToggleSetting(
         coroutineScope.launch {
             context.settingsDataStore.edit { it[enabledKey] = true }
         }
-        schedule(context, hour, minute)
+        schedule?.invoke(context, hour, minute)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -94,7 +101,7 @@ fun NotificationToggleSetting(
     fun onToggle() {
         if (enabled) {
             enabled = false
-            cancel(context)
+            cancel?.invoke(context)
             coroutineScope.launch {
                 context.settingsDataStore.edit { it[enabledKey] = false }
             }
@@ -151,16 +158,19 @@ fun NotificationToggleSetting(
     }
 
     if (enabled) {
-        TextRow(
-            icon = painterResource(R.drawable.ic_clock),
-            iconTint = iconTint,
-            text = stringResource(timeLabelRes),
-            endCaption = String.format("%02d:%02d", hour, minute),
-            modifier = Modifier.clickable { showTimePicker = true },
-        )
+        if (hasTime) {
+            TextRow(
+                icon = painterResource(R.drawable.ic_clock),
+                iconTint = iconTint,
+                text = stringResource(timeLabelRes),
+                endCaption = String.format("%02d:%02d", hour, minute),
+                modifier = Modifier.clickable { showTimePicker = true },
+            )
+        }
+        extraContent?.invoke()
     }
 
-    if (showTimePicker) {
+    if (hasTime && showTimePicker) {
         TimePickerDialog(
             initTime = LocalTime.of(hour, minute),
             onSelect = { selectedHour, selectedMinute, _ ->
@@ -169,11 +179,11 @@ fun NotificationToggleSetting(
                 showTimePicker = false
                 coroutineScope.launch {
                     context.settingsDataStore.edit {
-                        it[hourKey] = selectedHour
-                        it[minuteKey] = selectedMinute
+                        it[hourKey!!] = selectedHour
+                        it[minuteKey!!] = selectedMinute
                     }
                 }
-                schedule(context, selectedHour, selectedMinute)
+                schedule?.invoke(context, selectedHour, selectedMinute)
             },
             onClose = { showTimePicker = false },
         )

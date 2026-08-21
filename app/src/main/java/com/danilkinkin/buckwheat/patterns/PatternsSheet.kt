@@ -474,73 +474,6 @@ private fun KpiValue(
     }
 }
 
-// Top categories as a 3-column grid of mini area sparks (name + total + trend line).
-@Composable
-private fun CategorySparklines(
-    series: List<CategoryMonthlySeries>,
-    currency: ExtendCurrency,
-) {
-    if (series.isEmpty()) return
-    val context = LocalContext.current
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.patterns_category_trends),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(16.dp))
-            series.chunked(3).forEachIndexed { rowIndex, row ->
-                if (rowIndex > 0) Spacer(Modifier.height(16.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    val cells = row + List(3 - row.size) { null }
-                    cells.forEachIndexed { index, item ->
-                        if (index > 0) Spacer(Modifier.width(16.dp))
-                        if (item != null) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = item.displayName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = numberFormat(
-                                        context,
-                                        item.points.fold(BigDecimal.ZERO) { acc, point -> acc + point },
-                                        currency,
-                                    ),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                MiniSpark(
-                                    values = item.points,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                )
-                            }
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // Full category breakdown: name, total, percent, monthly average, trend, active months.
 @Composable
 private fun CategoryBreakdownCard(
@@ -612,168 +545,6 @@ private fun CategoryBreakdownCard(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Transaction count trends per category: shows how many times you buy each top category per month.
-@Composable
-private fun CategoryFrequencyCard(
-    series: List<CategoryTransactionSeries>,
-    context: Context,
-    currency: ExtendCurrency,
-) {
-    if (series.isEmpty()) return
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.patterns_frequency_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.patterns_frequency_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            series.forEach { s ->
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = s.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val totalTxns = s.points.sum()
-                        val avgMonthly = if (s.points.isNotEmpty()) {
-                            BigDecimal(totalTxns).divide(s.points.size.toBigDecimal(), 1, RoundingMode.HALF_UP)
-                        } else {
-                            BigDecimal.ZERO
-                        }
-                        Text(
-                            text = stringResource(
-                                R.string.patterns_frequency_detail,
-                                totalTxns,
-                                avgMonthly,
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "${s.points.sum()}",
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                    )
-                }
-                if (s.points.size >= 2) {
-                    Spacer(Modifier.height(6.dp))
-                    val maxVal = s.points.maxOrNull()?.coerceAtLeast(1) ?: 1
-                    val barColor = MaterialTheme.colorScheme.primary
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(24.dp),
-                    ) {
-                        val slotWidth = size.width / s.points.size
-                        val maxBarHeight = size.height - 4.dp.toPx()
-                        s.points.forEachIndexed { index, count ->
-                            val barHeight = (count.toFloat() / maxVal * maxBarHeight).coerceAtLeast(2.dp.toPx())
-                            val x = index * slotWidth + slotWidth * 0.15f
-                            val barW = slotWidth * 0.7f
-                            drawRoundRect(
-                                color = barColor.copy(alpha = if (count > 0) 0.7f else 0.12f),
-                                topLeft = Offset(x, size.height - barHeight),
-                                size = Size(barW, barHeight),
-                                cornerRadius = CornerRadius(barW / 2f, barW / 2f),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Actionable suggestions to set up recurring payments for categories with stable high frequency.
-@Composable
-private fun FrequencyRecurringSuggestionCard(
-    candidates: List<FrequencyRecurringCandidate>,
-    context: Context,
-    currency: ExtendCurrency,
-    onAddRecurring: (FrequencyRecurringCandidate) -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.patterns_frequency_recurring_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.patterns_frequency_recurring_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            candidates.forEach { candidate ->
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = candidate.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.patterns_frequency_recurring_detail,
-                                candidate.avgTransactionsPerMonth.setScale(1, RoundingMode.HALF_UP),
-                                candidate.activeMonths,
-                                candidate.totalTransactions,
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.patterns_frequency_recurring_suggested,
-                                candidate.suggestedDayOfMonth,
-                                numberFormat(context, candidate.suggestedAmount, currency),
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    TextButton(onClick = { onAddRecurring(candidate) }) {
-                        Text(stringResource(R.string.patterns_frequency_recurring_add))
                     }
                 }
             }
@@ -1113,71 +884,6 @@ private fun AnomaliesCard(
 }
 
 @Composable
-private fun SuggestionsCard(suggestions: List<InsightSuggestion>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.patterns_optimize),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            suggestions.forEach { suggestion ->
-                val severityLabel: String
-                val severityColor = when (suggestion.severity) {
-                    Severity.HIGH -> {
-                        severityLabel = stringResource(R.string.patterns_severity_high)
-                        colorBad
-                    }
-                    Severity.MEDIUM -> {
-                        severityLabel = stringResource(R.string.patterns_severity_medium)
-                        colorNotGood
-                    }
-                    Severity.LOW -> {
-                        severityLabel = stringResource(R.string.patterns_severity_low)
-                        colorGood
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    Box(
-                        Modifier
-                            .width(4.dp)
-                            .height(42.dp)
-                            .background(severityColor, RoundedCornerShape(2.dp)),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = severityLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = severityColor,
-                        )
-                        Text(
-                            text = suggestion.title,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        if (suggestion.body.isNotBlank()) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = suggestion.body,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun CommentPatternsCard(
     patterns: List<CommentPattern>,
     dataset: PatternDataset,
@@ -1246,6 +952,19 @@ private fun CommentPatternsCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            if (patterns.isEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    text = stringResource(R.string.patterns_comment_patterns_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(24.dp))
+            }
+
             Spacer(Modifier.height(12.dp))
 
             // Sort chips
@@ -1612,75 +1331,6 @@ private fun RecurringForecastCard(
                             ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Pattern-detected recurring charges: comment-based charges that repeat monthly.
-@Composable
-private fun DetectedRecurringCard(
-    charges: List<RecurringCharge>,
-    context: Context,
-    currency: ExtendCurrency,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.patterns_detected_recurring),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.patterns_detected_recurring_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            charges.forEach { charge ->
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = charge.normalizedComment,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.patterns_detected_recurring_detail,
-                                charge.monthsApart,
-                                prettyDate(
-                                    charge.lastDate.toDate(),
-                                    showTime = false,
-                                    forceShowDate = true,
-                                    shortMonth = true,
-                                ),
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "${numberFormat(context, charge.monthlyAmount, currency)}/mo",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
                         )
                     }
                 }
