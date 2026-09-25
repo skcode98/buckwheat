@@ -1,15 +1,15 @@
 package com.danilkinkin.buckwheat.di
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeSavingsGoalDao : SavingsGoalDao {
     private val goals = mutableListOf<SavingsGoal>()
 
-    override fun getAll(): LiveData<List<SavingsGoal>> {
-        return MutableLiveData(goals)
+    override fun getAll(): Flow<List<SavingsGoal>> {
+        return flow { emit(goals.toList()) }
     }
 
     override suspend fun getById(id: Long): SavingsGoal? {

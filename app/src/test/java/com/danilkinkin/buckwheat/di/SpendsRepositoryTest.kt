@@ -42,6 +42,8 @@ class SpendsRepositoryTest {
             budgetPeriodDao,
             currentDateUseCase,
             CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
+            CategoryCapTracker(context, SettingsRepository(context), transactionDao),
+            BudgetCalculator(context, currentDateUseCase),
         )
     }
 
@@ -180,11 +182,11 @@ class SpendsRepositoryTest {
 
         spendsRepository.importTransactions(listOf(olderSpend))
 
-        assert(!spendsRepository.getAllSpends().value!!.contains(olderSpend))
+        assert(!spendsRepository.getAllSpends().first().contains(olderSpend))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpent().first() == 0.toBigDecimal().setScale(2))
 
-        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        val buckets = budgetPeriodDao.getAll().first().filter { it.isImported }
         assert(buckets.size == 1)
         val bucket = buckets.single()
         assert(bucket.isImported)
@@ -206,7 +208,7 @@ class SpendsRepositoryTest {
         spendsRepository.importTransactions(listOf(olderSpend))
         spendsRepository.removeSpent(olderSpend)
 
-        assert(!spendsRepository.getAllSpends().value!!.contains(olderSpend))
+        assert(!spendsRepository.getAllSpends().first().contains(olderSpend))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpent().first() == 0.toBigDecimal().setScale(2))
     }
@@ -223,18 +225,18 @@ class SpendsRepositoryTest {
 
         spendsRepository.importTransactions(listOf(inPeriodSpend, oldSpendA, oldSpendB))
 
-        assert(spendsRepository.getAllSpends().value!!.contains(inPeriodSpend))
-        assert(!spendsRepository.getAllSpends().value!!.contains(oldSpendA))
-        assert(!spendsRepository.getAllSpends().value!!.contains(oldSpendB))
+        assert(spendsRepository.getAllSpends().first().contains(inPeriodSpend))
+        assert(!spendsRepository.getAllSpends().first().contains(oldSpendA))
+        assert(!spendsRepository.getAllSpends().first().contains(oldSpendB))
 
-        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        val buckets = budgetPeriodDao.getAll().first().filter { it.isImported }
         assert(buckets.size == 1)
         val bucket = buckets.single()
         assert(bucket.startDate.toLocalDate() == lastMonth.withDayOfMonth(1))
         assert(bucket.finishDate.toLocalDate() == lastMonth.withDayOfMonth(lastMonth.lengthOfMonth()))
         assert(bucket.totalSpent == 30.toBigDecimal().setScale(2))
 
-        val archived = budgetPeriodDao.getTransactionsForPeriod(bucket.id).value.orEmpty()
+        val archived = budgetPeriodDao.getTransactionsForPeriod(bucket.id).first()
         assert(archived.size == 2)
         assert(archived.all { it.periodId == bucket.id })
         assert(spendsRepository.getSpentFromDailyBudget().first() == 5.toBigDecimal().setScale(2))
@@ -254,13 +256,13 @@ class SpendsRepositoryTest {
         spendsRepository.importTransactions(listOf(olderSpend))
         spendsRepository.importTransactions(listOf(olderSpend))
 
-        val buckets = budgetPeriodDao.getAll().value.orEmpty().filter { it.isImported }
+        val buckets = budgetPeriodDao.getAll().first().filter { it.isImported }
         val archived = buckets.flatMap {
-            budgetPeriodDao.getTransactionsForPeriod(it.id).value.orEmpty()
+            budgetPeriodDao.getTransactionsForPeriod(it.id).first()
         }
         assert(archived.size == 1)
         assert(
-            spendsRepository.getAllSpends().value.orEmpty()
+            spendsRepository.getAllSpends().first()
                 .none { it.type == TransactionType.SPENT }
         )
     }
@@ -280,14 +282,9 @@ class SpendsRepositoryTest {
 
         spendsRepository.importTransactions(listOf(oldSpend))
 
-        var tags: List<String>? = null
-        val liveData = spendsRepository.getAllTags()
-        val observer = androidx.lifecycle.Observer<List<String>> { tags = it }
-        liveData.observeForever(observer)
-        liveData.removeObserver(observer)
+        val tags = spendsRepository.getAllTags().first()
 
-        assert(tags != null)
-        assert(tags!!.contains("groceries"))
+        assert(tags.contains("groceries"))
     }
 
     // Distinct category values assigned to transactions surface via getAllCategories so the
@@ -324,16 +321,11 @@ class SpendsRepositoryTest {
             )
         )
 
-        var categories: List<String>? = null
-        val liveData = spendsRepository.getAllCategories()
-        val observer = androidx.lifecycle.Observer<List<String>> { categories = it }
-        liveData.observeForever(observer)
-        liveData.removeObserver(observer)
+        val categories = spendsRepository.getAllCategories().first()
 
-        assert(categories != null)
-        assert(categories!!.contains("FOOD"))
-        assert(categories!!.contains("MyCategory"))
-        assert(categories!!.size == 2)
+        assert(categories.contains("FOOD"))
+        assert(categories.contains("MyCategory"))
+        assert(categories.size == 2)
     }
 
     // Check spent in same day added correctly
@@ -344,7 +336,7 @@ class SpendsRepositoryTest {
         val spend = Transaction(TransactionType.SPENT, 10.toBigDecimal(), currentDateUseCase.value)
         spendsRepository.addSpent(spend)
 
-        assert(spendsRepository.getAllSpends().value!!.contains(spend))
+        assert(spendsRepository.getAllSpends().first().contains(spend))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 10.toBigDecimal().setScale(2))
     }
 
@@ -438,7 +430,7 @@ class SpendsRepositoryTest {
         spendsRepository.addSpent(spend_1)
         spendsRepository.addSpent(spend_2)
         spendsRepository.removeSpent(spend_1)
-        val spends = spendsRepository.getAllSpends().value!!
+        val spends = spendsRepository.getAllSpends().first()
 
         assert(spends.isEmpty())
         assert(spendsRepository.getSpentFromDailyBudget().first() == 20.toBigDecimal().setScale(2))
@@ -460,7 +452,7 @@ class SpendsRepositoryTest {
         distributeBudget()
 
         spendsRepository.removeSpent(spend)
-        val spends = spendsRepository.getAllSpends().value!!
+        val spends = spendsRepository.getAllSpends().first()
 
         Log.d("SpendsRepositoryTest", "spentFromDailyBudget: ${spendsRepository.getSpentFromDailyBudget().first()}")
         Log.d("SpendsRepositoryTest", "dailyBudget: ${spendsRepository.nextDayBudget()}")
@@ -485,7 +477,7 @@ class SpendsRepositoryTest {
         spendsRepository.addSpent(spend)
         spendsRepository.removeSpent(spend)
         spendsRepository.addSpent(spend)
-        val spends = spendsRepository.getAllSpends().value!!
+        val spends = spendsRepository.getAllSpends().first()
 
         assert(spends.contains(spend))
         assert(spends.size == 1)
@@ -512,7 +504,7 @@ class SpendsRepositoryTest {
 
         spendsRepository.removeSpent(spend)
         spendsRepository.addSpent(spend)
-        val spends = spendsRepository.getAllSpends().value!!
+        val spends = spendsRepository.getAllSpends().first()
 
         assert(spends.contains(spend))
         assert(spends.size == 1)

@@ -1,15 +1,15 @@
 package com.danilkinkin.buckwheat.di
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeRecurringDao : RecurringDao {
     private val templates = mutableListOf<RecurringTemplate>()
 
-    override fun getAll(): LiveData<List<RecurringTemplate>> {
-        return MutableLiveData(templates)
+    override fun getAll(): Flow<List<RecurringTemplate>> {
+        return flow { emit(templates.toList()) }
     }
 
     override suspend fun getDueOnDay(day: Int): List<RecurringTemplate> {

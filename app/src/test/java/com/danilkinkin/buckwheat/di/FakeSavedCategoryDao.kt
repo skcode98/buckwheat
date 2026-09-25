@@ -1,15 +1,15 @@
 package com.danilkinkin.buckwheat.di
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeSavedCategoryDao : SavedCategoryDao {
     private val categories = mutableListOf<SavedCategory>()
 
-    override fun getAll(): LiveData<List<SavedCategory>> {
-        return MutableLiveData(categories)
+    override fun getAll(): Flow<List<SavedCategory>> {
+        return flow { emit(categories.toList()) }
     }
 
     override suspend fun getById(id: Int): SavedCategory? {

@@ -219,7 +219,7 @@ class CompareToLastPeriodTest {
         )
 
         assertEquals(BigDecimal("50"), comparison.delta)
-        assertEquals(BigDecimal("50"), comparison.percentChange)
+        assertEquals(BigDecimal("50.00"), comparison.percentChange)
     }
 
     @Test

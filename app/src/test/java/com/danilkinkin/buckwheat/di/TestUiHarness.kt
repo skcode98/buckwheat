@@ -22,16 +22,19 @@ fun buildTestUiHarness(): TestUiHarness {
     val transactionDao = FakeTransactionDao()
     val budgetPeriodDao = FakeBudgetPeriodDao()
     val settingsRepository = SettingsRepository(context)
+    val currentDateUseCase = FakeGetCurrentDateUseCase()
     val spendsRepository = SpendsRepository(
         context = context,
         transactionDao = transactionDao,
         savedTagDao = FakeSavedTagDao(),
         savedCategoryDao = FakeSavedCategoryDao(),
         budgetPeriodDao = budgetPeriodDao,
-        getCurrentDateUseCase = FakeGetCurrentDateUseCase(),
+        getCurrentDateUseCase = currentDateUseCase,
         categoryAssignmentScheduler = CategoryAssignmentScheduler(
             CategoryAssigner(context, transactionDao, budgetPeriodDao)
         ),
+        categoryCapTracker = CategoryCapTracker(context, settingsRepository, transactionDao),
+        budgetCalculator = BudgetCalculator(context, currentDateUseCase),
     )
     return TestUiHarness(
         spendsViewModel = SpendsViewModel(

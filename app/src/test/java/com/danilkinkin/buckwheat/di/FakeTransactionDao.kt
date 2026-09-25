@@ -1,28 +1,28 @@
 package com.danilkinkin.buckwheat.di
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeTransactionDao : TransactionDao {
     val spends = mutableListOf<Transaction>()
 
-    override fun getAll(): LiveData<List<Transaction>> {
-        return MutableLiveData(spends)
+    override fun getAll(): Flow<List<Transaction>> {
+        return flow { emit(spends.toList()) }
     }
 
-    override fun getAll(type: TransactionType): LiveData<List<Transaction>> {
-        return MutableLiveData(spends)
+    override fun getAll(type: TransactionType): Flow<List<Transaction>> {
+        return flow { emit(spends.toList()) }
     }
 
-    override fun getAll(type: TransactionType, startDate: Long, endDate: Long): LiveData<List<Transaction>> {
-        return MutableLiveData(spends)
+    override fun getAll(type: TransactionType, startDate: Long, endDate: Long): Flow<List<Transaction>> {
+        return flow { emit(spends.toList()) }
     }
 
-    override fun getAll(startDate: Long, endDate: Long): LiveData<List<Transaction>> {
-        return MutableLiveData(spends)
+    override fun getAll(startDate: Long, endDate: Long): Flow<List<Transaction>> {
+        return flow { emit(spends.toList()) }
     }
 
     override suspend fun getById(uid: Int): Transaction? {
@@ -33,10 +33,16 @@ class FakeTransactionDao : TransactionDao {
         return spends.toList()
     }
 
-    override fun getUncategorizedCount(): LiveData<Int> {
-        return MutableLiveData(
-            spends.count { it.type == TransactionType.SPENT && it.category.isNullOrBlank() }
-        )
+    override suspend fun getAllNow(type: TransactionType, startDate: Long, endDate: Long): List<Transaction> {
+        return spends.filter {
+            it.type == type && it.date.time in startDate..endDate
+        }
+    }
+
+    override fun getUncategorizedCount(): Flow<Int> {
+        return flow {
+            emit(spends.count { it.type == TransactionType.SPENT && it.category.isNullOrBlank() })
+        }
     }
 
     override suspend fun insert(vararg transaction: Transaction) {
@@ -56,8 +62,10 @@ class FakeTransactionDao : TransactionDao {
         }
     }
 
-    override suspend fun deleteById(uid: Int) {
+    override suspend fun deleteById(uid: Int): Int {
+        val before = spends.size
         spends.removeIf { it.uid == uid }
+        return before - spends.size
     }
 
     override suspend fun updateCategory(uid: Int, category: String?) {

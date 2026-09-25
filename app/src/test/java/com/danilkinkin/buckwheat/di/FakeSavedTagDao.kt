@@ -1,15 +1,15 @@
 package com.danilkinkin.buckwheat.di
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.entities.SavedTag
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 class FakeSavedTagDao : SavedTagDao {
     private val tags = mutableListOf<SavedTag>()
 
-    override fun getAll(): LiveData<List<SavedTag>> {
-        return MutableLiveData(tags)
+    override fun getAll(): Flow<List<SavedTag>> {
+        return flow { emit(tags.toList()) }
     }
 
     override suspend fun getById(id: Int): SavedTag? {
