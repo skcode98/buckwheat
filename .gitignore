@@ -20,3 +20,10 @@ keystore.properties
 
 # Visual Studio
 .vs/
+
+# Agent/IDE tool state (never commit)
+.kilo/
+.playwright-mcp/
+.opencode/plans/
+.superpowers/
+compile_output.txt
