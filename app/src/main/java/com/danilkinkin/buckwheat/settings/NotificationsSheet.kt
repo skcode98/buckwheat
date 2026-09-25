@@ -53,6 +53,7 @@ fun NotificationsSheet() {
                 OverspendNotificationSetting()
                 OnTrackAlertSetting()
                 PeriodFinishSetting()
+                AutoExportSetting()
             }
         }
     }

@@ -53,6 +53,7 @@ val lastRecurringAppliedDateStoreKey = longPreferencesKey("lastRecurringAppliedD
 val startPeriodDateStoreKey = longPreferencesKey("startPeriodDate")
 val finishPeriodDateStoreKey = longPreferencesKey("finishPeriodDate")
 val finishPeriodActualDateStoreKey = longPreferencesKey("finishPeriodActualDate")
+val lastAutoExportedPeriodStartStoreKey = longPreferencesKey("lastAutoExportedPeriodStart")
 // Transient flag: true once the daily overspend notification has been posted for the
 // current day's crossing, reset when spending returns at or under the daily budget.
 val overspendNotifiedStoreKey = booleanPreferencesKey("overspendNotified")

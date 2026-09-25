@@ -96,6 +96,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".notifications.AutoExportReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".notifications.ReminderBootReceiver"
             android:exported="true">
             <intent-filter>

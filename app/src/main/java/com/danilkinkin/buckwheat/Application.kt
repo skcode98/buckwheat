@@ -12,6 +12,7 @@ import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import com.danilkinkin.buckwheat.notifications.OnTrackAlertReceiver
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.notifications.RecurringPaymentAlertReceiver
+import com.danilkinkin.buckwheat.notifications.AutoExportReceiver
 import com.danilkinkin.buckwheat.notifications.PeriodFinishReceiver
 import com.danilkinkin.buckwheat.notifications.SpendDigestReceiver
 import com.danilkinkin.buckwheat.util.NumberDisplayConfig
@@ -161,6 +162,15 @@ class Application : Application(), Configuration.Provider {
                 description = getString(R.string.period_finish_channel_description)
             }
             notificationManager.createNotificationChannel(periodFinishChannel)
+
+            val autoExportChannel = NotificationChannel(
+                AutoExportReceiver.CHANNEL_ID,
+                getString(R.string.auto_export_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.auto_export_channel_description)
+            }
+            notificationManager.createNotificationChannel(autoExportChannel)
 
             val voiceWidgetChannel = NotificationChannel(
                 VoiceWidgetNotifications.CHANNEL_ID,

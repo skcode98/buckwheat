@@ -248,6 +248,11 @@
   <string name="period_finish_notify_text">Your budget period ended with %1$s left over</string>
   <string name="period_finish_overspent_text">Your budget period ended over budget by %1$s</string>
   <string name="period_finish_setting_title">Notify when period ends</string>
+  <string name="auto_export_channel_name">Auto export</string>
+  <string name="auto_export_channel_description">Silent CSV export of a finished period</string>
+  <string name="auto_export_notify_title">Period exported</string>
+  <string name="auto_export_notify_text">Spending saved to Downloads as %1$s.csv</string>
+  <string name="auto_export_setting_title">Export month on period end</string>
   <string name="app_lock_title">App lock</string>
   <string name="app_lock_description">Lock the app with a PIN or your fingerprint</string>
   <string name="app_lock_set_pin">Set PIN</string>

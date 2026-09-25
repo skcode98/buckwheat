@@ -9,6 +9,7 @@ import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.RECURRING_ALERT_DEFAULT_MINUTE
 import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_HOUR
 import com.danilkinkin.buckwheat.di.SPEND_DIGEST_DEFAULT_MINUTE
+import com.danilkinkin.buckwheat.di.autoExportEnabledStoreKey
 import com.danilkinkin.buckwheat.di.finishPeriodDateStoreKey
 import com.danilkinkin.buckwheat.di.periodFinishEnabledStoreKey
 import com.danilkinkin.buckwheat.di.recurringAlertEnabledStoreKey
@@ -74,6 +75,13 @@ class ReminderBootReceiver : BroadcastReceiver() {
                     val finishDateMillis = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
                     if (finishDateMillis != null && finishDateMillis > Date().time) {
                         PeriodFinishScheduler.schedule(context, Date(finishDateMillis))
+                    }
+                }
+                val autoExportEnabled = prefs[autoExportEnabledStoreKey] ?: false
+                if (autoExportEnabled) {
+                    val finishDateMillis = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
+                    if (finishDateMillis != null && finishDateMillis > Date().time) {
+                        AutoExportScheduler.schedule(context, Date(finishDateMillis))
                     }
                 }
                 WidgetRefreshScheduler.schedule(context)

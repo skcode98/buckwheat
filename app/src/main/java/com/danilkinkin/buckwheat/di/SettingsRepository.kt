@@ -49,6 +49,7 @@ val goalMilestonesNotifiedStoreKey = stringPreferencesKey("goalMilestonesNotifie
 val categoryCapsStoreKey = stringPreferencesKey("categoryCaps")
 val categoryCapNotifiedStoreKey = stringPreferencesKey("categoryCapNotified")
 val periodFinishEnabledStoreKey = booleanPreferencesKey("periodFinishEnabled")
+val autoExportEnabledStoreKey = booleanPreferencesKey("autoExportEnabled")
 val recurringAutoApplyModeStoreKey = stringPreferencesKey("recurringAutoApplyMode")
 // App lock keys moved to AppLockRepository (com.danilkinkin.buckwheat.data)
 

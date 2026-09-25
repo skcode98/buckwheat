@@ -15,14 +15,11 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.export.buildAutoExportFileName
+import com.danilkinkin.buckwheat.export.buildPeriodCsv
 import com.danilkinkin.buckwheat.util.toLocalDate
-import com.danilkinkin.buckwheat.util.toLocalDateTime
 import kotlinx.coroutines.launch
-import org.apache.commons.csv.CSVFormat
-import org.apache.commons.csv.CSVPrinter
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 @Composable
 fun rememberExportCSV(
@@ -43,23 +40,15 @@ fun rememberExportCSV(
     val snackBarExportToCSVSuccess = stringResource(R.string.export_to_csv_success)
     val snackBarExportToCSVFailed = stringResource(R.string.export_to_csv_failed)
 
-    val yearFormatter = DateTimeFormatter.ofPattern("yyyy")
+    val fileNamePattern = stringResource(R.string.export_to_csv_file_name)
 
     val fileName = if (startPeriodDate != null && finishPeriodDate != null) {
         val fromDate = startPeriodDate!!.toLocalDate()
         val toDate = LocalDate.now().coerceAtMost(finishPeriodDate!!.toLocalDate())
 
-        val from = if (
-            yearFormatter.format(fromDate) == yearFormatter.format(toDate)
-        ) {
-            DateTimeFormatter.ofPattern("dd-MM").format(fromDate)
-        } else {
-            DateTimeFormatter.ofPattern("dd-MM-yyyy").format(fromDate)
-        }
-        val to = DateTimeFormatter.ofPattern("dd-MM-yyyy").format(toDate)
-        stringResource(R.string.export_to_csv_file_name, from, to)
+        buildAutoExportFileName(fileNamePattern, fromDate, toDate)
     } else {
-        stringResource(R.string.export_to_csv_file_name, "?", "?")
+        fileNamePattern.format("?", "?")
     }
 
     CompositionLocalProvider(
@@ -77,26 +66,13 @@ fun rememberExportCSV(
             }
 
             coroutineScope.launch {
-                val stream = context.contentResolver.openOutputStream(uri)
-
-                val printer = CSVPrinter(
-                    stream?.writer(),
-                    CSVFormat.Builder.create().setHeader("amount", "comment", "commit_time")
-                        .build()
+                val csv = buildPeriodCsv(
+                    spendsViewModel.periodSpends.value ?: emptyList(),
                 )
-                val dateFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
 
-                (spendsViewModel.periodSpends.value ?: emptyList()).forEach { spent ->
-                    printer.printRecord(
-                        spent.value,
-                        spent.comment,
-                        spent.date.toLocalDateTime().format(dateFormatter),
-                    )
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.writer().use { it.write(csv) }
                 }
-
-                printer.flush()
-                printer.close()
-                stream?.close()
 
                 appViewModel.showSnackbar(snackBarExportToCSVSuccess)
             }
