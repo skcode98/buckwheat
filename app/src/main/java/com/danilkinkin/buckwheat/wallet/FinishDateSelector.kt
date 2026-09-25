@@ -29,6 +29,18 @@ import java.util.*
 
 const val FINISH_DATE_SELECTOR_SHEET = "finishDateSelector"
 
+/**
+ * Default bounds for the date picker when a caller does not constrain them.
+ * Enables selecting a period start up to two months in the past and a finish
+ * up to two months ahead.
+ */
+internal fun defaultPickerWindow(now: LocalDate = LocalDate.now()): Pair<Date, Date> {
+    return Pair(
+        now.minusMonths(2).withDayOfMonth(1).toDate(),
+        now.plusMonths(2).withDayOfMonth(1).minusDays(1).toDate(),
+    )
+}
+
 @Composable
 fun FinishDateSelector(
     selectDate: Date? = null,
@@ -43,12 +55,13 @@ fun FinishDateSelector(
 
     Surface(modifier = Modifier.fillMaxSize().padding(top = localBottomSheetScrollState.topPadding)) {
         val calendarState = remember {
+            val (pickerBefore, pickerAfter) = defaultPickerWindow()
             CalendarState(
                 context,
                 selectionMode = CalendarSelectionMode.RANGE,
                 selectDate = selectDate,
-                disableBeforeDate = disableBeforeDate ?: LocalDate.now().withDayOfMonth(1).toDate(),
-                disableAfterDate = disableAfterDate ?: LocalDate.now().plusMonths(1).withDayOfMonth(1).minusDays(1).toDate(),
+                disableBeforeDate = disableBeforeDate ?: pickerBefore,
+                disableAfterDate = disableAfterDate ?: pickerAfter,
             )
         }
 

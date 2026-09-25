@@ -100,6 +100,8 @@ fun BottomSheets(
         FinishDateSelector(
             selectDate = state.args["initialDate"] as? Date?,
             selectStartDate = state.args["initialStartDate"] as? Date?,
+            disableBeforeDate = state.args["disableBeforeDate"] as? Date?,
+            disableAfterDate = state.args["disableAfterDate"] as? Date?,
             onBackPressed = {
                 coroutineScope.launch {
                     state.hide()

@@ -186,11 +186,7 @@ data class CalendarUiState(
     }
 
     fun setDates(newFrom: LocalDate?, newTo: LocalDate?): CalendarUiState {
-        return if (newTo == null) {
-            copy(selectedStartDate = newFrom)
-        } else {
-            copy(selectedStartDate = newFrom, selectedEndDate = newTo)
-        }
+        return copy(selectedStartDate = newFrom, selectedEndDate = newTo)
     }
 
     fun setDate(new: LocalDate?): CalendarUiState {
