@@ -133,7 +133,7 @@ class MainActivity : FragmentActivity() {
                 .asPaddingValues()
 
             if (isReady.value) {
-                BuckwheatTheme {
+                BuckwheatTheme(dynamicColor = true) {
                     OverrideLocalize {
                         BalloonProvider {
                             CompositionLocalProvider(
