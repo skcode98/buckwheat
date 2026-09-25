@@ -6,14 +6,22 @@ import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.util.toDate
+import com.danilkinkin.buckwheat.util.toLocalDate
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.concurrent.Executors
 
 class HistoryRowsTest {
+
+    private companion object {
+        const val HISTORY_LOADER_THREAD = "history-loader"
+    }
 
     private fun spent(
         uid: Int,
@@ -105,7 +113,7 @@ class HistoryRowsTest {
     }
 
     @Test
-    fun contentHashChangesWhenATransactionChanges() {
+    fun dayCardContentChangesWhenATransactionValueChanges() {
         val before = composeHistoryRows(
             listOf(spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0))),
             emptyList(),
@@ -119,8 +127,59 @@ class HistoryRowsTest {
 
         assertEquals("day-2026-08-05", before.first().key)
         assertEquals(before.first().key, after.first().key)
-        assertTrue(before.first().contentHash != after.first().contentHash)
+        assertTrue(before.first().transactions != after.first().transactions)
         assertEquals(BigDecimal("90"), after.first().dayTotal)
+    }
+
+    @Test
+    fun resolvesEachTransactionDayExactlyOnce() {
+        var calls = 0
+
+        composeHistoryRows(
+            periodSpends = listOf(
+                spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+                spent(2, "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
+                spent(3, "25", "tea", LocalDateTime.of(2026, 8, 5, 9, 0)),
+            ),
+            archivedTransactions = emptyList(),
+            searchQuery = "",
+            onlyDay = LocalDate.of(2026, 8, 5),
+            toDay = { date ->
+                calls++
+                date.toLocalDate()
+            },
+        )
+
+        assertEquals(3, calls)
+    }
+
+    @Test
+    fun buildsHistoryRowsOnTheGivenDispatcher() = runTest {
+        val dispatcher = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, HISTORY_LOADER_THREAD)
+        }.asCoroutineDispatcher()
+
+        try {
+            var threadName: String? = null
+            val rows = loadHistoryRows(
+                dispatcher = dispatcher,
+                periodSpends = listOf(
+                    spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+                    spent(2, "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
+                ),
+                archivedTransactions = emptyList(),
+                searchQuery = "",
+                toDay = { date ->
+                    threadName = Thread.currentThread().name
+                    date.toLocalDate()
+                },
+            )
+
+            assertEquals(1, rows.size)
+            assertEquals(HISTORY_LOADER_THREAD, threadName)
+        } finally {
+            dispatcher.close()
+        }
     }
 
     @Test

@@ -24,11 +24,9 @@ class ListAnimationTest {
 
     private fun row(
         key: String,
-        hash: String = key,
         vararg transactions: Transaction,
     ): RowEntity = RowEntity(
         key = key,
-        contentHash = hash,
         day = LocalDate.of(2026, 8, 5),
         transactions = transactions.toList(),
         firstTransactionIndex = 0,
@@ -38,61 +36,20 @@ class ListAnimationTest {
     private fun simulateDispatch(
         oldList: List<AnimatedItem<RowEntity>>,
         newList: List<RowEntity>,
-    ): List<AnimatedItem<RowEntity>> {
-        val oldKeyToIndex = HashMap<String, Int>()
-        oldList.forEachIndexed { index, item -> oldKeyToIndex[item.item.key] = index }
-
-        val consumedOld = BooleanArray(oldList.size)
-        val compositeList = ArrayList<AnimatedItem<RowEntity>>(newList.size)
-        val oldIndexOfComposite = ArrayList<Int>(newList.size)
-
-        newList.forEach { row ->
-            val oldIndex = oldKeyToIndex[row.key]
-            if (oldIndex != null && !consumedOld[oldIndex]) {
-                consumedOld[oldIndex] = true
-                val animated = oldList[oldIndex]
-                if (animated.item.contentHash != row.contentHash) {
-                    animated.item = row
-                }
-                animated.visibility.targetState = true
-                compositeList.add(animated)
-                oldIndexOfComposite.add(oldIndex)
-            } else {
-                val animated = AnimatedItem(
-                    visibility = MutableTransitionState(false),
-                    row,
-                )
-                animated.visibility.targetState = true
-                compositeList.add(animated)
-                oldIndexOfComposite.add(-1)
-            }
-        }
-
-        for (oldIndex in oldList.indices) {
-            if (!consumedOld[oldIndex]) {
-                val animated = oldList[oldIndex]
-                animated.visibility.targetState = false
-                val nextKept = oldIndexOfComposite.indexOfFirst { it > oldIndex }
-                val insertAt = if (nextKept < 0) compositeList.size else nextKept
-                compositeList.add(insertAt, animated)
-                oldIndexOfComposite.add(insertAt, -1)
-            }
-        }
-
-        return compositeList
-    }
+    ): List<AnimatedItem<RowEntity>> =
+        dispatchAnimatedItems(oldList, newList, firstInject = false).items
 
     @Test
     fun transactionMovedToAnotherDayUpdatesBothDayCardsInPlace() {
         val tx1 = tx("coffee")
         val tx2 = tx("lunch")
         val oldList = listOf(
-            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
+            row("day-2026-08-05", tx1, tx2),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
 
         val newRows = listOf(
-            row("day-2026-08-06", "day-2026-08-06-b", tx2),
-            row("day-2026-08-05", "day-2026-08-05-a", tx1),
+            row("day-2026-08-06", tx2),
+            row("day-2026-08-05", tx1),
         )
 
         val composite = simulateDispatch(oldList, newRows)
@@ -111,12 +68,12 @@ class ListAnimationTest {
         val tx1 = tx("coffee")
         val tx2 = tx("lunch")
         val oldList = listOf(
-            row("day-2026-08-06", "day-2026-08-06-x", tx3),
-            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
+            row("day-2026-08-06", tx3),
+            row("day-2026-08-05", tx1, tx2),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
 
         val newRows = listOf(
-            row("day-2026-08-06", "day-2026-08-06-x", tx3),
+            row("day-2026-08-06", tx3),
         )
 
         val composite = simulateDispatch(oldList, newRows)
@@ -133,7 +90,7 @@ class ListAnimationTest {
     fun contentEditUpdatesInPlaceWithoutDuplicatingTheDay() {
         val tx1 = tx("coffee")
         val oldList = listOf(
-            row("day-2026-08-05", "day-2026-08-05-50.00", tx1),
+            row("day-2026-08-05", tx1),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
 
         val edited = Transaction(
@@ -143,7 +100,7 @@ class ListAnimationTest {
             comment = tx1.comment,
         ).also { it.uid = tx1.uid }
         val newRows = listOf(
-            row("day-2026-08-05", "day-2026-08-05-90.00", edited),
+            row("day-2026-08-05", edited),
         )
 
         val composite = simulateDispatch(oldList, newRows)
@@ -156,21 +113,39 @@ class ListAnimationTest {
     }
 
     @Test
+    fun onlyTheFirstDispatchConsumesFirstInject() {
+        val rows = listOf(row("day-2026-08-05", tx("coffee")))
+        var firstInject = true
+
+        val first = dispatchAnimatedItems(emptyList(), rows, firstInject)
+        assertTrue(first.consumedFirstInject)
+        firstInject = false
+
+        val second = dispatchAnimatedItems(first.items, rows, firstInject)
+        val third = dispatchAnimatedItems(second.items, rows, firstInject)
+
+        assertTrue(!second.consumedFirstInject)
+        assertTrue(!third.consumedFirstInject)
+        assertEquals(1, third.items.size)
+        assertTrue(third.items.all { it.visibility.targetState })
+    }
+
+    @Test
     fun lingeringRowsFromPreviousFrameDoNotReadPastNewList() {
         val tx3 = tx("bus")
         val tx1 = tx("coffee")
         val tx2 = tx("lunch")
         val liveRows = listOf(
-            row("day-2026-08-06", "day-2026-08-06-b", tx3),
+            row("day-2026-08-06", tx3),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
         val lingeringRows = listOf(
-            row("day-2026-08-05", "day-2026-08-05-a-b", tx1, tx2),
+            row("day-2026-08-05", tx1, tx2),
         ).map { AnimatedItem(MutableTransitionState(true), it) }
         lingeringRows.forEach { it.visibility.targetState = false }
         val oldList = liveRows + lingeringRows
 
         val newRows = listOf(
-            row("day-2026-08-06", "day-2026-08-06-bu", tx3),
+            row("day-2026-08-06", tx3),
         )
 
         val composite = simulateDispatch(oldList, newRows)

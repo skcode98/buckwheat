@@ -73,6 +73,8 @@ enum class TopSheetValue {
     HalfExpanded
 }
 
+private const val EXPAND_CONTENT_COMPOSE_THRESHOLD = 0.05f
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 @ExperimentalMaterialApi
@@ -219,7 +221,7 @@ fun TopSheetLayout(
 
         ) {
             Box(modifier = modifier.fillMaxSize()) {
-                if (progress != 0f) {
+                if (progress >= EXPAND_CONTENT_COMPOSE_THRESHOLD) {
                     Box(
                         Modifier
                             .fillMaxSize()

@@ -12,12 +12,66 @@ import java.time.LocalDate
 
 data class RowEntity(
     val key: String,
-    var contentHash: String? = null,
     val day: LocalDate,
     val transactions: List<Transaction>,
     val firstTransactionIndex: Int = 0,
     var dayTotal: BigDecimal? = null,
 )
+
+internal data class AnimatedDispatch(
+    val items: List<AnimatedItem<RowEntity>>,
+    val consumedFirstInject: Boolean,
+)
+
+internal fun dispatchAnimatedItems(
+    oldList: List<AnimatedItem<RowEntity>>,
+    newList: List<RowEntity>,
+    firstInject: Boolean,
+): AnimatedDispatch {
+    val oldKeyToIndex = HashMap<String, Int>()
+    oldList.forEachIndexed { index, item -> oldKeyToIndex[item.item.key] = index }
+
+    val consumedOld = BooleanArray(oldList.size)
+    val compositeList = ArrayList<AnimatedItem<RowEntity>>(newList.size)
+    val oldIndexOfComposite = ArrayList<Int>(newList.size)
+
+    newList.forEach { row ->
+        val oldIndex = oldKeyToIndex[row.key]
+        if (oldIndex != null && !consumedOld[oldIndex]) {
+            consumedOld[oldIndex] = true
+            val animated = oldList[oldIndex]
+            if (animated.item.transactions != row.transactions ||
+                animated.item.dayTotal != row.dayTotal
+            ) {
+                animated.item = row
+            }
+            animated.visibility.targetState = true
+            compositeList.add(animated)
+            oldIndexOfComposite.add(oldIndex)
+        } else {
+            val animated = AnimatedItem(
+                visibility = MutableTransitionState(firstInject),
+                row,
+            )
+            animated.visibility.targetState = true
+            compositeList.add(animated)
+            oldIndexOfComposite.add(-1)
+        }
+    }
+
+    for (oldIndex in oldList.indices) {
+        if (!consumedOld[oldIndex]) {
+            val animated = oldList[oldIndex]
+            animated.visibility.targetState = false
+            val nextKept = oldIndexOfComposite.indexOfFirst { it > oldIndex }
+            val insertAt = if (nextKept < 0) compositeList.size else nextKept
+            compositeList.add(insertAt, animated)
+            oldIndexOfComposite.add(insertAt, -1)
+        }
+    }
+
+    return AnimatedDispatch(items = compositeList, consumedFirstInject = firstInject)
+}
 
 @Suppress("UpdateTransitionLabel", "TransitionPropertiesLabel")
 @SuppressLint("ComposableNaming", "UnusedTransitionTargetStateParameter")
@@ -64,55 +118,19 @@ fun updateAnimatedItemsState(
         if (state.value == newList) {
             return@LaunchedEffect
         }
-        val oldList = state.value.toList()
+        val dispatch = dispatchAnimatedItems(
+            oldList = state.value.toList(),
+            newList = newList,
+            firstInject = firstInject.value,
+        )
 
-        val oldKeyToIndex = HashMap<String, Int>()
-        oldList.forEachIndexed { index, item -> oldKeyToIndex[item.item.key] = index }
-
-        val consumedOld = BooleanArray(oldList.size)
-        val compositeList = ArrayList<AnimatedItem<RowEntity>>(newList.size)
-        val oldIndexOfComposite = ArrayList<Int>(newList.size)
-
-        newList.forEach { row ->
-            val oldIndex = oldKeyToIndex[row.key]
-            if (oldIndex != null && !consumedOld[oldIndex]) {
-                consumedOld[oldIndex] = true
-                val animated = oldList[oldIndex]
-                if (animated.item.contentHash != row.contentHash) {
-                    animated.item = row
-                }
-                animated.visibility.targetState = true
-                compositeList.add(animated)
-                oldIndexOfComposite.add(oldIndex)
-            } else {
-                val animated = AnimatedItem(
-                    visibility = MutableTransitionState(firstInject.value),
-                    row
-                )
-                animated.visibility.targetState = true
-                compositeList.add(animated)
-                oldIndexOfComposite.add(-1)
-            }
-        }
-
-        for (oldIndex in oldList.indices) {
-            if (!consumedOld[oldIndex]) {
-                val animated = oldList[oldIndex]
-                animated.visibility.targetState = false
-                val nextKept = oldIndexOfComposite.indexOfFirst { it > oldIndex }
-                val insertAt = if (nextKept < 0) compositeList.size else nextKept
-                compositeList.add(insertAt, animated)
-                oldIndexOfComposite.add(insertAt, -1)
-            }
-        }
-
-        if (state.value != compositeList) {
-            state.value = compositeList
+        if (state.value != dispatch.items) {
+            state.value = dispatch.items
         }
         firstInject.value = false
-        val initialAnimation = androidx.compose.animation.core.Animatable(1.0f)
-        initialAnimation.animateTo(0f)
-        state.value = state.value.filter { it.visibility.targetState }
+        if (dispatch.consumedFirstInject) {
+            state.value = state.value.filter { it.visibility.targetState }
+        }
     }
 
     return state

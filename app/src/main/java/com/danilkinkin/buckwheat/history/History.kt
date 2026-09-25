@@ -37,7 +37,10 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.toLocalDate
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.util.*
@@ -82,12 +85,13 @@ fun History(
 
     LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, allSpends, periodSpends, archivedTransactions) {
         val sourceSpends = if (onlyCategoryKey != null && showAllPeriods) allSpends else periodSpends
-        historyList = composeHistoryRows(
-            sourceSpends,
-            archivedTransactions,
-            searchQuery,
-            onlyDay,
-            onlyCategoryKey,
+        historyList = loadHistoryRows(
+            dispatcher = Dispatchers.Default,
+            periodSpends = sourceSpends,
+            archivedTransactions = archivedTransactions,
+            searchQuery = searchQuery,
+            onlyDay = onlyDay,
+            onlyCategoryKey = onlyCategoryKey,
         )
     }
 
@@ -260,6 +264,7 @@ internal fun composeHistoryRows(
     searchQuery: String,
     onlyDay: LocalDate? = null,
     onlyCategoryKey: CategoryKey? = null,
+    toDay: (Date) -> LocalDate = { it.toLocalDate() },
 ): List<RowEntity> {
     val searching = searchQuery.isNotBlank()
 
@@ -268,8 +273,8 @@ internal fun composeHistoryRows(
             add(
                 HistoryEntry(
                     "spent-${tx.uid}",
-                    "spent-${tx.uid}-${tx.value}-${tx.comment}-${tx.date.time}",
                     tx.date,
+                    toDay(tx.date),
                     tx.value,
                     tx.comment,
                     tx,
@@ -281,8 +286,8 @@ internal fun composeHistoryRows(
                 add(
                     HistoryEntry(
                         "spent-archived-${tx.uid}",
-                        "spent-archived-${tx.uid}-${tx.value}-${tx.comment}-${tx.date.time}",
                         tx.date,
+                        toDay(tx.date),
                         tx.value,
                         tx.comment,
                         tx.toTransaction(),
@@ -292,19 +297,18 @@ internal fun composeHistoryRows(
         }
     }.filter { entry ->
         (!searching || entry.comment.contains(searchQuery, ignoreCase = true)) &&
-            (onlyDay == null || entry.date.toLocalDate().isEqual(onlyDay)) &&
+            (onlyDay == null || entry.day.isEqual(onlyDay)) &&
             (onlyCategoryKey == null || transactionMatchesCategory(entry.transaction, onlyCategoryKey))
     }.sortedBy { it.date }
 
     if (entries.isEmpty()) return emptyList()
 
-    val grouped = entries.groupBy { it.date.toLocalDate() }
+    val grouped = entries.groupBy { it.day }
     var firstTransactionIndex = 0
     return grouped.keys.sorted().map { day ->
         val dayEntries = grouped.getValue(day)
         val card = RowEntity(
             key = "day-$day",
-            contentHash = "day-$day-" + dayEntries.joinToString("|") { it.contentHash },
             day = day,
             transactions = dayEntries.map { it.transaction },
             firstTransactionIndex = firstTransactionIndex,
@@ -315,10 +319,29 @@ internal fun composeHistoryRows(
     }.reversed()
 }
 
+internal suspend fun loadHistoryRows(
+    dispatcher: CoroutineDispatcher,
+    periodSpends: List<Transaction>,
+    archivedTransactions: List<ArchivedTransaction>,
+    searchQuery: String,
+    onlyDay: LocalDate? = null,
+    onlyCategoryKey: CategoryKey? = null,
+    toDay: (Date) -> LocalDate = { it.toLocalDate() },
+): List<RowEntity> = withContext(dispatcher) {
+    composeHistoryRows(
+        periodSpends = periodSpends,
+        archivedTransactions = archivedTransactions,
+        searchQuery = searchQuery,
+        onlyDay = onlyDay,
+        onlyCategoryKey = onlyCategoryKey,
+        toDay = toDay,
+    )
+}
+
 private data class HistoryEntry(
     val key: String,
-    val contentHash: String,
     val date: Date,
+    val day: LocalDate,
     val value: BigDecimal,
     val comment: String,
     val transaction: Transaction,
