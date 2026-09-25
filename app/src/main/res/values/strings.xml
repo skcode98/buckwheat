@@ -595,4 +595,5 @@
   <string name="categories_chart_no_categories">We can\'t split your spends by categories</string>
   <string name="categories_chart_use_tags">Use tags to see chart by categories</string>
   <string name="patterns_show_all_tags">Show all %1$d tags ▾</string>
+  <string name="year">Year</string>
 </resources>

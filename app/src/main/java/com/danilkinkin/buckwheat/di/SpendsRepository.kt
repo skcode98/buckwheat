@@ -173,8 +173,10 @@ class SpendsRepository @Inject constructor(
     }
 
     fun getRestedBudgetDistributionMethod() = context.budgetDataStore.data.map { it ->
-        it[restedBudgetDistributionMethodStoreKey]?.let {
-            RestedBudgetDistributionMethod.valueOf(it)
+        it[restedBudgetDistributionMethodStoreKey]?.let { value ->
+            runCatching {
+                RestedBudgetDistributionMethod.valueOf(value)
+            }.getOrDefault(RestedBudgetDistributionMethod.ASK)
         } ?: RestedBudgetDistributionMethod.ASK
     }
 
@@ -234,7 +236,13 @@ class SpendsRepository @Inject constructor(
             )
         }
 
-        transactionDao.deleteAllAndInsert(
+        // Wipe only the old INCOME marker rows — out-of-period rows (recurring
+        // backfill, CSV imports for a later period) survive archiveCurrentPeriod
+        // and must not be deleted here or the data is lost.
+        transactionDao.getAllNow()
+            .filter { it.type == TransactionType.INCOME }
+            .forEach { transactionDao.deleteById(it.uid) }
+        transactionDao.insert(
             Transaction(
                 TransactionType.INCOME,
                 newBudget,

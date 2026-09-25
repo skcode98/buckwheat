@@ -166,8 +166,8 @@ fun PeriodDetailSheet(
                                         ),
                                         callback = { result ->
                                             if (!result.containsKey("finishDate")) return@PathState
-                                            val finishDate = result["finishDate"] as Date
-                                            val startDate = result["startDate"] as Date
+                                            val finishDate = result["finishDate"] as? Date ?: return@PathState
+                                            val startDate = result["startDate"] as? Date ?: return@PathState
                                             coroutineScope.launch {
                                                 archivesViewModel.updatePeriodDates(
                                                     p.id,

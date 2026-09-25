@@ -37,7 +37,7 @@ class ExtendCurrency(val value: String? = null, val type: Type) {
     override fun equals(other: Any?): Boolean {
         if (other == null || other !is ExtendCurrency) return false
 
-        return other.value == this.value && this.type == this.type
+        return other.value == this.value && other.type == this.type
     }
 
     override fun hashCode(): Int {

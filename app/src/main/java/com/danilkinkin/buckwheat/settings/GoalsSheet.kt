@@ -391,7 +391,7 @@ fun GoalsSheet(
                             value = selectedYear.toString(),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Year") },
+                            label = { Text(stringResource(R.string.year)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
                             modifier = Modifier
                                 .menuAnchor()
@@ -583,7 +583,7 @@ fun GoalsSheet(
                             value = selectedYear.toString(),
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Year") },
+                            label = { Text(stringResource(R.string.year)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
                             modifier = Modifier
                                 .menuAnchor()

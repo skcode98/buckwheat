@@ -254,7 +254,7 @@ fun BudgetConstructor(
                     callback = { result ->
                         if (!result.containsKey("finishDate")) return@PathState
 
-                        val finishDate = result["finishDate"] as Date
+                        val finishDate = result["finishDate"] as? Date ?: return@PathState
                         val startDate = result["startDate"] as? Date ?: startDateToValue.value
 
                         startDateToValue.value = startDate
