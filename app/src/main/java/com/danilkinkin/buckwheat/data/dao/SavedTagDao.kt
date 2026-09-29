@@ -10,7 +10,7 @@ interface SavedTagDao {
     fun getAll(): Flow<List<SavedTag>>
 
     @Query("SELECT * FROM saved_tags WHERE id = :id")
-    suspend fun getById(id: Int): SavedTag?
+    suspend fun getById(id: String): SavedTag?
 
     @Query("SELECT * FROM saved_tags")
     suspend fun getAllNow(): List<SavedTag>
@@ -22,7 +22,7 @@ interface SavedTagDao {
     suspend fun existsByName(name: String): Boolean
 
     @Insert
-    suspend fun insert(tag: SavedTag): Long
+    suspend fun insert(tag: SavedTag)
 
     @Insert
     suspend fun insertAll(tags: List<SavedTag>)
@@ -31,7 +31,7 @@ interface SavedTagDao {
     suspend fun update(tag: SavedTag)
 
     @Query("DELETE FROM saved_tags WHERE id = :id")
-    suspend fun deleteById(id: Int)
+    suspend fun deleteById(id: String)
 
     @Query("DELETE FROM saved_tags")
     suspend fun deleteAll()

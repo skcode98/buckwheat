@@ -17,7 +17,7 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return flow { emit(periods.toList()) }
     }
 
-    override suspend fun getById(id: Int): BudgetPeriod? {
+    override suspend fun getById(id: String): BudgetPeriod? {
         return periods.firstOrNull { it.id == id }
     }
 
@@ -25,12 +25,8 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return periods.toList()
     }
 
-    override suspend fun insert(period: BudgetPeriod): Long {
-        if (period.id == 0) {
-            period.id = periods.size
-        }
+    override suspend fun insert(period: BudgetPeriod) {
         periods.add(period)
-        return period.id.toLong()
     }
 
     override suspend fun insertAll(periods: List<BudgetPeriod>) {
@@ -42,11 +38,11 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         archivedTransactions.clear()
     }
 
-    override fun getTransactionsForPeriod(periodId: Int): Flow<List<ArchivedTransaction>> {
+    override fun getTransactionsForPeriod(periodId: String): Flow<List<ArchivedTransaction>> {
         return flow { emit(archivedTransactions.filter { it.periodId == periodId }) }
     }
 
-    override fun getSpendsForPeriod(periodId: Int): Flow<List<ArchivedTransaction>> {
+    override fun getSpendsForPeriod(periodId: String): Flow<List<ArchivedTransaction>> {
         return flow {
             emit(
                 archivedTransactions.filter { it.periodId == periodId && it.type == TransactionType.SPENT }
@@ -72,41 +68,43 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return flow { emit(archivedTransactions.toList()) }
     }
 
-    override suspend fun updateTotalSpent(periodId: Int, totalSpent: BigDecimal) {
+    override suspend fun updateTotalSpent(periodId: String, totalSpent: BigDecimal) {
         val index = periods.indexOfFirst { it.id == periodId }
         if (index >= 0) {
-            periods[index] = periods[index].copy(totalSpent = totalSpent).also { it.id = periodId }
+            periods[index] = periods[index].copy(totalSpent = totalSpent)
         }
     }
 
-    override suspend fun updateBudget(id: Int, budget: BigDecimal) {
+    override suspend fun updateBudget(id: String, budget: BigDecimal) {
         val index = periods.indexOfFirst { it.id == id }
         if (index >= 0) {
-            periods[index] = periods[index].copy(budget = budget).also { it.id = id }
+            periods[index] = periods[index].copy(budget = budget)
         }
     }
 
-    override suspend fun updateDates(id: Int, startDate: Date, finishDate: Date) {
+    override suspend fun updateDates(id: String, startDate: Date, finishDate: Date) {
         val index = periods.indexOfFirst { it.id == id }
         if (index >= 0) {
-            periods[index] = periods[index]
-                .copy(startDate = startDate, finishDate = finishDate)
-                .also { it.id = id }
+            periods[index] = periods[index].copy(startDate = startDate, finishDate = finishDate)
         }
     }
 
-    override suspend fun deleteById(id: Int) {
+    override suspend fun deleteById(id: String) {
         periods.removeIf { it.id == id }
     }
 
-    override suspend fun updateCategory(uid: Int, category: String?) {
-        val index = archivedTransactions.indexOfFirst { it.uid == uid }
+    override suspend fun updateCategory(id: String, category: String?) {
+        val index = archivedTransactions.indexOfFirst { it.id == id }
         if (index >= 0) {
-            archivedTransactions[index] = archivedTransactions[index].copy(category = category).also { it.uid = uid }
+            archivedTransactions[index] = archivedTransactions[index].copy(category = category)
         }
     }
 
     override suspend fun insertArchivedTransactions(transactions: List<ArchivedTransaction>) {
         archivedTransactions.addAll(transactions)
+    }
+
+    override suspend fun deleteArchivedById(id: String) {
+        archivedTransactions.removeIf { it.id == id }
     }
 }

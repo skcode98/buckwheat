@@ -40,6 +40,7 @@ class ImportAutoCategorizeTest {
             CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
             CategoryCapTracker(context, SettingsRepository(context), transactionDao),
             BudgetCalculator(context, currentDateUseCase),
+            FakePendingMutationDao(),
         )
     }
 

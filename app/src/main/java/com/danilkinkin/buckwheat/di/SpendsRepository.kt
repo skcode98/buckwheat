@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.room.Transaction as RoomTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -14,17 +15,20 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.PendingMutation
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
 import com.danilkinkin.buckwheat.util.roundToDay
@@ -77,7 +81,37 @@ class SpendsRepository @Inject constructor(
     private val categoryAssignmentScheduler: CategoryAssignmentScheduler,
     private val categoryCapTracker: CategoryCapTracker,
     private val budgetCalculator: BudgetCalculator,
+    private val pendingMutationDao: PendingMutationDao,
 ) {
+    private suspend fun markMutation(table: String, recordId: String, isDelete: Boolean) {
+        val queuedAt = getCurrentDateUseCase().time
+        if (pendingMutationDao.mark(table, recordId, queuedAt, isDelete) == 0) {
+            pendingMutationDao.enqueue(
+                PendingMutation(
+                    table = table,
+                    recordId = recordId,
+                    queuedAt = queuedAt,
+                    isDelete = isDelete,
+                )
+            )
+        }
+    }
+
+    private suspend fun markUpsert(table: String, recordId: String) =
+        markMutation(table, recordId, isDelete = false)
+
+    private suspend fun markUpserts(table: String, recordIds: List<String>) {
+        recordIds.forEach { markUpsert(table, it) }
+    }
+
+    private suspend fun markDeleted(table: String, recordId: String, familyId: String?, syncSeq: Long) {
+        if (familyId != null && syncSeq > 0L) {
+            markMutation(table, recordId, isDelete = true)
+        } else {
+            pendingMutationDao.deleteQueued(table, listOf(recordId))
+        }
+    }
+
     fun getAllTransactions(): Flow<List<Transaction>> = transactionDao.getAll()
     fun getAllArchivedTransactions(): Flow<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
     fun getAllBudgetPeriods(): Flow<List<BudgetPeriod>> = budgetPeriodDao.getAll()
@@ -242,14 +276,17 @@ class SpendsRepository @Inject constructor(
         // and must not be deleted here or the data is lost.
         transactionDao.getAllNow()
             .filter { it.type == TransactionType.INCOME }
-            .forEach { transactionDao.deleteById(it.uid) }
-        transactionDao.insert(
-            Transaction(
-                TransactionType.INCOME,
-                newBudget,
-                startDate,
-            )
+            .forEach {
+                markDeleted(SyncTables.TRANSACTIONS, it.id, it.familyId, it.syncSeq)
+                transactionDao.deleteById(it.id)
+            }
+        val incomeMarker = Transaction(
+            type = TransactionType.INCOME,
+            value = newBudget,
+            date = startDate,
         )
+        transactionDao.insert(incomeMarker)
+        markUpsert(SyncTables.TRANSACTIONS, incomeMarker.id)
 
         setDailyBudget(whatBudgetForDay())
 
@@ -295,28 +332,29 @@ class SpendsRepository @Inject constructor(
 
         val totalSpent = spends.map { it.value }.fold(BigDecimal.ZERO) { acc, v -> acc + v }
 
-        val periodId = budgetPeriodDao.insert(
-            BudgetPeriod(
-                budget = oldBudget,
-                startDate = startDate,
-                finishDate = cappedFinishDate,
-                actualFinishDate = actualFinishDate?.takeIf { !it.after(cappedFinishDate) },
-                currencyCode = currencyCode,
-                totalSpent = totalSpent,
-            )
+        val period = BudgetPeriod(
+            budget = oldBudget,
+            startDate = startDate,
+            finishDate = cappedFinishDate,
+            actualFinishDate = actualFinishDate?.takeIf { !it.after(cappedFinishDate) },
+            currencyCode = currencyCode,
+            totalSpent = totalSpent,
         )
+        budgetPeriodDao.insert(period)
+        markUpsert(SyncTables.BUDGET_PERIODS, period.id)
+        val periodId = period.id
 
-        budgetPeriodDao.insertArchivedTransactions(
-            inPeriod.map { tx ->
-                ArchivedTransaction(
-                    periodId = periodId.toInt(),
-                    type = tx.type,
-                    value = tx.value,
-                    date = tx.date,
-                    comment = tx.comment,
-                )
-            }
-        )
+        val archived = inPeriod.map { tx ->
+            ArchivedTransaction(
+                periodId = periodId,
+                type = tx.type,
+                value = tx.value,
+                date = tx.date,
+                comment = tx.comment,
+            )
+        }
+        budgetPeriodDao.insertArchivedTransactions(archived)
+        markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, archived.map { it.id })
 
         Log.d(
             "SpendsRepository",
@@ -352,6 +390,7 @@ class SpendsRepository @Inject constructor(
         val incomeTransactions = transactionDao.getAll(TransactionType.INCOME).first()
         incomeTransactions.forEach { incomeTransaction ->
             transactionDao.update(incomeTransaction.copy(value = newBudget))
+            markUpsert(SyncTables.TRANSACTIONS, incomeTransaction.id)
         }
 
         updateDailyBudget(whatBudgetForDay())
@@ -395,6 +434,7 @@ class SpendsRepository @Inject constructor(
         transactionDao.getAll(TransactionType.SET_DAILY_BUDGET).first().lastOrNull()
             ?.let { setDailyBudgetTransaction ->
                 transactionDao.update(setDailyBudgetTransaction.copy(value = newDailyBudget))
+                markUpsert(SyncTables.TRANSACTIONS, setDailyBudgetTransaction.id)
             }
     }
 
@@ -419,13 +459,13 @@ class SpendsRepository @Inject constructor(
             )
         }
 
-        transactionDao.insert(
-            Transaction(
-                TransactionType.SET_DAILY_BUDGET,
-                newDailyBudget,
-                getCurrentDateUseCase(),
-            )
+        val dailyBudgetMarker = Transaction(
+            type = TransactionType.SET_DAILY_BUDGET,
+            value = newDailyBudget,
+            date = getCurrentDateUseCase(),
         )
+        transactionDao.insert(dailyBudgetMarker)
+        markUpsert(SyncTables.TRANSACTIONS, dailyBudgetMarker.id)
     }
 
     suspend fun whatBudgetForDay(
@@ -448,6 +488,7 @@ class SpendsRepository @Inject constructor(
 
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
+        markUpsert(SyncTables.TRANSACTIONS, newTransaction.id)
 
         var notifyOverspend = false
         context.budgetDataStore.edit {
@@ -599,8 +640,8 @@ class SpendsRepository @Inject constructor(
 
         val existingPeriods = budgetPeriodDao.getAllNow().sortedBy { it.isImported }
         val currencyCode = currentCurrencyCode()
-        val monthBucketIds = mutableMapOf<YearMonth, Int>()
-        val rowsByPeriod = mutableMapOf<Int, MutableList<Transaction>>()
+        val monthBucketIds = mutableMapOf<YearMonth, String>()
+        val rowsByPeriod = mutableMapOf<String, MutableList<Transaction>>()
 
         outOfPeriod.forEach { tx ->
             val month = YearMonth.from(tx.date.toLocalDateTime())
@@ -609,17 +650,18 @@ class SpendsRepository @Inject constructor(
             }
 
             val periodId = coveringPeriod?.id ?: monthBucketIds.getOrPut(month) {
-                budgetPeriodDao.insert(
-                    BudgetPeriod(
-                        budget = BigDecimal.ZERO,
-                        startDate = month.atDay(1).toDate(),
-                        finishDate = Date(month.atEndOfMonth().atTime(23, 59, 59).toDate().time + 999),
-                        actualFinishDate = null,
-                        currencyCode = currencyCode,
-                        totalSpent = BigDecimal.ZERO,
-                        isImported = true,
-                    )
-                ).toInt()
+                val period = BudgetPeriod(
+                    budget = BigDecimal.ZERO,
+                    startDate = month.atDay(1).toDate(),
+                    finishDate = Date(month.atEndOfMonth().atTime(23, 59, 59).toDate().time + 999),
+                    actualFinishDate = null,
+                    currencyCode = currencyCode,
+                    totalSpent = BigDecimal.ZERO,
+                    isImported = true,
+                )
+                budgetPeriodDao.insert(period)
+                markUpsert(SyncTables.BUDGET_PERIODS, period.id)
+                period.id
             }
 
             rowsByPeriod.getOrPut(periodId) { mutableListOf() }.add(tx)
@@ -633,18 +675,19 @@ class SpendsRepository @Inject constructor(
             if (spentDelta > BigDecimal.ZERO) {
                 budgetPeriodDao.updateTotalSpent(periodId, (currentTotal + spentDelta).setScale(2))
             }
-            budgetPeriodDao.insertArchivedTransactions(
-                rows.map { tx ->
-                    ArchivedTransaction(
-                        periodId = periodId,
-                        type = tx.type,
-                        value = tx.value,
-                        date = tx.date,
-                        comment = tx.comment,
-                        category = tx.category,
-                    )
-                }
-            )
+            markUpsert(SyncTables.BUDGET_PERIODS, periodId)
+            val archived = rows.map { tx ->
+                ArchivedTransaction(
+                    periodId = periodId,
+                    type = tx.type,
+                    value = tx.value,
+                    date = tx.date,
+                    comment = tx.comment,
+                    category = tx.category,
+                )
+            }
+            budgetPeriodDao.insertArchivedTransactions(archived)
+            markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, archived.map { it.id })
         }
     }
 
@@ -657,10 +700,36 @@ class SpendsRepository @Inject constructor(
         }
     }
 
+    @RoomTransaction
+    suspend fun enrolDevice(memberId: String, familyId: String, enrolledAt: Long) {
+        val existing = transactionDao.getAllNow()
+        if (existing.isEmpty()) return
+
+        val enrolled = existing.map { transaction ->
+            transaction.copy(
+                memberId = memberId,
+                familyId = familyId,
+                updatedAt = enrolledAt,
+                version = 1,
+                deletedAt = null,
+                syncSeq = 0L,
+            )
+        }
+
+        transactionDao.update(*enrolled.toTypedArray())
+        markUpserts(SyncTables.TRANSACTIONS, enrolled.map { it.id })
+    }
+
     suspend fun removeSpent(transactionForRemove: Transaction) {
-        val deletedRows = this.transactionDao.deleteById(transactionForRemove.uid)
+        val deletedRows = this.transactionDao.deleteById(transactionForRemove.id)
         if (deletedRows == 0) return
 
+        markDeleted(
+            SyncTables.TRANSACTIONS,
+            transactionForRemove.id,
+            transactionForRemove.familyId,
+            transactionForRemove.syncSeq,
+        )
         context.budgetDataStore.edit {
             val startPeriodDate = it[startPeriodDateStoreKey]
                 ?.let { value -> Date(value) } ?: return@edit

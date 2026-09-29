@@ -324,6 +324,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = SYNC_CONFLICTS_SHEET,
+    ) { state ->
+        SyncConflictsSheet()
+    }
+
+    BottomSheetWrapper(
         name = RECURRING_PAYMENTS_SHEET,
     ) { state ->
         RecurringPaymentsSheet(

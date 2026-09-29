@@ -22,6 +22,9 @@ import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetReceiver
 import com.danilkinkin.buckwheat.widget.category.CategoryWidgetReceiver
 import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import androidx.work.Configuration
+import com.danilkinkin.buckwheat.sync.SyncScheduler
+import com.danilkinkin.buckwheat.sync.SyncWorkerFactoryEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import com.danilkinkin.buckwheat.di.roundValuesStoreKey
 import dagger.hilt.android.HiltAndroidApp
@@ -36,7 +39,14 @@ import kotlinx.coroutines.launch
 class Application : Application(), Configuration.Provider {
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
+    override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder()
+        .setWorkerFactory(
+            EntryPointAccessors.fromApplication(
+                applicationContext,
+                SyncWorkerFactoryEntryPoint::class.java,
+            ).workerFactory()
+        )
+        .build()
     override fun onCreate() {
         CrashLogger.install(this)
 
@@ -52,6 +62,8 @@ class Application : Application(), Configuration.Provider {
         createNotificationChannel()
 
         WidgetRefreshScheduler.schedule(this)
+
+        SyncScheduler.schedule(this)
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {

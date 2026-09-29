@@ -64,7 +64,7 @@ class RecurringPaymentsViewModel @Inject constructor(
         }
     }
 
-    fun deleteTemplate(id: Int) {
+    fun deleteTemplate(id: String) {
         viewModelScope.launch {
             recurringDao.deleteById(id)
         }

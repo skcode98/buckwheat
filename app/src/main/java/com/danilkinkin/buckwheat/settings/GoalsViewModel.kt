@@ -61,7 +61,7 @@ class GoalsViewModel @Inject constructor(
     // for a goal allocation now happen inside a single lock.
     private val allocationMutex = Mutex()
 
-    fun allocateToGoal(goalId: Long, amount: BigDecimal) {
+    fun allocateToGoal(goalId: String, amount: BigDecimal) {
         if (amount <= BigDecimal.ZERO) return
         viewModelScope.launch {
             allocationMutex.withLock {
@@ -94,7 +94,7 @@ class GoalsViewModel @Inject constructor(
     // Posts a progress nudge when the allocation crossed a milestone that has not been
     // announced yet for this goal. Only the highest newly reached milestone is announced,
     // and the bucket is persisted so the same milestone never notifies twice.
-    private suspend fun notifyMilestone(goalId: Long, goal: SavingsGoal) {
+    private suspend fun notifyMilestone(goalId: String, goal: SavingsGoal) {
         val notified = settingsRepository.getGoalNotifiedMilestones()
         val lastBucket = notified[goalId] ?: 0
         val newBucket = goalMilestoneBucket(goalProgressPercent(goal))
@@ -107,7 +107,7 @@ class GoalsViewModel @Inject constructor(
         settingsRepository.setGoalNotifiedMilestones(notified + (goalId to newBucket))
     }
 
-    fun deleteGoal(id: Long) {
+    fun deleteGoal(id: String) {
         viewModelScope.launch {
             savingsGoalDao.deleteById(id)
             val notified = settingsRepository.getGoalNotifiedMilestones()
@@ -117,7 +117,7 @@ class GoalsViewModel @Inject constructor(
         }
     }
 
-    fun updateGoal(id: Long, name: String, targetAmount: BigDecimal, deadline: Date?) {
+    fun updateGoal(id: String, name: String, targetAmount: BigDecimal, deadline: Date?) {
         if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
         viewModelScope.launch {
             val goal = savingsGoalDao.getById(id) ?: return@launch

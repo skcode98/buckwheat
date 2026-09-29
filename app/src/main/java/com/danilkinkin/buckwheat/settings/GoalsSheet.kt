@@ -126,8 +126,8 @@ fun GoalsSheet(
     var deadlineMillis by remember { mutableStateOf<Long?>(null) }
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
-    var showAllocateDialog by remember { mutableStateOf<Long?>(null) }
-    var editingGoalId by remember { mutableStateOf<Long?>(null) }
+    var showAllocateDialog by remember { mutableStateOf<String?>(null) }
+    var editingGoalId by remember { mutableStateOf<String?>(null) }
     var editNameText by remember { mutableStateOf("") }
     var editTargetText by remember { mutableStateOf("") }
     var editDeadlineMillis by remember { mutableStateOf<Long?>(null) }

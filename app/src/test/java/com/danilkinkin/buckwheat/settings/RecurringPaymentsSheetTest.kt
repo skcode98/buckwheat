@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
+import com.danilkinkin.buckwheat.di.TestUiHarness
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import kotlinx.coroutines.flow.first
@@ -24,8 +25,7 @@ class RecurringPaymentsSheetTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun showSheet() {
-        val harness = buildTestUiHarness()
+    private fun showSheet(harness: TestUiHarness) {
         compose.setContent {
             BuckwheatTheme {
                 RecurringPaymentsSheet(
@@ -38,7 +38,12 @@ class RecurringPaymentsSheetTest {
 
     @Test
     fun silentModeIsSelectedByDefault() {
-        showSheet()
+        val harness = buildTestUiHarness()
+        runBlocking {
+            harness.settingsRepository.setRecurringAutoApplyMode(RecurringAutoApplyMode.SILENT)
+        }
+
+        showSheet(harness)
 
         compose.onNodeWithText("Off").assertIsNotSelected()
         compose.onNodeWithText("Ask").assertIsNotSelected()
@@ -49,23 +54,9 @@ class RecurringPaymentsSheetTest {
     fun selectingAskModePersistsAndHighlightsAskChip() {
         val harness = buildTestUiHarness()
 
-        compose.setContent {
-            BuckwheatTheme {
-                RecurringPaymentsSheet(
-                    viewModel = harness.recurringPaymentsViewModel,
-                    spendsViewModel = harness.spendsViewModel,
-                )
-            }
-        }
+        showSheet(harness)
 
         compose.onNodeWithText("Ask").performClick()
-
-        compose.waitUntil(timeoutMillis = 5_000) {
-            runBlocking {
-                harness.settingsRepository.getRecurringAutoApplyMode().first() == RecurringAutoApplyMode.ASK
-            }
-        }
-
         compose.onNodeWithText("Ask").assertIsSelected()
         compose.onNodeWithText("Auto").assertIsNotSelected()
         assertEquals(

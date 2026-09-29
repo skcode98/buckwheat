@@ -12,15 +12,18 @@ import java.util.Date
 
 class ListAnimationTest {
 
-    private var nextUid = 1
+    private var nextId = 0
 
-    private fun tx(comment: String): Transaction =
-        Transaction(
+    private fun tx(comment: String): Transaction {
+        nextId++
+        return Transaction(
+            id = nextId.toString(),
             type = TransactionType.SPENT,
             value = BigDecimal(10),
-            date = Date(1780000000000 + nextUid * 1000L),
+            date = Date(1780000000000L + nextId * 1000L),
             comment = comment,
-        ).also { it.uid = nextUid++ }
+        )
+    }
 
     private fun row(
         key: String,
@@ -94,11 +97,12 @@ class ListAnimationTest {
         ).map { AnimatedItem(MutableTransitionState(true), it) }
 
         val edited = Transaction(
+            id = tx1.id,
             type = TransactionType.SPENT,
             value = BigDecimal(90),
             date = tx1.date,
             comment = tx1.comment,
-        ).also { it.uid = tx1.uid }
+        )
         val newRows = listOf(
             row("day-2026-08-05", edited),
         )

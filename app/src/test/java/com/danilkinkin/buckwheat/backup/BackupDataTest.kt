@@ -35,14 +35,16 @@ class BackupDataTest {
     private fun sampleData(): BackupData {
         val now = Date(1_700_000_000_000L)
         val tx = Transaction(
+            id = "7",
             type = TransactionType.SPENT,
             value = BigDecimal("150.50"),
             date = Date(now.time + 1000),
             comment = "lunch",
             category = "FOOD",
-        ).also { it.uid = 7 }
+        )
 
         val period = BudgetPeriod(
+            id = "3",
             budget = BigDecimal("1000.00"),
             startDate = now,
             finishDate = Date(now.time + 10 * 86_400_000L),
@@ -50,25 +52,26 @@ class BackupDataTest {
             currencyCode = "INR",
             totalSpent = BigDecimal("150.50"),
             isImported = false,
-        ).also { it.id = 3 }
+        )
 
         val archived = ArchivedTransaction(
-            periodId = 3,
+            id = "9",
+            periodId = "3",
             type = TransactionType.SPENT,
             value = BigDecimal("20.00"),
             date = now,
             comment = "coffee",
             category = "FOOD",
-        ).also { it.uid = 9 }
+        )
 
-        val tag = SavedTag(name = "work").also { it.id = 1 }
-        val category = SavedCategory(name = "coffee", emoji = "☕").also { it.id = 2 }
+        val tag = SavedTag(id = "1", name = "work")
+        val category = SavedCategory(id = "2", name = "coffee", emoji = "☕")
         val recurring = RecurringTemplate(
             amount = BigDecimal("99.00"),
             comment = "Netflix",
             dayOfMonth = 5,
             enabled = true,
-            id = 4,
+            id = "4",
         )
         val goal = SavingsGoal(
             name = "vacation",
@@ -77,7 +80,7 @@ class BackupDataTest {
             deadline = Date(now.time + 30 * 86_400_000L),
             createdAt = now,
             completed = false,
-            id = 11,
+            id = "11",
         )
 
         return BackupData(
@@ -115,11 +118,11 @@ class BackupDataTest {
         assertEquals(original.version, parsed.version)
         assertEquals(original.exportedAt, parsed.exportedAt)
         assertEquals(original.transactions, parsed.transactions)
-        assertEquals(7, parsed.transactions.single().uid)
+        assertEquals("7", parsed.transactions.single().id)
         assertEquals(original.budgetPeriods, parsed.budgetPeriods)
         assertEquals(3, parsed.budgetPeriods.single().id)
         assertEquals(original.archivedTransactions, parsed.archivedTransactions)
-        assertEquals(9, parsed.archivedTransactions.single().uid)
+        assertEquals("9", parsed.archivedTransactions.single().id)
         assertEquals(3, parsed.archivedTransactions.single().periodId)
         assertEquals(original.savedTags, parsed.savedTags)
         assertEquals(original.savedCategories, parsed.savedCategories)
@@ -153,8 +156,7 @@ class BackupDataTest {
     fun transactionWithNullCategoryRoundTrips() {
         val original = emptyData().copy(
             transactions = listOf(
-                Transaction(TransactionType.SPENT, BigDecimal("10.00"), Date(0), "c", null)
-                    .also { it.uid = 1 }
+                Transaction(id = "1", type = TransactionType.SPENT, value = BigDecimal("10.00"), date = Date(0), comment = "c", category = null)
             )
         )
         val parsed = parseBackupData(original.toJsonString())
@@ -163,7 +165,7 @@ class BackupDataTest {
         parsed!!
 
         assertNull(parsed.transactions.single().category)
-        assertEquals(1, parsed.transactions.single().uid)
+        assertEquals("1", parsed.transactions.single().id)
     }
 
     @Test

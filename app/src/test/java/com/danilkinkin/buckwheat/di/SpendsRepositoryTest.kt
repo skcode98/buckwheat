@@ -8,11 +8,13 @@ import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +31,7 @@ class SpendsRepositoryTest {
 
     val currentDateUseCase: FakeGetCurrentDateUseCase = FakeGetCurrentDateUseCase()
     val budgetPeriodDao: FakeBudgetPeriodDao = FakeBudgetPeriodDao()
+    val pendingMutationDao: FakePendingMutationDao = FakePendingMutationDao()
 
     @Before
     fun init() {
@@ -44,6 +47,7 @@ class SpendsRepositoryTest {
             CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
             CategoryCapTracker(context, SettingsRepository(context), transactionDao),
             BudgetCalculator(context, currentDateUseCase),
+            pendingMutationDao,
         )
     }
 
@@ -141,7 +145,7 @@ class SpendsRepositoryTest {
     fun reCalcBudgetAfterSkipFewDayWithSpentTest() = runTest {
         setBudget()
 
-        spendsRepository.addSpent(Transaction(TransactionType.SPENT, 10.toBigDecimal(), currentDateUseCase.value))
+        spendsRepository.addSpent(Transaction(type = TransactionType.SPENT, value = 10.toBigDecimal(), date = currentDateUseCase.value))
 
         assert(spendsRepository.howMuchNotSpent() == 90.toBigDecimal().setScale(2))
         rewindTime(1)
@@ -219,9 +223,9 @@ class SpendsRepositoryTest {
         setBudget()
 
         val lastMonth = currentDateUseCase.value.toLocalDate().minusMonths(1)
-        val inPeriodSpend = Transaction(TransactionType.SPENT, 5.toBigDecimal(), currentDateUseCase.value)
-        val oldSpendA = Transaction(TransactionType.SPENT, 10.toBigDecimal(), lastMonth.withDayOfMonth(5).toDate())
-        val oldSpendB = Transaction(TransactionType.SPENT, 20.toBigDecimal(), lastMonth.withDayOfMonth(20).toDate())
+        val inPeriodSpend = Transaction(type = TransactionType.SPENT, value = 5.toBigDecimal(), date = currentDateUseCase.value)
+        val oldSpendA = Transaction(type = TransactionType.SPENT, value = 10.toBigDecimal(), date = lastMonth.withDayOfMonth(5).toDate())
+        val oldSpendB = Transaction(type = TransactionType.SPENT, value = 20.toBigDecimal(), date = lastMonth.withDayOfMonth(20).toDate())
 
         spendsRepository.importTransactions(listOf(inPeriodSpend, oldSpendA, oldSpendB))
 
@@ -333,7 +337,7 @@ class SpendsRepositoryTest {
     fun addSpentTest() = runTest {
         setBudget()
 
-        val spend = Transaction(TransactionType.SPENT, 10.toBigDecimal(), currentDateUseCase.value)
+        val spend = Transaction(type = TransactionType.SPENT, value = 10.toBigDecimal(), date = currentDateUseCase.value)
         spendsRepository.addSpent(spend)
 
         assert(spendsRepository.getAllSpends().first().contains(spend))
@@ -347,10 +351,11 @@ class SpendsRepositoryTest {
         setBudget()
 
         val crossing = Transaction(
+            id = "1",
             type = TransactionType.SPENT,
             value = 120.toBigDecimal(),
             date = currentDateUseCase.value,
-        ).also { it.uid = 1 }
+        )
         spendsRepository.addSpent(crossing)
 
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -368,10 +373,11 @@ class SpendsRepositoryTest {
         setBudget()
 
         val crossing = Transaction(
+            id = "1",
             type = TransactionType.SPENT,
             value = 120.toBigDecimal(),
             date = currentDateUseCase.value,
-        ).also { it.uid = 1 }
+        )
         spendsRepository.addSpent(crossing)
 
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -390,7 +396,7 @@ class SpendsRepositoryTest {
     fun addSpentInPreviousDayTest() = runTest {
         setBudget()
 
-        val spend = Transaction(TransactionType.SPENT, 10.toBigDecimal(), currentDateUseCase.value)
+        val spend = Transaction(type = TransactionType.SPENT, value = 10.toBigDecimal(), date = currentDateUseCase.value)
 
         Log.d("SpendsRepositoryTest", "whatBudgetForDay: ${spendsRepository.whatBudgetForDay()}")
 
@@ -412,6 +418,194 @@ class SpendsRepositoryTest {
         assert(spendsRepository.getSpent().first() == 10.toBigDecimal().setScale(2))
     }
 
+    @Test
+    fun addSpentQueuesTheTransactionForPush() = runTest {
+        setBudget()
+
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single()
+        assertEquals("spend-1", queued.recordId)
+        assertEquals(false, queued.isDelete)
+        assertEquals(currentDateUseCase.value.time, queued.queuedAt)
+    }
+
+    @Test
+    fun setDailyBudgetQueuesTheNewMarker() = runTest {
+        setBudget()
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.setDailyBudget(50.toBigDecimal())
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single()
+        assertEquals(false, queued.isDelete)
+    }
+
+    @Test
+    fun changeBudgetQueuesTheUpdatedIncomeMarker() = runTest {
+        setBudget()
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.changeBudget(
+            2000.toBigDecimal(),
+            currentDateUseCase.value.toLocalDate().plusDays(9).toDate(),
+        )
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS)
+        val queuedIds = queued.map { it.recordId }.toSet()
+        val stored = spendsRepository.getAllTransactions().first()
+            .filter { it.type == TransactionType.INCOME }
+            .map { it.id }
+            .toSet()
+        assertTrue(stored.isNotEmpty())
+        assertTrue(
+            "missing=" + (stored - queuedIds),
+            stored.all { it in queuedIds },
+        )
+        assertTrue(queued.none { it.isDelete })
+    }
+
+    @Test
+    fun setBudgetQueuesTheNewIncomeMarkerAndArchivesTheOldPeriod() = runTest {
+        setBudget()
+        spendsRepository.addSpent(
+            Transaction(
+                id = "spend-1",
+                type = TransactionType.SPENT,
+                value = 10.toBigDecimal(),
+                date = currentDateUseCase.value,
+            )
+        )
+        pendingMutationDao.deleteAll()
+
+        rewindTime(1)
+        setBudget(budget = 2000, days = 9)
+
+        assertTrue(pendingMutationDao.forTable(SyncTables.BUDGET_PERIODS).isNotEmpty())
+        assertTrue(pendingMutationDao.forTable(SyncTables.ARCHIVED_TRANSACTIONS).isNotEmpty())
+        assertTrue(pendingMutationDao.forTable(SyncTables.TRANSACTIONS).isNotEmpty())
+        assertTrue(pendingMutationDao.tombstones().isEmpty())
+    }
+
+    @Test
+    fun csvImportQueuesInPeriodSpendsAndArchivedOutOfPeriodRows() = runTest {
+        setBudget()
+        pendingMutationDao.deleteAll()
+
+        val inPeriod = Transaction(
+            id = "in-1",
+            type = TransactionType.SPENT,
+            value = 5.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        val outOfPeriod = Transaction(
+            id = "out-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value.toLocalDateTime().minusDays(1).toDate(),
+        )
+
+        spendsRepository.importTransactions(listOf(inPeriod, outOfPeriod))
+
+        assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
+        assertTrue(pendingMutationDao.forTable(SyncTables.ARCHIVED_TRANSACTIONS).isNotEmpty())
+        assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
+    }
+
+    @Test
+    fun enrollingAQueuesEveryLocalTransactionForPush() = runTest {
+        setBudget()
+        spendsRepository.addSpent(
+            Transaction(
+                id = "spend-1",
+                type = TransactionType.SPENT,
+                value = 10.toBigDecimal(),
+                date = currentDateUseCase.value,
+            )
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.enrolDevice("member-1", "family-1", 9000L)
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS)
+        assertTrue(queued.isNotEmpty())
+        assertTrue(queued.all { !it.isDelete })
+    }
+
+    @Test
+    fun removingANeverSyncedTransactionClearsItsQueueEntry() = runTest {
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+        assertEquals(1, pendingMutationDao.count())
+
+        spendsRepository.removeSpent(spend)
+
+        assertEquals(0, pendingMutationDao.count())
+    }
+
+    @Test
+    fun removingASyncedTransactionQueuesATombstone() = runTest {
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+            familyId = "family-1",
+            syncSeq = 7L,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+
+        spendsRepository.removeSpent(spend)
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single()
+        assertEquals("spend-1", queued.recordId)
+        assertEquals(true, queued.isDelete)
+    }
+
+    @Test
+    fun removingASyncedTransactionAndReAddingItClearsTheTombstone() = runTest {
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+            familyId = "family-1",
+            syncSeq = 7L,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+        spendsRepository.removeSpent(spend)
+        assertEquals(true, pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single().isDelete)
+
+        spendsRepository.addSpent(spend)
+
+        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single()
+        assertEquals(false, queued.isDelete)
+    }
+
+
+
     // Check today spent removed correctly
     @Test
     fun removeSpendTest() = runTest {
@@ -432,7 +626,8 @@ class SpendsRepositoryTest {
         spendsRepository.removeSpent(spend_1)
         val spends = spendsRepository.getAllSpends().first()
 
-        assert(spends.isEmpty())
+        assertEquals(1, spends.size)
+        assertEquals(spend_2.id, spends.single().id)
         assert(spendsRepository.getSpentFromDailyBudget().first() == 20.toBigDecimal().setScale(2))
     }
 
@@ -608,9 +803,9 @@ class SpendsRepositoryTest {
         // [Day 1] Spend 10 of 100 -> saved 90
         spendsRepository.addSpent(
             Transaction(
-                TransactionType.SPENT,
-                10.toBigDecimal(),
-                currentDateUseCase.value,
+                type = TransactionType.SPENT,
+                value = 10.toBigDecimal(),
+                date = currentDateUseCase.value,
             )
         )
 
@@ -638,9 +833,9 @@ class SpendsRepositoryTest {
 
         spendsRepository.addSpent(
             Transaction(
-                TransactionType.SPENT,
-                150.50.toBigDecimal(),
-                currentDateUseCase.value,
+                type = TransactionType.SPENT,
+                value = 150.50.toBigDecimal(),
+                date = currentDateUseCase.value,
             )
         )
 
@@ -698,7 +893,7 @@ class SpendsRepositoryTest {
 
         assert(spendsRepository.whatBudgetForDay(applyTodaySpends = true) == 100.toBigDecimal().setScale(2))
 
-        spendsRepository.addSpent(Transaction(TransactionType.SPENT, 140.toBigDecimal(), currentDateUseCase.value))
+        spendsRepository.addSpent(Transaction(type = TransactionType.SPENT, value = 140.toBigDecimal(), date = currentDateUseCase.value))
 
         assert(spendsRepository.nextDayBudget() == 100.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 140.toBigDecimal().setScale(2))
@@ -712,7 +907,7 @@ class SpendsRepositoryTest {
 
         assert(spendsRepository.whatBudgetForDay(applyTodaySpends = true) == 95.56.toBigDecimal().setScale(2))
 
-        spendsRepository.addSpent(Transaction(TransactionType.SPENT, 10.toBigDecimal(), currentDateUseCase.value))
+        spendsRepository.addSpent(Transaction(type = TransactionType.SPENT, value = 10.toBigDecimal(), date = currentDateUseCase.value))
 
         assert(spendsRepository.nextDayBudget() == 95.56.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 10.toBigDecimal().setScale(2))
@@ -775,7 +970,7 @@ class SpendsRepositoryTest {
 
         assert(spendsRepository.whatBudgetForDay(applyTodaySpends = true) == 283.33.toBigDecimal().setScale(2))
 
-        spendsRepository.addSpent(Transaction(TransactionType.SPENT, 300.toBigDecimal(), currentDateUseCase.value))
+        spendsRepository.addSpent(Transaction(type = TransactionType.SPENT, value = 300.toBigDecimal(), date = currentDateUseCase.value))
 
         assert(spendsRepository.nextDayBudget() == 283.34.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 300.toBigDecimal().setScale(2))
@@ -789,7 +984,7 @@ class SpendsRepositoryTest {
 
         assert(spendsRepository.whatBudgetForDay(applyTodaySpends = true) == 275.toBigDecimal().setScale(2))
 
-        spendsRepository.addSpent(Transaction(TransactionType.SPENT, 100.toBigDecimal(), currentDateUseCase.value))
+        spendsRepository.addSpent(Transaction(type = TransactionType.SPENT, value = 100.toBigDecimal(), date = currentDateUseCase.value))
 
         assert(spendsRepository.nextDayBudget() == 275.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpentFromDailyBudget().first() == 100.toBigDecimal().setScale(2))

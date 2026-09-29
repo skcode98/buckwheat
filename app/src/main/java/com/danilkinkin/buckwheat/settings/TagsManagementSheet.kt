@@ -38,7 +38,7 @@ fun TagsManagementSheet(
         16.dp,
     )
 
-    var editingId by remember { mutableStateOf<Int?>(null) }
+    var editingId by remember { mutableStateOf<String?>(null) }
     var editingText by remember { mutableStateOf("") }
     var newTagText by remember { mutableStateOf("") }
 

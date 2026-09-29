@@ -20,9 +20,8 @@ class FakeRecurringDao : RecurringDao {
         return templates.toList()
     }
 
-    override suspend fun insert(template: RecurringTemplate): Long {
+    override suspend fun insert(template: RecurringTemplate) {
         templates.add(template)
-        return template.id.toLong()
     }
 
     override suspend fun insertAll(templates: List<RecurringTemplate>) {
@@ -40,7 +39,7 @@ class FakeRecurringDao : RecurringDao {
         templates.removeIf { it.id == template.id }
     }
 
-    override suspend fun deleteById(id: Int) {
+    override suspend fun deleteById(id: String) {
         templates.removeIf { it.id == id }
     }
 

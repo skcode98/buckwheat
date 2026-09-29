@@ -80,7 +80,7 @@ fun findPreviousPeriod(periods: List<BudgetPeriod>, currentStart: Date): BudgetP
 // improvement just because the full previous period hasn't been spent yet.
 fun previousSpentAtSameElapsedDays(
     archivedTransactions: List<ArchivedTransaction>,
-    periodId: Int,
+    periodId: String,
     previousStart: Date,
     elapsedDays: Int,
 ): BigDecimal {
@@ -202,6 +202,8 @@ fun CompareToLastPeriodCard(
     }
 }
 
+private const val PREVIEW_PERIOD_ID = "preview-period"
+
 @Preview(name = "Comparison", widthDp = 360)
 @Preview(name = "Comparison (Dark mode)", widthDp = 360, uiMode = UI_MODE_NIGHT_YES)
 @Composable
@@ -212,7 +214,7 @@ private fun PreviewComparison() {
             currentSpent = BigDecimal(150),
             archivedTransactions = listOf(
                 ArchivedTransaction(
-                    periodId = 1,
+                    periodId = PREVIEW_PERIOD_ID,
                     type = TransactionType.SPENT,
                     value = BigDecimal(100),
                     date = Date(),
@@ -220,13 +222,14 @@ private fun PreviewComparison() {
                 ),
             ),
             previousPeriod = BudgetPeriod(
+                id = PREVIEW_PERIOD_ID,
                 budget = BigDecimal(500),
                 startDate = Date(),
                 finishDate = Date(),
                 actualFinishDate = null,
                 currencyCode = "USD",
                 totalSpent = BigDecimal.ZERO,
-            ).also { it.id = 1 },
+            ),
             elapsedDays = 3,
             currency = ExtendCurrency.getInstance("USD"),
         )

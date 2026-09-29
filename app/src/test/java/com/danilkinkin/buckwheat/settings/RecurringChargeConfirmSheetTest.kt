@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.di.TestUiHarness
 import com.danilkinkin.buckwheat.di.buildTestUiHarness
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import org.junit.Assert.assertTrue
@@ -39,6 +40,14 @@ class RecurringChargeConfirmSheetTest {
         ),
     )
 
+    private fun awaitAtLeast(count: Int, harness: TestUiHarness) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (harness.transactionDao.spends.size < count && System.currentTimeMillis() < deadline) {
+            compose.waitForIdle()
+            Thread.sleep(10)
+        }
+    }
+
     @Test
     fun addButtonRecordsPendingChargesAndClearsQueue() {
         val harness = buildTestUiHarness()
@@ -58,14 +67,13 @@ class RecurringChargeConfirmSheetTest {
 
         compose.onNodeWithText("Add").performClick()
 
-        compose.waitUntil(timeoutMillis = 5_000) {
-            harness.spendsViewModel.pendingRecurringCharges.value?.isEmpty() == true
-        }
+        awaitAtLeast(pendingCharges().size, harness)
 
         val comments = harness.transactionDao.spends.map { it.comment }
         assertTrue("gym" in comments)
         assertTrue("phone" in comments)
         assertTrue(harness.transactionDao.spends.all { it.type == TransactionType.SPENT })
+        assertTrue(harness.spendsViewModel.pendingRecurringCharges.value.orEmpty().isEmpty())
     }
 
     @Test

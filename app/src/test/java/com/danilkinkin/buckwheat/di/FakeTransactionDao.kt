@@ -14,19 +14,19 @@ class FakeTransactionDao : TransactionDao {
     }
 
     override fun getAll(type: TransactionType): Flow<List<Transaction>> {
-        return flow { emit(spends.toList()) }
+        return flow { emit(spends.filter { it.type == type }) }
     }
 
     override fun getAll(type: TransactionType, startDate: Long, endDate: Long): Flow<List<Transaction>> {
-        return flow { emit(spends.toList()) }
+        return flow { emit(spends.filter { it.type == type && it.date.time in startDate..endDate }) }
     }
 
     override fun getAll(startDate: Long, endDate: Long): Flow<List<Transaction>> {
-        return flow { emit(spends.toList()) }
+        return flow { emit(spends.filter { it.date.time in startDate..endDate }) }
     }
 
-    override suspend fun getById(uid: Int): Transaction? {
-        return spends.firstOrNull { it.uid == uid }
+    override suspend fun getById(id: String): Transaction? {
+        return spends.firstOrNull { it.id == id }
     }
 
     override suspend fun getAllNow(): List<Transaction> {
@@ -55,21 +55,21 @@ class FakeTransactionDao : TransactionDao {
 
     override suspend fun update(vararg transaction: Transaction) {
         transaction.forEach { incoming ->
-            val index = spends.indexOfFirst { it.uid == incoming.uid }
+            val index = spends.indexOfFirst { it.id == incoming.id }
             if (index >= 0) {
                 spends[index] = incoming
             }
         }
     }
 
-    override suspend fun deleteById(uid: Int): Int {
+    override suspend fun deleteById(id: String): Int {
         val before = spends.size
-        spends.removeIf { it.uid == uid }
+        spends.removeIf { it.id == id }
         return before - spends.size
     }
 
-    override suspend fun updateCategory(uid: Int, category: String?) {
-        val index = spends.indexOfFirst { it.uid == uid }
+    override suspend fun updateCategory(id: String, category: String?) {
+        val index = spends.indexOfFirst { it.id == id }
         if (index >= 0) {
             spends[index] = spends[index].copy(category = category)
         }

@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 // user-picked emoji for saved custom categories; built-ins resolve their own emoji.
 data class CategoryItem(
     val name: String,
-    val id: Int? = null,
+    val id: String? = null,
     val emoji: String = "",
 )
 
@@ -49,7 +49,7 @@ class CategoriesManagementViewModel @Inject constructor(
         }
     }
 
-    fun updateCategory(id: Int, name: String, emoji: String = "") {
+    fun updateCategory(id: String, name: String, emoji: String = "") {
         val trimmed = name.trim()
         if (trimmed.isBlank() || SpendCategory.fromStored(trimmed) != null) return
         viewModelScope.launch {
@@ -57,13 +57,13 @@ class CategoriesManagementViewModel @Inject constructor(
             // Don't rename onto an existing category's name
             if (other == null || other.id == id) {
                 savedCategoryDao.update(
-                    SavedCategory(name = trimmed, emoji = emoji).also { it.id = id }
+                    SavedCategory(id = id, name = trimmed, emoji = emoji)
                 )
             }
         }
     }
 
-    fun deleteCategory(id: Int) {
+    fun deleteCategory(id: String) {
         viewModelScope.launch {
             savedCategoryDao.deleteById(id)
         }

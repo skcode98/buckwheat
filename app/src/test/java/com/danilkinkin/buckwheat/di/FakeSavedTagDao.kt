@@ -12,7 +12,7 @@ class FakeSavedTagDao : SavedTagDao {
         return flow { emit(tags.toList()) }
     }
 
-    override suspend fun getById(id: Int): SavedTag? {
+    override suspend fun getById(id: String): SavedTag? {
         return tags.firstOrNull { it.id == id }
     }
 
@@ -28,9 +28,8 @@ class FakeSavedTagDao : SavedTagDao {
         return tags.any { it.name == name }
     }
 
-    override suspend fun insert(tag: SavedTag): Long {
+    override suspend fun insert(tag: SavedTag) {
         tags.add(tag)
-        return tag.id.toLong()
     }
 
     override suspend fun insertAll(tags: List<SavedTag>) {
@@ -44,7 +43,7 @@ class FakeSavedTagDao : SavedTagDao {
         }
     }
 
-    override suspend fun deleteById(id: Int) {
+    override suspend fun deleteById(id: String) {
         tags.removeIf { it.id == id }
     }
 

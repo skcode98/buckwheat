@@ -24,8 +24,8 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC")
     fun getAll(startDate: Long, endDate: Long): Flow<List<Transaction>>
 
-    @Query("SELECT * FROM transactions WHERE uid = :uid")
-    suspend fun getById(uid: Int): Transaction?
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    suspend fun getById(id: String): Transaction?
 
     @Query("SELECT * FROM transactions")
     suspend fun getAllNow(): List<Transaction>
@@ -45,11 +45,11 @@ interface TransactionDao {
     @Update(entity = Transaction::class, onConflict = OnConflictStrategy.REPLACE)
     suspend fun update(vararg transaction: Transaction)
 
-    @Query("DELETE FROM transactions WHERE uid = :uid")
-    suspend fun deleteById(uid: Int): Int
+    @Query("DELETE FROM transactions WHERE id = :id")
+    suspend fun deleteById(id: String): Int
 
-    @Query("UPDATE transactions SET category = :category WHERE uid = :uid")
-    suspend fun updateCategory(uid: Int, category: String?)
+    @Query("UPDATE transactions SET category = :category WHERE id = :id")
+    suspend fun updateCategory(id: String, category: String?)
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()

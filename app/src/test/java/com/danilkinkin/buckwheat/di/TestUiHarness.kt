@@ -35,6 +35,7 @@ fun buildTestUiHarness(): TestUiHarness {
         ),
         categoryCapTracker = CategoryCapTracker(context, settingsRepository, transactionDao),
         budgetCalculator = BudgetCalculator(context, currentDateUseCase),
+        pendingMutationDao = FakePendingMutationDao(),
     )
     return TestUiHarness(
         spendsViewModel = SpendsViewModel(

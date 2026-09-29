@@ -48,4 +48,8 @@ object AppModule {
     @Singleton
     @Provides
     fun provideSavingsGoalDao(db: DatabaseModule) = db.savingsGoalDao()
+
+    @Singleton
+    @Provides
+    fun providePendingMutationDao(db: DatabaseModule) = db.pendingMutationDao()
 }

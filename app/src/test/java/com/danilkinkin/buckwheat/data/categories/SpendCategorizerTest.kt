@@ -133,9 +133,9 @@ class SpendCategorizerTest {
     @Test
     fun `categoryTotals aggregates custom and built-in spends separately`() {
         val spends = listOf(
-            Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts"),
-            Transaction(TransactionType.SPENT, BigDecimal(5), Date(), "bus", category = "Gifts"),
-            Transaction(TransactionType.SPENT, BigDecimal(20), Date(), "movie"),
+            Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "lunch", category = "Gifts"),
+            Transaction(type = TransactionType.SPENT, value = BigDecimal(5), date = Date(), comment = "bus", category = "Gifts"),
+            Transaction(type = TransactionType.SPENT, value = BigDecimal(20), date = Date(), comment = "movie"),
         )
 
         val totals = categoryTotals(spends)
@@ -152,7 +152,7 @@ class SpendCategorizerTest {
     @Test
     fun `categoryTotals drops non-positive totals`() {
         val spends = listOf(
-            Transaction(TransactionType.SPENT, BigDecimal.ZERO, Date(), "lunch", category = "Gifts"),
+            Transaction(type = TransactionType.SPENT, value = BigDecimal.ZERO, date = Date(), comment = "lunch", category = "Gifts"),
         )
 
         assertEquals(emptyList<Pair<CategoryKey, BigDecimal>>(), categoryTotals(spends))
@@ -175,8 +175,8 @@ class SpendCategorizerTest {
 
     @Test
     fun `transactionMatchesCategory matches persisted built-in and custom categories`() {
-        val builtIn = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "FOOD")
-        val custom = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts")
+        val builtIn = Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "lunch", category = "FOOD")
+        val custom = Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "lunch", category = "Gifts")
 
         assertTrue(
             transactionMatchesCategory(builtIn, CategoryKey.BuiltIn(SpendCategory.FOOD))
@@ -186,7 +186,7 @@ class SpendCategorizerTest {
 
     @Test
     fun `transactionMatchesCategory matches offline keyword classification`() {
-        val transaction = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "bus")
+        val transaction = Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "bus")
 
         assertTrue(
             transactionMatchesCategory(transaction, CategoryKey.BuiltIn(SpendCategory.TRANSPORT))
@@ -195,8 +195,8 @@ class SpendCategorizerTest {
 
     @Test
     fun `transactionMatchesCategory rejects other categories`() {
-        val builtIn = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "FOOD")
-        val custom = Transaction(TransactionType.SPENT, BigDecimal(10), Date(), "lunch", category = "Gifts")
+        val builtIn = Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "lunch", category = "FOOD")
+        val custom = Transaction(type = TransactionType.SPENT, value = BigDecimal(10), date = Date(), comment = "lunch", category = "Gifts")
 
         assertFalse(
             transactionMatchesCategory(builtIn, CategoryKey.BuiltIn(SpendCategory.TRAVEL))

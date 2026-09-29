@@ -12,7 +12,7 @@ class FakeSavedCategoryDao : SavedCategoryDao {
         return flow { emit(categories.toList()) }
     }
 
-    override suspend fun getById(id: Int): SavedCategory? {
+    override suspend fun getById(id: String): SavedCategory? {
         return categories.firstOrNull { it.id == id }
     }
 
@@ -28,9 +28,8 @@ class FakeSavedCategoryDao : SavedCategoryDao {
         return categories.any { it.name == name }
     }
 
-    override suspend fun insert(category: SavedCategory): Long {
+    override suspend fun insert(category: SavedCategory) {
         categories.add(category)
-        return category.id.toLong()
     }
 
     override suspend fun insertAll(categories: List<SavedCategory>) {
@@ -44,7 +43,7 @@ class FakeSavedCategoryDao : SavedCategoryDao {
         }
     }
 
-    override suspend fun deleteById(id: Int) {
+    override suspend fun deleteById(id: String) {
         categories.removeIf { it.id == id }
     }
 

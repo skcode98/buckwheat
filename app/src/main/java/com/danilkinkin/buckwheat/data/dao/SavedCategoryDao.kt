@@ -10,7 +10,7 @@ interface SavedCategoryDao {
     fun getAll(): Flow<List<SavedCategory>>
 
     @Query("SELECT * FROM saved_categories WHERE id = :id")
-    suspend fun getById(id: Int): SavedCategory?
+    suspend fun getById(id: String): SavedCategory?
 
     @Query("SELECT * FROM saved_categories")
     suspend fun getAllNow(): List<SavedCategory>
@@ -22,7 +22,7 @@ interface SavedCategoryDao {
     suspend fun existsByName(name: String): Boolean
 
     @Insert
-    suspend fun insert(category: SavedCategory): Long
+    suspend fun insert(category: SavedCategory)
 
     @Insert
     suspend fun insertAll(categories: List<SavedCategory>)
@@ -31,7 +31,7 @@ interface SavedCategoryDao {
     suspend fun update(category: SavedCategory)
 
     @Query("DELETE FROM saved_categories WHERE id = :id")
-    suspend fun deleteById(id: Int)
+    suspend fun deleteById(id: String)
 
     @Query("DELETE FROM saved_categories")
     suspend fun deleteAll()

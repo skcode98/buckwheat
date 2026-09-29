@@ -16,24 +16,25 @@ import java.time.LocalDateTime
 class CategoryWidgetTest {
 
     private fun spent(
-        uid: Int,
+        id: String,
         value: String,
         category: String?,
     ): Transaction = Transaction(
+        id = id,
         type = TransactionType.SPENT,
         value = BigDecimal(value),
         date = LocalDateTime.of(2026, 8, 5, 12, 0).toDate(),
         comment = "",
         category = category,
-    ).also { it.uid = uid }
+    )
 
     @Test
     fun aggregatesTotalsAndAttachesCaps() {
         val rows = categoryWidgetRows(
             spends = listOf(
-                spent(1, "100", "FOOD"),
-                spent(2, "50", "FOOD"),
-                spent(3, "40", "TRANSPORT"),
+                spent("1", "100", "FOOD"),
+                spent("2", "50", "FOOD"),
+                spent("3", "40", "TRANSPORT"),
             ),
             caps = mapOf("FOOD" to BigDecimal("300"), "TRANSPORT" to BigDecimal("50")),
         )
@@ -54,7 +55,7 @@ class CategoryWidgetTest {
     @Test
     fun nonPositiveCapIsTreatedAsUncapped() {
         val rows = categoryWidgetRows(
-            spends = listOf(spent(1, "100", "FOOD")),
+            spends = listOf(spent("1", "100", "FOOD")),
             caps = mapOf("FOOD" to BigDecimal("0")),
         )
 
@@ -68,11 +69,11 @@ class CategoryWidgetTest {
     fun cappedCategoriesComeFirstSortedByUtilizationThenUncappedByAmount() {
         val rows = categoryWidgetRows(
             spends = listOf(
-                spent(1, "30", "TRANSPORT"), // cap 100 -> 30%
-                spent(2, "90", "FOOD"), // cap 100 -> 90% (top capped)
-                spent(3, "80", "HEALTH"), // cap 100 -> 80%
-                spent(4, "500", "BILLS"), // uncapped, largest
-                spent(5, "10", "SHOPPING"), // uncapped
+                spent("1", "30", "TRANSPORT"), // cap 100 -> 30%
+                spent("2", "90", "FOOD"), // cap 100 -> 90% (top capped)
+                spent("3", "80", "HEALTH"), // cap 100 -> 80%
+                spent("4", "500", "BILLS"), // uncapped, largest
+                spent("5", "10", "SHOPPING"), // uncapped
             ),
             caps = mapOf(
                 "TRANSPORT" to BigDecimal("100"),
@@ -91,8 +92,8 @@ class CategoryWidgetTest {
     fun cappedCategoriesTieBreakByAmount() {
         val rows = categoryWidgetRows(
             spends = listOf(
-                spent(1, "40", "FOOD"), // 80/200 -> 40%
-                spent(2, "60", "TRANSPORT"), // 60/150 -> 40% but larger amount
+                spent("1", "40", "FOOD"), // 80/200 -> 40%
+                spent("2", "60", "TRANSPORT"), // 60/150 -> 40% but larger amount
             ),
             caps = mapOf("FOOD" to BigDecimal("200"), "TRANSPORT" to BigDecimal("150")),
         )
@@ -107,10 +108,10 @@ class CategoryWidgetTest {
     fun maxRowsTruncatesKeepingTheOrder() {
         val rows = categoryWidgetRows(
             spends = listOf(
-                spent(1, "90", "FOOD"),
-                spent(2, "80", "HEALTH"),
-                spent(3, "70", "TRANSPORT"),
-                spent(4, "60", "SHOPPING"),
+                spent("1", "90", "FOOD"),
+                spent("2", "80", "HEALTH"),
+                spent("3", "70", "TRANSPORT"),
+                spent("4", "60", "SHOPPING"),
             ),
             caps = mapOf("FOOD" to BigDecimal("100")),
             maxRows = 2,
@@ -125,7 +126,7 @@ class CategoryWidgetTest {
     @Test
     fun maxRowsZeroProducesEmptyList() {
         val rows = categoryWidgetRows(
-            spends = listOf(spent(1, "100", "FOOD")),
+            spends = listOf(spent("1", "100", "FOOD")),
             caps = emptyMap(),
             maxRows = 0,
         )
@@ -140,7 +141,7 @@ class CategoryWidgetTest {
     @Test
     fun customCapLookupUsesRawName() {
         val rows = categoryWidgetRows(
-            spends = listOf(spent(1, "100", "Groceries")),
+            spends = listOf(spent("1", "100", "Groceries")),
             caps = mapOf("Groceries" to BigDecimal("250")),
         )
 
@@ -154,7 +155,7 @@ class CategoryWidgetTest {
     fun resolvesBuiltInPills() {
         val pills = categoryWidgetPills(
             rows = categoryWidgetRows(
-                spends = listOf(spent(1, "100", "FOOD"), spent(2, "5", "OTHER")),
+                spends = listOf(spent("1", "100", "FOOD"), spent("2", "5", "OTHER")),
                 caps = mapOf("FOOD" to BigDecimal("200")),
             ),
             displayName = { key ->
@@ -183,7 +184,7 @@ class CategoryWidgetTest {
     fun resolvesCustomPillsWithSavedEmojiAndDeterministicColor() {
         val pills = categoryWidgetPills(
             rows = categoryWidgetRows(
-                spends = listOf(spent(1, "100", "Groceries")),
+                spends = listOf(spent("1", "100", "Groceries")),
                 caps = emptyMap(),
             ),
             displayName = { (it as CategoryKey.Custom).name },
@@ -201,7 +202,7 @@ class CategoryWidgetTest {
     fun customPillWithoutSavedEmojiFallsBackToDefault() {
         val pills = categoryWidgetPills(
             rows = categoryWidgetRows(
-                spends = listOf(spent(1, "100", "Groceries")),
+                spends = listOf(spent("1", "100", "Groceries")),
                 caps = emptyMap(),
             ),
             displayName = { (it as CategoryKey.Custom).name },

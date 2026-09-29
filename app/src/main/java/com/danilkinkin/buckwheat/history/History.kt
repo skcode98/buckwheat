@@ -272,7 +272,7 @@ internal fun composeHistoryRows(
         periodSpends.forEach { tx ->
             add(
                 HistoryEntry(
-                    "spent-${tx.uid}",
+                    "spent-${tx.id}",
                     tx.date,
                     toDay(tx.date),
                     tx.value,
@@ -285,7 +285,7 @@ internal fun composeHistoryRows(
             archivedTransactions.forEach { tx ->
                 add(
                     HistoryEntry(
-                        "spent-archived-${tx.uid}",
+                        "spent-archived-${tx.id}",
                         tx.date,
                         toDay(tx.date),
                         tx.value,

@@ -1,0 +1,37 @@
+package com.danilkinkin.buckwheat.data.entities
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.math.BigDecimal
+
+@Entity(tableName = "family_state")
+data class FamilyState(
+    @PrimaryKey
+    @ColumnInfo(name = "family_id")
+    val familyId: String,
+
+    @ColumnInfo(name = "budget")
+    val budget: BigDecimal,
+
+    @ColumnInfo(name = "start_date")
+    val startDate: Long,
+
+    @ColumnInfo(name = "finish_date")
+    val finishDate: Long,
+
+    @ColumnInfo(name = "currency")
+    val currency: String,
+
+    @ColumnInfo(name = "sync_seq", defaultValue = "0")
+    val syncSeq: Long = 0L,
+
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0L,
+
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long? = null,
+
+    @ColumnInfo(name = "version", defaultValue = "1")
+    val version: Int = 1,
+)

@@ -12,7 +12,7 @@ class FakeSavingsGoalDao : SavingsGoalDao {
         return flow { emit(goals.toList()) }
     }
 
-    override suspend fun getById(id: Long): SavingsGoal? {
+    override suspend fun getById(id: String): SavingsGoal? {
         return goals.firstOrNull { it.id == id }
     }
 
@@ -20,9 +20,8 @@ class FakeSavingsGoalDao : SavingsGoalDao {
         return goals.toList()
     }
 
-    override suspend fun insert(goal: SavingsGoal): Long {
+    override suspend fun insert(goal: SavingsGoal) {
         goals.add(goal)
-        return goal.id
     }
 
     override suspend fun insertAll(goals: List<SavingsGoal>) {
@@ -40,7 +39,7 @@ class FakeSavingsGoalDao : SavingsGoalDao {
         goals.removeIf { it.id == goal.id }
     }
 
-    override suspend fun deleteById(id: Long) {
+    override suspend fun deleteById(id: String) {
         goals.removeIf { it.id == id }
     }
 

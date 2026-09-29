@@ -601,4 +601,16 @@
   <string name="categories_chart_use_tags">Use tags to see chart by categories</string>
   <string name="patterns_show_all_tags">Show all %1$d tags ▾</string>
   <string name="year">Year</string>
+  <string name="sync_conflicts_title">Sync Conflicts</string>
+  <string name="sync_conflicts_empty">No sync conflicts</string>
+  <string name="sync_conflicts_dismiss_all">Dismiss all</string>
+  <string name="sync_conflicts_won_by">Kept your version, won by %1$s</string>
+  <string name="sync_conflicts_table_transactions">Transactions</string>
+  <string name="sync_conflicts_table_archived_transactions">Archived transactions</string>
+  <string name="sync_conflicts_table_budget_periods">Budget periods</string>
+  <string name="sync_conflicts_table_saved_categories">Categories</string>
+  <string name="sync_conflicts_table_saved_tags">Tags</string>
+  <string name="sync_conflicts_table_recurring_templates">Recurring payments</string>
+  <string name="sync_conflicts_table_savings_goals">Goals</string>
+  <string name="sync_conflicts_table_other">Other</string>
 </resources>

@@ -80,6 +80,12 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("debug") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
+
     bundle {
         language {
             enableSplit = false
@@ -93,6 +99,10 @@ android {
         resources.excludes += "/META-INF/LGPL2.1"
     }
     namespace = "com.danilkinkin.buckwheat"
+}
+
+tasks.matching { it.name == "mergeDebugAssets" }.configureEach {
+    dependsOn("kspDebugKotlin")
 }
 
 dependencies {
@@ -145,6 +155,8 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.15.1")
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.room:room-testing:2.7.2")
+    implementation("androidx.hilt:hilt-work:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.7.1")
     testImplementation("androidx.work:work-testing:2.7.1")
     testImplementation("androidx.test:runner:1.6.2")

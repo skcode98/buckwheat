@@ -17,24 +17,26 @@ class CompareToLastPeriodTest {
 
     private fun period(
         finishDaysAgo: Long,
-        id: Int = finishDaysAgo.toInt(),
+        id: String = finishDaysAgo.toString(),
     ): BudgetPeriod =
         BudgetPeriod(
+            id = id,
             budget = BigDecimal("1000"),
             startDate = daysAgo(finishDaysAgo + 10),
             finishDate = daysAgo(finishDaysAgo),
             actualFinishDate = null,
             currencyCode = "USD",
             totalSpent = BigDecimal.ZERO,
-        ).also { it.id = id }
+        )
 
     private fun archived(
-        periodId: Int,
+        periodId: String,
         daysAgo: Long,
         value: String,
         type: TransactionType = TransactionType.SPENT,
     ): ArchivedTransaction =
         ArchivedTransaction(
+            id = "$periodId-$daysAgo",
             periodId = periodId,
             type = type,
             value = BigDecimal(value),
@@ -46,8 +48,8 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodPicksLatestFinishedBeforeCurrentStart() {
         val currentStart = daysAgo(5)
 
-        val latest = period(6, id = 2)
-        val older = period(9, id = 1)
+        val latest = period(6, id = "2")
+        val older = period(9, id = "1")
 
         assertSame(latest, findPreviousPeriod(listOf(older, latest), currentStart))
     }
@@ -56,8 +58,8 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodSkipsImportedPeriods() {
         val currentStart = daysAgo(5)
 
-        val imported = period(6, id = 2).copy(isImported = true)
-        val real = period(9, id = 1)
+        val imported = period(6, id = "2").copy(isImported = true)
+        val real = period(9, id = "1")
 
         assertSame(real, findPreviousPeriod(listOf(imported, real), currentStart))
     }
@@ -66,7 +68,7 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodReturnsNullWhenOnlyImportedPeriodsPrecede() {
         val currentStart = daysAgo(5)
 
-        val imported = period(6, id = 2).copy(isImported = true)
+        val imported = period(6, id = "2").copy(isImported = true)
 
         assertNull(findPreviousPeriod(listOf(imported), currentStart))
     }
@@ -75,8 +77,8 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodIgnoresCurrentAndFuturePeriods() {
         val currentStart = daysAgo(5)
 
-        val current = period(4, id = 3)
-        val future = period(2, id = 4)
+        val current = period(4, id = "3")
+        val future = period(2, id = "4")
 
         val result = findPreviousPeriod(listOf(current, future), currentStart)
 
@@ -92,7 +94,7 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodIncludesPeriodEndingSameDayAsCurrentStart() {
         val currentStart = daysAgo(5)
 
-        val contiguous = period(5, id = 2)
+        val contiguous = period(5, id = "2")
 
         assertSame(contiguous, findPreviousPeriod(listOf(contiguous), currentStart))
     }
@@ -101,7 +103,7 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodUsesActualFinishDateForEarlyFinishedPeriod() {
         val currentStart = daysAgo(5)
 
-        val earlyFinished = period(30, id = 1).copy(
+        val earlyFinished = period(30, id = "1").copy(
             actualFinishDate = daysAgo(6),
         )
 
@@ -112,7 +114,7 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodIgnoresEarlyFinishedAfterCurrentStart() {
         val currentStart = daysAgo(5)
 
-        val endedLater = period(30, id = 1).copy(
+        val endedLater = period(30, id = "1").copy(
             actualFinishDate = daysAgo(4),
         )
 
@@ -123,7 +125,7 @@ class CompareToLastPeriodTest {
     fun findPreviousPeriodIgnoresResetPeriodWhoseScheduledFinishIsLater() {
         val currentStart = daysAgo(5)
 
-        val reset = period(1, id = 1)
+        val reset = period(1, id = "1")
 
         assertNull(findPreviousPeriod(listOf(reset), currentStart))
     }
@@ -135,7 +137,7 @@ class CompareToLastPeriodTest {
         // caps the archived finishDate at the new start date.
         val currentStart = daysAgo(5)
 
-        val restartedPeriod = period(30, id = 1).copy(
+        val restartedPeriod = period(30, id = "1").copy(
             actualFinishDate = daysAgo(6), // manually finished early
         )
 
@@ -145,7 +147,7 @@ class CompareToLastPeriodTest {
     @Test
     fun effectiveFinishDateFallsBackToScheduledFinish() {
         val scheduled = daysAgo(6)
-        val period = period(6, id = 1)
+        val period = period(6, id = "1")
 
         assertEquals(scheduled, effectiveFinishDate(period))
 
@@ -159,13 +161,13 @@ class CompareToLastPeriodTest {
 
         val result = previousSpentAtSameElapsedDays(
             archivedTransactions = listOf(
-                archived(periodId = 1, daysAgo = 14, value = "100"),
-                archived(periodId = 1, daysAgo = 12, value = "50"),
-                archived(periodId = 1, daysAgo = 5, value = "999"),
-                archived(periodId = 2, daysAgo = 13, value = "700"),
-                archived(periodId = 1, daysAgo = 13, value = "200", type = TransactionType.INCOME),
+                archived(periodId = "1", daysAgo = 14, value = "100"),
+                archived(periodId = "1", daysAgo = 12, value = "50"),
+                archived(periodId = "1", daysAgo = 5, value = "999"),
+                archived(periodId = "2", daysAgo = 13, value = "700"),
+                archived(periodId = "1", daysAgo = 13, value = "200", type = TransactionType.INCOME),
             ),
-            periodId = 1,
+            periodId = "1",
             previousStart = previousStart,
             elapsedDays = 3,
         )
@@ -181,10 +183,10 @@ class CompareToLastPeriodTest {
 
         val result = previousSpentAtSameElapsedDays(
             archivedTransactions = listOf(
-                archived(periodId = 1, daysAgo = 10, value = "25"),
-                archived(periodId = 1, daysAgo = 8, value = "75"),
+                archived(periodId = "1", daysAgo = 10, value = "25"),
+                archived(periodId = "1", daysAgo = 8, value = "75"),
             ),
-            periodId = 1,
+            periodId = "1",
             previousStart = previousStart,
             elapsedDays = 0,
         )
@@ -196,7 +198,7 @@ class CompareToLastPeriodTest {
     fun previousSpentAtSameElapsedDaysNoMatchingReturnsZero() {
         val result = previousSpentAtSameElapsedDays(
             archivedTransactions = emptyList(),
-            periodId = 1,
+            periodId = "1",
             previousStart = daysAgo(10),
             elapsedDays = 3,
         )

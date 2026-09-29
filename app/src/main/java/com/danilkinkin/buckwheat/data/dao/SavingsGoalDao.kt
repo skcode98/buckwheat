@@ -14,13 +14,13 @@ interface SavingsGoalDao {
     fun getAll(): Flow<List<SavingsGoal>>
 
     @Query("SELECT * FROM savings_goals WHERE id = :id")
-    suspend fun getById(id: Long): SavingsGoal?
+    suspend fun getById(id: String): SavingsGoal?
 
     @Query("SELECT * FROM savings_goals")
     suspend fun getAllNow(): List<SavingsGoal>
 
     @Insert
-    suspend fun insert(goal: SavingsGoal): Long
+    suspend fun insert(goal: SavingsGoal)
 
     @Insert
     suspend fun insertAll(goals: List<SavingsGoal>)
@@ -32,7 +32,7 @@ interface SavingsGoalDao {
     suspend fun delete(goal: SavingsGoal)
 
     @Query("DELETE FROM savings_goals WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    suspend fun deleteById(id: String)
 
     @Query("DELETE FROM savings_goals")
     suspend fun deleteAll()

@@ -89,11 +89,11 @@ fun transactionMatchesCategory(transaction: Transaction, key: CategoryKey): Bool
 suspend fun categorizeSpendsWithAi(
     context: Context,
     spends: List<Transaction>,
-): Map<Int, SpendCategory> {
+): Map<String, SpendCategory> {
     if (spends.isEmpty()) return emptyMap()
 
     val categoryKeys = SpendCategory.entries.joinToString(", ") { it.name }
-    val result = mutableMapOf<Int, SpendCategory>()
+    val result = mutableMapOf<String, SpendCategory>()
 
     spends.chunked(CATEGORY_BATCH_SIZE).forEach { batch ->
         val records = batch.mapIndexed { index, transaction ->
@@ -109,11 +109,11 @@ suspend fun categorizeSpendsWithAi(
 
         when (val ai = callAi(context = context, systemPrompt = systemPrompt, userPrompt = userPrompt)) {
             is AiRouterResult.Success -> {
-                // Remap the model's local record index back to the transaction uid so the caller
+                // Remap the model's local record index back to the transaction id so the caller
                 // can persist the assignment. Records the model skipped fall back to the offline
                 // classifier.
                 parseCategoryResponse(ai.text).forEach { (index, category) ->
-                    batch.getOrNull(index)?.let { result[it.uid] = category }
+                    batch.getOrNull(index)?.let { result[it.id] = category }
                 }
             }
             is AiRouterResult.Failure -> {

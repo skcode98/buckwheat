@@ -8,6 +8,7 @@ import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.newSyncId
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -136,24 +137,21 @@ fun parseBackupData(json: String): BackupData? {
 // ---------- Entity codecs ----------
 
 private fun Transaction.toJson(): JSONObject = JSONObject()
-    .put("uid", uid)
+    .put("id", id)
     .put("type", type.name)
     .put("value", value.toPlainString())
     .put("date", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
 
-private fun JSONObject.toTransaction(): Transaction {
-    val transaction = Transaction(
-        type = TransactionType.valueOf(optString("type", TransactionType.SPENT.name)),
-        value = BigDecimal(optString("value", "0")),
-        date = Date(optLong("date")),
-        comment = optString("comment"),
-        category = if (isNull("category")) null else optString("category", null),
-    )
-    transaction.uid = optInt("uid")
-    return transaction
-}
+private fun JSONObject.toTransaction(): Transaction = Transaction(
+    id = optString("id").ifBlank { newSyncId() },
+    type = TransactionType.valueOf(optString("type", TransactionType.SPENT.name)),
+    value = BigDecimal(optString("value", "0")),
+    date = Date(optLong("date")),
+    comment = optString("comment"),
+    category = if (isNull("category")) null else optString("category", null),
+)
 
 private fun BudgetPeriod.toJson(): JSONObject = JSONObject()
     .put("id", id)
@@ -165,22 +163,19 @@ private fun BudgetPeriod.toJson(): JSONObject = JSONObject()
     .put("totalSpent", totalSpent.toPlainString())
     .put("isImported", isImported)
 
-private fun JSONObject.toBudgetPeriod(): BudgetPeriod {
-    val period = BudgetPeriod(
-        budget = BigDecimal(optString("budget", "0")),
-        startDate = Date(optLong("startDate")),
-        finishDate = Date(optLong("finishDate")),
-        actualFinishDate = if (isNull("actualFinishDate")) null else Date(optLong("actualFinishDate")),
-        currencyCode = optString("currencyCode"),
-        totalSpent = BigDecimal(optString("totalSpent", "0")),
-        isImported = optBoolean("isImported"),
-    )
-    period.id = optInt("id")
-    return period
-}
+private fun JSONObject.toBudgetPeriod(): BudgetPeriod = BudgetPeriod(
+    id = optString("id").ifBlank { newSyncId() },
+    budget = BigDecimal(optString("budget", "0")),
+    startDate = Date(optLong("startDate")),
+    finishDate = Date(optLong("finishDate")),
+    actualFinishDate = if (isNull("actualFinishDate")) null else Date(optLong("actualFinishDate")),
+    currencyCode = optString("currencyCode"),
+    totalSpent = BigDecimal(optString("totalSpent", "0")),
+    isImported = optBoolean("isImported"),
+)
 
 private fun ArchivedTransaction.toJson(): JSONObject = JSONObject()
-    .put("uid", uid)
+    .put("id", id)
     .put("periodId", periodId)
     .put("type", type.name)
     .put("value", value.toPlainString())
@@ -188,39 +183,35 @@ private fun ArchivedTransaction.toJson(): JSONObject = JSONObject()
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
 
-private fun JSONObject.toArchivedTransaction(): ArchivedTransaction {
-    val transaction = ArchivedTransaction(
-        periodId = optInt("periodId"),
-        type = TransactionType.valueOf(optString("type", TransactionType.SPENT.name)),
-        value = BigDecimal(optString("value", "0")),
-        date = Date(optLong("date")),
-        comment = optString("comment"),
-        category = if (isNull("category")) null else optString("category", null),
-    )
-    transaction.uid = optInt("uid")
-    return transaction
-}
+private fun JSONObject.toArchivedTransaction(): ArchivedTransaction = ArchivedTransaction(
+    id = optString("id").ifBlank { newSyncId() },
+    periodId = optString("periodId"),
+    type = TransactionType.valueOf(optString("type", TransactionType.SPENT.name)),
+    value = BigDecimal(optString("value", "0")),
+    date = Date(optLong("date")),
+    comment = optString("comment"),
+    category = if (isNull("category")) null else optString("category", null),
+)
 
 private fun SavedTag.toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("name", name)
 
-private fun JSONObject.toSavedTag(): SavedTag {
-    val tag = SavedTag(name = optString("name"))
-    tag.id = optInt("id")
-    return tag
-}
+private fun JSONObject.toSavedTag(): SavedTag = SavedTag(
+    id = optString("id").ifBlank { newSyncId() },
+    name = optString("name"),
+)
 
 private fun SavedCategory.toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("name", name)
     .put("emoji", emoji)
 
-private fun JSONObject.toSavedCategory(): SavedCategory {
-    val category = SavedCategory(name = optString("name"), emoji = optString("emoji"))
-    category.id = optInt("id")
-    return category
-}
+private fun JSONObject.toSavedCategory(): SavedCategory = SavedCategory(
+    id = optString("id").ifBlank { newSyncId() },
+    name = optString("name"),
+    emoji = optString("emoji"),
+)
 
 private fun RecurringTemplate.toJson(): JSONObject = JSONObject()
     .put("id", id)
@@ -230,11 +221,11 @@ private fun RecurringTemplate.toJson(): JSONObject = JSONObject()
     .put("enabled", enabled)
 
 private fun JSONObject.toRecurringTemplate(): RecurringTemplate = RecurringTemplate(
+    id = optString("id").ifBlank { newSyncId() },
     amount = BigDecimal(optString("amount", "0")),
     comment = optString("comment"),
     dayOfMonth = optInt("dayOfMonth"),
     enabled = optBoolean("enabled"),
-    id = optInt("id"),
 )
 
 private fun SavingsGoal.toJson(): JSONObject = JSONObject()
@@ -247,13 +238,13 @@ private fun SavingsGoal.toJson(): JSONObject = JSONObject()
     .put("completed", completed)
 
 private fun JSONObject.toSavingsGoal(): SavingsGoal = SavingsGoal(
+    id = optString("id").ifBlank { newSyncId() },
     name = optString("name"),
     targetAmount = BigDecimal(optString("targetAmount", "0")),
     currentAmount = BigDecimal(optString("currentAmount", "0")),
     deadline = if (isNull("deadline")) null else Date(optLong("deadline")),
     createdAt = Date(optLong("createdAt")),
     completed = optBoolean("completed"),
-    id = optLong("id"),
 )
 
 // ---------- Preferences codecs ----------

@@ -1,0 +1,102 @@
+package com.danilkinkin.buckwheat.di
+
+import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
+import com.danilkinkin.buckwheat.data.dao.RecurringDao
+import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
+import com.danilkinkin.buckwheat.data.dao.SavedTagDao
+import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
+import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.sync.DataStoreFamilySessionStore
+import com.danilkinkin.buckwheat.sync.DataStoreSyncStateStore
+import com.danilkinkin.buckwheat.sync.FamilyApi
+import com.danilkinkin.buckwheat.sync.FamilyApiFactory
+import com.danilkinkin.buckwheat.sync.FamilySessionStore
+import com.danilkinkin.buckwheat.sync.HttpFamilyApi
+import com.danilkinkin.buckwheat.sync.RoomSyncDatabase
+import com.danilkinkin.buckwheat.sync.SessionSyncClient
+import com.danilkinkin.buckwheat.sync.SyncBindings
+import com.danilkinkin.buckwheat.sync.SyncClient
+import com.danilkinkin.buckwheat.sync.SyncClock
+import com.danilkinkin.buckwheat.sync.SyncDatabase
+import com.danilkinkin.buckwheat.sync.SyncEngine
+import com.danilkinkin.buckwheat.sync.SyncStateStore
+import dagger.Binds
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class SyncBindingsModule {
+    @Binds
+    @Singleton
+    abstract fun bindFamilySessionStore(
+        store: DataStoreFamilySessionStore,
+    ): FamilySessionStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncStateStore(
+        store: DataStoreSyncStateStore,
+    ): SyncStateStore
+
+    @Binds
+    @Singleton
+    abstract fun bindFamilyApiFactory(factory: DefaultFamilyApiFactory): FamilyApiFactory
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncClient(client: SessionSyncClient): SyncClient
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object SyncModule {
+    @Provides
+    @Singleton
+    fun provideSyncDatabase(
+        pendingMutationDao: PendingMutationDao,
+        transactionDao: TransactionDao,
+        budgetPeriodDao: BudgetPeriodDao,
+        savedCategoryDao: SavedCategoryDao,
+        savedTagDao: SavedTagDao,
+        recurringDao: RecurringDao,
+        savingsGoalDao: SavingsGoalDao,
+        syncStateStore: SyncStateStore,
+    ): SyncDatabase = RoomSyncDatabase(
+        gateways = SyncBindings(pendingMutationDao).gateways(
+            transactionDao = transactionDao,
+            budgetPeriodDao = budgetPeriodDao,
+            savedCategoryDao = savedCategoryDao,
+            savedTagDao = savedTagDao,
+            recurringDao = recurringDao,
+            savingsGoalDao = savingsGoalDao,
+        ),
+        pendingMutationDao = pendingMutationDao,
+        syncStateStore = syncStateStore,
+    )
+
+    @Provides
+    @Singleton
+    fun provideSyncClock(): SyncClock = SyncClock { System.currentTimeMillis() }
+
+    @Provides
+    @Singleton
+    fun provideSyncEngine(
+        client: SyncClient,
+        database: SyncDatabase,
+        store: FamilySessionStore,
+    ) = SyncEngine(
+        client = client,
+        database = database,
+        tokenProvider = { store.token() },
+    )
+}
+
+class DefaultFamilyApiFactory @Inject constructor() : FamilyApiFactory {
+    override fun create(baseUrl: String): FamilyApi = HttpFamilyApi(baseUrl)
+}

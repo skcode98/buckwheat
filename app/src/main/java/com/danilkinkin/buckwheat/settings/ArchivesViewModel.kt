@@ -26,9 +26,9 @@ class ArchivesViewModel @Inject constructor(
     val periods: StateFlow<List<BudgetPeriod>> = budgetPeriodDao.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedPeriodId = MutableStateFlow<Int?>(null)
+    private val _selectedPeriodId = MutableStateFlow<String?>(null)
 
-    fun selectPeriod(periodId: Int) {
+    fun selectPeriod(periodId: String) {
         _selectedPeriodId.value = periodId
     }
 
@@ -40,15 +40,15 @@ class ArchivesViewModel @Inject constructor(
         if (id != null) budgetPeriodDao.getTransactionsForPeriod(id) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun updatePeriodDates(periodId: Int, startDate: Date, finishDate: Date) = viewModelScope.launch {
+    fun updatePeriodDates(periodId: String, startDate: Date, finishDate: Date) = viewModelScope.launch {
         budgetPeriodDao.updateDates(periodId, startDate, finishDate)
     }
 
-    fun updatePeriodBudget(periodId: Int, budget: BigDecimal) = viewModelScope.launch {
+    fun updatePeriodBudget(periodId: String, budget: BigDecimal) = viewModelScope.launch {
         budgetPeriodDao.updateBudget(periodId, budget)
     }
 
-    fun deletePeriod(periodId: Int) = viewModelScope.launch {
+    fun deletePeriod(periodId: String) = viewModelScope.launch {
         if (_selectedPeriodId.value == periodId) {
             _selectedPeriodId.value = null
         }

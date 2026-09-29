@@ -20,7 +20,7 @@ interface RecurringDao {
     suspend fun getAllNow(): List<RecurringTemplate>
 
     @Insert
-    suspend fun insert(template: RecurringTemplate): Long
+    suspend fun insert(template: RecurringTemplate)
 
     @Insert
     suspend fun insertAll(templates: List<RecurringTemplate>)
@@ -32,7 +32,7 @@ interface RecurringDao {
     suspend fun delete(template: RecurringTemplate)
 
     @Query("DELETE FROM recurring_templates WHERE id = :id")
-    suspend fun deleteById(id: Int)
+    suspend fun deleteById(id: String)
 
     @Query("DELETE FROM recurring_templates")
     suspend fun deleteAll()

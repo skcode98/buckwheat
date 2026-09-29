@@ -34,10 +34,10 @@ class CategoryAssigner @Inject constructor(
 
         val offlineAssigned = uncategorized.mapNotNull { transaction ->
             offlineCategoryOrNull(transaction.comment)
-                ?.let { transaction.uid to it.name }
+                ?.let { transaction.id to it.name }
         }
-        offlineAssigned.forEach { (uid, category) ->
-            transactionDao.updateCategory(uid, category)
+        offlineAssigned.forEach { (id, category) ->
+            transactionDao.updateCategory(id, category)
         }
 
         val aiCandidates = uncategorized.filter {
@@ -46,8 +46,8 @@ class CategoryAssigner @Inject constructor(
         if (aiCandidates.isEmpty()) return
 
         val assigned = categorizeSpendsWithAi(context, aiCandidates)
-        assigned.forEach { (uid, category) ->
-            transactionDao.updateCategory(uid, category.name)
+        assigned.forEach { (id, category) ->
+            transactionDao.updateCategory(id, category.name)
         }
     }
 
@@ -60,10 +60,10 @@ class CategoryAssigner @Inject constructor(
 
         val offlineAssigned = uncategorized.mapNotNull { transaction ->
             offlineCategoryOrNull(transaction.comment)
-                ?.let { transaction.uid to it.name }
+                ?.let { transaction.id to it.name }
         }
-        offlineAssigned.forEach { (uid, category) ->
-            budgetPeriodDao.updateCategory(uid, category)
+        offlineAssigned.forEach { (id, category) ->
+            budgetPeriodDao.updateCategory(id, category)
         }
 
         val aiCandidates = uncategorized.filter {
@@ -72,8 +72,8 @@ class CategoryAssigner @Inject constructor(
         if (aiCandidates.isEmpty()) return
 
         val assigned = categorizeSpendsWithAi(context, aiCandidates.map { it.toTransaction() })
-        assigned.forEach { (uid, category) ->
-            budgetPeriodDao.updateCategory(uid, category.name)
+        assigned.forEach { (id, category) ->
+            budgetPeriodDao.updateCategory(id, category.name)
         }
     }
 }

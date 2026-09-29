@@ -8,6 +8,10 @@ import java.util.Date
 
 @Entity(tableName = "savings_goals")
 data class SavingsGoal(
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String = newSyncId(),
+
     val name: String,
     @ColumnInfo(name = "target_amount")
     val targetAmount: BigDecimal,
@@ -17,5 +21,19 @@ data class SavingsGoal(
     @ColumnInfo(name = "created_at")
     val createdAt: Date = Date(),
     val completed: Boolean = false,
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+
+    @ColumnInfo(name = "family_id")
+    val familyId: String? = null,
+
+    @ColumnInfo(name = "sync_seq", defaultValue = "0")
+    val syncSeq: Long = 0L,
+
+    @ColumnInfo(name = "updated_at", defaultValue = "0")
+    val updatedAt: Long = 0L,
+
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long? = null,
+
+    @ColumnInfo(name = "version", defaultValue = "1")
+    val version: Int = 1,
 )

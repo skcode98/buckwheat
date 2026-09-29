@@ -207,6 +207,16 @@ fun Settings(
                         )
                     },
                 )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_info),
+                    text = stringResource(R.string.sync_conflicts_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(SYNC_CONFLICTS_SHEET)
+                        )
+                    },
+                )
                 val importCSV = rememberImportCSV()
                 TextRow(
                     icon = painterResource(R.drawable.ic_file_download),

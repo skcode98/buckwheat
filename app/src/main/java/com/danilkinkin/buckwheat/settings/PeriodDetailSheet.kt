@@ -215,7 +215,7 @@ fun PeriodDetailSheet(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    items(transactions, key = { it.uid }) { tx ->
+                    items(transactions, key = { it.id }) { tx ->
                         ArchivedTransactionItem(
                             transaction = tx,
                             currency = currency,

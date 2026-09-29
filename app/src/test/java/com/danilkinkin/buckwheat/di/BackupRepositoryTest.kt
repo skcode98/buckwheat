@@ -77,15 +77,17 @@ class BackupRepositoryTest {
         val now = Date(1_700_000_000_000L)
 
         val spend = Transaction(
+            id = "7",
             type = TransactionType.SPENT,
             value = BigDecimal("150.50"),
             date = Date(now.time + 1000),
             comment = "lunch",
             category = "FOOD",
-        ).also { it.uid = 7 }
+        )
         transactionDao.insert(spend)
 
         val period = BudgetPeriod(
+            id = "3",
             budget = BigDecimal("1000.00"),
             startDate = now,
             finishDate = Date(now.time + 86_400_000L),
@@ -93,25 +95,26 @@ class BackupRepositoryTest {
             currencyCode = "INR",
             totalSpent = BigDecimal("150.50"),
             isImported = false,
-        ).also { it.id = 3 }
+        )
         budgetPeriodDao.insert(period)
         budgetPeriodDao.insertArchivedTransactions(
             listOf(
                 ArchivedTransaction(
-                    periodId = 3,
+                    id = "9",
+                    periodId = "3",
                     type = TransactionType.SPENT,
                     value = BigDecimal("20.00"),
                     date = now,
                     comment = "coffee",
-                ).also { it.uid = 9 }
+                )
             )
         )
 
-        savedTagDao.insert(SavedTag(name = "work").also { it.id = 1 })
-        savedCategoryDao.insert(SavedCategory(name = "coffee").also { it.id = 2 })
-        recurringDao.insert(RecurringTemplate(BigDecimal("99.00"), "Netflix", 5, true, 4))
+        savedTagDao.insert(SavedTag(id = "1", name = "work"))
+        savedCategoryDao.insert(SavedCategory(id = "2", name = "coffee"))
+        recurringDao.insert(RecurringTemplate(amount = BigDecimal("99.00"), comment = "Netflix", dayOfMonth = 5, enabled = true, id = "4"))
         savingsGoalDao.insert(
-            SavingsGoal("vacation", BigDecimal("50000.00"), BigDecimal.ZERO, null, now, false, 11)
+            SavingsGoal(id = "11", name = "vacation", targetAmount = BigDecimal("50000.00"), currentAmount = BigDecimal.ZERO, deadline = null, createdAt = now, completed = false)
         )
 
         context.budgetDataStore.edit { it[budgetStoreKey] = "500.00" }
@@ -136,16 +139,16 @@ class BackupRepositoryTest {
         val restoredTransactions = transactionDao.spends
         assertEquals(1, restoredTransactions.size)
         assertEquals("FOOD", restoredTransactions[0].category)
-        assertEquals(7, restoredTransactions[0].uid)
+        assertEquals("7", restoredTransactions[0].id)
 
         val restoredPeriods = budgetPeriodDao.getAllNow()
         assertEquals(1, restoredPeriods.size)
-        assertEquals(3, restoredPeriods[0].id)
+        assertEquals("3", restoredPeriods[0].id)
 
         val restoredArchived = budgetPeriodDao.getAllArchivedNow()
         assertEquals(1, restoredArchived.size)
-        assertEquals(3, restoredArchived[0].periodId)
-        assertEquals(9, restoredArchived[0].uid)
+        assertEquals("3", restoredArchived[0].periodId)
+        assertEquals("9", restoredArchived[0].id)
 
         assertEquals(1, savedTagDao.getAllNow().size)
         assertEquals(1, savedCategoryDao.getAllNow().size)

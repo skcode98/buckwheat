@@ -310,19 +310,19 @@ class SettingsRepository @Inject constructor(
 
     // The per-goal last-notified milestone bucket, serialized as "goalId:bucket;goalId:bucket",
     // so a milestone nudge is posted only once per goal.
-    suspend fun getGoalNotifiedMilestones(): Map<Long, Int> {
+    suspend fun getGoalNotifiedMilestones(): Map<String, Int> {
         val raw = context.settingsDataStore.data.first()[goalMilestonesNotifiedStoreKey]
             ?: return emptyMap()
         return raw.split(';').mapNotNull { entry ->
             val parts = entry.split(':')
             if (parts.size != 2) return@mapNotNull null
-            val id = parts[0].toLongOrNull() ?: return@mapNotNull null
+            val id = parts[0].ifBlank { return@mapNotNull null }
             val bucket = parts[1].toIntOrNull() ?: return@mapNotNull null
             id to bucket
         }.toMap()
     }
 
-    suspend fun setGoalNotifiedMilestones(milestones: Map<Long, Int>) {
+    suspend fun setGoalNotifiedMilestones(milestones: Map<String, Int>) {
         val serialized = milestones.entries
             .sortedBy { it.key }
             .joinToString(";") { "${it.key}:${it.value}" }

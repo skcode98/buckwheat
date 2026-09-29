@@ -24,39 +24,41 @@ class HistoryRowsTest {
     }
 
     private fun spent(
-        uid: Int,
+        id: String,
         value: String,
         comment: String = "",
         date: LocalDateTime = LocalDateTime.of(2026, 8, 5, 12, 0),
         category: String? = null,
     ): Transaction = Transaction(
+        id = id,
         type = TransactionType.SPENT,
         value = BigDecimal(value),
         date = date.toDate(),
         comment = comment,
         category = category,
-    ).also { it.uid = uid }
+    )
 
     private fun archived(
-        uid: Int,
+        id: String,
         value: String,
         comment: String,
         date: LocalDateTime,
     ): ArchivedTransaction = ArchivedTransaction(
-        periodId = 1,
+        id = id,
+        periodId = "1",
         type = TransactionType.SPENT,
         value = BigDecimal(value),
         date = date.toDate(),
         comment = comment,
-    ).also { it.uid = uid }
+    )
 
     @Test
     fun groupsTransactionsIntoDayCardsNewestFirst() {
         val rows = composeHistoryRows(
             periodSpends = listOf(
-                spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
-                spent(2, "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
-                spent(3, "200", "dinner", LocalDateTime.of(2026, 8, 6, 20, 0)),
+                spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+                spent("2", "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
+                spent("3", "200", "dinner", LocalDateTime.of(2026, 8, 6, 20, 0)),
             ),
             archivedTransactions = emptyList(),
             searchQuery = "",
@@ -64,11 +66,11 @@ class HistoryRowsTest {
 
         assertEquals(listOf("day-2026-08-06", "day-2026-08-05"), rows.map { it.key })
         assertEquals(LocalDate.of(2026, 8, 6), rows[0].day)
-        assertEquals(listOf(3), rows[0].transactions.map { it.uid })
+        assertEquals(listOf("3"), rows[0].transactions.map { it.id })
         assertEquals(BigDecimal("200"), rows[0].dayTotal)
         assertEquals(2, rows[0].firstTransactionIndex)
 
-        assertEquals(listOf(2, 1), rows[1].transactions.map { it.uid })
+        assertEquals(listOf("2", "1"), rows[1].transactions.map { it.id })
         assertEquals(BigDecimal("150"), rows[1].dayTotal)
         assertEquals(0, rows[1].firstTransactionIndex)
     }
@@ -83,21 +85,21 @@ class HistoryRowsTest {
 
     @Test
     fun archivedTransactionsIncludedOnlyWhileSearching() {
-        val period = listOf(spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)))
-        val archivedTx = archived(9, "40", "ancient lunch", LocalDateTime.of(2025, 1, 2, 9, 0))
+        val period = listOf(spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)))
+        val archivedTx = archived("9", "40", "ancient lunch", LocalDateTime.of(2025, 1, 2, 9, 0))
 
         assertEquals(listOf("day-2026-08-05"), composeHistoryRows(period, listOf(archivedTx), "").map { it.key })
 
         val searching = composeHistoryRows(period, listOf(archivedTx), "lunch")
         assertEquals(listOf("day-2026-08-05", "day-2025-01-02"), searching.map { it.key })
-        assertEquals(listOf(9), searching.last().transactions.map { it.uid })
+        assertEquals(listOf("9"), searching.last().transactions.map { it.id })
     }
 
     @Test
     fun filterByDayAndCategoryDropsOtherTransactions() {
         val spends = listOf(
-            spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
-            spent(2, "50", "bus", LocalDateTime.of(2026, 8, 6, 9, 0)),
+            spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+            spent("2", "50", "bus", LocalDateTime.of(2026, 8, 6, 9, 0)),
         )
 
         val onlyDay = composeHistoryRows(spends, emptyList(), "", onlyDay = LocalDate.of(2026, 8, 6))
@@ -115,12 +117,12 @@ class HistoryRowsTest {
     @Test
     fun dayCardContentChangesWhenATransactionValueChanges() {
         val before = composeHistoryRows(
-            listOf(spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0))),
+            listOf(spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0))),
             emptyList(),
             "",
         )
         val after = composeHistoryRows(
-            listOf(spent(1, "90", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0))),
+            listOf(spent("1", "90", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0))),
             emptyList(),
             "",
         )
@@ -137,9 +139,9 @@ class HistoryRowsTest {
 
         composeHistoryRows(
             periodSpends = listOf(
-                spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
-                spent(2, "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
-                spent(3, "25", "tea", LocalDateTime.of(2026, 8, 5, 9, 0)),
+                spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+                spent("2", "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
+                spent("3", "25", "tea", LocalDateTime.of(2026, 8, 5, 9, 0)),
             ),
             archivedTransactions = emptyList(),
             searchQuery = "",
@@ -164,8 +166,8 @@ class HistoryRowsTest {
             val rows = loadHistoryRows(
                 dispatcher = dispatcher,
                 periodSpends = listOf(
-                    spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
-                    spent(2, "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
+                    spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0)),
+                    spent("2", "50", "coffee", LocalDateTime.of(2026, 8, 5, 8, 0)),
                 ),
                 archivedTransactions = emptyList(),
                 searchQuery = "",
@@ -184,7 +186,7 @@ class HistoryRowsTest {
 
     @Test
     fun persistedCategoryIsNotFilteredOutByKeywordFallback() {
-        val tx = spent(1, "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0), category = "HEALTH")
+        val tx = spent("1", "100", "lunch", LocalDateTime.of(2026, 8, 5, 12, 0), category = "HEALTH")
         val rows = composeHistoryRows(
             listOf(tx),
             emptyList(),
@@ -192,6 +194,6 @@ class HistoryRowsTest {
             onlyCategoryKey = CategoryKey.BuiltIn(SpendCategory.HEALTH),
         )
         assertEquals(1, rows.size)
-        assertEquals(listOf(1), rows.single().transactions.map { it.uid })
+        assertEquals(listOf("1"), rows.single().transactions.map { it.id })
     }
 }

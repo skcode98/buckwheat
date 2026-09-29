@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 data class TagItem(
     val name: String,
-    val id: Int? = null,
+    val id: String? = null,
 )
 
 @HiltViewModel
@@ -41,19 +41,19 @@ class TagsManagementViewModel @Inject constructor(
         }
     }
 
-    fun updateTag(id: Int, name: String) {
+    fun updateTag(id: String, name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
             val other = savedTagDao.getByName(trimmed)
             // Don't rename onto an existing tag's name
             if (other == null || other.id == id) {
-                savedTagDao.update(SavedTag(name = trimmed).also { it.id = id })
+                savedTagDao.update(SavedTag(id = id, name = trimmed))
             }
         }
     }
 
-    fun deleteTag(id: Int) {
+    fun deleteTag(id: String) {
         viewModelScope.launch {
             savedTagDao.deleteById(id)
         }
