@@ -34,7 +34,7 @@ class SyncTableBinding<T : Any>(
     private val isDirty: suspend (String) -> Boolean,
     private val payloadOf: (T) -> String,
     private val metaOf: (T) -> SyncMeta,
-    private val decoder: (LocalRecord) -> T?,
+    private val decoder: (LocalRecord) -> T,
 ) : SyncTableGateway {
 
     private fun toRecord(entity: T, dirty: Boolean): LocalRecord {
@@ -61,7 +61,7 @@ class SyncTableBinding<T : Any>(
     }
 
     override suspend fun upsert(record: LocalRecord) {
-        val entity = decoder(record) ?: return
+        val entity = decoder(record)
         remover(record.id)
         inserter(entity)
     }
@@ -73,6 +73,7 @@ class RoomSyncDatabase(
     private val gateways: List<SyncTableGateway>,
     private val pendingMutationDao: PendingMutationDao,
     private val syncStateStore: SyncStateStore,
+    private val runInTransaction: suspend (block: suspend () -> Unit) -> Unit = { block -> block() },
 ) : SyncDatabase {
 
     private fun gateway(table: String): SyncTableGateway? = gateways.firstOrNull { it.table == table }
@@ -83,6 +84,7 @@ class RoomSyncDatabase(
 
     override suspend fun dirtyRecords(): List<LocalRecord> {
         val queued = pendingMutationDao.getAllNow()
+        val stale = mutableListOf<Pair<String, String>>()
         val records = queued.mapNotNull { mutation ->
             val binding = gateway(mutation.table) ?: return@mapNotNull null
             val record = binding.loadById(mutation.recordId)
@@ -100,26 +102,36 @@ class RoomSyncDatabase(
                     memberId = null,
                 )
             } else {
+                stale.add(mutation.table to mutation.recordId)
                 null
             }
         }
+        stale.forEach { (table, recordId) -> pendingMutationDao.deleteQueued(table, listOf(recordId)) }
         return records
+    }
+
+    override suspend fun reset() {
+        pendingMutationDao.deleteAll()
+        syncStateStore.clear()
     }
 
     override suspend fun apply(apply: SyncApply) {
         val clean = apply.records.filter { !it.dirty }
-        clean.groupBy { it.table }.forEach { (table, records) ->
-            val binding = gateway(table) ?: return@forEach
-            records.forEach { record ->
-                if (record.deletedAt != null) {
-                    binding.remove(record.id)
-                } else {
-                    binding.upsert(record)
+        val grouped = clean.groupBy { it.table }
+        runInTransaction {
+            grouped.forEach { (table, records) ->
+                val binding = gateway(table) ?: return@forEach
+                records.forEach { record ->
+                    if (record.deletedAt != null) {
+                        binding.remove(record.id)
+                    } else {
+                        binding.upsert(record)
+                    }
                 }
             }
-        }
-        clean.groupBy { it.table }.forEach { (table, records) ->
-            pendingMutationDao.deleteQueued(table, records.map { it.id })
+            grouped.forEach { (table, records) ->
+                pendingMutationDao.deleteQueued(table, records.map { it.id })
+            }
         }
         syncStateStore.writeCursor(apply.cursor)
         syncStateStore.replaceConflicts(apply.conflicts)

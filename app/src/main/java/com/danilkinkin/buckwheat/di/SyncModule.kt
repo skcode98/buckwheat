@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.di
 
+import androidx.room.withTransaction
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
@@ -59,6 +60,7 @@ object SyncModule {
     @Provides
     @Singleton
     fun provideSyncDatabase(
+        database: DatabaseModule,
         pendingMutationDao: PendingMutationDao,
         transactionDao: TransactionDao,
         budgetPeriodDao: BudgetPeriodDao,
@@ -78,6 +80,7 @@ object SyncModule {
         ),
         pendingMutationDao = pendingMutationDao,
         syncStateStore = syncStateStore,
+        runInTransaction = { block -> database.withTransaction { block() } },
     )
 
     @Provides
@@ -93,7 +96,7 @@ object SyncModule {
     ) = SyncEngine(
         client = client,
         database = database,
-        tokenProvider = { store.token() },
+        sessionProvider = { store.current() },
     )
 }
 

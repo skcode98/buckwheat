@@ -30,6 +30,7 @@ class FamilySyncCoordinator @Inject constructor(
 
     suspend fun signOut() {
         registrar.signOut()
+        database.reset()
         SyncScheduler.cancel(context)
     }
 

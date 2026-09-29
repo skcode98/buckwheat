@@ -8,6 +8,7 @@ import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import org.json.JSONException
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.util.Date
@@ -18,6 +19,21 @@ internal fun String?.toBigDecimalPayload(fallback: String = "0"): BigDecimal =
 internal fun String.readType(): TransactionType =
     runCatching { TransactionType.valueOf(this) }.getOrDefault(TransactionType.SPENT)
 
+internal fun JSONObject.requireString(key: String): String {
+    if (!has(key) || isNull(key)) throw JSONException("payload key $key is missing")
+    return getString(key)
+}
+
+internal fun JSONObject.requireLong(key: String): Long {
+    if (!has(key) || isNull(key)) throw JSONException("payload key $key is missing")
+    return getLong(key)
+}
+
+internal fun JSONObject.requireBoolean(key: String): Boolean {
+    if (!has(key) || isNull(key)) throw JSONException("payload key $key is missing")
+    return getBoolean(key)
+}
+
 internal fun Transaction.businessPayload(): JSONObject = JSONObject()
     .put("type", type.name)
     .put("value", value.toPlainString())
@@ -27,9 +43,9 @@ internal fun Transaction.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readTransaction(id: String): Transaction = Transaction(
     id = id,
-    type = optString("type").readType(),
-    value = optString("value", "0").toBigDecimalPayload(),
-    date = Date(optLong("spentAt")),
+    type = requireString("type").readType(),
+    value = requireString("value").toBigDecimalPayload(),
+    date = Date(requireLong("spentAt")),
     comment = optString("comment", ""),
     category = optString("category", null),
 )
@@ -44,10 +60,10 @@ internal fun ArchivedTransaction.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readArchivedTransaction(id: String): ArchivedTransaction = ArchivedTransaction(
     id = id,
-    periodId = optString("periodId"),
-    type = optString("type").readType(),
-    value = optString("value", "0").toBigDecimalPayload(),
-    date = Date(optLong("spentAt")),
+    periodId = requireString("periodId"),
+    type = requireString("type").readType(),
+    value = requireString("value").toBigDecimalPayload(),
+    date = Date(requireLong("spentAt")),
     comment = optString("comment", ""),
     category = optString("category", null),
 )
@@ -63,13 +79,13 @@ internal fun BudgetPeriod.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readBudgetPeriod(id: String): BudgetPeriod = BudgetPeriod(
     id = id,
-    budget = optString("budget", "0").toBigDecimalPayload(),
-    startDate = Date(optLong("startDate")),
-    finishDate = Date(optLong("finishDate")),
+    budget = requireString("budget").toBigDecimalPayload(),
+    startDate = Date(requireLong("startDate")),
+    finishDate = Date(requireLong("finishDate")),
     actualFinishDate = if (isNull("actualFinishDate")) null else Date(optLong("actualFinishDate")),
-    currencyCode = optString("currency", "USD"),
-    totalSpent = optString("totalSpent", "0").toBigDecimalPayload(),
-    isImported = optBoolean("isImported", false),
+    currencyCode = requireString("currency"),
+    totalSpent = requireString("totalSpent").toBigDecimalPayload(),
+    isImported = requireBoolean("isImported"),
 )
 
 internal fun SavedCategory.businessPayload(): JSONObject = JSONObject()
@@ -78,7 +94,7 @@ internal fun SavedCategory.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readSavedCategory(id: String): SavedCategory = SavedCategory(
     id = id,
-    name = optString("name"),
+    name = requireString("name"),
     emoji = optString("emoji", ""),
 )
 
@@ -86,7 +102,7 @@ internal fun SavedTag.businessPayload(): JSONObject = JSONObject().put("name", n
 
 internal fun JSONObject.readSavedTag(id: String): SavedTag = SavedTag(
     id = id,
-    name = optString("name"),
+    name = requireString("name"),
 )
 
 internal fun RecurringTemplate.businessPayload(): JSONObject = JSONObject()
@@ -97,10 +113,10 @@ internal fun RecurringTemplate.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readRecurringTemplate(id: String): RecurringTemplate = RecurringTemplate(
     id = id,
-    amount = optString("amount", "0").toBigDecimalPayload(),
+    amount = requireString("amount").toBigDecimalPayload(),
     comment = optString("comment", ""),
     dayOfMonth = optInt("dayOfMonth", 1),
-    enabled = optBoolean("enabled", true),
+    enabled = requireBoolean("enabled"),
 )
 
 internal fun SavingsGoal.businessPayload(): JSONObject = JSONObject()
@@ -113,12 +129,12 @@ internal fun SavingsGoal.businessPayload(): JSONObject = JSONObject()
 
 internal fun JSONObject.readSavingsGoal(id: String): SavingsGoal = SavingsGoal(
     id = id,
-    name = optString("name"),
-    targetAmount = optString("targetAmount", "0").toBigDecimalPayload(),
-    currentAmount = optString("currentAmount", "0").toBigDecimalPayload(),
+    name = requireString("name"),
+    targetAmount = requireString("targetAmount").toBigDecimalPayload(),
+    currentAmount = requireString("currentAmount").toBigDecimalPayload(),
     deadline = if (isNull("deadline")) null else Date(optLong("deadline")),
-    createdAt = Date(optLong("createdAt")),
-    completed = optBoolean("completed", false),
+    createdAt = Date(requireLong("createdAt")),
+    completed = requireBoolean("completed"),
 )
 
 internal fun Transaction.withSyncMeta(record: LocalRecord): Transaction = copy(

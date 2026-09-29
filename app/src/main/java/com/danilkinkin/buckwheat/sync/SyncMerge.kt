@@ -1,30 +1,53 @@
 package com.danilkinkin.buckwheat.sync
 
-private data class Outcome(val record: LocalRecord, val winner: String?)
+private data class Outcome(val record: LocalRecord, val conflict: ConflictNotice?)
 
-private fun resolve(local: LocalRecord, remote: WireRecord): Outcome {
+internal fun WireRecord.toLocalRecord(
+    familyId: String?,
+    dirty: Boolean = false,
+    syncSeq: Long = this.seq,
+): LocalRecord = LocalRecord(
+    table = table,
+    id = id,
+    updatedAt = updatedAt,
+    version = version,
+    deletedAt = deletedAt,
+    payload = payload,
+    dirty = dirty,
+    memberId = memberId,
+    familyId = familyId,
+    syncSeq = syncSeq,
+)
+
+private fun conflict(
+    table: String,
+    id: String,
+    versionsDiffer: Boolean,
+    winnerMemberId: String?,
+): ConflictNotice? = if (versionsDiffer) {
+    ConflictNotice(table, id, winnerMemberId.orEmpty())
+} else {
+    null
+}
+
+private fun resolve(local: LocalRecord, remote: WireRecord, familyId: String?): Outcome {
+    val versionsDiffer = local.version != remote.version
     if (local.dirty && remote.deletedAt == null) {
-        val winner = local.memberId.takeIf { local.version != remote.version }
-        return Outcome(local, winner)
+        return Outcome(
+            local,
+            conflict(local.table, local.id, versionsDiffer, local.memberId),
+        )
     }
     val remoteWins = remote.deletedAt != null || remote.updatedAt > local.updatedAt
     if (!remoteWins) {
-        val winner = local.memberId.takeIf { local.version != remote.version }
-        return Outcome(local, winner)
+        return Outcome(
+            local,
+            conflict(local.table, local.id, versionsDiffer, local.memberId),
+        )
     }
-    val winner = remote.memberId.takeIf { local.version != remote.version }
     return Outcome(
-        LocalRecord(
-            table = remote.table,
-            id = remote.id,
-            updatedAt = remote.updatedAt,
-            version = remote.version,
-            deletedAt = remote.deletedAt,
-            payload = remote.payload,
-            dirty = false,
-            memberId = remote.memberId,
-        ),
-        winner,
+        remote.toLocalRecord(familyId = local.familyId ?: familyId),
+        conflict(local.table, local.id, versionsDiffer, remote.memberId),
     )
 }
 
@@ -32,6 +55,7 @@ fun mergePull(
     local: List<LocalRecord>,
     remote: List<WireRecord>,
     cursor: Long,
+    familyId: String? = null,
 ): MergeResult {
     val unmatched = remote.associateBy { it.table to it.id }.toMutableMap()
     val records = mutableListOf<LocalRecord>()
@@ -43,27 +67,13 @@ fun mergePull(
             records.add(record)
             continue
         }
-        val outcome = resolve(record, incoming)
+        val outcome = resolve(record, incoming, familyId)
         records.add(outcome.record)
-        val winner = outcome.winner
-        if (winner != null) {
-            conflicts.add(ConflictNotice(record.table, record.id, winner))
-        }
+        outcome.conflict?.let { conflicts.add(it) }
     }
 
     for (incoming in unmatched.values) {
-        records.add(
-            LocalRecord(
-                table = incoming.table,
-                id = incoming.id,
-                updatedAt = incoming.updatedAt,
-                version = incoming.version,
-                deletedAt = incoming.deletedAt,
-                payload = incoming.payload,
-                dirty = false,
-                memberId = incoming.memberId,
-            )
-        )
+        records.add(incoming.toLocalRecord(familyId = familyId))
     }
 
     val highestSeq = remote.maxOfOrNull { it.seq } ?: cursor

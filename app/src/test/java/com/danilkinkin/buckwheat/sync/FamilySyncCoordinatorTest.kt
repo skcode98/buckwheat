@@ -115,6 +115,14 @@ class FamilySyncCoordinatorTest {
     }
 
     @Test
+    fun signingOutResetsTheSyncState() = runTest {
+        coordinator().enrol("https://sync.example", "Ada")
+        coordinator().signOut()
+
+        assertEquals(1, database.resets)
+    }
+
+    @Test
     fun schedulingStillRequiresANetwork() {
         assertEquals(NetworkType.CONNECTED, SyncScheduler.periodicRequest().workSpec.constraints.requiredNetworkType)
     }
@@ -137,6 +145,7 @@ class FamilySyncCoordinatorTest {
 
     private class RecordingSyncDatabase : SyncDatabase {
         val enrolments = mutableListOf<Triple<String, String, Long>>()
+        var resets = 0
 
         override suspend fun readCursor(): Long = 0L
 
@@ -148,6 +157,10 @@ class FamilySyncCoordinatorTest {
 
         override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) {
             enrolments.add(Triple(memberId, familyId, enrolledAt))
+        }
+
+        override suspend fun reset() {
+            resets++
         }
     }
 }

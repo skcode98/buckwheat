@@ -53,8 +53,18 @@ class SyncWorkerTest {
             }
 
             override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) = Unit
+            override suspend fun reset() = Unit
         },
-        tokenProvider = { token },
+        sessionProvider = {
+            token?.let {
+                FamilySession(
+                    baseUrl = "https://sync.example.com",
+                    token = it,
+                    familyId = "family-1",
+                    memberId = "member-1",
+                )
+            }
+        },
     )
 
     @Test

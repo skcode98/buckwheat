@@ -56,8 +56,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(it.memberId, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readTransaction(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readTransaction(record.id).withSyncMeta(record)
         },
     )
 
@@ -72,8 +71,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(it.memberId, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readArchivedTransaction(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readArchivedTransaction(record.id).withSyncMeta(record)
         },
     )
 
@@ -88,8 +86,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readBudgetPeriod(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readBudgetPeriod(record.id).withSyncMeta(record)
         },
     )
 
@@ -104,8 +101,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readSavedCategory(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readSavedCategory(record.id).withSyncMeta(record)
         },
     )
 
@@ -120,8 +116,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record)
         },
     )
 
@@ -136,8 +131,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readRecurringTemplate(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readRecurringTemplate(record.id).withSyncMeta(record)
         },
     )
 
@@ -152,8 +146,7 @@ class SyncBindings(
         payloadOf = { it.businessPayload().toString() },
         metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
         decoder = { record ->
-            runCatching { JSONObject(record.payload).readSavingsGoal(record.id).withSyncMeta(record) }
-                .getOrNull()
+            JSONObject(record.payload).readSavingsGoal(record.id).withSyncMeta(record)
         },
     )
 }

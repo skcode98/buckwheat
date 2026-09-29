@@ -226,7 +226,15 @@ class SyncEngineTest {
         assertEquals("token-abc", client.lastToken)
     }
 
-    private fun engine(token: String? = "token-abc") = SyncEngine(client, database) { token }
+    private fun engine(token: String? = "token-abc") =
+        SyncEngine(client, database) { token?.let { session(it) } }
+
+    private fun session(token: String) = FamilySession(
+        baseUrl = "https://sync.example.com",
+        token = token,
+        familyId = "family-1",
+        memberId = "member-1",
+    )
 
     private fun local(
         id: String,
@@ -310,6 +318,10 @@ class SyncEngineTest {
 
         override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) {
             calls.add("enrolAll")
+        }
+
+        override suspend fun reset() {
+            calls.add("reset")
         }
     }
 }

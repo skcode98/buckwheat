@@ -329,5 +329,7 @@ class FamilySyncViewModelTest {
         override suspend fun apply(apply: SyncApply) = Unit
 
         override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) = Unit
+
+        override suspend fun reset() = Unit
     }
 }

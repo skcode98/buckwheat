@@ -10,10 +10,12 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
 import java.util.Date
+import org.json.JSONException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class SyncPayloadsTest {
@@ -146,7 +148,8 @@ class SyncPayloadsTest {
 
     @Test
     fun withSyncMetaKeepsTheTombstoneTimestamp() {
-        val record = local(SyncTables.SAVED_TAGS, "tag-1", "{}", deletedAt = 999L)
+        val payload = JSONObject().put("name", "groceries").toString()
+        val record = local(SyncTables.SAVED_TAGS, "tag-1", payload, deletedAt = 999L)
 
         val decoded = JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record)
 
@@ -182,6 +185,37 @@ class SyncPayloadsTest {
     @Test
     fun aDisabledRecurringTemplateKeepsItsFlag() {
         assertFalse(recurring.copy(enabled = false).businessPayload().readRecurringTemplate("r-1").enabled)
+    }
+
+    @Test
+    fun aMissingRequiredKeyIsRejectedRatherThanGuessed() {
+        val missingType = JSONObject()
+            .put("value", "1")
+            .put("spentAt", 5L)
+        val missingCurrency = JSONObject()
+            .put("budget", "10")
+            .put("startDate", 1L)
+            .put("finishDate", 2L)
+            .put("totalSpent", "0")
+
+        assertThrows(JSONException::class.java) {
+            missingType.readTransaction("t-1")
+        }
+        assertThrows(JSONException::class.java) {
+            missingCurrency.readBudgetPeriod("p-1")
+        }
+    }
+
+    @Test
+    fun anExplicitNullForARequiredKeyIsRejected() {
+        val nulled = JSONObject()
+            .put("type", JSONObject.NULL)
+            .put("value", "1")
+            .put("spentAt", 5L)
+
+        assertThrows(JSONException::class.java) {
+            nulled.readTransaction("t-1")
+        }
     }
 
     @Test

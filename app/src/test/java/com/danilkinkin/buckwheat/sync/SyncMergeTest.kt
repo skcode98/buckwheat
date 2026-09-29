@@ -202,7 +202,7 @@ class SyncMergeTest {
     }
 
     @Test
-    fun localWinningWithoutAMemberIdReportsNoConflict() {
+    fun localWinningWithoutAMemberIdReportsAnUnknownWinner() {
         val result = mergePull(
             local = listOf(local(updatedAt = 300, version = 4, memberId = null)),
             remote = listOf(remote(updatedAt = 200, version = 2)),
@@ -210,7 +210,19 @@ class SyncMergeTest {
         )
 
         assertEquals("local-payload", result.records.first().payload)
-        assertTrue(result.conflicts.isEmpty())
+        assertEquals("", result.conflicts.single().wonByMemberId)
+    }
+
+    @Test
+    fun remoteWinningWithoutAMemberIdReportsAnUnknownWinner() {
+        val result = mergePull(
+            local = listOf(local(updatedAt = 100, version = 4, memberId = null)),
+            remote = listOf(remote(updatedAt = 200, version = 2, memberId = null)),
+            cursor = 0,
+        )
+
+        assertEquals("remote-payload", result.records.first().payload)
+        assertEquals("", result.conflicts.single().wonByMemberId)
     }
 
     @Test
@@ -282,6 +294,46 @@ class SyncMergeTest {
         )
 
         assertEquals("member-2", result.records.first().memberId)
+    }
+
+    @Test
+    fun anUnknownRemoteRecordIsStampedWithTheFamilyAndItsSeq() {
+        val result = mergePull(
+            local = emptyList(),
+            remote = listOf(remote(seq = 42)),
+            cursor = 0,
+            familyId = "family-1",
+        )
+
+        assertEquals("family-1", result.records.first().familyId)
+        assertEquals(42L, result.records.first().syncSeq)
+    }
+
+    @Test
+    fun aRemoteWinnerKeepsTheFamilyItBelongsTo() {
+        val record = local(updatedAt = 100, version = 1).copy(familyId = "family-1")
+
+        val result = mergePull(
+            local = listOf(record),
+            remote = listOf(remote(updatedAt = 200, version = 2)),
+            cursor = 0,
+            familyId = "family-1",
+        )
+
+        assertEquals("family-1", result.records.first().familyId)
+        assertEquals(10L, result.records.first().syncSeq)
+    }
+
+    @Test
+    fun aRemoteWinnerInheritsTheFamilyIdOnlyWhenLocalHasNone() {
+        val result = mergePull(
+            local = listOf(local(updatedAt = 100, version = 1)),
+            remote = listOf(remote(updatedAt = 200, version = 2)),
+            cursor = 0,
+            familyId = "family-1",
+        )
+
+        assertEquals("family-1", result.records.first().familyId)
     }
 
     @Test
