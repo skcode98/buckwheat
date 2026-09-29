@@ -127,6 +127,8 @@ data class WireRecord(
 
 data class RejectedWrite(val table: String, val id: String, val wonByMemberId: String?)
 
+const val MAX_CHANGES = 1000
+
 data class SyncOutcome(
     val cursor: Long,
     val accepted: List<String>,
@@ -153,6 +155,7 @@ class SyncStore(private val dataSource: DataSource) {
     ): SyncOutcome {
         requireUuid(familyId)
         requireUuid(memberId)
+        if (changes.size > MAX_CHANGES) throw BadRequestException("too_many_changes")
         changes.forEach { requireUuid(it.id) }
         dataSource.connection.use { connection ->
             connection.autoCommit = false
@@ -354,8 +357,26 @@ class SyncStore(private val dataSource: DataSource) {
                 if (column.nullable) return@map null
                 throw BadRequestException("payload_incomplete")
             }
-            (element as? JsonPrimitive)?.content ?: throw BadRequestException("payload_incomplete")
+            val primitive = element as? JsonPrimitive ?: throw BadRequestException("payload_invalid")
+            requireValidValue(primitive, column.type)
+            primitive.content
         }
+    }
+
+    private fun requireValidValue(primitive: JsonPrimitive, type: SqlType) {
+        val text = primitive.content
+        val valid = when (type) {
+            SqlType.TEXT -> true
+            SqlType.BOOLEAN -> if (primitive.isString) {
+                text.equals("true", ignoreCase = true) || text.equals("false", ignoreCase = true)
+            } else {
+                text == "true" || text == "false"
+            }
+
+            SqlType.INTEGER, SqlType.BIGINT -> text.toLongOrNull() != null
+            SqlType.NUMERIC -> text.toBigDecimalOrNull() != null
+        }
+        if (!valid) throw BadRequestException("payload_invalid")
     }
 }
 

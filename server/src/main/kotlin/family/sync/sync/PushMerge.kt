@@ -23,10 +23,11 @@ sealed interface MergeDecision {
 }
 
 fun decidePush(stored: StoredRecord?, incoming: PushChange): MergeDecision {
-    if (stored == null) return MergeDecision.Accept(incoming.version + 1)
-    if (incoming.version >= stored.version) return MergeDecision.Accept(incoming.version + 1)
-    if (incoming.deletedAt != null && stored.deletedAt == null) return MergeDecision.Accept(incoming.version + 1)
+    val next = maxOf(stored?.version ?: 0, incoming.version) + 1
+    if (stored == null) return MergeDecision.Accept(next)
+    if (incoming.version >= stored.version) return MergeDecision.Accept(next)
+    if (incoming.deletedAt != null && stored.deletedAt == null) return MergeDecision.Accept(next)
     if (stored.deletedAt != null && incoming.deletedAt == null) return MergeDecision.Reject(stored.memberId)
-    if (incoming.updatedAt > stored.updatedAt) return MergeDecision.Accept(incoming.version + 1)
+    if (incoming.updatedAt > stored.updatedAt) return MergeDecision.Accept(next)
     return MergeDecision.Reject(stored.memberId)
 }

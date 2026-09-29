@@ -12,6 +12,7 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -19,8 +20,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -33,8 +32,8 @@ fun Application.syncRoutes(dataSource: DataSource) {
     routing {
         post("/v1/sync") {
             val principal = tokenService.requirePrincipal(call.requestHeaderToken())
-            val body = Json.parseToJsonElement(call.receiveText()).jsonObject
-            val changes = body.changesOrEmpty().map { it.jsonObject.toPushChange() }
+            val body = call.receiveText().parseBody()
+            val changes = body.changeObjects().map { it.toPushChange() }
             val outcome = store.sync(
                 familyId = principal.familyId,
                 memberId = principal.memberId,
@@ -55,19 +54,35 @@ private fun ApplicationCall.requestHeaderToken(): String? {
 private fun TokenService.requirePrincipal(token: String?): Principal =
     token?.let { verify(it) } ?: throw UnauthorizedException("unauthenticated")
 
+private fun String.parseBody(): JsonObject {
+    val element = try {
+        Json.parseToJsonElement(this)
+    } catch (failure: SerializationException) {
+        throw BadRequestException("body_invalid")
+    }
+    return element as? JsonObject ?: throw BadRequestException("body_invalid")
+}
+
 private fun JsonObject.toPushChange(): PushChange = PushChange(
     table = requiredText("table"),
     id = requiredText("id"),
-    version = requiredLong("version").toInt(),
+    version = requiredInt("version"),
     updatedAt = requiredLong("updatedAt"),
     deletedAt = optionalLong("deletedAt"),
     payload = requiredPayload("payload"),
 )
 
-private fun JsonObject.changesOrEmpty(): JsonArray {
+private fun JsonObject.changeObjects(): List<JsonObject> {
     val element = this["changes"]
-    if (element == null || element is JsonNull) return JsonArray(emptyList())
-    return element.jsonArray
+    if (element == null || element is JsonNull) return emptyList()
+    val array = element as? JsonArray ?: throw BadRequestException("changes_invalid")
+    return array.map { it as? JsonObject ?: throw BadRequestException("changes_invalid") }
+}
+
+private fun JsonObject.requiredInt(field: String): Int {
+    val value = requiredLong(field)
+    if (value < 0 || value > Int.MAX_VALUE) throw BadRequestException("${field}_invalid")
+    return value.toInt()
 }
 
 private fun JsonObject.requiredText(field: String): String {

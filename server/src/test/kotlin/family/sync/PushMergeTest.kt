@@ -1,6 +1,7 @@
 package family.sync.sync
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PushMergeTest {
@@ -42,7 +43,7 @@ class PushMergeTest {
             incoming = push(version = 2, updatedAt = 200),
         )
 
-        assertEquals(MergeDecision.Accept(version = 3), decision)
+        assertEquals(MergeDecision.Accept(version = 5), decision)
     }
 
     @Test
@@ -72,7 +73,27 @@ class PushMergeTest {
             incoming = push(version = 1, updatedAt = 50, deletedAt = 900),
         )
 
-        assertEquals(MergeDecision.Accept(version = 2), decision)
+        assertEquals(MergeDecision.Accept(version = 10), decision)
+    }
+
+    @Test
+    fun anAcceptedWriteNeverMovesTheStoredVersionBackwards() {
+        val cases = listOf(
+            stored(version = 4, updatedAt = 100, memberId = MEMBER_B),
+            stored(version = 9, updatedAt = 100, memberId = MEMBER_B, deletedAt = 900),
+        )
+
+        for (existing in cases) {
+            val decision = decidePush(
+                stored = existing,
+                incoming = push(version = 1, updatedAt = 1000, deletedAt = 5000),
+            )
+
+            assertTrue(
+                "stored version ${existing.version} was not advanced",
+                (decision as MergeDecision.Accept).version > existing.version,
+            )
+        }
     }
 
     @Test
