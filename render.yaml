@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: family-sync
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_SSL_MODE
+        value: require

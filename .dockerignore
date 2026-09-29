@@ -1,0 +1,8 @@
+.git
+.gradle
+.kilo
+app
+**/build
+**/.gradle
+**/.kotlin
+*.log

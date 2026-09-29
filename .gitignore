@@ -27,3 +27,12 @@ keystore.properties
 .opencode/plans/
 .superpowers/
 compile_output.txt
+
+# JVM crash dumps from Gradle/Robolectric runs
+hs_err_pid*.log
+replay_pid*.log
+
+# Sync server build output and Gradle logs
+/server/build/
+.kotlin/
+*.log
