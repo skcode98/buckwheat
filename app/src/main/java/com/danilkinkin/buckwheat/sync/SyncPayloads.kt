@@ -21,7 +21,7 @@ internal fun String.readType(): TransactionType =
 internal fun Transaction.businessPayload(): JSONObject = JSONObject()
     .put("type", type.name)
     .put("value", value.toPlainString())
-    .put("date", date.time)
+    .put("spentAt", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
 
@@ -29,7 +29,7 @@ internal fun JSONObject.readTransaction(id: String): Transaction = Transaction(
     id = id,
     type = optString("type").readType(),
     value = optString("value", "0").toBigDecimalPayload(),
-    date = Date(optLong("date")),
+    date = Date(optLong("spentAt")),
     comment = optString("comment", ""),
     category = optString("category", null),
 )
@@ -38,7 +38,7 @@ internal fun ArchivedTransaction.businessPayload(): JSONObject = JSONObject()
     .put("periodId", periodId)
     .put("type", type.name)
     .put("value", value.toPlainString())
-    .put("date", date.time)
+    .put("spentAt", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
 
@@ -47,7 +47,7 @@ internal fun JSONObject.readArchivedTransaction(id: String): ArchivedTransaction
     periodId = optString("periodId"),
     type = optString("type").readType(),
     value = optString("value", "0").toBigDecimalPayload(),
-    date = Date(optLong("date")),
+    date = Date(optLong("spentAt")),
     comment = optString("comment", ""),
     category = optString("category", null),
 )
@@ -57,7 +57,7 @@ internal fun BudgetPeriod.businessPayload(): JSONObject = JSONObject()
     .put("startDate", startDate.time)
     .put("finishDate", finishDate.time)
     .put("actualFinishDate", actualFinishDate?.time ?: JSONObject.NULL)
-    .put("currencyCode", currencyCode)
+    .put("currency", currencyCode)
     .put("totalSpent", totalSpent.toPlainString())
     .put("isImported", isImported)
 
@@ -67,7 +67,7 @@ internal fun JSONObject.readBudgetPeriod(id: String): BudgetPeriod = BudgetPerio
     startDate = Date(optLong("startDate")),
     finishDate = Date(optLong("finishDate")),
     actualFinishDate = if (isNull("actualFinishDate")) null else Date(optLong("actualFinishDate")),
-    currencyCode = optString("currencyCode", "USD"),
+    currencyCode = optString("currency", "USD"),
     totalSpent = optString("totalSpent", "0").toBigDecimalPayload(),
     isImported = optBoolean("isImported", false),
 )

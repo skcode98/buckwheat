@@ -136,12 +136,24 @@ data class SyncOutcome(
 
 class SyncStore(private val dataSource: DataSource) {
 
+    private val uuidPattern =
+        Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+    private fun requireUuid(value: String) {
+        if (!uuidPattern.matches(value)) {
+            throw BadRequestException("id_not_a_uuid")
+        }
+    }
+
     fun sync(
         familyId: String,
         memberId: String,
         cursor: Long,
         changes: List<PushChange>,
     ): SyncOutcome {
+        requireUuid(familyId)
+        requireUuid(memberId)
+        changes.forEach { requireUuid(it.id) }
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             connection.prepareStatement("set lock_timeout = '4s'").use { it.execute() }
@@ -307,7 +319,11 @@ class SyncStore(private val dataSource: DataSource) {
                         val memberId = if (spec.hasMember) rows.getString(index++) else null
                         val payload = JsonObject(
                             spec.columns.associate { column ->
-                                column.key to JsonPrimitive(rows.getString(index++))
+                                column.key to if (column.type == SqlType.BOOLEAN) {
+                                    JsonPrimitive(rows.getBoolean(index++))
+                                } else {
+                                    JsonPrimitive(rows.getString(index++))
+                                }
                             }
                         )
                         records.add(

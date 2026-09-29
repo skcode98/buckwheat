@@ -169,7 +169,7 @@ class SyncPayloadsTest {
 
     @Test
     fun anAbsentCategoryStaysNull() {
-        val json = JSONObject().put("type", "SPENT").put("value", "1").put("date", 5L)
+        val json = JSONObject().put("type", "SPENT").put("value", "1").put("spentAt", 5L)
 
         assertNull(json.readTransaction("t-1").category)
     }
