@@ -613,4 +613,32 @@
   <string name="sync_conflicts_table_recurring_templates">Recurring payments</string>
   <string name="sync_conflicts_table_savings_goals">Goals</string>
   <string name="sync_conflicts_table_other">Other</string>
+
+  <string name="family_sync_title">Family Sync</string>
+  <string name="family_sync_intro">Share one budget with the people you live with. Enter the address of your family sync server, then either start a new family or join one with a code.</string>
+  <string name="family_sync_server_url">Server address</string>
+  <string name="family_sync_display_name">Your name</string>
+  <string name="family_sync_invite_code">Invite code</string>
+  <string name="family_sync_create">Start a family</string>
+  <string name="family_sync_create_description">Create a new family budget and invite the others</string>
+  <string name="family_sync_or_join">Already got a code from somebody?</string>
+  <string name="family_sync_join">Join a family</string>
+  <string name="family_sync_join_description">Use an invite code somebody shared with you</string>
+  <string name="family_sync_connected">You are sharing a budget</string>
+  <string name="family_sync_family">Family %1$s</string>
+  <string name="family_sync_member">Member %1$s</string>
+  <string name="family_sync_create_invite">Create an invite code</string>
+  <string name="family_sync_create_invite_description">Share this code so somebody else can join</string>
+  <string name="family_sync_invite_created">Invite code: %1$s</string>
+  <string name="family_sync_dismiss_invite">Hide the code</string>
+  <string name="family_sync_sign_out">Leave this family</string>
+  <string name="family_sync_sign_out_description">Stop syncing and forget this family on this device</string>
+  <string name="family_sync_created">Family started</string>
+  <string name="family_sync_joined">You joined the family</string>
+  <string name="family_sync_signed_out">You left the family</string>
+  <string name="family_sync_error_url">Enter a server address starting with https://</string>
+  <string name="family_sync_error_name">Enter your name</string>
+  <string name="family_sync_error_code">Enter an invite code</string>
+  <string name="family_sync_error_no_session">You are not in a family right now</string>
+  <string name="family_sync_error_generic">Something went wrong</string>
 </resources>

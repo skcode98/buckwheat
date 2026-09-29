@@ -69,6 +69,15 @@ not notice either. Both wake up automatically on the next sync.
 
 ## Enrolling a family
 
-The app has no enrolment screen yet — see the note in the changelog for the server. Once
-a UI exists, enrolment is: set the server URL, enter a display name, then either create an
-invite (share the code) or redeem one a family member created.
+Open Settings and pick "Family sync". The sheet has two sides.
+
+To start a family: set the server URL (the Render URL from above, `https://...onrender.com`),
+enter a display name, then tap create. The app creates the family, schedules background
+sync, and shows the family and member ids.
+
+To join one: paste the code a family member gave you into the invite field, enter a display
+name, then tap join.
+
+Once enrolled the sheet shows the family and member ids and offers a button to mint a new
+invite code, which appears on screen to read out or share. Signing out stops background
+sync and forgets the family on this device.

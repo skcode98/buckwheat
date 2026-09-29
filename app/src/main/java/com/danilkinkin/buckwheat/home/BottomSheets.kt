@@ -324,6 +324,12 @@ fun BottomSheets(
     }
 
     BottomSheetWrapper(
+        name = FAMILY_SYNC_SHEET,
+    ) { state ->
+        FamilySyncSheet()
+    }
+
+    BottomSheetWrapper(
         name = SYNC_CONFLICTS_SHEET,
     ) { state ->
         SyncConflictsSheet()

@@ -198,6 +198,16 @@ fun Settings(
 
                 SettingsSection(stringResource(R.string.settings_section_data))
                 TextRow(
+                    icon = painterResource(R.drawable.ic_share),
+                    text = stringResource(R.string.family_sync_title),
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(FAMILY_SYNC_SHEET)
+                        )
+                    },
+                )
+                TextRow(
                     icon = painterResource(R.drawable.ic_search),
                     text = stringResource(R.string.search_history_title),
                     endIcon = painterResource(R.drawable.ic_arrow_right),
