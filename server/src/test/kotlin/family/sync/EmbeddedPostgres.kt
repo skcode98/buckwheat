@@ -103,6 +103,15 @@ object TestDatabase {
         }
     }
 
+    fun countRows(table: String): Int = dataSource.connection.use { connection ->
+        connection.createStatement().use { statement ->
+            statement.executeQuery("select count(*) from $table").use { rows ->
+                rows.next()
+                rows.getInt(1)
+            }
+        }
+    }
+
     fun primaryKeys(table: String): Set<String> {
         val names = mutableSetOf<String>()
         dataSource.connection.use { connection ->

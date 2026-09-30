@@ -12,8 +12,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import javax.sql.DataSource
 
@@ -45,7 +45,7 @@ fun Application.familyRoutes(dataSource: DataSource) {
             }
 
             post("/join") {
-                val body = parser.parseToJsonElement(call.receiveText()).jsonObject
+                val body = call.receiveText().parseObjectBody()
                 val credentials = store.redeemInvite(
                     code = body.requiredText("code"),
                     displayName = body.requiredText("displayName"),
@@ -92,8 +92,17 @@ private fun io.ktor.server.application.ApplicationCall.requestHeaderToken(): Str
 private fun TokenService.requirePrincipal(token: String?): Principal =
     token?.let { verify(it) } ?: throw UnauthorizedException("unauthenticated")
 
+private fun String.parseObjectBody(): JsonObject {
+    val element = try {
+        Json.parseToJsonElement(this)
+    } catch (failure: IllegalArgumentException) {
+        throw BadRequestException("body_invalid")
+    }
+    return element as? JsonObject ?: throw BadRequestException("body_invalid")
+}
+
 private fun Json.readText(body: String, field: String): String =
-    parseToJsonElement(body).jsonObject.requiredText(field)
+    body.parseObjectBody().requiredText(field)
 
 private fun kotlinx.serialization.json.JsonObject.requiredText(field: String): String {
     val value = this[field]
