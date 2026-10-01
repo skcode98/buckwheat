@@ -10,6 +10,7 @@ import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
+import com.danilkinkin.buckwheat.data.dao.SyncStampDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
@@ -301,9 +302,26 @@ val Migration17to18: Migration = object : Migration(17, 18) {
     }
 }
 
+val Migration18to19: Migration = object : Migration(18, 19) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // `saved_tags.name` and `saved_categories.name` used to carry UNIQUE indexes. Two
+        // family members can independently save a tag/category with the same name on two
+        // devices; they sync as two distinct rows, so the unique index aborted the entire
+        // pull transaction on the second one. Recreate both indexes non-unique.
+        database.execSQL("DROP INDEX IF EXISTS `index_saved_tags_name`")
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_saved_tags_name` ON `saved_tags` (`name`)"
+        )
+        database.execSQL("DROP INDEX IF EXISTS `index_saved_categories_name`")
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_saved_categories_name` ON `saved_categories` (`name`)"
+        )
+    }
+}
+
 @Database(
     entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, FamilyState::class, PeriodLimit::class, PendingMutation::class],
-    version = 18,
+    version = 19,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -327,9 +345,11 @@ abstract class DatabaseModule : RoomDatabase() {
 
     abstract fun savingsGoalDao(): SavingsGoalDao
 
-    abstract fun pendingMutationDao(): PendingMutationDao
+abstract fun pendingMutationDao(): PendingMutationDao
+
+    abstract fun syncStampDao(): SyncStampDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19)
     }
 }

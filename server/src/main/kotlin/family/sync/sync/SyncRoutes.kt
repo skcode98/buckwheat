@@ -3,12 +3,13 @@ package family.sync.sync
 import family.sync.auth.Principal
 import family.sync.auth.TokenService
 import family.sync.family.BadRequestException
+import family.sync.family.SecuritySettings
 import family.sync.family.UnauthorizedException
+import family.sync.family.receiveTextLimited
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
-import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -25,14 +26,21 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import javax.sql.DataSource
 
-fun Application.syncRoutes(dataSource: DataSource) {
-    val tokenService = TokenService(dataSource)
+fun Application.syncRoutes(
+    dataSource: DataSource,
+    security: SecuritySettings = SecuritySettings.fromEnv(),
+) {
+    val tokenService = TokenService(dataSource, security.tokenLifetime)
     val store = SyncStore(dataSource)
 
     routing {
         post("/v1/sync") {
             val principal = tokenService.requirePrincipal(call.requestHeaderToken())
-            val body = call.receiveText().parseBody()
+            // A sync batch carries up to MAX_CHANGES entries, so the whole request can be large.
+            // receiveTextLimited streams at most maxBytes+1 and rejects 413, which also covers a
+            // chunked body that declares no Content-Length — the global plugin only sees a
+            // declared length, so it cannot close that case on its own.
+            val body = call.receiveTextLimited(security.maxRequestBytes).parseBody()
             val changes = body.changeObjects().map { it.toPushChange() }
             val outcome = store.sync(
                 familyId = principal.familyId,
@@ -110,7 +118,10 @@ private fun JsonObject.requiredPayload(field: String): String {
 
 private fun SyncOutcome.toResponse(): JsonObject = buildJsonObject {
     put("cursor", cursor)
-    putJsonArray("accepted") { accepted.forEach { add(it) } }
+    put("hasMore", hasMore)
+    putJsonArray("accepted") {
+        accepted.forEach { add(buildJsonObject { put("table", it.table); put("id", it.id) }) }
+    }
     putJsonArray("records") {
         records.forEach { record ->
             add(
@@ -133,7 +144,8 @@ private fun SyncOutcome.toResponse(): JsonObject = buildJsonObject {
                 buildJsonObject {
                     put("table", rejection.table)
                     put("id", rejection.id)
-                    put("wonByMemberId", rejection.wonByMemberId)
+                    put("reason", rejection.reason.wire)
+                    if (rejection.wonByMemberId != null) put("wonByMemberId", rejection.wonByMemberId)
                 }
             )
         }

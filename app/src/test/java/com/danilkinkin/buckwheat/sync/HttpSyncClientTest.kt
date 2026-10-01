@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.sync
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -88,7 +89,7 @@ class HttpSyncClientTest {
             """
             {
               "cursor": 17,
-              "accepted": ["rec-1"],
+              "accepted": [{"table":"transactions","id":"rec-1"}],
               "records": [
                 {
                   "table": "transactions",
@@ -102,14 +103,14 @@ class HttpSyncClientTest {
                 }
               ],
               "conflicts": [
-                {"table":"saved_tags","id":"rec-9","wonByMemberId":"member-2"}
+                {"table":"saved_tags","id":"rec-9","reason":"stale_version","wonByMemberId":"member-2"}
               ]
             }
             """.trimIndent()
         )
 
         assertEquals(17L, response.cursor)
-        assertEquals(listOf("rec-1"), response.accepted)
+        assertEquals(listOf(RecordKey("transactions", "rec-1")), response.accepted)
         assertEquals(1, response.records.size)
         val record = response.records.first()
         assertEquals("transactions", record.table)
@@ -152,13 +153,13 @@ class HttpSyncClientTest {
     }
 
     @Test
-    fun aConflictWithoutAWinnerDecodesToAnEmptyWinner() {
+    fun aConflictWithoutAWinnerDecodesToNoWinnerAtAll() {
         val response = decodeSyncResponse(
             """{"cursor":1,"accepted":[],"records":[],"conflicts":[
                  {"table":"saved_tags","id":"t-1"}]}"""
         )
 
-        assertEquals("", response.conflicts.first().wonByMemberId)
+        assertNull(response.conflicts.first().wonByMemberId)
     }
 
     @Test
@@ -166,9 +167,75 @@ class HttpSyncClientTest {
         val response = decodeSyncResponse("""{"cursor":9}""")
 
         assertEquals(9L, response.cursor)
-        assertEquals(emptyList<String>(), response.accepted)
+        assertEquals(emptyList<RecordKey>(), response.accepted)
         assertEquals(emptyList<WireRecord>(), response.records)
         assertEquals(emptyList<ConflictNotice>(), response.conflicts)
+    }
+
+    @Test
+    fun anAcceptanceIsKeyedByTableAndId() {
+        val response = decodeSyncResponse(
+            """{"cursor":1,"accepted":[{"table":"budget_periods","id":"p-1"},
+               {"table":"transactions","id":"t-1"}],"records":[],"conflicts":[]}"""
+        )
+
+        assertEquals(
+            listOf(RecordKey("budget_periods", "p-1"), RecordKey("transactions", "t-1")),
+            response.accepted,
+        )
+    }
+
+    @Test
+    fun aLegacyBareStringAcceptanceIsToleratedRatherThanDropped() {
+        // An app update can reach a device before the server update lands. Dropping the acknowledgement
+        // would leave that change queued and re-pushed for ever.
+        val response = decodeSyncResponse("""{"cursor":1,"accepted":["t-1"],"records":[],"conflicts":[]}""")
+
+        assertEquals(listOf(RecordKey("", "t-1")), response.accepted)
+    }
+
+    @Test
+    fun anAcceptanceWithoutAnIdIsDropped() {
+        val response = decodeSyncResponse(
+            """{"cursor":1,"accepted":[{"table":"transactions"},"t-1"],"records":[],"conflicts":[]}"""
+        )
+
+        assertEquals(listOf(RecordKey("", "t-1")), response.accepted)
+    }
+
+    @Test
+    fun hasMoreIsDecodedAndAbsentMeansFalse() {
+        assertTrue(decodeSyncResponse("""{"cursor":1,"hasMore":true}""").hasMore)
+        assertFalse(decodeSyncResponse("""{"cursor":1}""").hasMore)
+    }
+
+    @Test
+    fun anUnknownConflictReasonDegradesToStaleVersion() {
+        val response = decodeSyncResponse(
+            """{"cursor":1,"records":[],"conflicts":[
+                 {"table":"saved_tags","id":"t-1","reason":"invented_later"}]}"""
+        )
+
+        assertEquals(ConflictReason.STALE_VERSION, response.conflicts.first().reason)
+    }
+
+    @Test
+    fun everyConflictReasonSurvivesTheWire() {
+        val response = decodeSyncResponse(
+            """{"cursor":1,"records":[],"conflicts":[
+                 {"table":"saved_tags","id":"a","reason":"stale_version"},
+                 {"table":"saved_tags","id":"b","reason":"deleted_remotely"},
+                 {"table":"saved_tags","id":"c","reason":"cross_family_write"}]}"""
+        )
+
+        assertEquals(
+            listOf(
+                ConflictReason.STALE_VERSION,
+                ConflictReason.DELETED_REMOTELY,
+                ConflictReason.CROSS_FAMILY_WRITE,
+            ),
+            response.conflicts.map { it.reason },
+        )
     }
 
     @Test

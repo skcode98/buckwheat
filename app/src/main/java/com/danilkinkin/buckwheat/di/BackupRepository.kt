@@ -43,6 +43,10 @@ import com.danilkinkin.buckwheat.data.appLockBiometricSecretStoreKey
 import com.danilkinkin.buckwheat.data.appLockSmartTimeoutEnabledStoreKey
 import com.danilkinkin.buckwheat.data.appLockSmartTimeoutSecondsStoreKey
 import com.danilkinkin.buckwheat.data.appLockLastBackgroundTimeStoreKey
+import com.danilkinkin.buckwheat.sync.syncBaseUrlStoreKey
+import com.danilkinkin.buckwheat.sync.syncFamilyIdStoreKey
+import com.danilkinkin.buckwheat.sync.syncMemberIdStoreKey
+import com.danilkinkin.buckwheat.sync.syncTokenStoreKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import java.util.Date
@@ -93,6 +97,13 @@ class BackupRepository @Inject constructor(
                 savingsGoalDao.deleteAll()
                 budgetPeriodDao.deleteAll()
 
+                // The backup codec never writes family_id / sync_seq / version / updated_at, so
+                // every restored row comes back as pre-enrolment local data and the next
+                // enrolAll picks it up. The queue must not survive the wipe: entries for the old
+                // rows would point at local-only rows and the device would try to push (and
+                // retract) a family history it no longer holds.
+                database.pendingMutationDao().deleteAll()
+
                 // Insert in FK-safe order, preserving ids so archived_transactions keep their period link.
                 budgetPeriodDao.insertAll(backup.budgetPeriods)
                 budgetPeriodDao.insertArchivedTransactions(backup.archivedTransactions)
@@ -126,6 +137,13 @@ class BackupRepository @Inject constructor(
             prefs.remove(appLockSmartTimeoutEnabledStoreKey)
             prefs.remove(appLockSmartTimeoutSecondsStoreKey)
             prefs.remove(appLockLastBackgroundTimeStoreKey)
+            // Enrolment is device-local and never travels in a backup: the bearer token is a
+            // plaintext secret, and re-applying a family's ids from a backup would silently
+            // enrol this device in that family with an empty database.
+            prefs.remove(syncTokenStoreKey)
+            prefs.remove(syncFamilyIdStoreKey)
+            prefs.remove(syncMemberIdStoreKey)
+            prefs.remove(syncBaseUrlStoreKey)
         }
 
         // The reminder alarm survives neither DataStore changes nor the DB wipe, so re-arm it
@@ -193,22 +211,7 @@ class BackupRepository @Inject constructor(
 private fun Preferences.asBackupMap(): Map<String, BackupValue> {
     val result = LinkedHashMap<String, BackupValue>()
     asMap().forEach { (key, value) ->
-        // Never persist AI API keys into a backup file (plaintext secrets). Covers both the
-        // legacy voiceAiApiKey key and every per-provider "ai.<provider>.apiKey" key.
-        if (key.name == voiceAiApiKeyStoreKey.name || key.name.endsWith(".apiKey")) return@forEach
-        // App lock is a local-only concern: never persist the PIN hash (secret) nor the lock
-        // flags (a restored flag without a hash would lock the user out).
-        if (key.name == appLockPinHashStoreKey.name ||
-            key.name == appLockEnabledStoreKey.name ||
-            key.name == appLockBiometricEnabledStoreKey.name ||
-            key.name == appLockFailedAttemptsStoreKey.name ||
-            key.name == appLockLockoutUntilStoreKey.name ||
-            key.name == appLockBiometricIvStoreKey.name ||
-            key.name == appLockBiometricSecretStoreKey.name ||
-            key.name == appLockSmartTimeoutEnabledStoreKey.name ||
-            key.name == appLockSmartTimeoutSecondsStoreKey.name ||
-            key.name == appLockLastBackgroundTimeStoreKey.name
-        ) return@forEach
+        if (isNeverBackedUp(key.name)) return@forEach
         when (value) {
             is Boolean -> result[key.name] = BackupValue.Bool(value)
             is Int -> result[key.name] = BackupValue.IntValue(value)
@@ -234,3 +237,24 @@ private fun MutablePreferences.applyBackupMap(map: Map<String, BackupValue>) {
         }
     }
 }
+
+private val neverBackedUpKeys = setOf(
+    voiceAiApiKeyStoreKey.name,
+    appLockPinHashStoreKey.name,
+    appLockEnabledStoreKey.name,
+    appLockBiometricEnabledStoreKey.name,
+    appLockFailedAttemptsStoreKey.name,
+    appLockLockoutUntilStoreKey.name,
+    appLockBiometricIvStoreKey.name,
+    appLockBiometricSecretStoreKey.name,
+    appLockSmartTimeoutEnabledStoreKey.name,
+    appLockSmartTimeoutSecondsStoreKey.name,
+    appLockLastBackgroundTimeStoreKey.name,
+    syncTokenStoreKey.name,
+    syncFamilyIdStoreKey.name,
+    syncMemberIdStoreKey.name,
+    syncBaseUrlStoreKey.name,
+)
+
+private fun isNeverBackedUp(name: String): Boolean =
+    name in neverBackedUpKeys || name.endsWith(".apiKey")

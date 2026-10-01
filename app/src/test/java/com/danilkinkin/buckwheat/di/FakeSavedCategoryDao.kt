@@ -28,8 +28,41 @@ class FakeSavedCategoryDao : SavedCategoryDao {
         return categories.any { it.name == name }
     }
 
+    override suspend fun upsertOne(
+        id: String,
+        name: String,
+        emoji: String,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val category = SavedCategory(
+            id = id,
+            name = name,
+            emoji = emoji,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        val index = categories.indexOfFirst { it.id == id }
+        if (index >= 0) categories[index] = category else categories.add(category)
+    }
+
     override suspend fun insert(category: SavedCategory) {
-        categories.add(category)
+        upsertOne(
+            id = category.id,
+            name = category.name,
+            emoji = category.emoji,
+            familyId = category.familyId,
+            syncSeq = category.syncSeq,
+            updatedAt = category.updatedAt,
+            deletedAt = category.deletedAt,
+            version = category.version,
+        )
     }
 
     override suspend fun insertAll(categories: List<SavedCategory>) {

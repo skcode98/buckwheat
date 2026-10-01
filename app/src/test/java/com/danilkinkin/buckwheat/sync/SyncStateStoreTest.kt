@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.sync
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SyncStateStoreTest {
@@ -39,28 +40,52 @@ class SyncStateStoreTest {
     }
 
     @Test
-    fun aPartiallyBrokenPayloadKeepsTheUsableEntries() {
+    fun anEntryWithoutAKeyIsSkippedButOneWithoutAWinnerIsKept() {
         val json = """
             [
               {"table":"transactions","id":"t-1","wonByMemberId":"member-1"},
               {"table":"","id":"t-2","wonByMemberId":"member-2"},
               {"table":"transactions","id":"","wonByMemberId":"member-3"},
-              {"table":"transactions","id":"t-4","wonByMemberId":""}
+              {"table":"budget_periods","id":"p-1","wonByMemberId":""},
+              {"table":"saved_tags","id":"tag-1"}
             ]
         """.trimIndent()
 
         assertEquals(
-            listOf(ConflictNotice(SyncTables.TRANSACTIONS, "t-1", "member-1")),
+            listOf(
+                ConflictNotice(SyncTables.TRANSACTIONS, "t-1", "member-1"),
+                ConflictNotice(SyncTables.BUDGET_PERIODS, "p-1", null),
+                ConflictNotice(SyncTables.SAVED_TAGS, "tag-1", null),
+            ),
             decodeConflicts(json),
         )
     }
 
     @Test
-    fun anEntryMissingAFieldIsSkipped() {
-        val json = """[{"table":"transactions","id":"t-1"},{"table":"transactions","id":"t-2","wonByMemberId":"m"}]"""
+    fun aConflictFromAMemberlessTableSurvivesTheRoundTrip() {
+        val conflicts = SyncTables.ALL.map {
+            ConflictNotice(it, "id-1", wonByMemberId = null)
+        }
+
+        assertEquals(SyncTables.ALL.size, decodeConflicts(encodeConflicts(conflicts)).size)
+        assertNull(decodeConflicts(encodeConflicts(conflicts)).first().wonByMemberId)
+    }
+
+    @Test
+    fun everyReasonSurvivesTheRoundTrip() {
+        val conflicts = ConflictReason.entries.mapIndexed { index, reason ->
+            ConflictNotice(SyncTables.TRANSACTIONS, "t-$index", "member-1", reason)
+        }
+
+        assertEquals(conflicts, decodeConflicts(encodeConflicts(conflicts)))
+    }
+
+    @Test
+    fun anUnknownReasonDegradesToStaleVersion() {
+        val json = """[{"table":"transactions","id":"t-1","reason":"from_the_future"}]"""
 
         assertEquals(
-            listOf(ConflictNotice(SyncTables.TRANSACTIONS, "t-2", "m")),
+            listOf(ConflictNotice(SyncTables.TRANSACTIONS, "t-1", null, ConflictReason.STALE_VERSION)),
             decodeConflicts(json),
         )
     }

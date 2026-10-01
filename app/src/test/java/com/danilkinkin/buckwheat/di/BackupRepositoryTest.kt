@@ -4,10 +4,15 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.danilkinkin.buckwheat.backup.BACKUP_VERSION
+import com.danilkinkin.buckwheat.backup.BackupData
+import com.danilkinkin.buckwheat.backup.BackupValue
 import com.danilkinkin.buckwheat.backup.parseBackupData
+import com.danilkinkin.buckwheat.backup.toJsonString
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.PendingMutation
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -15,10 +20,16 @@ import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.sync.SyncTables
+import com.danilkinkin.buckwheat.sync.syncBaseUrlStoreKey
+import com.danilkinkin.buckwheat.sync.syncFamilyIdStoreKey
+import com.danilkinkin.buckwheat.sync.syncMemberIdStoreKey
+import com.danilkinkin.buckwheat.sync.syncTokenStoreKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -166,6 +177,45 @@ class BackupRepositoryTest {
         assertFalse(backupRepository.restoreBackup("{\"app\":\"other\",\"version\":1}"))
     }
 
+    // A restore replaces every row with pre-enrolment local data (the backup codec drops every
+    // sync column), so the pending-mutation queue has to go with the rows it described —
+    // otherwise the device would push, and retract, a family history it no longer holds.
+    @Test
+    fun restoreClearsThePendingMutationQueueAndStripsSyncColumns() = runTest {
+        val now = Date(1_700_000_000_000L)
+        transactionDao.insert(
+            Transaction(
+                id = "7",
+                type = TransactionType.SPENT,
+                value = BigDecimal("150.50"),
+                date = now,
+                comment = "lunch",
+                familyId = "family-1",
+                syncSeq = 12L,
+                version = 4,
+            )
+        )
+        database.pendingMutationDao().enqueue(
+            PendingMutation(
+                table = SyncTables.TRANSACTIONS,
+                recordId = "7",
+                queuedAt = now.time,
+                isDelete = false,
+            )
+        )
+        assertEquals(1, database.pendingMutationDao().count())
+
+        val json = backupRepository.exportBackup()
+        assertTrue(backupRepository.restoreBackup(json))
+
+        assertEquals(0, database.pendingMutationDao().count())
+        val restored = transactionDao.getAllNow().single()
+        assertEquals("7", restored.id)
+        assertNull(restored.familyId)
+        assertEquals(0L, restored.syncSeq)
+        assertEquals(1, restored.version)
+    }
+
     @Test
     fun exportProducesParseableJson() = runTest {
         val json = backupRepository.exportBackup()
@@ -186,5 +236,60 @@ class BackupRepositoryTest {
 
         assertFalse(json.contains("sk-secret-123"))
         assertFalse(json.contains("voiceAiApiKey"))
+    }
+
+    @Test
+    fun exportOmitsTheFamilySyncBearerTokenAndIds() = runTest {
+        // The token is a plaintext bearer credential for the whole family's history, so it must never
+        // reach a file the user is likely to email or upload somewhere.
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.settingsDataStore.edit {
+            it[syncBaseUrlStoreKey] = "https://sync.example"
+            it[syncTokenStoreKey] = "bearer-secret-abc"
+            it[syncFamilyIdStoreKey] = "family-uuid"
+            it[syncMemberIdStoreKey] = "member-uuid"
+        }
+
+        val json = backupRepository.exportBackup()
+
+        assertFalse(json.contains("bearer-secret-abc"))
+        assertFalse(json.contains("syncToken"))
+        assertFalse(json.contains("syncFamilyId"))
+        assertFalse(json.contains("syncMemberId"))
+        assertFalse(json.contains("syncBaseUrl"))
+    }
+
+    @Test
+    fun restoringACraftedBackupDoesNotEnrolTheDevice() = runTest {
+        // A backup from an enrolled device, or a hand-edited one, must not carry the device into a
+        // family: an empty local database with push rights over that family's history is worse than
+        // no enrolment at all.
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val crafted = BackupData(
+            version = BACKUP_VERSION,
+            exportedAt = 1_700_000_000_000L,
+            transactions = emptyList(),
+            budgetPeriods = emptyList(),
+            archivedTransactions = emptyList(),
+            savedTags = emptyList(),
+            savedCategories = emptyList(),
+            recurringTemplates = emptyList(),
+            savingsGoals = emptyList(),
+            budgetPreferences = emptyMap(),
+            settingsPreferences = mapOf(
+                syncTokenStoreKey.name to BackupValue.Str("crafted-token"),
+                syncFamilyIdStoreKey.name to BackupValue.Str("crafted-family"),
+                syncMemberIdStoreKey.name to BackupValue.Str("crafted-member"),
+                syncBaseUrlStoreKey.name to BackupValue.Str("https://evil.example"),
+            ),
+        ).toJsonString()
+
+        assertTrue(backupRepository.restoreBackup(crafted))
+
+        val prefs = context.settingsDataStore.data.first()
+        assertNull(prefs[syncTokenStoreKey])
+        assertNull(prefs[syncFamilyIdStoreKey])
+        assertNull(prefs[syncMemberIdStoreKey])
+        assertNull(prefs[syncBaseUrlStoreKey])
     }
 }

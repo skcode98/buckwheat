@@ -6,6 +6,8 @@ import com.danilkinkin.buckwheat.data.RecurringAutoApplyMode
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.di.SettingsRepository
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +21,7 @@ import javax.inject.Inject
 class RecurringPaymentsViewModel @Inject constructor(
     private val recurringDao: RecurringDao,
     private val settingsRepository: SettingsRepository,
+    private val syncDirtyMarker: SyncDirtyMarker,
 ) : ViewModel() {
     val templates: StateFlow<List<RecurringTemplate>> = recurringDao.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -35,19 +38,20 @@ class RecurringPaymentsViewModel @Inject constructor(
     fun addTemplate(amount: BigDecimal, comment: String, dayOfMonth: Int) {
         if (amount <= BigDecimal.ZERO || comment.isBlank() || dayOfMonth !in 1..31) return
         viewModelScope.launch {
-            recurringDao.insert(
-                RecurringTemplate(
-                    amount = amount,
-                    comment = comment.trim(),
-                    dayOfMonth = dayOfMonth,
-                )
+            val template = RecurringTemplate(
+                amount = amount,
+                comment = comment.trim(),
+                dayOfMonth = dayOfMonth,
             )
+            recurringDao.insert(template)
+            syncDirtyMarker.markUpsert(SyncTables.RECURRING_TEMPLATES, template.id)
         }
     }
 
     fun toggleEnabled(template: RecurringTemplate) {
         viewModelScope.launch {
             recurringDao.update(template.copy(enabled = !template.enabled))
+            syncDirtyMarker.markUpsert(SyncTables.RECURRING_TEMPLATES, template.id)
         }
     }
 
@@ -61,12 +65,20 @@ class RecurringPaymentsViewModel @Inject constructor(
                     dayOfMonth = dayOfMonth,
                 )
             )
+            syncDirtyMarker.markUpsert(SyncTables.RECURRING_TEMPLATES, template.id)
         }
     }
 
     fun deleteTemplate(id: String) {
         viewModelScope.launch {
-            recurringDao.deleteById(id)
+            val existing = recurringDao.getAllNow().firstOrNull { it.id == id } ?: return@launch
+            recurringDao.deleteById(existing.id)
+            syncDirtyMarker.markDelete(
+                SyncTables.RECURRING_TEMPLATES,
+                existing.id,
+                existing.familyId,
+                existing.syncSeq,
+            )
         }
     }
 }

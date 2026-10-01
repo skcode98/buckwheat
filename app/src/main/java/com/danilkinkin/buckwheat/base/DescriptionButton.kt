@@ -5,12 +5,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
+
+private const val DISABLED_ALPHA = 0.38f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +27,7 @@ fun DescriptionButton(
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
     colors: CardColors = CardDefaults.cardColors(),
     elevation: CardElevation = CardDefaults.cardElevation(),
+    enabled: Boolean = true,
 ){
     Card(
         onClick = onClick,
@@ -31,9 +35,12 @@ fun DescriptionButton(
         shape = MaterialTheme.shapes.extraLarge,
         colors = colors,
         elevation = elevation,
+        enabled = enabled,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (enabled) 1F else DISABLED_ALPHA),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(

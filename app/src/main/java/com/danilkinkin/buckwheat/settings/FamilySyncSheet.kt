@@ -1,24 +1,35 @@
 package com.danilkinkin.buckwheat.settings
 
+import android.content.Context
+import android.content.Intent
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,6 +39,9 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.errorForReport
+import java.time.Instant
+import java.util.Date
 
 const val FAMILY_SYNC_SHEET = "familySync"
 
@@ -42,16 +56,36 @@ fun FamilySyncSheet(
         16.dp,
     )
 
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+
     val session by viewModel.session.collectAsStateWithLifecycle()
     val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
     val displayName by viewModel.displayName.collectAsStateWithLifecycle()
     val inviteCode by viewModel.inviteCode.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val mintedInvite by viewModel.mintedInvite.collectAsStateWithLifecycle()
+    val memberName by viewModel.memberName.collectAsStateWithLifecycle()
+    val mintedInviteExpiresAt by viewModel.mintedInviteExpiresAt.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message -> appViewModel.showSnackbar(message) }
     }
+
+    val expiresAtLabel = remember(mintedInviteExpiresAt, context) {
+        mintedInviteExpiresAt?.let { inviteExpiryLabel(context, it) }
+    }
+    val inviteShareLine = mintedInvite?.let { code ->
+        stringResource(R.string.family_sync_invite_share_text, code)
+    }
+    val inviteShareText = if (expiresAtLabel == null) {
+        inviteShareLine.orEmpty()
+    } else {
+        "${inviteShareLine.orEmpty()}\n\n$expiresAtLabel"
+    }
+    val copyLabel = stringResource(R.string.family_sync_invite_copy)
+    val shareLabel = stringResource(R.string.family_sync_invite_share)
+    val copiedText = stringResource(R.string.family_sync_invite_copied)
 
     Surface(Modifier.padding(top = localBottomSheetScrollState.topPadding)) {
         Column {
@@ -109,6 +143,7 @@ fun FamilySyncSheet(
                             Text(stringResource(R.string.family_sync_create_description))
                         },
                         onClick = viewModel::enrol,
+                        enabled = !busy,
                     )
 
                     Text(
@@ -132,35 +167,90 @@ fun FamilySyncSheet(
                             Text(stringResource(R.string.family_sync_join_description))
                         },
                         onClick = viewModel::join,
+                        enabled = !busy,
                     )
                 } else {
                     Text(
                         text = stringResource(R.string.family_sync_connected),
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    Text(
-                        text = stringResource(R.string.family_sync_family, current.familyId),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(R.string.family_sync_member, current.memberId),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+
+                    val shownName = memberName.ifBlank { displayName }
+                    if (shownName.isNotBlank()) {
+                        Text(
+                            text = stringResource(R.string.family_sync_member_name, shownName),
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = stringResource(R.string.family_sync_family, current.familyId),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Text(
+                            text = stringResource(R.string.family_sync_member, current.memberId),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Text(
+                            text = stringResource(R.string.family_sync_ids_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        )
+                    }
 
                     mintedInvite?.let { code ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            colors = CardDefaults.cardColors(),
                         ) {
-                            Text(
-                                text = stringResource(R.string.family_sync_invite_created, code),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.family_sync_invite_created, code),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                if (expiresAtLabel != null) {
+                                    Text(
+                                        text = expiresAtLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = {
+                                        clipboard.setText(AnnotatedString(code))
+                                        appViewModel.showSnackbar(copiedText)
+                                    }) {
+                                        Text(copyLabel)
+                                    }
+                                    TextButton(onClick = {
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, inviteShareText)
+                                        }
+                                        try {
+                                            context.startActivity(
+                                                Intent.createChooser(intent, shareLabel)
+                                            )
+                                        } catch (e: Exception) {
+                                            context.errorForReport = e.stackTraceToString()
+                                        }
+                                    }) {
+                                        Text(shareLabel)
+                                    }
+                                }
+                            }
                         }
                         DescriptionButton(
                             title = { Text(stringResource(R.string.family_sync_dismiss_invite)) },
                             onClick = viewModel::clearMintedInvite,
+                            enabled = !busy,
                         )
                     }
 
@@ -170,6 +260,7 @@ fun FamilySyncSheet(
                             Text(stringResource(R.string.family_sync_create_invite_description))
                         },
                         onClick = viewModel::mintInvite,
+                        enabled = !busy,
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -180,9 +271,22 @@ fun FamilySyncSheet(
                             Text(stringResource(R.string.family_sync_sign_out_description))
                         },
                         onClick = viewModel::signOut,
+                        enabled = !busy,
                     )
                 }
             }
         }
     }
 }
+
+private fun inviteExpiryLabel(context: Context, expiresAt: String): String? = runCatching {
+    val instant = Instant.parse(expiresAt)
+    if (instant.isAfter(Instant.now())) {
+        context.getString(
+            R.string.family_sync_invite_expires_at,
+            DateFormat.getTimeFormat(context).format(Date.from(instant)),
+        )
+    } else {
+        context.getString(R.string.family_sync_invite_expired)
+    }
+}.getOrNull()

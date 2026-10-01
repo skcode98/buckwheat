@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.room.Transaction as RoomTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import com.danilkinkin.buckwheat.budgetDataStore
@@ -15,19 +14,18 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
-import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.PendingMutation
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.countDays
 import com.danilkinkin.buckwheat.util.isSameDay
@@ -81,36 +79,18 @@ class SpendsRepository @Inject constructor(
     private val categoryAssignmentScheduler: CategoryAssignmentScheduler,
     private val categoryCapTracker: CategoryCapTracker,
     private val budgetCalculator: BudgetCalculator,
-    private val pendingMutationDao: PendingMutationDao,
+    private val syncDirtyMarker: SyncDirtyMarker,
 ) {
-    private suspend fun markMutation(table: String, recordId: String, isDelete: Boolean) {
-        val queuedAt = getCurrentDateUseCase().time
-        if (pendingMutationDao.mark(table, recordId, queuedAt, isDelete) == 0) {
-            pendingMutationDao.enqueue(
-                PendingMutation(
-                    table = table,
-                    recordId = recordId,
-                    queuedAt = queuedAt,
-                    isDelete = isDelete,
-                )
-            )
-        }
-    }
-
+    // Thin delegations kept so the call sites below stay unchanged: SyncDirtyMarker advances
+    // version/updated_at AND queues the pending_mutations row in one place.
     private suspend fun markUpsert(table: String, recordId: String) =
-        markMutation(table, recordId, isDelete = false)
+        syncDirtyMarker.markUpsert(table, recordId)
 
-    private suspend fun markUpserts(table: String, recordIds: List<String>) {
-        recordIds.forEach { markUpsert(table, it) }
-    }
+    private suspend fun markUpserts(table: String, recordIds: List<String>) =
+        syncDirtyMarker.markUpserts(table, recordIds)
 
-    private suspend fun markDeleted(table: String, recordId: String, familyId: String?, syncSeq: Long) {
-        if (familyId != null && syncSeq > 0L) {
-            markMutation(table, recordId, isDelete = true)
-        } else {
-            pendingMutationDao.deleteQueued(table, listOf(recordId))
-        }
-    }
+    private suspend fun markDeleted(table: String, recordId: String, familyId: String?, syncSeq: Long) =
+        syncDirtyMarker.markDelete(table, recordId, familyId, syncSeq)
 
     fun getAllTransactions(): Flow<List<Transaction>> = transactionDao.getAll()
     fun getAllArchivedTransactions(): Flow<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
@@ -698,26 +678,6 @@ class SpendsRepository @Inject constructor(
             ExtendCurrency.Type.NONE -> ""
             else -> currency?.value ?: ""
         }
-    }
-
-    @RoomTransaction
-    suspend fun enrolDevice(memberId: String, familyId: String, enrolledAt: Long) {
-        val existing = transactionDao.getAllNow()
-        if (existing.isEmpty()) return
-
-        val enrolled = existing.map { transaction ->
-            transaction.copy(
-                memberId = memberId,
-                familyId = familyId,
-                updatedAt = enrolledAt,
-                version = 1,
-                deletedAt = null,
-                syncSeq = 0L,
-            )
-        }
-
-        transactionDao.update(*enrolled.toTypedArray())
-        markUpserts(SyncTables.TRANSACTIONS, enrolled.map { it.id })
     }
 
     suspend fun removeSpent(transactionForRemove: Transaction) {

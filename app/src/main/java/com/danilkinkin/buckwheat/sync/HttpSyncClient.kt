@@ -103,9 +103,7 @@ internal fun decodeSyncResponse(body: String): SyncResponse {
         )
     }
 
-    val accepted = mutableListOf<String>()
-    val acceptedArray = json.optJSONArray("accepted") ?: JSONArray()
-    for (index in 0 until acceptedArray.length()) accepted.add(acceptedArray.getString(index))
+    val accepted = decodeAccepted(json.optJSONArray("accepted") ?: JSONArray())
 
     val conflicts = mutableListOf<ConflictNotice>()
     val conflictArray = json.optJSONArray("conflicts") ?: JSONArray()
@@ -115,7 +113,10 @@ internal fun decodeSyncResponse(body: String): SyncResponse {
             ConflictNotice(
                 table = item.getString("table"),
                 id = item.getString("id"),
-                wonByMemberId = optNullableString(item, "wonByMemberId").orEmpty(),
+                // Absent, not null: an omitted winner means no member owns this row, which is the
+                // correct reading for the memberless tables the server shares with the whole family.
+                wonByMemberId = optNullableString(item, "wonByMemberId"),
+                reason = ConflictReason.fromWire(optNullableString(item, "reason")),
             )
         )
     }
@@ -125,7 +126,32 @@ internal fun decodeSyncResponse(body: String): SyncResponse {
         accepted = accepted,
         records = records,
         conflicts = conflicts,
+        hasMore = json.optBoolean("hasMore", false),
     )
+}
+
+/**
+ * `accepted` entries are `{"table":..,"id":..}` objects. A bare string is a legacy server that has not
+ * been updated yet: an app update can reach a device before the server does, so such an entry is kept
+ * with an empty table and matched by id alone. Discarding it instead would silently re-push a change the
+ * server already stored, forever.
+ */
+internal fun decodeAccepted(array: JSONArray): List<RecordKey> {
+    val accepted = mutableListOf<RecordKey>()
+    for (index in 0 until array.length()) {
+        when (val entry = array.opt(index)) {
+            is JSONObject -> accepted.add(
+                RecordKey(
+                    table = optNullableString(entry, "table").orEmpty(),
+                    id = optNullableString(entry, "id").orEmpty(),
+                )
+            )
+
+            is String -> if (entry.isNotBlank()) accepted.add(RecordKey(table = "", id = entry))
+            else -> Unit
+        }
+    }
+    return accepted.filter { it.id.isNotBlank() }
 }
 
 internal fun errorCodeOf(body: String): String? {

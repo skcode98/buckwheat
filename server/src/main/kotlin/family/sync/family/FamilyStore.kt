@@ -12,7 +12,11 @@ import javax.sql.DataSource
 
 private const val CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 private const val CODE_LENGTH = 8
+private const val REDEEMED_INVITE_RETENTION_DAYS = 1
+private const val EXPIRED_INVITE_RETENTION_DAYS = 7
 private val INVITE_LIFETIME = Duration.ofMinutes(15)
+
+const val DEFAULT_MAX_OUTSTANDING_INVITES: Int = 20
 
 data class FamilyCredentials(
     val familyId: String,
@@ -28,6 +32,7 @@ data class MintedInvite(
 class FamilyStore(
     private val dataSource: DataSource,
     private val tokenService: TokenService = TokenService(dataSource),
+    private val maxOutstandingInvites: Int = DEFAULT_MAX_OUTSTANDING_INVITES,
 ) {
 
     private val random = SecureRandom()
@@ -60,14 +65,25 @@ class FamilyStore(
         val code = generateCode()
         val expiresAt = Instant.now().plus(INVITE_LIFETIME)
         dataSource.connection.use { connection ->
-            connection.prepareStatement(
-                "insert into invites (code, family_id, created_by, expires_at) values (?, ?, ?, ?)"
-            ).use { statement ->
-                statement.setString(1, code)
-                statement.setUuid(2, principal.familyId)
-                statement.setUuid(3, principal.memberId)
-                statement.setTimestamp(4, Timestamp.from(expiresAt))
-                statement.executeUpdate()
+            connection.autoCommit = false
+            try {
+                pruneInvites(connection)
+                if (countOutstandingInvites(connection, principal.familyId) >= maxOutstandingInvites) {
+                    throw ConflictException("too_many_invites")
+                }
+                connection.prepareStatement(
+                    "insert into invites (code, family_id, created_by, expires_at) values (?, ?, ?, ?)"
+                ).use { statement ->
+                    statement.setString(1, code)
+                    statement.setUuid(2, principal.familyId)
+                    statement.setUuid(3, principal.memberId)
+                    statement.setTimestamp(4, Timestamp.from(expiresAt))
+                    statement.executeUpdate()
+                }
+                connection.commit()
+            } catch (failure: Exception) {
+                connection.rollback()
+                throw failure
             }
         }
         return MintedInvite(code, expiresAt.toString())
@@ -80,27 +96,40 @@ class FamilyStore(
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                val invite = readInvite(connection, normalized)
-                    ?: throw NotFoundException("invite_not_found")
-                val redeemedAt = invite.redeemedAt
-                if (redeemedAt != null) throw ConflictException("invite_already_used")
-                if (invite.expiresAt.isBefore(Instant.now())) throw GoneException("invite_expired")
+                val familyId = claimInvite(connection, normalized)
                 val memberId = insertReturningUuid(
                     connection,
                     "insert into members (family_id, display_name, is_owner) values (?, ?, false) returning id",
-                    invite.familyId,
+                    familyId,
                     name,
                 )
-                connection.prepareStatement(
-                    "update invites set redeemed_at = ? where code = ? and redeemed_at is null"
-                ).use { statement ->
-                    statement.setTimestamp(1, Timestamp.from(Instant.now()))
-                    statement.setString(2, normalized)
-                    if (statement.executeUpdate() != 1) throw ConflictException("invite_already_used")
-                }
-                val token = tokenService.mint(connection, memberId, invite.familyId)
+                val token = tokenService.mint(connection, memberId, familyId)
                 connection.commit()
-                return FamilyCredentials(invite.familyId, memberId, token)
+                return FamilyCredentials(familyId, memberId, token)
+            } catch (failure: Exception) {
+                connection.rollback()
+                throw failure
+            }
+        }
+    }
+
+    fun leave(principal: Principal) {
+        dataSource.connection.use { connection ->
+            connection.autoCommit = false
+            try {
+                // The member row and every token that authenticates as it go in one transaction.
+                // Revoking the caller's token separately means a crash in between leaves a live
+                // token for a member that no longer exists, which is exactly the state leave exists
+                // to remove.
+                connection.prepareStatement("delete from member_tokens where member_id = ?").use { statement ->
+                    statement.setUuid(1, principal.memberId)
+                    statement.executeUpdate()
+                }
+                connection.prepareStatement("delete from members where id = ?").use { statement ->
+                    statement.setUuid(1, principal.memberId)
+                    statement.executeUpdate()
+                }
+                connection.commit()
             } catch (failure: Exception) {
                 connection.rollback()
                 throw failure
@@ -137,15 +166,58 @@ class FamilyStore(
         }
     }
 
+    private fun claimInvite(connection: Connection, code: String): String {
+        val claimed = connection.prepareStatement(
+            "update invites set redeemed_at = now() where code = ? and redeemed_at is null " +
+                "and expires_at > now() returning family_id"
+        ).use { statement ->
+            statement.setString(1, code)
+            statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+        }
+        return claimed ?: throw unusableInvite(connection, code)
+    }
+
+    private fun unusableInvite(connection: Connection, code: String): ApiException {
+        val invite = readInvite(connection, code) ?: throw NotFoundException("invite_not_found")
+        return if (invite.redeemedAt != null) {
+            ConflictException("invite_already_used")
+        } else if (!invite.expiresAt.isAfter(Instant.now())) {
+            GoneException("invite_expired")
+        } else {
+            ConflictException("invite_already_used")
+        }
+    }
+
+    private fun pruneInvites(connection: Connection) {
+        connection.prepareStatement(
+            "delete from invites where " +
+                "(redeemed_at is not null and redeemed_at < now() - make_interval(days => ?)) or " +
+                "(expires_at < now() - make_interval(days => ?))"
+        ).use { statement ->
+            statement.setInt(1, REDEEMED_INVITE_RETENTION_DAYS)
+            statement.setInt(2, EXPIRED_INVITE_RETENTION_DAYS)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun countOutstandingInvites(connection: Connection, familyId: String): Int =
+        connection.prepareStatement(
+            "select count(*) from invites where family_id = ? and redeemed_at is null and expires_at > now()"
+        ).use { statement ->
+            statement.setUuid(1, familyId)
+            statement.executeQuery().use { rows ->
+                if (rows.next()) rows.getInt(1) else 0
+            }
+        }
+
     private fun readInvite(connection: Connection, code: String): Invite? =
         connection.prepareStatement(
-            "select family_id, expires_at, redeemed_at from invites where code = ?"
+            "select expires_at, redeemed_at from invites where code = ?"
         ).use { statement ->
             statement.setString(1, code)
             statement.executeQuery().use { rows ->
                 if (!rows.next()) return null
                 Invite(
-                    familyId = rows.getString("family_id"),
                     expiresAt = rows.getTimestamp("expires_at").toInstant(),
                     redeemedAt = rows.getTimestamp("redeemed_at")?.toInstant(),
                 )
@@ -170,7 +242,6 @@ class FamilyStore(
     }
 
     private data class Invite(
-        val familyId: String,
         val expiresAt: Instant,
         val redeemedAt: Instant?,
     )

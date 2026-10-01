@@ -157,10 +157,17 @@ class SyncPayloadsTest {
     }
 
     @Test
-    fun anUnknownTransactionTypeFallsBackToSpent() {
+    fun anUnknownTransactionTypeIsRejectedRatherThanGuessed() {
         val json = transaction.businessPayload().put("type", "NOT_A_TYPE")
 
-        assertEquals(TransactionType.SPENT, json.readTransaction("t-1").type)
+        assertThrows(SyncPayloadException::class.java) { json.readTransaction("t-1") }
+    }
+
+    @Test
+    fun anUnknownArchivedTransactionTypeIsRejectedToo() {
+        val json = archived.businessPayload().put("type", "NOT_A_TYPE")
+
+        assertThrows(SyncPayloadException::class.java) { json.readArchivedTransaction("a-1") }
     }
 
     @Test

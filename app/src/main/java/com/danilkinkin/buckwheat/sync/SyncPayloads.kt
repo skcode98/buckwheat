@@ -13,11 +13,27 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.util.Date
 
-internal fun String?.toBigDecimalPayload(fallback: String = "0"): BigDecimal =
-    BigDecimal(if (this.isNullOrBlank()) fallback else this)
+/**
+ * A payload the server sent cannot be turned into a row. Typed so the engine reports a bad payload
+ * instead of an anonymous sync failure. Extends [JSONException] because it stands in for the parse
+ * failures [JSONObject] raises for the very same broken input.
+ */
+internal class SyncPayloadException(message: String) : JSONException(message)
 
+internal fun String?.toBigDecimalPayload(fallback: String = "0"): BigDecimal {
+    val raw = if (isNullOrBlank()) fallback else this
+    return try {
+        BigDecimal(raw)
+    } catch (failure: NumberFormatException) {
+        throw SyncPayloadException("\"$raw\" is not a number")
+    }
+}
+
+// An unknown type is a renamed or corrupt value, never a spend: guessing silently turns an income
+// marker into a spend on every device that reads the payload back.
 internal fun String.readType(): TransactionType =
-    runCatching { TransactionType.valueOf(this) }.getOrDefault(TransactionType.SPENT)
+    TransactionType.entries.firstOrNull { it.name == this }
+        ?: throw SyncPayloadException("unknown transaction type \"$this\"")
 
 internal fun JSONObject.requireString(key: String): String {
     if (!has(key) || isNull(key)) throw JSONException("payload key $key is missing")
@@ -34,6 +50,14 @@ internal fun JSONObject.requireBoolean(key: String): Boolean {
     return getBoolean(key)
 }
 
+/**
+ * Android's [JSONObject.optString] with a fallback is `JSON.toString(opt(name))`, so a JSON null
+ * comes back as the four character string "null" instead of the fallback. The desktop org.json used
+ * by the JVM tests returns the fallback, which is why this only showed up on device. Never pass a
+ * fallback for a nullable column, read it explicitly instead.
+ */
+internal fun JSONObject.optNullableString(key: String): String? = if (isNull(key)) null else getString(key)
+
 internal fun Transaction.businessPayload(): JSONObject = JSONObject()
     .put("type", type.name)
     .put("value", value.toPlainString())
@@ -47,7 +71,7 @@ internal fun JSONObject.readTransaction(id: String): Transaction = Transaction(
     value = requireString("value").toBigDecimalPayload(),
     date = Date(requireLong("spentAt")),
     comment = optString("comment", ""),
-    category = optString("category", null),
+    category = optNullableString("category"),
 )
 
 internal fun ArchivedTransaction.businessPayload(): JSONObject = JSONObject()
@@ -65,7 +89,7 @@ internal fun JSONObject.readArchivedTransaction(id: String): ArchivedTransaction
     value = requireString("value").toBigDecimalPayload(),
     date = Date(requireLong("spentAt")),
     comment = optString("comment", ""),
-    category = optString("category", null),
+    category = optNullableString("category"),
 )
 
 internal fun BudgetPeriod.businessPayload(): JSONObject = JSONObject()

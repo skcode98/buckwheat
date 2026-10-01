@@ -5,6 +5,8 @@ import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,6 +23,7 @@ class CategoryAssigner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val transactionDao: TransactionDao,
     private val budgetPeriodDao: BudgetPeriodDao,
+    private val syncDirtyMarker: SyncDirtyMarker,
 ) {
     suspend fun assignToUncategorized() {
         assignTransactions()
@@ -39,6 +42,7 @@ class CategoryAssigner @Inject constructor(
         offlineAssigned.forEach { (id, category) ->
             transactionDao.updateCategory(id, category)
         }
+        syncDirtyMarker.markUpserts(SyncTables.TRANSACTIONS, offlineAssigned.map { it.first })
 
         val aiCandidates = uncategorized.filter {
             offlineCategoryOrNull(it.comment) == null
@@ -49,6 +53,7 @@ class CategoryAssigner @Inject constructor(
         assigned.forEach { (id, category) ->
             transactionDao.updateCategory(id, category.name)
         }
+        syncDirtyMarker.markUpserts(SyncTables.TRANSACTIONS, assigned.keys)
     }
 
     // Historical spends live in archived_transactions (a separate table with its own uid space),
@@ -65,6 +70,7 @@ class CategoryAssigner @Inject constructor(
         offlineAssigned.forEach { (id, category) ->
             budgetPeriodDao.updateCategory(id, category)
         }
+        syncDirtyMarker.markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, offlineAssigned.map { it.first })
 
         val aiCandidates = uncategorized.filter {
             offlineCategoryOrNull(it.comment) == null
@@ -75,5 +81,6 @@ class CategoryAssigner @Inject constructor(
         assigned.forEach { (id, category) ->
             budgetPeriodDao.updateCategory(id, category.name)
         }
+        syncDirtyMarker.markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, assigned.keys)
     }
 }

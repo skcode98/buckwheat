@@ -7,6 +7,7 @@ import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
+import com.danilkinkin.buckwheat.settings.FakeSyncDirtyMarker
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,6 +31,7 @@ class ImportAutoCategorizeTest {
     @Before
     fun init() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        val syncDirtyMarker = FakeSyncDirtyMarker()
         spendsRepository = SpendsRepository(
             context = context,
             transactionDao,
@@ -37,10 +39,12 @@ class ImportAutoCategorizeTest {
             FakeSavedCategoryDao(),
             budgetPeriodDao,
             currentDateUseCase,
-            CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
+            CategoryAssignmentScheduler(
+                CategoryAssigner(context, transactionDao, budgetPeriodDao, syncDirtyMarker)
+            ),
             CategoryCapTracker(context, SettingsRepository(context), transactionDao),
             BudgetCalculator(context, currentDateUseCase),
-            FakePendingMutationDao(),
+            syncDirtyMarker,
         )
     }
 

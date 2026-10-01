@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.di.SpendsRepository
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,7 @@ data class TagItem(
 class TagsManagementViewModel @Inject constructor(
     private val savedTagDao: SavedTagDao,
     private val spendsRepository: SpendsRepository,
+    private val syncDirtyMarker: SyncDirtyMarker,
 ) : ViewModel() {
     val allTags: StateFlow<List<TagItem>> = combine(
         spendsRepository.getAllTags(),
@@ -36,7 +39,9 @@ class TagsManagementViewModel @Inject constructor(
         if (trimmed.isBlank()) return
         viewModelScope.launch {
             if (!savedTagDao.existsByName(trimmed)) {
-                savedTagDao.insert(SavedTag(name = trimmed))
+                val tag = SavedTag(name = trimmed)
+                savedTagDao.insert(tag)
+                syncDirtyMarker.markUpsert(SyncTables.SAVED_TAGS, tag.id)
             }
         }
     }
@@ -45,17 +50,27 @@ class TagsManagementViewModel @Inject constructor(
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
+            // copy() keeps the row's sync metadata, which a rebuilt SavedTag would wipe
+            val existing = savedTagDao.getById(id) ?: return@launch
             val other = savedTagDao.getByName(trimmed)
             // Don't rename onto an existing tag's name
             if (other == null || other.id == id) {
-                savedTagDao.update(SavedTag(id = id, name = trimmed))
+                savedTagDao.update(existing.copy(name = trimmed))
+                syncDirtyMarker.markUpsert(SyncTables.SAVED_TAGS, existing.id)
             }
         }
     }
 
     fun deleteTag(id: String) {
         viewModelScope.launch {
-            savedTagDao.deleteById(id)
+            val existing = savedTagDao.getById(id) ?: return@launch
+            savedTagDao.deleteById(existing.id)
+            syncDirtyMarker.markDelete(
+                SyncTables.SAVED_TAGS,
+                existing.id,
+                existing.familyId,
+                existing.syncSeq,
+            )
         }
     }
 

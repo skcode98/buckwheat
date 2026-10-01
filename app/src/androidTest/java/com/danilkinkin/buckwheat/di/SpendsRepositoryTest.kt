@@ -31,14 +31,9 @@ class SpendsRepositoryTest {
 
     val currentDateUseCase: FakeGetCurrentDateUseCase = FakeGetCurrentDateUseCase()
 
-    @Before
-    fun init() {
-        spendsRepository = SpendsRepository(
-            context = composeTestRule.activity,
-            FakeTransactionDao(),
-            currentDateUseCase,
-        )
-    }
+    // `spendsRepository` comes from Hilt. It used to be rebuilt here with a hand-rolled
+    // constructor call that stopped matching the real one, which left this source set unable to
+    // compile.
 
     // Set budget 1000 for 10 days
     // Start daily budget 100

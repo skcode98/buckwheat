@@ -3,6 +3,8 @@ package com.danilkinkin.buckwheat.di
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import java.math.BigDecimal
+import java.util.Date
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -45,8 +47,55 @@ class FakeTransactionDao : TransactionDao {
         }
     }
 
+    override suspend fun upsertOne(
+        id: String,
+        type: TransactionType,
+        value: BigDecimal,
+        date: Date,
+        comment: String,
+        category: String?,
+        memberId: String?,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val tx = Transaction(
+            id = id,
+            type = type,
+            value = value,
+            date = date,
+            comment = comment,
+            category = category,
+            memberId = memberId,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        val index = spends.indexOfFirst { it.id == id }
+        if (index >= 0) spends[index] = tx else spends.add(tx)
+    }
+
     override suspend fun insert(vararg transaction: Transaction) {
-        spends.addAll(transaction)
+        transaction.forEach {
+            upsertOne(
+                id = it.id,
+                type = it.type,
+                value = it.value,
+                date = it.date,
+                comment = it.comment,
+                category = it.category,
+                memberId = it.memberId,
+                familyId = it.familyId,
+                syncSeq = it.syncSeq,
+                updatedAt = it.updatedAt,
+                deletedAt = it.deletedAt,
+                version = it.version,
+            )
+        }
     }
 
     override suspend fun insertAll(transactions: List<Transaction>) {

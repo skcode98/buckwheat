@@ -10,9 +10,16 @@ class ConfigTest {
     private fun postgresUri(): String =
         "postgresql://" + "user" + ":" + "pw" + "123456" + "@db.example.com:5432/family_sync"
 
+    /**
+     * DATABASE_PASSWORD is required, so every test that is not about the password itself seeds
+     * one and lets the caller override anything else.
+     */
+    private fun env(vararg overrides: Pair<String, String>): Map<String, String> =
+        mapOf("DATABASE_URL" to postgresUri(), "DATABASE_PASSWORD" to "secret") + overrides
+
     @Test
     fun aPostgresUriIsConvertedToAJdbcUrl() {
-        val config = loadConfig(mapOf("DATABASE_URL" to postgresUri()))
+        val config = loadConfig(env())
 
         assertEquals(
             "jdbc:postgresql://db.example.com:5432/family_sync?sslmode=require",
@@ -23,11 +30,7 @@ class ConfigTest {
     @Test
     fun credentialsAreDroppedFromTheUrlBecauseHikariSuppliesThem() {
         val config = loadConfig(
-            mapOf(
-                "DATABASE_URL" to postgresUri(),
-                "DATABASE_USER" to "user",
-                "DATABASE_PASSWORD" to "pw123456",
-            )
+            env("DATABASE_USER" to "user", "DATABASE_PASSWORD" to "pw123456")
         )
 
         assertEquals("user", config.databaseUser)
@@ -36,17 +39,54 @@ class ConfigTest {
     }
 
     @Test
+    fun theUserIsReadFromTheConnectionStringWhenTheEnvironmentOmitsIt() {
+        val config = loadConfig(
+            env("DATABASE_URL" to "postgresql://postgres.abcdefghijklm:secret@" +
+                "aws-0-ap-south-1.pooler.supabase.com:5432/postgres")
+        )
+
+        assertEquals("postgres.abcdefghijklm", config.databaseUser)
+        assertFalse(config.databaseUrl.contains("abcdefghijklm"))
+    }
+
+    @Test
+    fun theEnvironmentOverridesTheConnectionStringUser() {
+        val config = loadConfig(env("DATABASE_USER" to "explicit"))
+
+        assertEquals("explicit", config.databaseUser)
+    }
+
+    @Test
+    fun aBlankUserInTheEnvironmentFallsBackToTheConnectionString() {
+        val config = loadConfig(env("DATABASE_USER" to "   "))
+
+        assertEquals("user", config.databaseUser)
+    }
+
+    @Test
+    fun aBlankPasswordIsRefused() {
+        assertFailsWith<IllegalStateException> {
+            loadConfig(mapOf("DATABASE_URL" to postgresUri(), "DATABASE_PASSWORD" to "  "))
+        }
+    }
+
+    @Test
+    fun aMissingPasswordIsRefused() {
+        assertFailsWith<IllegalStateException> {
+            loadConfig(mapOf("DATABASE_URL" to postgresUri()))
+        }
+    }
+
+    @Test
     fun theSslModeDefaultsToRequire() {
-        val config = loadConfig(mapOf("DATABASE_URL" to postgresUri()))
+        val config = loadConfig(env())
 
         assertEquals(true, config.databaseUrl.endsWith("sslmode=require"))
     }
 
     @Test
     fun theSslModeCanBeDisabledForLocalDatabases() {
-        val config = loadConfig(
-            mapOf("DATABASE_URL" to postgresUri(), "DATABASE_SSL_MODE" to "disable")
-        )
+        val config = loadConfig(env("DATABASE_SSL_MODE" to "disable"))
 
         assertEquals(
             "jdbc:postgresql://db.example.com:5432/family_sync?sslmode=disable",
@@ -57,7 +97,7 @@ class ConfigTest {
     @Test
     fun anExistingSslModeInTheUrlIsNotOverwritten() {
         val config = loadConfig(
-            mapOf(
+            env(
                 "DATABASE_URL" to "jdbc:postgresql://localhost:5432/db?sslmode=verify-full",
                 "DATABASE_SSL_MODE" to "disable",
             )
@@ -69,7 +109,7 @@ class ConfigTest {
     @Test
     fun aSupabaseUriKeepsExactlyOneSslMode() {
         val config = loadConfig(
-            mapOf(
+            env(
                 "DATABASE_URL" to "postgresql://postgres.abcdefghijklm:secret@" +
                     "aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require",
             )
@@ -85,7 +125,7 @@ class ConfigTest {
     @Test
     fun aSupabaseUriHonoursTheConfiguredSslMode() {
         val config = loadConfig(
-            mapOf(
+            env(
                 "DATABASE_URL" to "postgresql://u:p@db.example.com:5432/postgres?sslmode=require",
                 "DATABASE_SSL_MODE" to "verify-full",
             )
@@ -100,7 +140,7 @@ class ConfigTest {
     @Test
     fun unrelatedQueryParametersSurvive() {
         val config = loadConfig(
-            mapOf(
+            env(
                 "DATABASE_URL" to "postgresql://db.example.com:5432/db" +
                     "?application_name=buckwheat&sslmode=require",
             )
@@ -115,7 +155,7 @@ class ConfigTest {
     @Test
     fun anUppercaseSslModeInTheUriIsReplaced() {
         val config = loadConfig(
-            mapOf("DATABASE_URL" to "postgresql://db.example.com:5432/db?SSLMode=disable")
+            env("DATABASE_URL" to "postgresql://db.example.com:5432/db?SSLMode=disable")
         )
 
         assertEquals("jdbc:postgresql://db.example.com:5432/db?sslmode=require", config.databaseUrl)
@@ -123,7 +163,9 @@ class ConfigTest {
 
     @Test
     fun aUriWithoutAPortKeepsThePortOff() {
-        val config = loadConfig(mapOf("DATABASE_URL" to "postgresql://db.example.com/family_sync"))
+        val config = loadConfig(
+            env("DATABASE_URL" to "postgresql://db.example.com/family_sync")
+        )
 
         assertEquals(
             "jdbc:postgresql://db.example.com/family_sync?sslmode=require",
@@ -133,7 +175,7 @@ class ConfigTest {
 
     @Test
     fun anExistingJdbcUrlKeepsItsScheme() {
-        val config = loadConfig(mapOf("DATABASE_URL" to "jdbc:postgresql://localhost:5432/db"))
+        val config = loadConfig(env("DATABASE_URL" to "jdbc:postgresql://localhost:5432/db"))
 
         assertEquals("jdbc:postgresql://localhost:5432/db?sslmode=require", config.databaseUrl)
     }
@@ -146,24 +188,26 @@ class ConfigTest {
     @Test
     fun aUrlWithoutASchemeIsRefused() {
         assertFailsWith<IllegalStateException> {
-            loadConfig(mapOf("DATABASE_URL" to "db.example.com:5432/family_sync"))
+            loadConfig(
+                mapOf("DATABASE_URL" to "db.example.com:5432/family_sync", "DATABASE_PASSWORD" to "pw")
+            )
         }
     }
 
     @Test
     fun thePortDefaultsToEightThousandEighty() {
-        assertEquals(8080, loadConfig(mapOf("DATABASE_URL" to "postgresql://h/db")).port)
+        assertEquals(8080, loadConfig(env("DATABASE_URL" to "postgresql://h/db")).port)
     }
 
     @Test
     fun theServerPortIsReadFromTheEnvironment() {
-        val config = loadConfig(mapOf("DATABASE_URL" to "postgresql://h/db", "PORT" to "9000"))
+        val config = loadConfig(env("DATABASE_URL" to "postgresql://h/db", "PORT" to "9000"))
 
         assertEquals(9000, config.port)
     }
 
     @Test
-    fun theUserDefaultsToPostgres() {
-        assertEquals("postgres", loadConfig(mapOf("DATABASE_URL" to "postgresql://h/db")).databaseUser)
+    fun theUserDefaultsToPostgresWhenNoUserIsAvailableAnywhere() {
+        assertEquals("postgres", loadConfig(env("DATABASE_URL" to "postgresql://h/db")).databaseUser)
     }
 }

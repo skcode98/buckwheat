@@ -1,14 +1,61 @@
+# Render blueprint for the Buckwheat family-sync server.
+#
+# This service is deliberately SEPARATE from the Android app. The app is an
+# HTTP client of whatever base URL the user types into the Family Sync sheet; it
+# hard-codes no host, no port and no database. See deploy/README.md.
+#
+# The image is built by Docker rather than by a native Render build because the
+# repository root build.gradle.kts applies the Android and KSP plugins. A native
+# Render build runs at the repo root and would try to compile the Android app,
+# which fails without an Android SDK. server/Dockerfile copies only server/ and
+# sidesteps that.
+
 services:
   - type: web
     name: family-sync
     runtime: docker
     plan: free
+
+    # server/Dockerfile lives in a subdirectory but copies paths relative to the
+    # repository root, so the build context must be the repository root.
+    # Render's documented default for dockerContext is the repo root; stating it
+    # explicitly removes the dependency on that default.
     dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+
+    # GET /health is registered by configureHealth() in
+    # server/src/main/kotlin/family/sync/HealthRoutes.kt and answers 200
+    # {"status":"ok"} with no authentication and no database access. It is the
+    # only endpoint the app never calls; it exists for Render's probe.
     healthCheckPath: /health
+
+    # Deploy on every push to the tracked branch. This repo has no GitHub Actions
+    # workflows, so `checksPass` would have nothing to wait for.
+    autoDeployTrigger: commit
+
+    # Only rebuild the image when something that is actually inside the image
+    # changes. Android-only commits skip the Docker build entirely. Render
+    # always processes render.yaml itself regardless of these filters.
+    buildFilter:
+      paths:
+        - server/**
+        - .dockerignore
+        - render.yaml
+
+    # Render injects PORT itself; do not pin it here. The server reads PORT in
+    # loadConfig() and falls back to 8080 when it is absent.
+    #
+    # DATABASE_URL must point at the Supabase SESSION pooler on 5432
+    # (aws-0-<region>.pooler.supabase.com), and its embedded username must be
+    # `postgres.<project-ref>`. Supavisor resolves the tenant from the username
+    # and rejects a bare `postgres` with
+    # `FATAL: (ENOTFOUND) tenant/user postgres. not found`. Config.kt reads that
+    # username out of DATABASE_URL, so DATABASE_USER is not a variable this
+    # service needs and prompting for it only invites an operator to type a bare
+    # `postgres` and break the connection. Set it directly on the service if you
+    # ever need an override. See deploy/README.md step 2.
     envVars:
       - key: DATABASE_URL
-        sync: false
-      - key: DATABASE_USER
         sync: false
       - key: DATABASE_PASSWORD
         sync: false

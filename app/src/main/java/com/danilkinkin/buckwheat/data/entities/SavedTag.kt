@@ -7,7 +7,10 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "saved_tags",
-    indices = [Index(value = ["name"], unique = true), Index("family_id")],
+    // `name` is deliberately NOT unique: two family members can independently create a tag
+    // with the same name on two devices, and they sync as two distinct rows. A unique index
+    // made the whole pull transaction abort on the second one.
+    indices = [Index(value = ["name"]), Index("family_id")],
 )
 data class SavedTag(
     @PrimaryKey

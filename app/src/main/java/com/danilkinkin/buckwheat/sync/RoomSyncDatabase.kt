@@ -3,70 +3,19 @@ package com.danilkinkin.buckwheat.sync
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
 
-data class SyncMeta(
-    val memberId: String?,
-    val familyId: String?,
-    val syncSeq: Long,
-    val updatedAt: Long,
-    val deletedAt: Long?,
-    val version: Int,
-)
+interface SyncDatabase {
+    suspend fun readCursor(): Long
 
-interface SyncTableGateway {
-    val table: String
+    /** Local rows with a queued push, tombstone-synthesised when a queued delete outlived its row. */
+    suspend fun dirtyRecords(): List<LocalRecord>
 
-    suspend fun loadAll(): List<LocalRecord>
+    suspend fun loadRecords(): List<LocalRecord>
 
-    suspend fun loadById(recordId: String): LocalRecord?
+    suspend fun apply(apply: SyncApply)
 
-    suspend fun upsert(record: LocalRecord)
+    suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long)
 
-    suspend fun remove(recordId: String)
-}
-
-class SyncTableBinding<T : Any>(
-    override val table: String,
-    private val idOf: (T) -> String,
-    private val loader: suspend () -> List<T>,
-    private val finder: suspend (String) -> T?,
-    private val inserter: suspend (T) -> Unit,
-    private val remover: suspend (String) -> Unit,
-    private val isDirty: suspend (String) -> Boolean,
-    private val payloadOf: (T) -> String,
-    private val metaOf: (T) -> SyncMeta,
-    private val decoder: (LocalRecord) -> T,
-) : SyncTableGateway {
-
-    private fun toRecord(entity: T, dirty: Boolean): LocalRecord {
-        val meta = metaOf(entity)
-        return LocalRecord(
-            table = table,
-            id = idOf(entity),
-            updatedAt = meta.updatedAt,
-            version = meta.version,
-            deletedAt = meta.deletedAt,
-            payload = payloadOf(entity),
-            dirty = dirty,
-            memberId = meta.memberId,
-            familyId = meta.familyId,
-            syncSeq = meta.syncSeq,
-        )
-    }
-
-    override suspend fun loadAll(): List<LocalRecord> = loader().map { toRecord(it, isDirty(idOf(it))) }
-
-    override suspend fun loadById(recordId: String): LocalRecord? {
-        val entity = finder(recordId) ?: return null
-        return toRecord(entity, dirty = true)
-    }
-
-    override suspend fun upsert(record: LocalRecord) {
-        val entity = decoder(record)
-        remover(record.id)
-        inserter(entity)
-    }
-
-    override suspend fun remove(recordId: String) = remover(recordId)
+    suspend fun reset()
 }
 
 class RoomSyncDatabase(
@@ -84,42 +33,68 @@ class RoomSyncDatabase(
 
     override suspend fun dirtyRecords(): List<LocalRecord> {
         val queued = pendingMutationDao.getAllNow()
+        if (queued.isEmpty()) return emptyList()
+
+        // One scan per table instead of one per queued row: the per-row lookup this replaces made a
+        // sync quadratic in the size of the queue.
+        val stored = queued
+            .groupBy { it.table }
+            .flatMap { (table, mutations) ->
+                val binding = gateway(table) ?: return@flatMap emptyList()
+                binding.loadByIds(mutations.map { it.recordId })
+            }
+            .associateBy { it.key }
+
+        val records = mutableListOf<LocalRecord>()
         val stale = mutableListOf<Pair<String, String>>()
-        val records = queued.mapNotNull { mutation ->
-            val binding = gateway(mutation.table) ?: return@mapNotNull null
-            val record = binding.loadById(mutation.recordId)
-            if (record != null) {
-                record
-            } else if (mutation.isDelete) {
-                LocalRecord(
-                    table = mutation.table,
-                    id = mutation.recordId,
-                    updatedAt = mutation.queuedAt,
-                    version = 1,
-                    deletedAt = mutation.queuedAt,
-                    payload = "{}",
-                    dirty = true,
-                    memberId = null,
-                )
-            } else {
-                stale.add(mutation.table to mutation.recordId)
-                null
+        queued.forEach { mutation ->
+            val record = stored[RecordKey(mutation.table, mutation.recordId)]
+            when {
+                record != null -> records.add(record.copy(dirty = true))
+                mutation.isDelete -> records.add(tombstoneFor(mutation))
+                // A queued upsert whose row no longer exists can neither be pushed nor retracted: there
+                // is nothing left to send and the server has nothing to undo. Dropping the queue entry is
+                // deliberate, so the row stops being re-queued for ever.
+                else -> stale.add(mutation.table to mutation.recordId)
             }
         }
         stale.forEach { (table, recordId) -> pendingMutationDao.deleteQueued(table, listOf(recordId)) }
         return records
     }
 
-    override suspend fun reset() {
-        pendingMutationDao.deleteAll()
-        syncStateStore.clear()
-    }
+    /**
+     * Builds the delete for a row this device has already removed.
+     *
+     * Tombstone contract:
+     *  - `payload` is the empty object. There is no row left to describe, and the server does not read a
+     *    payload for a change that carries `deletedAt`.
+     *  - `deletedAt` and `updatedAt` are the moment the delete was queued, so a device with a wrong clock
+     *    still moves the record forward instead of resurrecting a stale copy.
+     *  - `version` is 1. A hard-deleted row leaves nothing to read its last version from, and the server
+     *    resolves a delete by `deletedAt` rather than by comparing versions, so 1 costs nothing. A row
+     *    that is still present, and therefore does have a real version, never reaches this function: it
+     *    is pushed with its own version above.
+     */
+    private fun tombstoneFor(mutation: PendingMutation) = LocalRecord(
+        table = mutation.table,
+        id = mutation.recordId,
+        updatedAt = mutation.queuedAt,
+        version = 1,
+        deletedAt = mutation.queuedAt,
+        payload = "{}",
+        dirty = true,
+        memberId = null,
+    )
 
     override suspend fun apply(apply: SyncApply) {
         val clean = apply.records.filter { !it.dirty }
         val grouped = clean.groupBy { it.table }
         runInTransaction {
-            grouped.forEach { (table, records) ->
+            // SyncTables.APPLY_ORDER, not the order the records happened to arrive in: budget_periods has
+            // to be written before archived_transactions, which has an ON DELETE CASCADE foreign key to
+            // it. A period written first is updated in place by the upsert, so its archived rows survive.
+            SyncTables.APPLY_ORDER.forEach { table ->
+                val records = grouped[table] ?: return@forEach
                 val binding = gateway(table) ?: return@forEach
                 records.forEach { record ->
                     if (record.deletedAt != null) {
@@ -129,19 +104,56 @@ class RoomSyncDatabase(
                     }
                 }
             }
-            grouped.forEach { (table, records) ->
-                pendingMutationDao.deleteQueued(table, records.map { it.id })
+            // The queue is settled here, once the writes have committed, and only for a row that has not moved
+            // past the version this run pushed. `pending_mutations` is keyed by (table, id) and
+            // SyncDirtyMarker re-queues a later edit onto that same key, so deleting by key alone would
+            // discard a queue entry for an edit that arrived mid-request and leave that edit unpushed and
+            // overwritten. `SyncStampDao` only ever increments the version, so a higher version is exactly
+            // that later edit.
+            apply.settled.groupBy { it.key.table }.forEach { (table, changes) ->
+                val binding = gateway(table)
+                val ids = changes.map { it.key.id }
+                val current = binding?.loadByIds(ids)?.associateBy { it.id }.orEmpty()
+                val settledIds = changes
+                    .filter { change ->
+                        val row = current[change.key.id]
+                        row == null || row.version <= change.version
+                    }
+                    .map { it.key.id }
+                pendingMutationDao.deleteQueued(table, settledIds)
             }
         }
-        syncStateStore.writeCursor(apply.cursor)
+
+        // The two stores are not one transaction and the order is deliberate. The cursor goes last: a
+        // crash between the Room commit and this write leaves the cursor behind, so the next sync re-pulls
+        // the same window and rewrites nothing, because an upsert of an identical row is a no-op. Writing
+        // the cursor first would skip the window entirely on a crash and lose every row in it. Conflicts
+        // go before the cursor for the same reason: they are advisory and re-derived by that re-pull, so
+        // writing them early costs nothing and writing them late could lose them.
         syncStateStore.replaceConflicts(apply.conflicts)
+        syncStateStore.writeCursor(apply.cursor)
     }
 
     override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) {
-        gateways.forEach { binding ->
-            val enrolled = enrolRecords(binding.loadAll(), memberId, familyId, enrolledAt)
-            enrolled.forEach { binding.upsert(it) }
-            enrolled.forEach { pendingMutationDao.enqueue(PendingMutation(binding.table, it.id, enrolledAt)) }
+        runInTransaction {
+            gateways.forEach { binding ->
+                val enrolled = enrolRecords(binding.loadAll(), memberId, familyId, enrolledAt)
+                enrolled.forEach { binding.upsert(it) }
+                enrolled.forEach { record ->
+                    pendingMutationDao.enqueue(
+                        PendingMutation(
+                            table = binding.table,
+                            recordId = record.id,
+                            queuedAt = enrolledAt,
+                        )
+                    )
+                }
+            }
         }
+    }
+
+    override suspend fun reset() {
+        runInTransaction { pendingMutationDao.deleteAll() }
+        syncStateStore.clear()
     }
 }

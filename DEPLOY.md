@@ -1,83 +1,55 @@
 # Family sync — deployment
 
-The sync server lives in `server/` and is deployed to **Render** (free web service),
-backed by a **Supabase** free Postgres project. Both free tiers are $0 and neither
-needs a credit card.
+The full walkthrough lives in **[deploy/README.md](deploy/README.md)**. Start
+there.
 
-## Why Docker
+Short version: the sync service is a separate HTTP service in `server/`, hosted
+on Render's free web service and backed by a free Supabase Postgres project.
+Both tiers are $0, neither needs a credit card, and the deployment material all
+lives under [`deploy/`](deploy/README.md).
 
-Render builds on its own infrastructure, so **you do not need Docker installed locally**.
-Docker is also the right runtime here because the repository root is the *Android*
-build (`build.gradle.kts` applies the Android and KSP plugins). A native Render build
-always runs at the repo root and would try to compile the Android app, which fails
-without an Android SDK. `server/Dockerfile` copies only `server/` and sidesteps that
-entirely.
+- First-time setup, Supabase project creation, blueprint launch, `curl`
+  verification: **[deploy/README.md](deploy/README.md)**
+- Every environment variable the server reads: **[deploy/env.example](deploy/env.example)**
+- Day two — rotating the database password, redeploys, rollbacks, logs, the free
+  Supabase pause: **[deploy/OPERATIONS.md](deploy/OPERATIONS.md)**
+- Database setup and the row-level-security story:
+  **[deploy/supabase/README.md](deploy/supabase/README.md)**
 
-`render.yaml` points at it with `dockerfilePath: ./server/Dockerfile`.
+Two files outside `deploy/` carry the deployment itself:
+[`render.yaml`](render.yaml) is the Render blueprint, and
+[`server/Dockerfile`](server/Dockerfile) builds the image.
 
-## 1. Create the Supabase project
+## Why a separate service, and why Docker
 
-1. Go to <https://supabase.com/dashboard> and create a new project.
-2. Wait for the database to finish provisioning.
-3. Open **Connect** (or **Project Settings → Database**) and copy these three values:
-   - `DATABASE_URL` — the **session-mode pooler** URI on port **5432**, not `6543`.
-     Flyway migrations need real sessions, so transaction-mode pooling will not work.
-     The URI looks like
-     `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require`
-   - `DATABASE_USER` — `postgres`
-   - `DATABASE_PASSWORD` — your project database password
-4. Nothing else. You do **not** need to paste any SQL: the server runs Flyway on boot
-   and applies `server/src/main/resources/db/migration/` (V1 schema, V2 goals name, V3
-   row-level security) automatically.
+Yes, it is fine — and it is already the architecture, not a workaround. The
+Android app is an HTTP client of `/v1/sync` and `/v1/family/*` and hard-codes
+nothing about where the service lives: the user types the base URL into the
+Family Sync sheet. Keeping the deployment files in this same project directory
+is exactly what `deploy/` does.
 
-Migration V3 enables row-level security on all 14 family tables. Supabase exposes the
-`public` schema through its auto-generated API, so without RLS anyone holding the anon
-key could read the whole family database. RLS with no policies blocks the anon and
-authenticated roles while leaving the server's own connection unaffected.
-
-## 2. Launch the Render blueprint
-
-Render builds from GitHub, so **commit and push first**, then:
-
-1. Render dashboard → **Blueprints** → **New Blueprint Instance**
-2. Repository: `skcode98/buckwheat`, branch `master`
-3. Blueprint path: the repo-root `render.yaml`
-4. When prompted, paste the three values from step 1. `DATABASE_SSL_MODE` is already
-   fixed to `require` in the blueprint.
-
-Render then creates the `family-sync` web service and builds the Docker image. First boot
-runs the migrations; watch the deploy logs for `Started` and then hit the health endpoint.
-
-## 3. Verify
-
-```bash
-curl https://family-sync.onrender.com/health
-```
-
-Expected: a 200 with the service healthy. The first request after an idle period can take
-up to ~a minute while the free instance spins back up.
+Docker is required for one specific reason. Render's native build runtimes always
+build at the repository root, and the root `build.gradle.kts` applies the Android
+and KSP plugins — so a native Render build would try to compile the Android app
+and fail without an Android SDK. `server/Dockerfile` copies only `server/`, which
+has its own Gradle build, and sidesteps that.
 
 ## Free-tier behaviour to expect
 
 | | |
 |---|---|
-| Render web service | Free, forever. 512 MB. Sleeps after 15 min idle, ~1 min to wake. |
-| Supabase project | Free, never expires. 500 MB. **Pauses after 7 days of no activity**, data kept, resumes on the next request. |
+| Render web service | Free, forever. 512 MB. **Sleeps after 15 min idle**, ~1 min to wake. |
+| Supabase project | Free, never expires. 500 MB. **Pauses after 7 days of low activity**, data kept. |
 
-The pause and the sleep both preserve data, so a family that uses the app regularly will
-not notice either. Both wake up automatically on the next sync.
+Both preserve data, so a family that uses the app regularly will not notice
+either. The difference is in how they recover: a Render sleep fixes itself on the
+next request, but a paused Supabase project needs a manual **Resume project**
+click in the dashboard. See [OPERATIONS.md](deploy/OPERATIONS.md).
 
 ## Enrolling a family
 
-Open Settings and pick "Family sync". The sheet has two sides.
-
-To start a family: set the server URL (the Render URL from above, `https://...onrender.com`),
-enter a display name, then tap create. The app creates the family, schedules background
-sync, and shows the family and member ids.
-
-To join one: paste the code a family member gave you into the invite field, enter a display
-name, then tap join.
-
-Once enrolled the sheet shows the family and member ids and offers a button to mint a new
-invite code, which appears on screen to read out or share. Signing out stops background
-sync and forgets the family on this device.
+Open Settings and pick "Family sync". To start a family, enter the server URL
+from Render, type a display name, then tap create; the app shows the family and
+member ids. To join one, paste an invite code and a display name, then tap join.
+Once enrolled, the sheet can mint a fresh invite code to read out or share.
+Signing out stops background sync and forgets the family on this device.

@@ -16,9 +16,95 @@ import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import org.json.JSONObject
 
+/**
+ * One local table, exposed to the sync engine as plain [LocalRecord]s.
+ *
+ * Deliberately has no single-row `find`. Every lookup a sync performs is a batched [loadByIds], because
+ * a per-row lookup that scans the whole table makes a sync quadratic, and a sync reads each table once
+ * rather than once per row.
+ */
+interface SyncTableGateway {
+    val table: String
+
+    suspend fun loadAll(): List<LocalRecord>
+
+    suspend fun loadByIds(recordIds: Collection<String>): List<LocalRecord>
+
+    /**
+     * A genuine upsert. The insert is conflict-resolving in SQL, so an existing row is updated in place
+     * and never deleted first. That is what keeps archived history: deleting a budget period to
+     * re-insert it cascades away every archived row that references it.
+     */
+    suspend fun upsert(record: LocalRecord)
+
+    suspend fun remove(recordId: String)
+}
+
+/** The columns a sync reads and writes on every one of the seven tables. */
+data class SyncMeta(
+    val updatedAt: Long,
+    val version: Int,
+    val deletedAt: Long?,
+    val memberId: String?,
+    val familyId: String?,
+    val syncSeq: Long,
+)
+
+class SyncTableBinding<T : Any>(
+    override val table: String,
+    private val loader: suspend () -> List<T>,
+    private val inserter: suspend (T) -> Unit,
+    private val remover: suspend (String) -> Unit,
+    private val idOf: (T) -> String,
+    private val isDirty: suspend (String) -> Boolean,
+    private val payloadOf: (T) -> String,
+    private val metaOf: (T) -> SyncMeta,
+    private val decoder: (LocalRecord) -> T,
+) : SyncTableGateway {
+
+    override suspend fun loadAll(): List<LocalRecord> = loader().map { toRecord(it) }
+
+    override suspend fun loadByIds(recordIds: Collection<String>): List<LocalRecord> {
+        if (recordIds.isEmpty()) return emptyList()
+        val wanted = recordIds.toHashSet()
+        return loader().filter { idOf(it) in wanted }.map { toRecord(it) }
+    }
+
+    override suspend fun upsert(record: LocalRecord) {
+        inserter(decoder(record))
+    }
+
+    override suspend fun remove(recordId: String) {
+        remover(recordId)
+    }
+
+    private suspend fun toRecord(entity: T): LocalRecord {
+        val meta = metaOf(entity)
+        val id = idOf(entity)
+        return LocalRecord(
+            table = table,
+            id = id,
+            updatedAt = meta.updatedAt,
+            version = meta.version,
+            deletedAt = meta.deletedAt,
+            payload = payloadOf(entity),
+            // Read the queue rather than assume: this is the only place a row is called dirty, and a
+            // hardcoded `true` here made every pulled row look like a local edit.
+            dirty = isDirty(id),
+            memberId = meta.memberId,
+            familyId = meta.familyId,
+            syncSeq = meta.syncSeq,
+        )
+    }
+}
+
 class SyncBindings(
     private val pendingMutationDao: PendingMutationDao,
 ) {
+    /**
+     * Bound in [SyncTables.APPLY_ORDER], which is also the order a pull is written in. The order matters
+     * because `archived_transactions` has an ON DELETE CASCADE foreign key to `budget_periods`.
+     */
     fun gateways(
         transactionDao: TransactionDao,
         budgetPeriodDao: BudgetPeriodDao,
@@ -27,126 +113,118 @@ class SyncBindings(
         recurringDao: RecurringDao,
         savingsGoalDao: SavingsGoalDao,
     ): List<SyncTableGateway> = listOf(
-        transactions(transactionDao),
-        archivedTransactions(budgetPeriodDao),
-        budgetPeriods(budgetPeriodDao),
-        savedCategories(savedCategoryDao),
-        savedTags(savedTagDao),
-        recurringTemplates(recurringDao),
-        savingsGoals(savingsGoalDao),
+        binding(
+            table = SyncTables.BUDGET_PERIODS,
+            dao = budgetPeriodDao,
+            loader = { dao: BudgetPeriodDao -> dao.getAllNow() },
+            inserter = { dao: BudgetPeriodDao, record: BudgetPeriod -> dao.insert(record) },
+            remover = { dao: BudgetPeriodDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.BUDGET_PERIODS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readBudgetPeriod(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.TRANSACTIONS,
+            dao = transactionDao,
+            loader = { dao: TransactionDao -> dao.getAllNow() },
+            inserter = { dao: TransactionDao, record: Transaction -> dao.insert(record) },
+            remover = { dao: TransactionDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.TRANSACTIONS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = {
+                SyncMeta(it.updatedAt, it.version, it.deletedAt, it.memberId, it.familyId, it.syncSeq)
+            },
+            decoder = { record -> JSONObject(record.payload).readTransaction(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.SAVED_CATEGORIES,
+            dao = savedCategoryDao,
+            loader = { dao: SavedCategoryDao -> dao.getAllNow() },
+            inserter = { dao: SavedCategoryDao, record: SavedCategory -> dao.insert(record) },
+            remover = { dao: SavedCategoryDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.SAVED_CATEGORIES, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readSavedCategory(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.SAVED_TAGS,
+            dao = savedTagDao,
+            loader = { dao: SavedTagDao -> dao.getAllNow() },
+            inserter = { dao: SavedTagDao, record: SavedTag -> dao.insert(record) },
+            remover = { dao: SavedTagDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.SAVED_TAGS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.RECURRING_TEMPLATES,
+            dao = recurringDao,
+            loader = { dao: RecurringDao -> dao.getAllNow() },
+            inserter = { dao: RecurringDao, record: RecurringTemplate -> dao.insert(record) },
+            remover = { dao: RecurringDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.RECURRING_TEMPLATES, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readRecurringTemplate(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.SAVINGS_GOALS,
+            dao = savingsGoalDao,
+            loader = { dao: SavingsGoalDao -> dao.getAllNow() },
+            inserter = { dao: SavingsGoalDao, record: SavingsGoal -> dao.insert(record) },
+            remover = { dao: SavingsGoalDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.SAVINGS_GOALS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readSavingsGoal(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.ARCHIVED_TRANSACTIONS,
+            dao = budgetPeriodDao,
+            loader = { dao: BudgetPeriodDao -> dao.getAllArchivedNow() },
+            inserter = { dao: BudgetPeriodDao, record: ArchivedTransaction ->
+                dao.insertArchivedTransactions(listOf(record))
+            },
+            remover = { dao: BudgetPeriodDao, id: String -> dao.deleteArchivedById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.ARCHIVED_TRANSACTIONS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = {
+                SyncMeta(it.updatedAt, it.version, it.deletedAt, it.memberId, it.familyId, it.syncSeq)
+            },
+            decoder = { record -> JSONObject(record.payload).readArchivedTransaction(record.id).withSyncMeta(record) },
+        ),
     )
 
-    private fun metaOf(
-        memberId: String?,
-        familyId: String?,
-        syncSeq: Long,
-        updatedAt: Long,
-        deletedAt: Long?,
-        version: Int,
-    ) = SyncMeta(memberId, familyId, syncSeq, updatedAt, deletedAt, version)
-
-    private fun transactions(dao: TransactionDao) = SyncTableBinding<Transaction>(
-        table = SyncTables.TRANSACTIONS,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { dao.getById(it) },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.TRANSACTIONS, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(it.memberId, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readTransaction(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun archivedTransactions(dao: BudgetPeriodDao) = SyncTableBinding<ArchivedTransaction>(
-        table = SyncTables.ARCHIVED_TRANSACTIONS,
-        idOf = { it.id },
-        loader = { dao.getAllArchivedNow() },
-        finder = { id -> dao.getAllArchivedNow().firstOrNull { it.id == id } },
-        inserter = { dao.insertArchivedTransactions(listOf(it)) },
-        remover = { dao.deleteArchivedById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.ARCHIVED_TRANSACTIONS, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(it.memberId, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readArchivedTransaction(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun budgetPeriods(dao: BudgetPeriodDao) = SyncTableBinding<BudgetPeriod>(
-        table = SyncTables.BUDGET_PERIODS,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { dao.getById(it) },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.BUDGET_PERIODS, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readBudgetPeriod(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun savedCategories(dao: SavedCategoryDao) = SyncTableBinding<SavedCategory>(
-        table = SyncTables.SAVED_CATEGORIES,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { dao.getById(it) },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.SAVED_CATEGORIES, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readSavedCategory(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun savedTags(dao: SavedTagDao) = SyncTableBinding<SavedTag>(
-        table = SyncTables.SAVED_TAGS,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { dao.getById(it) },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.SAVED_TAGS, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun recurringTemplates(dao: RecurringDao) = SyncTableBinding<RecurringTemplate>(
-        table = SyncTables.RECURRING_TEMPLATES,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { id -> dao.getAllNow().firstOrNull { it.id == id } },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.RECURRING_TEMPLATES, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readRecurringTemplate(record.id).withSyncMeta(record)
-        },
-    )
-
-    private fun savingsGoals(dao: SavingsGoalDao) = SyncTableBinding<SavingsGoal>(
-        table = SyncTables.SAVINGS_GOALS,
-        idOf = { it.id },
-        loader = { dao.getAllNow() },
-        finder = { dao.getById(it) },
-        inserter = { dao.insert(it) },
-        remover = { dao.deleteById(it) },
-        isDirty = { pendingMutationDao.isQueued(SyncTables.SAVINGS_GOALS, it) != 0 },
-        payloadOf = { it.businessPayload().toString() },
-        metaOf = { metaOf(null, it.familyId, it.syncSeq, it.updatedAt, it.deletedAt, it.version) },
-        decoder = { record ->
-            JSONObject(record.payload).readSavingsGoal(record.id).withSyncMeta(record)
-        },
+    private fun <D, T : Any> binding(
+        table: String,
+        dao: D,
+        loader: suspend (D) -> List<T>,
+        inserter: suspend (D, T) -> Unit,
+        remover: suspend (D, String) -> Unit,
+        idOf: (T) -> String,
+        isDirty: suspend (String) -> Boolean,
+        payloadOf: (T) -> String,
+        metaOf: (T) -> SyncMeta,
+        decoder: (LocalRecord) -> T,
+    ): SyncTableGateway = SyncTableBinding(
+        table = table,
+        loader = { loader(dao) },
+        inserter = { inserter(dao, it) },
+        remover = { remover(dao, it) },
+        idOf = idOf,
+        isDirty = { isDirty(it) },
+        payloadOf = payloadOf,
+        metaOf = metaOf,
+        decoder = decoder,
     )
 }

@@ -2,6 +2,8 @@ package com.danilkinkin.buckwheat.di
 
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
+import java.math.BigDecimal
+import java.util.Date
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -20,8 +22,53 @@ class FakeSavingsGoalDao : SavingsGoalDao {
         return goals.toList()
     }
 
+    override suspend fun upsertOne(
+        id: String,
+        name: String,
+        targetAmount: BigDecimal,
+        currentAmount: BigDecimal,
+        deadline: Date?,
+        createdAt: Date,
+        completed: Boolean,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val goal = SavingsGoal(
+            id = id,
+            name = name,
+            targetAmount = targetAmount,
+            currentAmount = currentAmount,
+            deadline = deadline,
+            createdAt = createdAt,
+            completed = completed,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        val index = goals.indexOfFirst { it.id == id }
+        if (index >= 0) goals[index] = goal else goals.add(goal)
+    }
+
     override suspend fun insert(goal: SavingsGoal) {
-        goals.add(goal)
+        upsertOne(
+            id = goal.id,
+            name = goal.name,
+            targetAmount = goal.targetAmount,
+            currentAmount = goal.currentAmount,
+            deadline = goal.deadline,
+            createdAt = goal.createdAt,
+            completed = goal.completed,
+            familyId = goal.familyId,
+            syncSeq = goal.syncSeq,
+            updatedAt = goal.updatedAt,
+            deletedAt = goal.deletedAt,
+            version = goal.version,
+        )
     }
 
     override suspend fun insertAll(goals: List<SavingsGoal>) {

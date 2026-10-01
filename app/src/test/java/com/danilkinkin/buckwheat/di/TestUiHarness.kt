@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
+import com.danilkinkin.buckwheat.settings.FakeSyncDirtyMarker
 import com.danilkinkin.buckwheat.settings.RecurringPaymentsViewModel
 
 // Shared fixtures for Robolectric Compose UI tests: real ViewModels wired to in-memory
@@ -23,6 +24,7 @@ fun buildTestUiHarness(): TestUiHarness {
     val budgetPeriodDao = FakeBudgetPeriodDao()
     val settingsRepository = SettingsRepository(context)
     val currentDateUseCase = FakeGetCurrentDateUseCase()
+    val syncDirtyMarker = FakeSyncDirtyMarker()
     val spendsRepository = SpendsRepository(
         context = context,
         transactionDao = transactionDao,
@@ -31,11 +33,11 @@ fun buildTestUiHarness(): TestUiHarness {
         budgetPeriodDao = budgetPeriodDao,
         getCurrentDateUseCase = currentDateUseCase,
         categoryAssignmentScheduler = CategoryAssignmentScheduler(
-            CategoryAssigner(context, transactionDao, budgetPeriodDao)
+            CategoryAssigner(context, transactionDao, budgetPeriodDao, syncDirtyMarker)
         ),
         categoryCapTracker = CategoryCapTracker(context, settingsRepository, transactionDao),
         budgetCalculator = BudgetCalculator(context, currentDateUseCase),
-        pendingMutationDao = FakePendingMutationDao(),
+        syncDirtyMarker = syncDirtyMarker,
     )
     return TestUiHarness(
         spendsViewModel = SpendsViewModel(
@@ -48,6 +50,7 @@ fun buildTestUiHarness(): TestUiHarness {
         recurringPaymentsViewModel = RecurringPaymentsViewModel(
             recurringDao = FakeRecurringDao(),
             settingsRepository = settingsRepository,
+            syncDirtyMarker = syncDirtyMarker,
         ),
         transactionDao = transactionDao,
         settingsRepository = settingsRepository,

@@ -25,6 +25,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.sync.ConflictNotice
+import com.danilkinkin.buckwheat.sync.ConflictReason
 
 const val SYNC_CONFLICTS_SHEET = "syncConflicts"
 
@@ -82,10 +83,12 @@ fun SyncConflictsSheet(
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                text = stringResource(
-                                    R.string.sync_conflicts_won_by,
-                                    conflict.wonByMemberId,
-                                ),
+                                text = conflict.winnerText(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                            Text(
+                                text = stringResource(conflict.reason.labelRes()),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             )
@@ -119,4 +122,22 @@ private fun String.labelRes(): Int = when (this) {
     "recurring_templates" -> R.string.sync_conflicts_table_recurring_templates
     "savings_goals" -> R.string.sync_conflicts_table_savings_goals
     else -> R.string.sync_conflicts_table_other
+}
+
+/**
+ * The memberless tables are shared by the family, so their rows have no member id and the server omits
+ * `wonByMemberId`. Saying "shared by the family" is the truth; printing an empty line, or the four
+ * character string "null", is not.
+ */
+@Composable
+private fun ConflictNotice.winnerText(): String = wonByMemberId
+    ?.takeIf { it.isNotBlank() }
+    ?.let { stringResource(R.string.sync_conflicts_won_by, it) }
+    ?: stringResource(R.string.sync_conflicts_shared_by_family)
+
+@StringRes
+private fun ConflictReason.labelRes(): Int = when (this) {
+    ConflictReason.STALE_VERSION -> R.string.sync_conflicts_reason_stale_version
+    ConflictReason.DELETED_REMOTELY -> R.string.sync_conflicts_reason_deleted_remotely
+    ConflictReason.CROSS_FAMILY_WRITE -> R.string.sync_conflicts_reason_cross_family_write
 }

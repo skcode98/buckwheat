@@ -70,7 +70,8 @@ internal fun encodeConflicts(conflicts: List<ConflictNotice>): String {
             JSONObject()
                 .put("table", notice.table)
                 .put("id", notice.id)
-                .put("wonByMemberId", notice.wonByMemberId)
+                .put("wonByMemberId", notice.wonByMemberId ?: JSONObject.NULL)
+                .put("reason", notice.reason.wire)
         )
     }
     return array.toString()
@@ -86,11 +87,21 @@ internal fun decodeConflicts(raw: String?): List<ConflictNotice> {
     return buildList {
         for (i in 0 until array.length()) {
             val obj = array.optJSONObject(i) ?: continue
-            val table = obj.optString("table")
-            val id = obj.optString("id")
-            val wonBy = obj.optString("wonByMemberId")
-            if (table.isBlank() || id.isBlank() || wonBy.isBlank()) continue
-            add(ConflictNotice(table = table, id = id, wonByMemberId = wonBy))
+            val table = obj.optNullableString("table").orEmpty()
+            val id = obj.optNullableString("id").orEmpty()
+            // Only an unusable key discards an entry. A missing or null winner is the CORRECT reading
+            // for the memberless tables, whose rows are shared by the family rather than owned by a
+            // member, and dropping those notices is what used to hide every conflict on five of the
+            // seven tables.
+            if (table.isBlank() || id.isBlank()) continue
+            add(
+                ConflictNotice(
+                    table = table,
+                    id = id,
+                    wonByMemberId = obj.optNullableString("wonByMemberId")?.takeIf { it.isNotBlank() },
+                    reason = ConflictReason.fromWire(obj.optNullableString("reason")),
+                )
+            )
         }
     }
 }

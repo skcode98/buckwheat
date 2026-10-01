@@ -1,5 +1,6 @@
 package family.sync
 
+import family.sync.family.SecuritySettings
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
 import kotlin.test.BeforeTest
@@ -106,6 +107,71 @@ class FamilyBodyTest {
         assertEquals(HttpStatusCode.BadRequest, postJson("/v1/family/create", "[]").status)
 
         assertEquals(0, TestDatabase.countRows("families"))
+    }
+
+    @Test
+    fun aBodyOverTheCapIsRefusedAsTooLarge() = runServerWith(SecuritySettings(maxRequestBytes = 64)) {
+        val oversized = """{"displayName":"${"x".repeat(512)}"}"""
+
+        val response = postJson("/v1/family/create", oversized)
+
+        assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+        assertEquals("payload_too_large", response.error())
+        assertEquals(0, TestDatabase.countRows("families"))
+    }
+
+    @Test
+    fun aBodyInsideTheCapIsStillAccepted() = runServerWith(SecuritySettings(maxRequestBytes = 64)) {
+        val response = postJson("/v1/family/create", """{"displayName":"tiny"}""")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(1, TestDatabase.countRows("families"))
+    }
+
+    @Test
+    fun anOversizedJoinBodyIsRefusedBeforeItCanClaimAnInvite() = runServerWith(
+        SecuritySettings(maxRequestBytes = 64),
+    ) {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+
+        val response = postJson(
+            "/v1/family/join",
+            """{"code":"$code","displayName":"${"x".repeat(512)}"}""",
+        )
+
+        assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+        assertEquals("payload_too_large", response.error())
+
+        val afterwards = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+
+        assertEquals(HttpStatusCode.OK, afterwards.status)
+    }
+
+    @Test
+    fun anAbsurdlyLongDisplayNameIsRefused() = runServer {
+        val response = postJson("/v1/family/create", """{"displayName":"${"x".repeat(101)}"}""")
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals("displayName_too_long", response.error())
+        assertEquals(0, TestDatabase.countRows("families"))
+    }
+
+    @Test
+    fun aDisplayNameAtTheLimitIsAccepted() = runServer {
+        val name = "x".repeat(100)
+
+        val response = postJson("/v1/family/create", """{"displayName":"$name"}""")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun anAbsurdlyLongInviteCodeIsRefused() = runServer {
+        val response = postJson("/v1/family/join", """{"code":"${"A".repeat(17)}","displayName":"a"}""")
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals("code_too_long", response.error())
     }
 
     private suspend fun HttpResponse.error(): String? = json()["error"]?.jsonPrimitiveText()

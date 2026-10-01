@@ -1,8 +1,78 @@
-.git
-.gradle
-.kilo
+# Build context rules for server/Dockerfile.
+#
+# WHY THIS FILE LIVES AT THE REPOSITORY ROOT
+# ------------------------------------------
+# The Docker build client looks for `.dockerignore` in the *root directory of the
+# build context* -- never next to the Dockerfile. render.yaml sets
+# `dockerContext: .`, so the context is the repository root, and this is the
+# file that takes effect.
+#
+# The only thing that would override it is `server/Dockerfile.dockerignore`, the
+# Dockerfile-specific naming convention, which wins over the context-root file.
+# There is deliberately no such file next to server/Dockerfile, so the list
+# below is the only one in play. Adding one there would silently change what
+# reaches the image without changing anything in this file.
+#
+# WHAT IT BUYS
+# ------------
+# server/Dockerfile copies only server/build.gradle.kts, server/settings.gradle.kts
+# and server/src. Everything matched below is dead weight in the context.
+#
+# Render clones the repository before building, so only git-tracked files are
+# actually shipped; build outputs and local Gradle caches never reach the daemon
+# in the first place, because .gitignore already covers them. The Android module
+# is tracked, and it is by far the largest part of the repository, so excluding
+# it is the change that actually matters.
+#
+# MATCHING RULES TO KEEP IN MIND
+# ------------------------------
+# A pattern with a single path component matches at the context root only; it
+# does not match the same name nested deeper. That is why `app` excludes the
+# Android module but would not have excluded a nested `app` directory. Use
+# `**/` when the name should match at any depth.
+#
+# Note what is deliberately NOT listed: `build.gradle.kts` and
+# `settings.gradle.kts`. Both names also exist inside server/, and the image
+# copies them. They total well under a hundred lines, so the safest thing is to
+# let them travel with the context.
+
+# --- Android application ---------------------------------------------------
 app
+gradlew
+gradlew.bat
+gradle
+gradle.properties
+local.properties
+spotless
+
+# --- Build output and caches ----------------------------------------------
 **/build
 **/.gradle
 **/.kotlin
-*.log
+**/.cxx
+**/.externalNativeBuild
+captures
+
+# --- Repository metadata and CI -------------------------------------------
+.git
+.github
+.gitignore
+.gitattributes
+
+# --- Documentation and deployment material ---------------------------------
+# Nothing under docs/ or deploy/ is copied by server/Dockerfile.
+**/*.md
+docs
+deploy
+
+# --- Editor, OS and agent scratch ------------------------------------------
+.idea
+.vs
+.kilo
+.opencode
+.playwright-mcp
+.playwright
+.superpowers
+.DS_Store
+**/*.log
+**/*.png

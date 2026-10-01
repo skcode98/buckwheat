@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.data.dao
 
 import kotlinx.coroutines.flow.Flow
+import androidx.room.Transaction as RoomTransaction
 import androidx.room.*
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 
@@ -21,8 +22,60 @@ interface SavedTagDao {
     @Query("SELECT EXISTS(SELECT 1 FROM saved_tags WHERE name = :name)")
     suspend fun existsByName(name: String): Boolean
 
-    @Insert
-    suspend fun insert(tag: SavedTag)
+    /**
+     * A real conflict-resolving upsert, written by hand because neither Room annotation does this job.
+     *
+     * `@Insert(onConflict = REPLACE)` is WRONG here for the general reason: SQLite's REPLACE deletes
+     * the conflicting row and inserts a new one, which cascades wherever this table is a foreign-key
+     * parent.
+     *
+     * `@Upsert` is ALSO WRONG, and worse: on conflict Room updates only the primary key column and
+     * leaves every other column at its old value, so `family_id`, `sync_seq`, `updated_at` and
+     * `version` were silently frozen. A pull that returned a changed `family_id` or `version`
+     * applied nothing, and `enrolAll` stamped nothing.
+     *
+     * `ON CONFLICT(id) DO UPDATE SET` updates in place and assigns every non-key column from
+     * `excluded`. Any column dropped from the SET list silently stops syncing — keep this list in
+     * step with the entity.
+     */
+    @Query(
+        """
+        INSERT INTO `saved_tags` (
+            `id`, `name`, `family_id`, `sync_seq`, `updated_at`, `deleted_at`, `version`
+        ) VALUES (
+            :id, :name, :familyId, :syncSeq, :updatedAt, :deletedAt, :version
+        )
+        ON CONFLICT(`id`) DO UPDATE SET
+            `name` = excluded.`name`,
+            `family_id` = excluded.`family_id`,
+            `sync_seq` = excluded.`sync_seq`,
+            `updated_at` = excluded.`updated_at`,
+            `deleted_at` = excluded.`deleted_at`,
+            `version` = excluded.`version`
+        """
+    )
+    suspend fun upsertOne(
+        id: String,
+        name: String,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    )
+
+    @RoomTransaction
+    suspend fun insert(tag: SavedTag) {
+        upsertOne(
+            id = tag.id,
+            name = tag.name,
+            familyId = tag.familyId,
+            syncSeq = tag.syncSeq,
+            updatedAt = tag.updatedAt,
+            deletedAt = tag.deletedAt,
+            version = tag.version,
+        )
+    }
 
     @Insert
     suspend fun insertAll(tags: List<SavedTag>)

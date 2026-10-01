@@ -1,7 +1,9 @@
 package family.sync
 
 import family.sync.auth.TokenService
+import family.sync.family.SecuritySettings
 import java.security.MessageDigest
+import java.time.Duration
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -125,6 +127,47 @@ class FamilyScopeTest {
         val service = tokenService()
 
         service.revoke("never-issued")
+    }
+
+    @Test
+    fun aTokenThatOutlivedItsLifetimeIsRefused() {
+        val family = TestDatabase.createFamily("parent")
+        val token = tokenService().mint(family.memberId, family.familyId)
+
+        val expired = TokenService(TestDatabase.dataSource, Duration.ZERO)
+
+        assertNull(expired.verify(token))
+    }
+
+    @Test
+    fun aTokenInsideItsLifetimeStillResolves() {
+        val family = TestDatabase.createFamily("parent")
+        val token = tokenService().mint(family.memberId, family.familyId)
+
+        val principal = assertNotNull(
+            TokenService(TestDatabase.dataSource, Duration.ofDays(1)).verify(token)
+        )
+
+        assertEquals(family.memberId, principal.memberId)
+    }
+
+    @Test
+    fun theLifetimeIsOptInAndReadFromTheEnvironment() {
+        // The lifetime is a window on created_at, so it applies retroactively. A finite default
+        // would invalidate every token already in the field the moment it deployed.
+        assertEquals(Duration.ofDays(3650), SecuritySettings.fromEnv(emptyMap()).tokenLifetime)
+        assertEquals(
+            Duration.ofDays(3650),
+            SecuritySettings.fromEnv(mapOf("TOKEN_LIFETIME_DAYS" to "junk")).tokenLifetime,
+        )
+        assertEquals(
+            Duration.ofDays(7),
+            SecuritySettings.fromEnv(mapOf("TOKEN_LIFETIME_DAYS" to "7")).tokenLifetime,
+        )
+        assertEquals(
+            Duration.ofDays(3650),
+            SecuritySettings.fromEnv(mapOf("TOKEN_LIFETIME_DAYS" to "-1")).tokenLifetime,
+        )
     }
 
     private fun tokenService(): TokenService = TokenService(TestDatabase.dataSource)

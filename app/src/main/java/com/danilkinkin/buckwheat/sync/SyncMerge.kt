@@ -19,13 +19,19 @@ internal fun WireRecord.toLocalRecord(
     syncSeq = syncSeq,
 )
 
+/**
+ * A null [winnerMemberId] is a real answer, not a missing one: the memberless tables are shared by the
+ * family and none of their rows carries a member id, so every conflict on budget_periods,
+ * saved_categories, saved_tags, recurring_templates and savings_goals resolves to "nobody in
+ * particular". It must reach the conflict sheet rather than being dropped on the way there.
+ */
 private fun conflict(
     table: String,
     id: String,
     versionsDiffer: Boolean,
     winnerMemberId: String?,
 ): ConflictNotice? = if (versionsDiffer) {
-    ConflictNotice(table, id, winnerMemberId.orEmpty())
+    ConflictNotice(table, id, winnerMemberId.orEmpty().ifBlank { null })
 } else {
     null
 }
@@ -77,5 +83,7 @@ fun mergePull(
     }
 
     val highestSeq = remote.maxOfOrNull { it.seq } ?: cursor
+    // `maxOf` is the whole guarantee: a server that repeats an older cursor, or an empty window, can only
+    // ever hold the window in place. It can never move this device backwards into records it has seen.
     return MergeResult(records, maxOf(cursor, highestSeq), conflicts)
 }

@@ -18,3 +18,7 @@ class ForbiddenException(code: String) : ApiException(HttpStatusCode.Forbidden, 
 class ConflictException(code: String) : ApiException(HttpStatusCode.Conflict, code)
 
 class GoneException(code: String) : ApiException(HttpStatusCode.Gone, code)
+
+class PayloadTooLargeException(code: String) : ApiException(HttpStatusCode.PayloadTooLarge, code)
+
+class TooManyRequestsException(code: String) : ApiException(HttpStatusCode.TooManyRequests, code)

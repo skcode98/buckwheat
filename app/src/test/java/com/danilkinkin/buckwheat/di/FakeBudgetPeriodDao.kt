@@ -25,8 +25,91 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         return periods.toList()
     }
 
-    override suspend fun insert(period: BudgetPeriod) {
+    // Mirrors the @Upsert on BudgetPeriodDao.insert: an existing row is updated in place.
+    override suspend fun upsertPeriod(
+        id: String,
+        budget: BigDecimal,
+        startDate: Date,
+        finishDate: Date,
+        actualFinishDate: Date?,
+        currencyCode: String,
+        totalSpent: BigDecimal,
+        isImported: Boolean,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val period = BudgetPeriod(
+            id = id,
+            budget = budget,
+            startDate = startDate,
+            finishDate = finishDate,
+            actualFinishDate = actualFinishDate,
+            currencyCode = currencyCode,
+            totalSpent = totalSpent,
+            isImported = isImported,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        periods.removeAll { it.id == id }
         periods.add(period)
+    }
+
+    override suspend fun upsertArchivedTransaction(
+        id: String,
+        periodId: String,
+        type: TransactionType,
+        value: BigDecimal,
+        date: Date,
+        comment: String,
+        category: String?,
+        memberId: String?,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val row = ArchivedTransaction(
+            id = id,
+            periodId = periodId,
+            type = type,
+            value = value,
+            date = date,
+            comment = comment,
+            category = category,
+            memberId = memberId,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        archivedTransactions.removeAll { it.id == id }
+        archivedTransactions.add(row)
+    }
+
+    override suspend fun insert(period: BudgetPeriod) {
+        upsertPeriod(
+            id = period.id,
+            budget = period.budget,
+            startDate = period.startDate,
+            finishDate = period.finishDate,
+            actualFinishDate = period.actualFinishDate,
+            currencyCode = period.currencyCode,
+            totalSpent = period.totalSpent,
+            isImported = period.isImported,
+            familyId = period.familyId,
+            syncSeq = period.syncSeq,
+            updatedAt = period.updatedAt,
+            deletedAt = period.deletedAt,
+            version = period.version,
+        )
     }
 
     override suspend fun insertAll(periods: List<BudgetPeriod>) {
@@ -52,6 +135,10 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
 
     override suspend fun getAllArchivedNow(): List<ArchivedTransaction> {
         return archivedTransactions.toList()
+    }
+
+    override suspend fun getArchivedById(id: String): ArchivedTransaction? {
+        return archivedTransactions.firstOrNull { it.id == id }
     }
 
     override fun getArchivedUncategorizedCount(): Flow<Int> {
@@ -101,6 +188,10 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
     }
 
     override suspend fun insertArchivedTransactions(transactions: List<ArchivedTransaction>) {
+        // Mirrors the real DAO, which is a genuine conflict-resolving upsert now.
+        transactions.forEach { row ->
+            archivedTransactions.removeAll { existing -> existing.id == row.id }
+        }
         archivedTransactions.addAll(transactions)
     }
 

@@ -1,11 +1,24 @@
 package family.sync
 
+import family.sync.family.RateLimitSetting
+import family.sync.family.SecuritySettings
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.testing.ApplicationTestBuilder
+import io.ktor.server.testing.testApplication
+import java.time.Duration
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+fun runServerWith(
+    settings: SecuritySettings,
+    block: suspend ApplicationTestBuilder.() -> Unit,
+) = testApplication {
+    application { familySyncModule(TestDatabase.dataSource, settings) }
+    block()
+}
 
 class InviteRedeemTest {
 
@@ -135,11 +148,188 @@ class InviteRedeemTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
-    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.createFamily(
+    @Test
+    fun leavingRevokesTheTokenAndRemovesTheMembership() = runServer {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+
+        val left = postJson("/v1/family/leave", "{}", child.field("token"))
+
+        assertEquals(HttpStatusCode.OK, left.status)
+        assertEquals("true", left.json()["left"]?.jsonPrimitiveText())
+        val afterwards = postJson("/v1/family/whoami", "{}", child.field("token"))
+        assertEquals(HttpStatusCode.Unauthorized, afterwards.status)
+        assertEquals(1, TestDatabase.countRows("members"))
+        assertEquals(1, TestDatabase.readTokenHashes().size)
+    }
+
+    @Test
+    fun theOwnerKeepsItsTokenAfterSomebodyElseLeaves() = runServer {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+        postJson("/v1/family/leave", "{}", child.field("token"))
+
+        val whoAmI = postJson("/v1/family/whoami", "{}", owner.field("token"))
+
+        assertEquals(HttpStatusCode.OK, whoAmI.status)
+        assertEquals("parent", whoAmI.field("displayName"))
+    }
+
+    @Test
+    fun anUnauthenticatedDeviceCannotLeave() = runServer {
+        val response = postJson("/v1/family/leave", "{}", null)
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun anExpiredTokenCannotEvenLeave() = runServerWith(SecuritySettings(tokenLifetime = Duration.ZERO)) {
+        val owner = createFamily("parent")
+
+        val response = postJson("/v1/family/leave", "{}", owner.field("token"))
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun creatingFamiliesIsRateLimitedPerCaller() {
+        val clock = FakeClock()
+        val settings = SecuritySettings(
+            createRate = RateLimitSetting(2, Duration.ofMinutes(10)),
+            clock = clock::now,
+        )
+
+        runServerWith(settings) {
+            assertEquals(HttpStatusCode.OK, createFamily("one").status)
+            assertEquals(HttpStatusCode.OK, createFamily("two").status)
+
+            val blocked = createFamily("three")
+            assertEquals(HttpStatusCode.TooManyRequests, blocked.status)
+            assertEquals("rate_limited", blocked.json()["error"]?.jsonPrimitiveText())
+            assertEquals(2, TestDatabase.countRows("families"))
+
+            clock.advance(Duration.ofMinutes(10))
+
+            assertEquals(HttpStatusCode.OK, createFamily("four").status)
+        }
+    }
+
+    @Test
+    fun joiningIsRateLimitedPerCaller() {
+        val clock = FakeClock()
+        val settings = SecuritySettings(
+            joinRate = RateLimitSetting(1, Duration.ofMinutes(5)),
+            clock = clock::now,
+        )
+
+        runServerWith(settings) {
+            createFamily("parent")
+            val first = postJson("/v1/family/join", """{"code":"AAAAAA1","displayName":"a"}""")
+            assertEquals(HttpStatusCode.NotFound, first.status)
+
+            val blocked = postJson("/v1/family/join", """{"code":"BBBBBB2","displayName":"b"}""")
+            assertEquals(HttpStatusCode.TooManyRequests, blocked.status)
+            assertEquals("rate_limited", blocked.json()["error"]?.jsonPrimitiveText())
+
+            clock.advance(Duration.ofMinutes(5))
+
+            val afterTheWindow = postJson("/v1/family/join", """{"code":"BBBBBB2","displayName":"b"}""")
+            assertEquals(HttpStatusCode.NotFound, afterTheWindow.status)
+        }
+    }
+
+    @Test
+    fun mintingInvitesIsRateLimitedPerCaller() {
+        val clock = FakeClock()
+        val settings = SecuritySettings(
+            inviteRate = RateLimitSetting(1, Duration.ofMinutes(5)),
+            clock = clock::now,
+        )
+
+        runServerWith(settings) {
+            val owner = createFamily("parent")
+            assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
+
+            val blocked = postJson("/v1/family/invite", "{}", owner.field("token"))
+            assertEquals(HttpStatusCode.TooManyRequests, blocked.status)
+            assertEquals("rate_limited", blocked.json()["error"]?.jsonPrimitiveText())
+
+            clock.advance(Duration.ofMinutes(5))
+
+            assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
+        }
+    }
+
+    @Test
+    fun oneOwnerCannotFloodTheInviteTable() = runServerWith(
+        SecuritySettings(maxOutstandingInvites = 2),
+    ) {
+        val owner = createFamily("parent")
+        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
+        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
+
+        val blocked = postJson("/v1/family/invite", "{}", owner.field("token"))
+
+        assertEquals(HttpStatusCode.Conflict, blocked.status)
+        assertEquals("too_many_invites", blocked.json()["error"]?.jsonPrimitiveText())
+        assertEquals(2, TestDatabase.countRows("invites"))
+    }
+
+    @Test
+    fun mintingAnInvitePrunesInvitesNobodyCanRedeemAnymore() = runServer {
+        val owner = createFamily("parent")
+        mintInvite(owner.field("token"))
+        TestDatabase.dataSource.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate("update invites set redeemed_at = now() - interval '30 days'")
+            }
+        }
+
+        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
+
+        assertEquals(1, TestDatabase.countRows("invites"))
+    }
+
+    @Test
+    fun aUsedInviteNeverCreatesASecondMember() = runServer {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+        postJson("/v1/family/join", """{"code":"$code","displayName":"first"}""")
+
+        repeat(3) {
+            postJson("/v1/family/join", """{"code":"$code","displayName":"again"}""")
+        }
+
+        assertEquals(2, TestDatabase.countRows("members"))
+    }
+
+    @Test
+    fun anExpiredInviteCreatesNoMember() = runServer {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+        TestDatabase.expireInvite(code)
+
+        val response = postJson("/v1/family/join", """{"code":"$code","displayName":"late"}""")
+
+        assertEquals(HttpStatusCode.Gone, response.status)
+        assertEquals(1, TestDatabase.countRows("members"))
+    }
+
+    private suspend fun ApplicationTestBuilder.createFamily(
         displayName: String,
     ): HttpResponse = postJson("/v1/family/create", """{"displayName":"$displayName"}""")
 
-    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.mintInvite(
+    private suspend fun ApplicationTestBuilder.mintInvite(
         token: String,
     ): String = postJson("/v1/family/invite", "{}", token).field("code")
+}
+
+private class FakeClock(private var millis: Long = 0L) {
+    fun now(): Long = millis
+
+    fun advance(duration: Duration) {
+        millis += duration.toMillis()
+    }
 }

@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.sync
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -210,7 +211,7 @@ class SyncMergeTest {
         )
 
         assertEquals("local-payload", result.records.first().payload)
-        assertEquals("", result.conflicts.single().wonByMemberId)
+        assertNull(result.conflicts.single().wonByMemberId)
     }
 
     @Test
@@ -222,7 +223,7 @@ class SyncMergeTest {
         )
 
         assertEquals("remote-payload", result.records.first().payload)
-        assertEquals("", result.conflicts.single().wonByMemberId)
+        assertNull(result.conflicts.single().wonByMemberId)
     }
 
     @Test
@@ -382,5 +383,47 @@ class SyncMergeTest {
         )
 
         assertEquals(80, result.cursor)
+    }
+
+    @Test
+    fun everyMemberlessTableStillReportsItsConflict() {
+        // These five tables carry no member id at all, so their conflicts resolve to "nobody in
+        // particular". Losing the notice here is what hid every conflict on those tables.
+        val tables = listOf(
+            SyncTables.BUDGET_PERIODS,
+            SyncTables.SAVED_CATEGORIES,
+            SyncTables.SAVED_TAGS,
+            SyncTables.RECURRING_TEMPLATES,
+            SyncTables.SAVINGS_GOALS,
+        )
+
+        tables.forEach { table ->
+            val result = mergePull(
+                local = listOf(local(updatedAt = 100, version = 1, memberId = null).copy(table = table)),
+                remote = listOf(remote(updatedAt = 200, version = 2, memberId = null).copy(table = table)),
+                cursor = 0,
+            )
+
+            assertEquals("no conflict reported for $table", 1, result.conflicts.size)
+            assertNull("winner for $table", result.conflicts.single().wonByMemberId)
+        }
+    }
+
+    @Test
+    fun aCursorOlderThanTheLocalOneNeverRewinds() {
+        val result = mergePull(
+            local = emptyList(),
+            remote = emptyList(),
+            cursor = 0,
+        )
+
+        assertEquals(0, result.cursor)
+        val ahead = mergePull(
+            local = listOf(local(updatedAt = 100)),
+            remote = listOf(remote(seq = 4, updatedAt = 200)),
+            cursor = 90,
+        )
+
+        assertEquals(90, ahead.cursor)
     }
 }

@@ -28,8 +28,38 @@ class FakeSavedTagDao : SavedTagDao {
         return tags.any { it.name == name }
     }
 
+    override suspend fun upsertOne(
+        id: String,
+        name: String,
+        familyId: String?,
+        syncSeq: Long,
+        updatedAt: Long,
+        deletedAt: Long?,
+        version: Int,
+    ) {
+        val tag = SavedTag(
+            id = id,
+            name = name,
+            familyId = familyId,
+            syncSeq = syncSeq,
+            updatedAt = updatedAt,
+            deletedAt = deletedAt,
+            version = version,
+        )
+        val index = tags.indexOfFirst { it.id == id }
+        if (index >= 0) tags[index] = tag else tags.add(tag)
+    }
+
     override suspend fun insert(tag: SavedTag) {
-        tags.add(tag)
+        upsertOne(
+            id = tag.id,
+            name = tag.name,
+            familyId = tag.familyId,
+            syncSeq = tag.syncSeq,
+            updatedAt = tag.updatedAt,
+            deletedAt = tag.deletedAt,
+            version = tag.version,
+        )
     }
 
     override suspend fun insertAll(tags: List<SavedTag>) {

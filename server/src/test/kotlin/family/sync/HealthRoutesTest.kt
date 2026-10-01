@@ -1,5 +1,6 @@
 package family.sync
 
+import family.sync.family.SecuritySettings
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.server.testing.testApplication
@@ -21,5 +22,13 @@ class HealthRoutesTest {
     fun healthReportsOkWhenReachedRepeatedly() = testApplication {
         application { familySyncModule(TestDatabase.dataSource) }
         assertEquals(200, client.get("/health").status.value)
+    }
+
+    @Test
+    fun healthStillAnswersUnderATightRequestBodyCap() = testApplication {
+        application { familySyncModule(TestDatabase.dataSource, SecuritySettings(maxRequestBytes = 8)) }
+        val response = client.get("/health")
+        assertEquals(200, response.status.value)
+        assertTrue(response.bodyAsText().contains("\"status\":\"ok\""))
     }
 }

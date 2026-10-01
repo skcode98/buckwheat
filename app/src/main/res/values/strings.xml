@@ -605,6 +605,10 @@
   <string name="sync_conflicts_empty">No sync conflicts</string>
   <string name="sync_conflicts_dismiss_all">Dismiss all</string>
   <string name="sync_conflicts_won_by">Kept your version, won by %1$s</string>
+  <string name="sync_conflicts_shared_by_family">Kept your version, shared with the family</string>
+  <string name="sync_conflicts_reason_stale_version">Someone else changed this first</string>
+  <string name="sync_conflicts_reason_deleted_remotely">Deleted on another device</string>
+  <string name="sync_conflicts_reason_cross_family_write">That entry belongs to another family</string>
   <string name="sync_conflicts_table_transactions">Transactions</string>
   <string name="sync_conflicts_table_archived_transactions">Archived transactions</string>
   <string name="sync_conflicts_table_budget_periods">Budget periods</string>
@@ -641,4 +645,12 @@
   <string name="family_sync_error_code">Enter an invite code</string>
   <string name="family_sync_error_no_session">You are not in a family right now</string>
   <string name="family_sync_error_generic">Something went wrong</string>
+  <string name="family_sync_member_name">Sharing as %1$s</string>
+  <string name="family_sync_ids_hint">These two ids tell support which family member this device is.</string>
+  <string name="family_sync_invite_copy">Copy code</string>
+  <string name="family_sync_invite_copied">Invite code copied</string>
+  <string name="family_sync_invite_share">Share code</string>
+  <string name="family_sync_invite_expires_at">This code stops working at %1$s</string>
+  <string name="family_sync_invite_expired">This code has expired</string>
+  <string name="family_sync_invite_share_text">Join my Buckwheat family budget with the invite code %1$s</string>
 </resources>

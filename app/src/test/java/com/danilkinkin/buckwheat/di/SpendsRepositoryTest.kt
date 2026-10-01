@@ -8,6 +8,7 @@ import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.settings.FakeSyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
@@ -31,7 +32,8 @@ class SpendsRepositoryTest {
 
     val currentDateUseCase: FakeGetCurrentDateUseCase = FakeGetCurrentDateUseCase()
     val budgetPeriodDao: FakeBudgetPeriodDao = FakeBudgetPeriodDao()
-    val pendingMutationDao: FakePendingMutationDao = FakePendingMutationDao()
+    val syncDirtyMarker = FakeSyncDirtyMarker()
+    val pendingMutationDao: FakePendingMutationDao = syncDirtyMarker.pendingMutationDao
 
     @Before
     fun init() {
@@ -44,10 +46,12 @@ class SpendsRepositoryTest {
             FakeSavedCategoryDao(),
             budgetPeriodDao,
             currentDateUseCase,
-            CategoryAssignmentScheduler(CategoryAssigner(context, transactionDao, budgetPeriodDao)),
+            CategoryAssignmentScheduler(
+                CategoryAssigner(context, transactionDao, budgetPeriodDao, syncDirtyMarker)
+            ),
             CategoryCapTracker(context, SettingsRepository(context), transactionDao),
             BudgetCalculator(context, currentDateUseCase),
-            pendingMutationDao,
+            syncDirtyMarker,
         )
     }
 
@@ -435,7 +439,7 @@ class SpendsRepositoryTest {
         val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single()
         assertEquals("spend-1", queued.recordId)
         assertEquals(false, queued.isDelete)
-        assertEquals(currentDateUseCase.value.time, queued.queuedAt)
+        assertEquals(FakeSyncDirtyMarker.QUEUED_AT, queued.queuedAt)
     }
 
     @Test
@@ -518,26 +522,6 @@ class SpendsRepositoryTest {
         assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
         assertTrue(pendingMutationDao.forTable(SyncTables.ARCHIVED_TRANSACTIONS).isNotEmpty())
         assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
-    }
-
-    @Test
-    fun enrollingAQueuesEveryLocalTransactionForPush() = runTest {
-        setBudget()
-        spendsRepository.addSpent(
-            Transaction(
-                id = "spend-1",
-                type = TransactionType.SPENT,
-                value = 10.toBigDecimal(),
-                date = currentDateUseCase.value,
-            )
-        )
-        pendingMutationDao.deleteAll()
-
-        spendsRepository.enrolDevice("member-1", "family-1", 9000L)
-
-        val queued = pendingMutationDao.forTable(SyncTables.TRANSACTIONS)
-        assertTrue(queued.isNotEmpty())
-        assertTrue(queued.all { !it.isDelete })
     }
 
     @Test

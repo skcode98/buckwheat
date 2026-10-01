@@ -17,6 +17,8 @@ import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
@@ -31,6 +33,7 @@ class GoalsViewModel @Inject constructor(
     private val savingsGoalDao: SavingsGoalDao,
     private val spendsRepository: SpendsRepository,
     private val settingsRepository: SettingsRepository,
+    private val syncDirtyMarker: SyncDirtyMarker,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
     val goals: StateFlow<List<SavingsGoal>> = savingsGoalDao.getAll()
@@ -45,13 +48,13 @@ class GoalsViewModel @Inject constructor(
     fun addGoal(name: String, targetAmount: BigDecimal, deadline: Date? = null) {
         if (name.isBlank() || targetAmount <= BigDecimal.ZERO) return
         viewModelScope.launch {
-            savingsGoalDao.insert(
-                SavingsGoal(
-                    name = name.trim(),
-                    targetAmount = targetAmount,
-                    deadline = deadline,
-                )
+            val goal = SavingsGoal(
+                name = name.trim(),
+                targetAmount = targetAmount,
+                deadline = deadline,
             )
+            savingsGoalDao.insert(goal)
+            syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
         }
     }
 
@@ -75,9 +78,11 @@ class GoalsViewModel @Inject constructor(
                 val completed = newAmount >= goal.targetAmount
                 val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
                 savingsGoalDao.update(updatedGoal)
+                syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
                 if (completed && !goal.completed) {
                     _goalCompletedEvents.tryEmit(updatedGoal)
                 }
+                // addSpent queues the resulting transactions row itself.
                 spendsRepository.addSpent(
                     Transaction(
                         type = TransactionType.SPENT,
@@ -109,7 +114,14 @@ class GoalsViewModel @Inject constructor(
 
     fun deleteGoal(id: String) {
         viewModelScope.launch {
-            savingsGoalDao.deleteById(id)
+            val existing = savingsGoalDao.getById(id) ?: return@launch
+            savingsGoalDao.deleteById(existing.id)
+            syncDirtyMarker.markDelete(
+                SyncTables.SAVINGS_GOALS,
+                existing.id,
+                existing.familyId,
+                existing.syncSeq,
+            )
             val notified = settingsRepository.getGoalNotifiedMilestones()
             if (notified.containsKey(id)) {
                 settingsRepository.setGoalNotifiedMilestones(notified - id)
@@ -130,6 +142,7 @@ class GoalsViewModel @Inject constructor(
                     completed = completed,
                 )
             )
+            syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
         }
     }
 }

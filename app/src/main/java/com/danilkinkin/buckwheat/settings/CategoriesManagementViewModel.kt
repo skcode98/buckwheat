@@ -6,6 +6,8 @@ import com.danilkinkin.buckwheat.data.categories.SpendCategory
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.di.SpendsRepository
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +31,7 @@ data class CategoryItem(
 class CategoriesManagementViewModel @Inject constructor(
     private val savedCategoryDao: SavedCategoryDao,
     private val spendsRepository: SpendsRepository,
+    private val syncDirtyMarker: SyncDirtyMarker,
 ) : ViewModel() {
     // Built-in categories always first, then saved custom ones, then transaction-only
     // categories that were deleted from the saved list.
@@ -44,7 +47,9 @@ class CategoriesManagementViewModel @Inject constructor(
         if (trimmed.isBlank() || SpendCategory.fromStored(trimmed) != null) return
         viewModelScope.launch {
             if (!savedCategoryDao.existsByName(trimmed)) {
-                savedCategoryDao.insert(SavedCategory(name = trimmed, emoji = emoji))
+                val category = SavedCategory(name = trimmed, emoji = emoji)
+                savedCategoryDao.insert(category)
+                syncDirtyMarker.markUpsert(SyncTables.SAVED_CATEGORIES, category.id)
             }
         }
     }
@@ -53,19 +58,27 @@ class CategoriesManagementViewModel @Inject constructor(
         val trimmed = name.trim()
         if (trimmed.isBlank() || SpendCategory.fromStored(trimmed) != null) return
         viewModelScope.launch {
+            // copy() keeps the row's sync metadata, which a rebuilt SavedCategory would wipe
+            val existing = savedCategoryDao.getById(id) ?: return@launch
             val other = savedCategoryDao.getByName(trimmed)
             // Don't rename onto an existing category's name
             if (other == null || other.id == id) {
-                savedCategoryDao.update(
-                    SavedCategory(id = id, name = trimmed, emoji = emoji)
-                )
+                savedCategoryDao.update(existing.copy(name = trimmed, emoji = emoji))
+                syncDirtyMarker.markUpsert(SyncTables.SAVED_CATEGORIES, existing.id)
             }
         }
     }
 
     fun deleteCategory(id: String) {
         viewModelScope.launch {
-            savedCategoryDao.deleteById(id)
+            val existing = savedCategoryDao.getById(id) ?: return@launch
+            savedCategoryDao.deleteById(existing.id)
+            syncDirtyMarker.markDelete(
+                SyncTables.SAVED_CATEGORIES,
+                existing.id,
+                existing.familyId,
+                existing.syncSeq,
+            )
         }
     }
 
