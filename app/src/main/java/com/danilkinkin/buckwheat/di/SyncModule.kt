@@ -8,10 +8,12 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.sync.DataStoreFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.DataStoreFamilySessionStore
 import com.danilkinkin.buckwheat.sync.DataStoreSyncStateStore
 import com.danilkinkin.buckwheat.sync.FamilyApi
 import com.danilkinkin.buckwheat.sync.FamilyApiFactory
+import com.danilkinkin.buckwheat.sync.FamilyMembersCache
 import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import com.danilkinkin.buckwheat.sync.HttpFamilyApi
 import com.danilkinkin.buckwheat.sync.RoomSyncDatabase
@@ -44,6 +46,12 @@ abstract class SyncBindingsModule {
     abstract fun bindSyncStateStore(
         store: DataStoreSyncStateStore,
     ): SyncStateStore
+
+    @Binds
+    @Singleton
+    abstract fun bindFamilyMembersCache(
+        store: DataStoreFamilyMembersCache,
+    ): FamilyMembersCache
 
     @Binds
     @Singleton
@@ -93,10 +101,14 @@ object SyncModule {
         client: SyncClient,
         database: SyncDatabase,
         store: FamilySessionStore,
+        syncStateStore: SyncStateStore,
+        clock: SyncClock,
     ) = SyncEngine(
         client = client,
         database = database,
         sessionProvider = { store.current() },
+        syncStateStore = syncStateStore,
+        clock = clock,
     )
 }
 

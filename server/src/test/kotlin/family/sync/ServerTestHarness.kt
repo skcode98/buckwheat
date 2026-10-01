@@ -45,4 +45,17 @@ fun kotlinx.serialization.json.JsonElement?.jsonArrayText(): List<String> {
     return array.map { it.jsonPrimitive.content }
 }
 
+/**
+ * Reads one string field out of every element of an array of objects. [jsonArrayText] cannot serve
+ * this: it calls `jsonPrimitive` on each element, which throws on an object rather than reading into
+ * it, so a response that grew ids alongside its names needed a helper of its own.
+ */
+fun kotlinx.serialization.json.JsonElement?.jsonArrayField(name: String): List<String> {
+    val array = this?.jsonArray ?: return emptyList()
+    return array.map { element ->
+        element.jsonObject[name]?.jsonPrimitive?.content
+            ?: error("array element has no field $name: $element")
+    }
+}
+
 fun tamper(token: String): String = token.dropLast(1) + if (token.last() == 'A') 'B' else 'A'

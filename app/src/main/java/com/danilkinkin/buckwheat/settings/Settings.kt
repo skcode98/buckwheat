@@ -65,6 +65,10 @@ fun Settings(
     val syncConflictsViewModel: SyncConflictsViewModel = hiltViewModel()
     val conflicts by syncConflictsViewModel.conflicts.collectAsStateWithLifecycle()
 
+    val syncStatusViewModel: SyncStatusViewModel = hiltViewModel()
+    val enrolled by syncStatusViewModel.enrolled.collectAsStateWithLifecycle()
+    val syncStatus = syncStatusViewModel.status()
+
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
         16.dp,
@@ -205,6 +209,11 @@ fun Settings(
                 TextRow(
                     icon = painterResource(R.drawable.ic_share),
                     text = stringResource(R.string.family_sync_title),
+                    endContent = if (enrolled) {
+                        { SyncStatusChip(syncStatus) }
+                    } else {
+                        null
+                    },
                     endIcon = painterResource(R.drawable.ic_arrow_right),
                     modifier = Modifier.clickable {
                         appViewModel.openSheet(

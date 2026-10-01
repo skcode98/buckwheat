@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.sync
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.io.OutputStreamWriter
@@ -29,11 +30,19 @@ data class WhoAmI(
     val displayName: String,
 )
 
+data class FamilyMember(
+    val id: String,
+    val displayName: String,
+    val isOwner: Boolean,
+    val joinedAt: String,
+)
+
 interface FamilyApi {
     suspend fun createFamily(displayName: String): FamilyCredentials
     suspend fun joinFamily(code: String, displayName: String): FamilyCredentials
     suspend fun whoami(token: String): WhoAmI
     suspend fun mintInvite(token: String): MintedInvite
+    suspend fun members(token: String): List<FamilyMember>
 }
 
 class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
@@ -58,6 +67,9 @@ class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
     override suspend fun mintInvite(token: String): MintedInvite =
         decodeInvite(post(familyEndpoint(baseUrl, "invite"), token, JSONObject()))
 
+    override suspend fun members(token: String): List<FamilyMember> =
+        decodeMembers(get(familyEndpoint(baseUrl, "members"), token))
+
     private suspend fun post(url: String, token: String?, body: JSONObject): String =
         withContext(Dispatchers.IO) {
             var connection: HttpURLConnection? = null
@@ -79,6 +91,39 @@ class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
                     writer.write(body.toString())
                     writer.flush()
                 }
+
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    val text = runCatching {
+                        conn.errorStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }
+                    }.getOrNull().orEmpty()
+                    throw IOException("family HTTP $code ${errorCodeOf(text) ?: "unknown"}")
+                }
+
+                conn.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+            } catch (e: IOException) {
+                throw e
+            } catch (e: Exception) {
+                throw IOException(e.message ?: "family request failed", e)
+            } finally {
+                connection?.disconnect()
+            }
+        }
+
+    private suspend fun get(url: String, token: String?): String =
+        withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+            try {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                connection = conn
+                conn.requestMethod = "GET"
+                conn.connectTimeout = FAMILY_CONNECT_TIMEOUT_MS
+                conn.readTimeout = FAMILY_READ_TIMEOUT_MS
+                conn.useCaches = false
+                if (token != null) {
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                }
+                conn.connect()
 
                 val code = conn.responseCode
                 if (code !in 200..299) {
@@ -128,6 +173,31 @@ internal fun decodeInvite(body: String): MintedInvite {
         code = json.getString("code"),
         expiresAt = json.getString("expiresAt"),
     )
+}
+
+/**
+ * `{"members":[{"id":..,"displayName":..,"isOwner":..,"joinedAt":..}]}`. An element without an id or a
+ * display name is dropped rather than thrown away with it, because one unusable member must not hide
+ * the rest of the roster: this list is what every transaction's `memberId` is attributed against.
+ */
+internal fun decodeMembers(body: String): List<FamilyMember> {
+    val json = jsonOrThrow(body, "members response")
+    val array = json.optJSONArray("members") ?: JSONArray()
+    return buildList {
+        for (index in 0 until array.length()) {
+            val entry = array.optJSONObject(index) ?: continue
+            val id = entry.optNullableString("id")?.takeIf { it.isNotBlank() } ?: continue
+            val displayName = entry.optNullableString("displayName")?.takeIf { it.isNotBlank() } ?: continue
+            add(
+                FamilyMember(
+                    id = id,
+                    displayName = displayName,
+                    isOwner = entry.optBoolean("isOwner", false),
+                    joinedAt = entry.optNullableString("joinedAt").orEmpty(),
+                )
+            )
+        }
+    }
 }
 
 private fun jsonOrThrow(body: String, what: String): JSONObject = try {

@@ -349,6 +349,8 @@ class RoomSyncDatabaseRoomTest {
     private class RecordingSyncStateStore : SyncStateStore {
         var cursorValue = 0L
         var conflictValues = emptyList<ConflictNotice>()
+        var lastSyncedAtValue = 0L
+        var lastErrorValue: String? = null
         val writes = mutableListOf<String>()
 
         override fun cursor() = flowOf(cursorValue)
@@ -369,9 +371,25 @@ class RoomSyncDatabaseRoomTest {
             conflictValues = conflicts
         }
 
+        override fun lastSyncedAt() = flowOf(lastSyncedAtValue)
+
+        override fun lastError() = flowOf(lastErrorValue)
+
+        override suspend fun markSynced(at: Long) {
+            writes.add("synced")
+            lastSyncedAtValue = at
+        }
+
+        override suspend fun markFailed(reason: String?) {
+            writes.add("failed")
+            lastErrorValue = reason
+        }
+
         override suspend fun clear() {
             cursorValue = 0
             conflictValues = emptyList()
+            lastSyncedAtValue = 0
+            lastErrorValue = null
         }
     }
 }

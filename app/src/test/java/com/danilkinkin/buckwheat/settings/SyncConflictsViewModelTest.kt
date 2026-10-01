@@ -37,6 +37,8 @@ class SyncConflictsViewModelTest {
         private val state = MutableStateFlow<List<ConflictNotice>>(emptyList())
         val replaced = mutableListOf<List<ConflictNotice>>()
         var storedCursor = 0L
+        var storedLastSyncedAt = 0L
+        var storedLastError: String? = null
         var clearCount = 0
 
         override fun cursor(): Flow<Long> = MutableStateFlow(storedCursor)
@@ -54,6 +56,19 @@ class SyncConflictsViewModelTest {
         override suspend fun replaceConflicts(conflicts: List<ConflictNotice>) {
             replaced += conflicts
             state.value = conflicts
+        }
+
+        override fun lastSyncedAt(): Flow<Long> = MutableStateFlow(storedLastSyncedAt)
+
+        override fun lastError(): Flow<String?> = MutableStateFlow(storedLastError)
+
+        override suspend fun markSynced(at: Long) {
+            storedLastSyncedAt = at
+            storedLastError = null
+        }
+
+        override suspend fun markFailed(reason: String?) {
+            storedLastError = reason
         }
 
         override suspend fun clear() {

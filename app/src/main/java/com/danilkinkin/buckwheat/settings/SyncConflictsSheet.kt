@@ -12,11 +12,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,9 +36,22 @@ const val SYNC_CONFLICTS_SHEET = "syncConflicts"
 @Composable
 fun SyncConflictsSheet(
     viewModel: SyncConflictsViewModel = hiltViewModel(),
+    familyViewModel: FamilySyncViewModel = hiltViewModel(),
+    memberNames: Map<String, String> = emptyMap(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val showDetailLabel = stringResource(R.string.family_sync_conflict_show_detail)
+
+    // The sheet is opened from a static registration list, so it cannot be handed the roster from the
+    // call site. It resolves the same ViewModel the Family Sync sheet uses, which is the same instance
+    // because both resolve against the same owner. An explicit map still wins, which is what makes this
+    // previewable and testable without a ViewModel.
+    val roster by familyViewModel.members.collectAsStateWithLifecycle()
+    val names = remember(roster, memberNames) {
+        if (memberNames.isNotEmpty()) memberNames else roster.associate { it.id to it.displayName }
+    }
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),
@@ -76,14 +93,17 @@ fun SyncConflictsSheet(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(conflicts, key = { "${it.table}/${it.id}" }) { conflict ->
+                    items(conflicts, key = { it.detailKey() }) { conflict ->
+                        val detailKey = conflict.detailKey()
+                        val isExpanded = expanded[detailKey] == true
+
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = stringResource(conflict.table.labelRes()),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                text = conflict.winnerText(),
+                                text = conflict.winnerText(names),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             )
@@ -92,6 +112,27 @@ fun SyncConflictsSheet(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             )
+
+                            TextButton(
+                                onClick = {
+                                    if (isExpanded) {
+                                        expanded.remove(detailKey)
+                                    } else {
+                                        expanded[detailKey] = true
+                                    }
+                                },
+                                modifier = Modifier.align(Alignment.Start),
+                                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    text = showDetailLabel,
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+
+                            if (isExpanded) {
+                                ConflictDetail(conflict = conflict, memberNames = names)
+                            }
                         }
                     }
                 }
@@ -112,6 +153,56 @@ fun SyncConflictsSheet(
     }
 }
 
+private const val SHORT_ID_LENGTH = 8
+
+/**
+ * Shared by the `LazyColumn` key and the expand state, so a row cannot be recycled onto a
+ * different conflict's expansion.
+ */
+private fun ConflictNotice.detailKey(): String = "${table}/$id"
+
+/**
+ * Everything genuinely known about the kept record. [ConflictNotice] carries no payload, so this
+ * cannot show what the record says, only which record it is.
+ */
+@Composable
+private fun ConflictDetail(conflict: ConflictNotice, memberNames: Map<String, String>) {
+    val shortId = conflict.id.take(SHORT_ID_LENGTH)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.family_sync_conflict_yours),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Text(
+            text = stringResource(conflict.table.labelRes()),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            text = shortId,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+        )
+        if (conflict.id != shortId) {
+            Text(
+                text = conflict.id,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+        }
+        Text(
+            text = conflict.winnerText(memberNames),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
 @StringRes
 private fun String.labelRes(): Int = when (this) {
     "transactions" -> R.string.sync_conflicts_table_transactions
@@ -128,11 +219,20 @@ private fun String.labelRes(): Int = when (this) {
  * The memberless tables are shared by the family, so their rows have no member id and the server omits
  * `wonByMemberId`. Saying "shared by the family" is the truth; printing an empty line, or the four
  * character string "null", is not.
+ *
+ * A present winner is printed as a name. A raw member uuid identifies nobody to the reader, and a
+ * member missing from [memberNames] is still not identified by a uuid, so it degrades to a generic
+ * "Another member" rather than leaking one.
  */
 @Composable
-private fun ConflictNotice.winnerText(): String = wonByMemberId
+private fun ConflictNotice.winnerText(memberNames: Map<String, String>): String = wonByMemberId
     ?.takeIf { it.isNotBlank() }
-    ?.let { stringResource(R.string.sync_conflicts_won_by, it) }
+    ?.let { memberId ->
+        memberNames[memberId.trim()]
+            ?.takeIf { it.isNotBlank() }
+            ?.let { stringResource(R.string.sync_conflicts_won_by, it) }
+            ?: stringResource(R.string.family_sync_conflict_unknown_member)
+    }
     ?: stringResource(R.string.sync_conflicts_shared_by_family)
 
 @StringRes

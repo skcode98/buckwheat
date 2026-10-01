@@ -15,6 +15,10 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import javax.sql.DataSource
 
 private const val MAX_INVITE_CODE_LENGTH = 16
@@ -97,7 +101,25 @@ private suspend fun ApplicationCall.respondWithMembers(
     tokenService: TokenService,
 ) {
     val principal = tokenService.requirePrincipal(bearerToken())
-    respond(HttpStatusCode.OK, mapOf("members" to store.familyDisplayNames(principal.familyId)))
+    // Built with kotlinx's JsonObject builder rather than a nested Map<String, Any>: the content
+    // negotiator serialises by reified type, and `Any` has no serializer, so a nested map of maps
+    // fails at runtime with a 500 instead of rendering. JsonObject is the same approach SyncRoutes
+    // already uses for its nested payloads.
+    val members = buildJsonObject {
+        putJsonArray("members") {
+            store.familyMembers(principal.familyId).forEach { member ->
+                add(
+                    buildJsonObject {
+                        put("id", member.id)
+                        put("displayName", member.displayName)
+                        put("isOwner", member.isOwner)
+                        put("joinedAt", member.joinedAt)
+                    }
+                )
+            }
+        }
+    }
+    respond(HttpStatusCode.OK, members)
 }
 
 private fun ApplicationCall.limit(limiter: RateLimiter, action: String) {

@@ -1,8 +1,16 @@
 package com.danilkinkin.buckwheat.sync
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 class SyncStateStoreTest {
 
@@ -88,5 +96,111 @@ class SyncStateStoreTest {
             listOf(ConflictNotice(SyncTables.TRANSACTIONS, "t-1", null, ConflictReason.STALE_VERSION)),
             decodeConflicts(json),
         )
+    }
+}
+
+/**
+ * What a run leaves behind, rather than what it returned. A run that fails all five WorkManager
+ * retries is only reportable afterwards, from state, which is the entire reason these keys exist.
+ *
+ * These run against the real store rather than a fake: the transitions under test are the store's
+ * edits, and a fake would only assert that the fake behaves like the fake. The Context-scoped
+ * delegate is what forces Robolectric here.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+class DataStoreSyncStateStoreTest {
+
+    private val store =
+        DataStoreSyncStateStore(ApplicationProvider.getApplicationContext<Context>())
+
+    @Before
+    fun setUp() = runBlocking {
+        store.clear()
+    }
+
+    @Test
+    fun aFreshDeviceReportsNeitherATimeNorAnError() = runBlocking {
+        assertEquals(0L, store.lastSyncedAt().first())
+        assertNull(store.lastError().first())
+    }
+
+    @Test
+    fun markingSyncedKeepsTheClockTimeItWasGiven() = runBlocking {
+        store.markSynced(at = 1_700_000_000_000L)
+
+        assertEquals(1_700_000_000_000L, store.lastSyncedAt().first())
+        assertNull(store.lastError().first())
+    }
+
+    @Test
+    fun markingSyncedClearsTheErrorThePreviousRunLeftBehind() = runBlocking {
+        store.markSynced(at = 1_000L)
+        store.markFailed("push failed")
+        assertEquals("push failed", store.lastError().first())
+
+        store.markSynced(at = 2_000L)
+
+        // The error is not a separate fact to be dismissed: one run cannot have both worked and
+        // failed, so the newer run decides and the chip must not still be reading the older one.
+        assertEquals(2_000L, store.lastSyncedAt().first())
+        assertNull(store.lastError().first())
+    }
+
+    @Test
+    fun markingFailedLeavesTheLastGoodTimeAlone() = runBlocking {
+        store.markSynced(at = 1_000L)
+
+        store.markFailed("apply failed")
+
+        // Kept on purpose. How long ago this device last agreed with the family is still true, and
+        // erasing it would make a failure indistinguishable from a device that has never synced.
+        assertEquals(1_000L, store.lastSyncedAt().first())
+        assertEquals("apply failed", store.lastError().first())
+    }
+
+    @Test
+    fun markingFailedWithNullClearsTheError() = runBlocking {
+        store.markSynced(at = 1_000L)
+        store.markFailed("push failed")
+
+        store.markFailed(null)
+
+        assertNull(store.lastError().first())
+        assertEquals(1_000L, store.lastSyncedAt().first())
+    }
+
+    @Test
+    fun aBlankReasonBehavesLikeNull() = runBlocking {
+        store.markFailed("push failed")
+
+        store.markFailed("")
+
+        assertNull(store.lastError().first())
+    }
+
+    @Test
+    fun aWhitespaceOnlyReasonNeverReadsBackAsAnError() = runBlocking {
+        store.markSynced(at = 1_000L)
+        store.markFailed("push failed")
+
+        // A reason that carries no information must never turn the chip red with nothing to show:
+        // both the write and the read side treat blank as no reason at all.
+        store.markFailed("   ")
+
+        assertNull(store.lastError().first())
+    }
+
+    @Test
+    fun clearWipesTheLastTimeAndTheErrorTogether() = runBlocking {
+        store.writeCursor(42L)
+        store.markSynced(at = 1_000L)
+        store.markFailed("apply failed")
+
+        store.clear()
+
+        assertEquals(0L, store.lastSyncedAt().first())
+        assertNull(store.lastError().first())
+        assertEquals(0L, store.readCursor())
     }
 }

@@ -38,6 +38,8 @@ class FamilySyncCoordinator @Inject constructor(
 
     suspend fun invite(): MintedInvite? = registrar.invite()
 
+    suspend fun members(): List<FamilyMember>? = registrar.members()
+
     private suspend fun activate(session: FamilySession) {
         database.enrolAll(
             memberId = session.memberId,

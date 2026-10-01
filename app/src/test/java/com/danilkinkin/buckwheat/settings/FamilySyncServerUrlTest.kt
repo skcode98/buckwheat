@@ -9,9 +9,11 @@ import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.sync.FamilyApi
 import com.danilkinkin.buckwheat.sync.FamilyApiFactory
 import com.danilkinkin.buckwheat.sync.FamilyCredentials
+import com.danilkinkin.buckwheat.sync.FamilyMember
 import com.danilkinkin.buckwheat.sync.FamilySession
 import com.danilkinkin.buckwheat.sync.FamilySyncCoordinator
 import com.danilkinkin.buckwheat.sync.FamilySyncRegistrar
+import com.danilkinkin.buckwheat.sync.InMemoryFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.LocalRecord
 import com.danilkinkin.buckwheat.sync.MintedInvite
 import com.danilkinkin.buckwheat.sync.SyncApply
@@ -72,13 +74,15 @@ class FamilySyncServerUrlTest {
     )
 
     private fun viewModel(): FamilySyncViewModel {
+        // Shared instance, so the registrar and the ViewModel see the same roster as they do in production.
+        val cache = InMemoryFamilyMembersCache()
         val coordinator = FamilySyncCoordinator(
             context = context,
-            registrar = FamilySyncRegistrar(sessionStore, InviteFamilyApi),
+            registrar = FamilySyncRegistrar(sessionStore, InviteFamilyApi, cache),
             database = NoSyncDatabase,
             clock = SyncClock { 700L },
         )
-        return FamilySyncViewModel(coordinator, sessionStore, context)
+        return FamilySyncViewModel(coordinator, sessionStore, cache, context)
     }
 
     @Test
@@ -152,6 +156,8 @@ class FamilySyncServerUrlTest {
 
             override suspend fun mintInvite(token: String) =
                 MintedInvite(code = "CODE-1", expiresAt = EXPIRES_AT)
+
+            override suspend fun members(token: String): List<FamilyMember> = emptyList()
         }
     }
 

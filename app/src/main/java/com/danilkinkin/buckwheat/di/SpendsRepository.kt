@@ -36,6 +36,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.YearMonth
@@ -68,6 +70,25 @@ fun shouldNotifyOverspend(
     nowOver: Boolean,
     alreadyNotified: Boolean,
 ): Boolean = nowOver && !wasOver && !alreadyNotified
+
+/**
+ * One member's share of the spending in a window, plus a null-keyed bucket for spend that
+ * predates enrolment.
+ *
+ * `total` is folded in Kotlin as BigDecimal because `transactions.value` is a TEXT column: a SQL
+ * `SUM(CAST(value AS REAL))` returns a Double and quietly drops cent precision on real money.
+ */
+data class MemberSpend(
+    val memberId: String?,
+    val displayName: String?,
+    val total: BigDecimal,
+)
+
+// The window total for a rollup, so a UI can render "320 of 1000" from the list it already has.
+// Every row is present (including the null-memberId bucket), so folding the list gives exactly
+// what one SQL SUM would have given.
+val List<MemberSpend>.grandTotal: BigDecimal
+    get() = fold(BigDecimal.ZERO) { acc, spend -> acc + spend.total }
 
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
@@ -130,6 +151,119 @@ class SpendsRepository @Inject constructor(
             .map { it.first }
             .distinct()
             .toList()
+
+    /**
+     * Groups already-fetched SPENT rows by `member_id` and sums their values in Kotlin.
+     *
+     * Deliberately not a SQL GROUP BY: `value` is TEXT (RoomConverters), so summing it in SQLite
+     * means CASTing to REAL, which returns a Double and loses cent precision. Folding BigDecimal
+     * keeps the exact figure and matches the `fold(BigDecimal.ZERO)` already used in
+     * `archiveCurrentPeriod` and `archiveImported`. This project has no SQL JOIN anywhere either —
+     * `member_id` to display name is a Kotlin join, so the grouping is too.
+     *
+     * No `deleted_at` filter: the app hard-deletes rows (`deleteById`, and sync calls `remove` for
+     * any record carrying `deletedAt`), the tombstones live only in the pending-mutations queue,
+     * and no read query in the project filters on it. Adding one here would hide nothing and
+     * disagree with every other query in the codebase.
+     *
+     * Rows with a null `member_id` predate enrolment. They are kept as their own null-keyed bucket
+     * instead of being dropped, so the rollup still adds up to the window total.
+     */
+    private fun rollupSpentByMember(
+        transactions: List<Transaction>,
+        memberNames: Map<String, String>,
+    ): List<MemberSpend> {
+        val totals = LinkedHashMap<String?, BigDecimal>()
+        transactions.forEach { transaction ->
+            val running = totals[transaction.memberId] ?: BigDecimal.ZERO
+            totals[transaction.memberId] = running + transaction.value
+        }
+        return totals
+            .map { (memberId, total) ->
+                MemberSpend(
+                    memberId = memberId,
+                    // The roster is a cache owned elsewhere, so a name is only as good as the
+                    // caller's map; an unknown id keeps a null displayName rather than a placeholder.
+                    displayName = memberId?.let { memberNames[it] },
+                    total = total,
+                )
+            }
+            // Biggest spender first, with the unattributed bucket always last.
+            .sortedWith(
+                compareBy<MemberSpend> { it.memberId == null }
+                    .thenByDescending { it.total }
+            )
+    }
+
+    /**
+     * Per-member spend for a date window as a one-shot snapshot. [memberNames] is taken as a
+     * parameter rather than looked up here, so this stays a pure data read over the rows it owns.
+     * An empty window returns an empty list, never null, and never throws.
+     */
+    suspend fun spentByMember(
+        startDate: Long,
+        endDate: Long,
+        memberNames: Map<String, String> = emptyMap(),
+    ): List<MemberSpend> = rollupSpentByMember(
+        transactionDao.getAllNow(TransactionType.SPENT, startDate, endDate),
+        memberNames,
+    )
+
+    /**
+     * The same rollup as a Flow, derived from the existing `getAll(type, startDate, endDate)` Room
+     * query, so a UI observes it without re-querying on every frame. No new DAO Flow query is
+     * needed. [memberNames] is a Flow so a roster that loads after the first emission renames the
+     * rows in place instead of the caller having to collect it again.
+     */
+    fun spentByMemberFlow(
+        startDate: Long,
+        endDate: Long,
+        memberNames: Flow<Map<String, String>> = flowOf(emptyMap()),
+    ): Flow<List<MemberSpend>> = combine(
+        transactionDao.getAll(TransactionType.SPENT, startDate, endDate),
+        memberNames,
+    ) { transactions, names ->
+        rollupSpentByMember(transactions, names)
+    }
+
+    /**
+     * Rollup for the active budget period, reusing the `startPeriodDate`/`finishPeriodDate` bounds
+     * this class already keeps in DataStore — no new state is introduced. A missing finish date
+     * means no period is configured, which yields an empty list rather than a misleading one.
+     */
+    suspend fun spentByMemberCurrentPeriod(
+        memberNames: Map<String, String> = emptyMap(),
+    ): List<MemberSpend> {
+        val start = getStartPeriodDate().firstOrNull() ?: return emptyList()
+        val finish = getFinishPeriodDate().firstOrNull() ?: return emptyList()
+        return spentByMember(start.time, finish.time, memberNames)
+    }
+
+    /**
+     * Current-period rollup as a Flow. Derives the window from the two existing period-date flows and
+     * then defers to [spentByMemberFlow], so the transactions Room flow stays a real source: a spend
+     * added while the sheet is open re-emits, which a bare `combine` of the dates and the roster would
+     * silently miss because neither of those changes when a row is inserted.
+     *
+     * Only the finish date can be absent. [getStartPeriodDate] falls back to today, so a null there is
+     * not a state this class can be in, and a missing finish date is what "no period is configured"
+     * actually looks like.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun spentByMemberCurrentPeriodFlow(
+        memberNames: Flow<Map<String, String>> = flowOf(emptyMap()),
+    ): Flow<List<MemberSpend>> = combine(
+        getStartPeriodDate(),
+        getFinishPeriodDate(),
+        memberNames,
+    ) { start, finish, names -> Triple(start, finish, names) }
+        .flatMapLatest { (start, finish, names) ->
+            if (finish == null) {
+                flowOf(emptyList())
+            } else {
+                spentByMemberFlow(start.time, finish.time, flowOf(names))
+            }
+        }
 
     fun getBudget() = context.budgetDataStore.data.map {
         (it[budgetStoreKey]?.toBigDecimal() ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)

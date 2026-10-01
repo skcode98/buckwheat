@@ -1,6 +1,8 @@
 package com.danilkinkin.buckwheat.sync
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
@@ -9,16 +11,56 @@ import java.io.IOException
 /** The server caps a pull window, so a first sync can need more than one round trip. */
 private const val MAX_SYNC_PAGES = 200
 
+/**
+ * Records nothing. Used only as the default for [SyncEngine.syncStateStore], so a caller that is not
+ * the production graph does not silently start claiming that its runs are observed.
+ */
+internal object NoopSyncStateStore : SyncStateStore {
+    override fun cursor(): Flow<Long> = flowOf(0L)
+    override suspend fun readCursor(): Long = 0L
+    override suspend fun writeCursor(cursor: Long) = Unit
+    override fun conflicts(): Flow<List<ConflictNotice>> = flowOf(emptyList())
+    override suspend fun readConflicts(): List<ConflictNotice> = emptyList()
+    override suspend fun replaceConflicts(conflicts: List<ConflictNotice>) = Unit
+    override fun lastSyncedAt(): Flow<Long> = flowOf(0L)
+    override fun lastError(): Flow<String?> = flowOf(null)
+    override suspend fun markSynced(at: Long) = Unit
+    override suspend fun markFailed(reason: String?) = Unit
+    override suspend fun clear() = Unit
+}
+
+/**
+ * [syncStateStore] and [clock] exist only to make a run observable: without them a run that fails all
+ * five WorkManager retries is indistinguishable from one that worked. They are defaulted rather than
+ * required so that the direct constructions in the engine and worker tests keep compiling; the Hilt
+ * graph always supplies the real ones.
+ */
 class SyncEngine(
     private val client: SyncClient,
     private val database: SyncDatabase,
     private val sessionProvider: suspend () -> FamilySession?,
+    private val syncStateStore: SyncStateStore = NoopSyncStateStore,
+    private val clock: SyncClock = SyncClock { System.currentTimeMillis() },
 ) {
     private val mutex = Mutex()
+
+    /**
+     * Every outcome a run can report leaves a trace in the store, so a failure that outlives its last
+     * retry is still visible afterwards instead of being computed and thrown away.
+     *
+     * The write is best effort: it is a DataStore write on a path that is already reporting trouble,
+     * and it must never change the [SyncOutcome] the worker turns into a retry or a failure.
+     */
+    private suspend fun failed(reason: String): SyncOutcome.Failed {
+        runCatching { syncStateStore.markFailed(reason) }
+        return SyncOutcome.Failed(reason)
+    }
 
     suspend fun sync(): SyncOutcome = mutex.withLock { runSync() }
 
     private suspend fun runSync(): SyncOutcome {
+        // Nothing is recorded here on purpose. A device that is not enrolled has no family to be out
+        // of date with, so neither stamping a time nor raising an error would be a true statement.
         val session = sessionProvider() ?: return SyncOutcome.NotEnrolled
 
         val startCursor = database.readCursor()
@@ -36,7 +78,7 @@ class SyncEngine(
             val response = try {
                 client.sync(session.token, SyncRequest(cursor = cursor, changes = changes))
             } catch (e: IOException) {
-                return SyncOutcome.Failed(e.message ?: "push failed")
+                return failed(e.message ?: "push failed")
             }
             if (page == 1) accepted = response.accepted
             records = records + response.records
@@ -81,17 +123,23 @@ class SyncEngine(
                 )
             )
 
+            // Order is load-bearing: the tick is only written once the Room transaction above has
+            // returned. A process that dies inside that transaction never reaches this line, so a
+            // crash can never leave behind a green "synced" claiming the family already has rows that
+            // were never applied.
+            runCatching { syncStateStore.markSynced(clock.now()) }
+
             SyncOutcome.Synced(cursor = merged.cursor, conflicts = notices)
         } catch (e: CancellationException) {
             throw e
         } catch (e: SyncPayloadException) {
             // A payload the server sent cannot be turned into a row. Naming it is the difference between
             // "a member's income turned into a spend" and an anonymous failure.
-            SyncOutcome.Failed("bad payload: ${e.message}")
+            failed("bad payload: ${e.message}")
         } catch (e: JSONException) {
-            SyncOutcome.Failed("bad payload: ${e.message}")
+            failed("bad payload: ${e.message}")
         } catch (e: Exception) {
-            SyncOutcome.Failed(e.message ?: "apply failed")
+            failed(e.message ?: "apply failed")
         }
     }
 

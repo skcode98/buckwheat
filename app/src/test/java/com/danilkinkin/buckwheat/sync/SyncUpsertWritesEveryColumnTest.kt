@@ -318,7 +318,7 @@ class SyncUpsertWritesEveryColumnTest {
                 savingsGoalDao = goals,
             ),
             pendingMutationDao = db.pendingMutationDao(),
-            syncStateStore = NoOpSyncStateStore,
+            syncStateStore = NoOpTestSyncStateStore,
             runInTransaction = { block -> block() },
         )
 
@@ -332,13 +332,22 @@ class SyncUpsertWritesEveryColumnTest {
     }
 }
 
-private object NoOpSyncStateStore : SyncStateStore {
+// Deliberately NOT named `NoOpSyncStateStore`: production already ships `internal object
+// NoopSyncStateStore` in the same package, and the two class files differ only by the case of one
+// letter. On a case-insensitive filesystem they land on the same output path, one overwrites the
+// other, and the survivor loads under the wrong name, which surfaces as
+// NoClassDefFoundError: com/danilkinkin/buckwheat/sync/NoopSyncStateStore (wrong name: ...NoOp...).
+private object NoOpTestSyncStateStore : SyncStateStore {
     override fun cursor() = kotlinx.coroutines.flow.flowOf(0L)
     override suspend fun readCursor() = 0L
     override suspend fun writeCursor(cursor: Long) = Unit
     override fun conflicts() = kotlinx.coroutines.flow.flowOf(emptyList<ConflictNotice>())
     override suspend fun readConflicts() = emptyList<ConflictNotice>()
     override suspend fun replaceConflicts(conflicts: List<ConflictNotice>) = Unit
+    override fun lastSyncedAt() = kotlinx.coroutines.flow.flowOf(0L)
+    override fun lastError() = kotlinx.coroutines.flow.flowOf(null)
+    override suspend fun markSynced(at: Long) = Unit
+    override suspend fun markFailed(reason: String?) = Unit
     override suspend fun clear() = Unit
 }
 

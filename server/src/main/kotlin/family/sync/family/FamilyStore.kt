@@ -29,6 +29,21 @@ data class MintedInvite(
     val expiresAt: String,
 )
 
+/**
+ * One member as the family sees them.
+ *
+ * The id is not decoration. Every synced transaction carries the `member_id` of whoever logged it,
+ * so without the id a client holding a spend cannot say which member it belongs to, and a conflict
+ * naming `wonByMemberId` cannot be resolved to a human either. Returning names alone made the roster
+ * displayable but left every attribution question unanswerable.
+ */
+data class FamilyMember(
+    val id: String,
+    val displayName: String,
+    val isOwner: Boolean,
+    val joinedAt: String,
+)
+
 class FamilyStore(
     private val dataSource: DataSource,
     private val tokenService: TokenService = TokenService(dataSource),
@@ -153,15 +168,24 @@ class FamilyStore(
         }
     }
 
-    fun familyDisplayNames(familyId: String): List<String> = dataSource.connection.use { connection ->
+    fun familyMembers(familyId: String): List<FamilyMember> = dataSource.connection.use { connection ->
         connection.prepareStatement(
-            "select display_name from members where family_id = ? order by joined_at, id"
+            "select id, display_name, is_owner, joined_at from members where family_id = ? order by joined_at, id"
         ).use { statement ->
             statement.setUuid(1, familyId)
             statement.executeQuery().use { rows ->
-                val names = mutableListOf<String>()
-                while (rows.next()) names.add(rows.getString("display_name"))
-                names
+                val members = mutableListOf<FamilyMember>()
+                while (rows.next()) {
+                    members.add(
+                        FamilyMember(
+                            id = rows.getString("id"),
+                            displayName = rows.getString("display_name"),
+                            isOwner = rows.getBoolean("is_owner"),
+                            joinedAt = rows.getTimestamp("joined_at").toInstant().toString(),
+                        )
+                    )
+                }
+                members
             }
         }
     }

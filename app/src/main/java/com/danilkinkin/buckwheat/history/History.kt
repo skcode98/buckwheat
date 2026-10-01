@@ -33,6 +33,7 @@ import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.analytics.WholeBudgetCard
 import com.danilkinkin.buckwheat.settings.CategoriesManagementViewModel
+import com.danilkinkin.buckwheat.settings.FamilySyncViewModel
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.numberFormat
@@ -68,6 +69,15 @@ fun History(
     val allCategories by categoriesViewModel.allCategories.collectAsStateWithLifecycle()
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
+    }
+
+    // Resolved per row, never per day card: a day on which two family members both spent carries two
+    // different member ids, and a single name hoisted to the day would confidently label both rows with
+    // whoever happened to be first.
+    val familySyncViewModel: FamilySyncViewModel = hiltViewModel()
+    val familyMembers by familySyncViewModel.members.collectAsStateWithLifecycle()
+    val memberNames = remember(familyMembers) {
+        familyMembers.associate { it.id to it.displayName }
     }
 
     var historyList by remember { mutableStateOf<List<RowEntity>>(emptyList()) }
@@ -152,6 +162,7 @@ fun History(
                         firstTransactionIndex = row.firstTransactionIndex,
                         currency = currency.value,
                         categoryEmojis = categoryEmojis,
+                        memberNames = memberNames,
                         readOnly = readOnly,
                         onEdit = { transaction ->
                             editorViewModel.startEditingSpent(transaction)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -31,11 +32,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.analytics.categoriesChart.baseColors
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.CategoryKey
@@ -177,12 +180,16 @@ internal fun TimelineRowContent(
     currency: ExtendCurrency,
     modifier: Modifier = Modifier,
     category: Pair<String, String>? = null,
+    memberNames: Map<String, String> = emptyMap(),
 ) {
     val context = LocalContext.current
     val palette = timelinePaletteFor(transaction)
     val name = category?.second ?: ""
     val comment = transaction.comment
     val time = prettyDate(transaction.date, showTime = true, forceHideDate = true)
+    val attribution = transaction.memberId
+        ?.let { memberNames[it] }
+        ?.takeIf { it.isNotBlank() }
 
     Row(
         modifier = modifier
@@ -212,6 +219,21 @@ internal fun TimelineRowContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (attribution != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.family_sync_spent_by, attribution),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .widthIn(max = 96.dp)
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             )
         }
         Spacer(Modifier.width(12.dp))

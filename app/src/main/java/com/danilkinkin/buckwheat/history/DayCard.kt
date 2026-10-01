@@ -83,6 +83,7 @@ fun DayCard(
     onSwipeDelete: (Transaction) -> Unit = {},
     onTriedSwipe: () -> Unit = {},
     showTutorial: (Int) -> Boolean = { false },
+    memberNames: Map<String, String> = emptyMap(),
 ) {
     val context = LocalContext.current
 
@@ -103,6 +104,7 @@ fun DayCard(
                         transaction = transaction,
                         currency = currency,
                         category = category,
+                        memberNames = memberNames,
                     )
                 } else {
                     SwipeActions(
@@ -135,6 +137,7 @@ fun DayCard(
                                 onEdit = { onEdit(transaction) },
                                 onDelete = { onDelete(transaction) },
                                 onCopy = { onCopy(transaction) },
+                                memberNames = memberNames,
                             )
                         }
                     }

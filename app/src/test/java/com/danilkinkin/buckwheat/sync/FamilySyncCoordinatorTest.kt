@@ -38,7 +38,7 @@ class FamilySyncCoordinatorTest {
 
     private fun coordinator(now: Long = 700L) = FamilySyncCoordinator(
         context = context,
-        registrar = FamilySyncRegistrar(sessionStore, StaticFamilyApiFactory),
+        registrar = FamilySyncRegistrar(sessionStore, StaticFamilyApiFactory, InMemoryFamilyMembersCache()),
         database = database,
         clock = SyncClock { now },
     )
@@ -140,6 +140,8 @@ class FamilySyncCoordinatorTest {
 
             override suspend fun mintInvite(token: String): MintedInvite =
                 MintedInvite(code = "CODE-1", expiresAt = "2030-01-01T00:00:00Z")
+
+            override suspend fun members(token: String): List<FamilyMember> = emptyList()
         }
     }
 

@@ -653,4 +653,27 @@
   <string name="family_sync_invite_expires_at">This code stops working at %1$s</string>
   <string name="family_sync_invite_expired">This code has expired</string>
   <string name="family_sync_invite_share_text">Join my Buckwheat family budget with the invite code %1$s</string>
+  <string name="family_sync_status_synced">Synced</string>
+  <string name="family_sync_status_never">Not synced yet</string>
+  <string name="family_sync_status_stale">Out of date</string>
+  <string name="family_sync_status_failed">Sync failed</string>
+  <string name="family_sync_last_synced_never">Never synced</string>
+  <string name="family_sync_last_synced_at">Last synced %1$s</string>
+  <string name="family_sync_sync_now">Sync now</string>
+  <string name="family_sync_sync_never_error">Sync has not run yet on this device</string>
+  <plurals name="family_sync_pending">
+    <item quantity="one">%1$d change waiting to upload</item>
+    <item quantity="other">%1$d changes waiting to upload</item>
+  </plurals>
+  <string name="family_sync_members_title">Family members</string>
+  <string name="family_sync_members_loading">Loading members</string>
+  <string name="family_sync_members_failed">Could not load members</string>
+  <string name="family_sync_members_refresh">Refresh members</string>
+  <string name="family_sync_member_owner">Owner</string>
+  <string name="family_sync_member_you">you</string>
+  <string name="family_sync_transparency_notice">Everyone in this family can see all spending, including the comment on every transaction.</string>
+  <string name="family_sync_spent_by">%1$s</string>
+  <string name="family_sync_conflict_show_detail">Show what changed</string>
+  <string name="family_sync_conflict_yours">Your version</string>
+  <string name="family_sync_conflict_unknown_member">Another member</string>
 </resources>

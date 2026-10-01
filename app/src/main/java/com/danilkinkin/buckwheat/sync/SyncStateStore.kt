@@ -20,6 +20,8 @@ val Context.syncStateDataStore by preferencesDataStore("syncState")
 
 val syncCursorStoreKey = longPreferencesKey("syncCursor")
 val syncConflictsStoreKey = stringPreferencesKey("syncConflicts")
+val syncLastSyncedAtStoreKey = longPreferencesKey("syncLastSyncedAt")
+val syncLastErrorStoreKey = stringPreferencesKey("syncLastError")
 
 interface SyncStateStore {
     fun cursor(): Flow<Long>
@@ -28,6 +30,20 @@ interface SyncStateStore {
     fun conflicts(): Flow<List<ConflictNotice>>
     suspend fun readConflicts(): List<ConflictNotice>
     suspend fun replaceConflicts(conflicts: List<ConflictNotice>)
+
+    /**
+     * Wall-clock time of the last run that actually reached the server and applied a pull, or 0 when
+     * this device has never had one. Kept apart from [cursor] on purpose: the cursor is a server
+     * position that can legitimately stand still across several runs, so it cannot answer "is my
+     * family seeing my spending right now".
+     */
+    fun lastSyncedAt(): Flow<Long>
+
+    /** The reason the most recent run failed, or null when the last run succeeded. */
+    fun lastError(): Flow<String?>
+
+    suspend fun markSynced(at: Long)
+    suspend fun markFailed(reason: String?)
     suspend fun clear()
 }
 
@@ -55,10 +71,34 @@ class DataStoreSyncStateStore @Inject constructor(
         store.edit { it[syncConflictsStoreKey] = encodeConflicts(conflicts) }
     }
 
+    override fun lastSyncedAt(): Flow<Long> = store.data.map { it[syncLastSyncedAtStoreKey] ?: 0L }
+
+    override fun lastError(): Flow<String?> =
+        store.data.map { it[syncLastErrorStoreKey]?.takeIf { reason -> reason.isNotBlank() } }
+
+    override suspend fun markSynced(at: Long) {
+        store.edit {
+            it[syncLastSyncedAtStoreKey] = at
+            it.remove(syncLastErrorStoreKey)
+        }
+    }
+
+    override suspend fun markFailed(reason: String?) {
+        store.edit {
+            if (reason.isNullOrBlank()) it.remove(syncLastErrorStoreKey)
+            else it[syncLastErrorStoreKey] = reason
+        }
+    }
+
     override suspend fun clear() {
         store.edit {
             it[syncCursorStoreKey] = 0L
             it.remove(syncConflictsStoreKey)
+            // A device that leaves a family must not keep showing the old family's sync state, and a
+            // stale green tick outliving a sign-out is exactly the false reassurance this state exists
+            // to prevent.
+            it.remove(syncLastSyncedAtStoreKey)
+            it.remove(syncLastErrorStoreKey)
         }
     }
 }

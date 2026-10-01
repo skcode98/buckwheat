@@ -137,8 +137,28 @@ class InviteRedeemTest {
         val members = postJson("/v1/family/members", "{}", owner.field("token"))
 
         assertEquals(HttpStatusCode.OK, members.status)
-        val names = members.json()["members"]?.jsonArrayText()
+        val names = members.json()["members"]?.jsonArrayField("displayName")
         assertEquals(listOf("parent", "child"), names)
+    }
+
+    /**
+     * The id is what makes attribution possible at all: a client holding a synced transaction knows
+     * only the `member_id` that wrote it, and a conflict names only `wonByMemberId`. A roster of bare
+     * names cannot answer either question, so the id has to be on the wire.
+     */
+    @Test
+    fun theMemberListCarriesTheIdAndOwnerFlag() = runServer {
+        val owner = createFamily("parent")
+        val code = mintInvite(owner.field("token"))
+        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+
+        val members = postJson("/v1/family/members", "{}", owner.field("token")).json()["members"]
+
+        val ids = members?.jsonArrayField("id")
+        assertEquals(2, ids?.size)
+        assertEquals(owner.field("memberId"), ids?.first())
+        assertEquals(child.field("memberId"), ids?.last())
+        assertEquals(listOf("true", "false"), members?.jsonArrayField("isOwner"))
     }
 
     @Test

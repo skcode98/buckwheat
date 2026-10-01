@@ -3,6 +3,7 @@ package com.danilkinkin.buckwheat.settings
 import android.content.Context
 import android.content.Intent
 import android.text.format.DateFormat
+import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.sync.SyncScheduler
 import java.time.Instant
 import java.util.Date
 
@@ -49,6 +51,7 @@ const val FAMILY_SYNC_SHEET = "familySync"
 fun FamilySyncSheet(
     appViewModel: AppViewModel = hiltViewModel(),
     viewModel: FamilySyncViewModel = hiltViewModel(),
+    syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val navigationBarHeight = androidx.compose.ui.unit.max(
@@ -67,6 +70,26 @@ fun FamilySyncSheet(
     val mintedInvite by viewModel.mintedInvite.collectAsStateWithLifecycle()
     val memberName by viewModel.memberName.collectAsStateWithLifecycle()
     val mintedInviteExpiresAt by viewModel.mintedInviteExpiresAt.collectAsStateWithLifecycle()
+    val members by viewModel.members.collectAsStateWithLifecycle()
+    val membersLoading by viewModel.membersLoading.collectAsStateWithLifecycle()
+    val membersFailed by viewModel.membersFailed.collectAsStateWithLifecycle()
+
+    val syncStatus = syncStatusViewModel.status()
+    val lastSyncedLabel = remember(syncStatus.lastSyncedAt) {
+        if (syncStatus.lastSyncedAt == 0L) {
+            null
+        } else {
+            DateUtils.getRelativeTimeSpanString(
+                syncStatus.lastSyncedAt,
+                System.currentTimeMillis(),
+                DateUtils.MINUTE_IN_MILLIS,
+            ).toString()
+        }
+    }
+    val onSyncNow = {
+        SyncScheduler.syncNow(context)
+        appViewModel.showSnackbar(context.getString(R.string.family_sync_sync_now))
+    }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message -> appViewModel.showSnackbar(message) }
@@ -200,6 +223,46 @@ fun FamilySyncSheet(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         )
                     }
+
+                    Text(
+                        text = stringResource(R.string.family_sync_transparency_notice),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SyncStatusChip(syncStatus)
+                    }
+
+                    Text(
+                        text = lastSyncedLabel?.let {
+                            stringResource(R.string.family_sync_last_synced_at, it)
+                        } ?: stringResource(R.string.family_sync_last_synced_never),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+
+                    syncStatus.lastError?.let { error ->
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    DescriptionButton(
+                        title = { Text(stringResource(R.string.family_sync_sync_now)) },
+                        onClick = onSyncNow,
+                        enabled = !busy,
+                    )
+
+                    FamilyMembersSection(
+                        members = members,
+                        currentMemberId = current.memberId,
+                        loading = membersLoading,
+                        failed = membersFailed,
+                        onRefresh = viewModel::refreshMembers,
+                    )
 
                     mintedInvite?.let { code ->
                         Card(

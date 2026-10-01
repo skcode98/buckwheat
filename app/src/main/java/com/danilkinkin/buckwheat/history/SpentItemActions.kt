@@ -33,6 +33,7 @@ fun SpentItemActions(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onCopy: () -> Unit,
+    memberNames: Map<String, String> = emptyMap(),
 ) {
     var actionsMenuExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -48,6 +49,7 @@ fun SpentItemActions(
             transaction = transaction,
             currency = currency,
             category = category,
+            memberNames = memberNames,
         )
         DropdownMenu(
             expanded = actionsMenuExpanded,
