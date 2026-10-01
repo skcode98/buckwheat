@@ -2,8 +2,11 @@
 -- Paste into the Supabase SQL editor (Dashboard -> SQL Editor) and run.
 -- Nothing here writes, migrates or locks anything.
 
--- 1. Did all three migrations apply?
---    Expect three rows, installed_rank 1..3, every success = true.
+-- 1. Did every migration apply?
+--    Expect one row per shipped file in server/src/main/resources/db/migration,
+--    installed_rank 1..N in order, every success = true. V4 is the (family_id, name)
+--    indexes; if it is missing, an adopted schema was baselined past it.
+--    Cross-check N against the files on disk — do not hardcode a count here.
 select installed_rank, version, description, type, success
 from flyway_schema_history
 order by installed_rank;
@@ -72,3 +75,18 @@ from sync_sequence;
 
 -- 7. Storage footprint against the 500 MB free-tier ceiling.
 select pg_size_pretty(pg_database_size(current_database())) as database_size;
+
+-- 8. Did V4's (family_id, name) indexes actually get created?
+--    Expect 2 rows: saved_categories_family_id_name_idx, saved_tags_family_id_name_idx.
+--    Zero rows here with V4 present in flyway_schema_history means the schema was
+--    adopted at a baseline version that swallowed V4 -- which is exactly the failure
+--    BASELINE_VERSION is pinned below the newest shipped migration to prevent.
+--    The indexes must NOT be unique: two members may save the same name.
+select indexname, indexdef
+from pg_indexes
+where schemaname = 'public'
+  and indexname in (
+    'saved_categories_family_id_name_idx',
+    'saved_tags_family_id_name_idx'
+  )
+order by indexname;

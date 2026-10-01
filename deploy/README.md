@@ -127,9 +127,19 @@ Do **not** run any SQL by hand. The server runs Flyway on boot from
 - `V1__initial_schema.sql` — the 14 family tables
 - `V2__savings_goals_name.sql` — adds `savings_goals.name`
 - `V3__lock_down_public_access.sql` — enables row-level security on all 14
+- `V4__index_saved_names_by_family.sql` — `(family_id, name)` indexes on
+  `saved_categories` and `saved_tags`
 
 The first boot therefore *is* the migration. Expect roughly a second of extra
 startup time before the health endpoint answers.
+
+An existing database that already has all 14 tables but no
+`flyway_schema_history` row is adopted rather than replayed from V1. Adoption is
+gated on that table set: a database holding only some of them is refused, because
+marking a partial schema as migrated would leave it permanently missing tables with
+nothing in the logs to say so. `BASELINE_VERSION` in
+`server/src/main/kotlin/family/sync/db/DatabaseFactory.kt` is pinned to `3`, below
+the newest shipped migration, so V4 still runs on an adopted database.
 
 ## 4. Push, then create the blueprint
 
@@ -140,11 +150,27 @@ Dockerfile, `.dockerignore` and this folder all need to be on the branch.
 2. Repository: `skcode98/buckwheat`, branch `master`.
 3. Blueprint path: the repository-root `render.yaml` (Render looks there by
    default, so you can leave the field alone).
-4. When prompted for values, supply the three from step 2. `DATABASE_SSL_MODE`
+4. When prompted for values, supply the two from step 2. `DATABASE_SSL_MODE`
    is already pinned to `require` in the blueprint.
 
 Render creates a web service named `family-sync`, builds the Docker image, and
 only then starts the container.
+
+### The blueprint pins no region
+
+`render.yaml` sets no `region:`, so Render applies its own default (currently
+Oregon) for any service created from it. That is a problem if your Supabase
+project is not in that region: every query then crosses an ocean, and on the free
+tier the extra latency is felt on every sync. If you already have a live service,
+open it and read the region off its dashboard, then add the matching `region:`
+line to `render.yaml` so a future blueprint instance lands in the same place. Do
+not add a region here without knowing where the database is — a wrong pin is worse
+than the default.
+
+`name: family-sync` in the blueprint is also only the name Render will *ask for*.
+It does not rename or adopt an existing service, and Render appends a suffix if
+the name is taken globally. An existing service keeps whatever name it already
+has.
 
 ## 5. Verify
 
@@ -182,7 +208,11 @@ from flyway_schema_history
 order by installed_rank;
 ```
 
-Three rows, `success = true`. See `deploy/supabase/verify.sql` for more.
+One row per file in `server/src/main/resources/db/migration/`, all `success = true`.
+On a database that already had the tables, the history starts with a single
+`BASELINE` row at version 3 and then V4 — that is adoption working, not a
+truncated history. See `deploy/supabase/verify.sql` for more, including a query
+that proves V4's indexes exist.
 
 # Wire contract
 

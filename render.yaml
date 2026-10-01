@@ -29,8 +29,10 @@ services:
     # only endpoint the app never calls; it exists for Render's probe.
     healthCheckPath: /health
 
-    # Deploy on every push to the tracked branch. This repo has no GitHub Actions
-    # workflows, so `checksPass` would have nothing to wait for.
+    # Deploy on every push to the tracked branch. Note that .github/workflows/build.yml exists and
+    # builds the Android APK only; it never touches server/, so there is no server-side CI status
+    # for `checksPass` to wait on. Its one relevant guarantee is that the APK still compiles, which
+    # does not cover this image.
     autoDeployTrigger: commit
 
     # Only rebuild the image when something that is actually inside the image

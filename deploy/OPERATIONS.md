@@ -187,5 +187,12 @@ If you ever need to move either tag:
   image. There is no way to pin it in the repository.
 - The runtime image only needs a JRE. The app ships as a start script plus jars
   from `installDist`.
+- The runtime stage ends with `USER buckwheat`. Both `groupadd` and `useradd` come
+  from the Debian/Ubuntu userland that `eclipse-temurin:17-jre` is built on. The
+  start script only reads from `/app`, and logback writes to stdout only
+  (`server/src/main/resources/logback.xml` has no file appender), so nothing needs
+  a writable directory. If the image is ever swapped for a distroless or
+  Alpine-based base, that `RUN` line has to change with it, and a distroless
+  runtime has no shell for the start script at all.
 - Check a tag exists before committing: the Docker Hub tags page for the image,
   or `docker pull <tag>` locally.
