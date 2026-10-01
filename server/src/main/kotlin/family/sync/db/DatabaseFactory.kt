@@ -27,6 +27,8 @@ fun migrate(dataSource: DataSource) {
     Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
+        .baselineOnMigrate(true)
+        .baselineVersion("0")
         .load()
         .migrate()
 }
