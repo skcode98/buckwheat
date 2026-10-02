@@ -660,7 +660,6 @@
   <string name="family_sync_last_synced_never">Never synced</string>
   <string name="family_sync_last_synced_at">Last synced %1$s</string>
   <string name="family_sync_sync_now">Sync now</string>
-  <string name="family_sync_sync_never_error">Sync has not run yet on this device</string>
   <plurals name="family_sync_pending">
     <item quantity="one">%1$d change waiting to upload</item>
     <item quantity="other">%1$d changes waiting to upload</item>

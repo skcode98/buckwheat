@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,7 +90,10 @@ fun FamilySyncSheet(
     val onSyncNow = {
         SyncScheduler.syncNow(context)
         appViewModel.showSnackbar(context.getString(R.string.family_sync_sync_now))
+        syncStatusViewModel.refreshPendingCount()
     }
+    val pendingCount by syncStatusViewModel.pendingCount.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { syncStatusViewModel.refreshPendingCount() }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message -> appViewModel.showSnackbar(message) }
@@ -135,6 +139,15 @@ fun FamilySyncSheet(
                 if (current == null) {
                     Text(
                         text = stringResource(R.string.family_sync_intro),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+
+                    // Consent has to be offered before the person commits, not surfaced once they are
+                    // already enrolled. The same notice repeats in the connected branch, where it
+                    // reads as a standing reminder rather than a one-off warning.
+                    Text(
+                        text = stringResource(R.string.family_sync_transparency_notice),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
@@ -247,6 +260,18 @@ fun FamilySyncSheet(
                             text = error,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    if (pendingCount > 0) {
+                        Text(
+                            text = pluralStringResource(
+                                R.plurals.family_sync_pending,
+                                pendingCount,
+                                pendingCount,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
 
