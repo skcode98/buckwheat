@@ -38,3 +38,15 @@ application {
 }
 
 tasks.test { useJUnit() }
+
+/**
+ * Regenerates `.kilo/sync-contract.json` from `SyncTables.ALL`. The Node rewrite in
+ * `buckwheat-sync` consumes that file, so the payload key lists are never hand-copied.
+ */
+tasks.register<JavaExec>("generateSyncContract") {
+    group = "verification"
+    description = "Writes the Android/server sync contract as JSON"
+    mainClass.set("family.sync.SyncContractExportKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    workingDir = projectDir
+}
