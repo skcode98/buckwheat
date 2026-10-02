@@ -11,6 +11,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private val staleRoster = listOf(
+    FamilyMember(id = "old-1", displayName = "PreviousFamily", isOwner = true, joinedAt = "2026-09-01T00:00:00Z"),
+    FamilyMember(id = "old-2", displayName = "AlsoPrevious", isOwner = false, joinedAt = "2026-09-01T00:00:01Z"),
+)
+
 private val defaultRoster = listOf(
     FamilyMember(
         id = "member-1",
@@ -166,35 +171,78 @@ class FamilySyncRegistrarTest {
 
     @Test
     fun enrolmentDiscardsARosterLeftBehindByAnEarlierFamily() = runTest {
-        cache.replaceMembers(defaultRoster)
+        cache.replaceMembers(staleRoster)
 
         registrar.enrol("https://sync.example.com", "Suraj")
 
         assertTrue(cache.cleared)
-        assertEquals(emptyList<FamilyMember>(), cache.readMembers())
+        // The new family's roster, and none of the previous family's names. Asserting "empty" used to
+        // pass for the wrong reason once enrolment started refetching, and preloading the same list the
+        // fake API returns meant a leaked name and a fetched one were indistinguishable.
+        val members = cache.readMembers()
+        assertEquals(defaultRoster.map { it.displayName }.sorted(), members.map { it.displayName }.sorted())
+        assertTrue(members.none { it.displayName.contains("Previous") })
     }
 
     @Test
     fun joiningDiscardsARosterLeftBehindByAnEarlierFamily() = runTest {
         store.save("https://sync.example.com", "token-old", "family-old", "member-1")
-        cache.replaceMembers(defaultRoster)
+        cache.replaceMembers(staleRoster)
 
         registrar.join("https://sync.example.com", "CODE", "Suraj")
 
         assertTrue(cache.cleared)
-        assertEquals(emptyList<FamilyMember>(), cache.readMembers())
+        val members = cache.readMembers()
+        assertEquals(defaultRoster.map { it.displayName }.sorted(), members.map { it.displayName }.sorted())
+        assertTrue(members.none { it.displayName.contains("Previous") })
     }
 
-    @Test
+    /**
+ * A refresh that fails must fall back to the roster of *this* family, never an earlier one.
+ *
+ * The failure is set AFTER the join on purpose: joining now refetches the roster, so the cache holds
+ * the new family's names by the time the refresh is made to fail. What this proves is that the
+ * fallback path returns the current family's cache rather than anything left over — which is only
+ * observable because the stale and current rosters are different lists.
+ */
+@Test
     fun aFailedRefreshAfterJoiningCannotSurfaceThePreviousFamily() = runTest {
         store.save("https://sync.example.com", "token-old", "family-old", "member-1")
-        cache.replaceMembers(defaultRoster)
+        cache.replaceMembers(staleRoster)
+
         registrar.join("https://sync.example.com", "CODE", "Suraj")
         api.membersFailure = IOException("family HTTP 503 service_unavailable")
 
         val members = registrar.members()
 
-        assertEquals(emptyList<FamilyMember>(), members)
+        assertEquals(defaultRoster.map { it.displayName }.sorted(), members.orEmpty().map { it.displayName }.sorted())
+        assertTrue(members.orEmpty().none { it.displayName.contains("Previous") })
+    }
+
+/**
+     * Joining with the server unreachable must leave an empty roster, never the previous family's.
+     *
+     * What this pins is narrow and worth being precise about: that the roster is *empty* when the
+     * refetch fails. It does NOT pin the clear-then-fetch ordering. A refactor that fetched first
+     * would leave the cache unwritten, so this test would still pass with nothing ever written to
+     * leak. The ordering is pinned by `joiningDiscardsARosterLeftBehindByAnEarlierFamily`, whose fetch
+     * succeeds and would end with an empty cache under that refactor. Do not weaken that one on the
+     * strength of this one existing.
+     *
+     * What this does catch is a fallback that restored the pre-join roster: those names would still be
+     * sitting there, shown under a new family's budget with nothing on screen to say so.
+     */
+    @Test
+    fun joiningWithTheServerUnreachableLeavesNoRosterAtAll() = runTest {
+        store.save("https://sync.example.com", "token-old", "family-old", "member-1")
+        cache.replaceMembers(staleRoster)
+        api.membersFailure = IOException("family HTTP 503 service_unavailable")
+
+        registrar.join("https://sync.example.com", "CODE", "Suraj")
+
+        assertTrue("the cache must be cleared even when the refetch fails", cache.cleared)
+        val members = cache.readMembers()
+        assertTrue("a previous family's names must never be shown under a new family", members.isEmpty())
     }
 
     @Test

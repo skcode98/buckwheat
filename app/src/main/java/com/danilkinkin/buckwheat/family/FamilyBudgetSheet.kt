@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.util.numberFormat
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -45,6 +48,7 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
     val isHead by viewModel.isHead.collectAsStateWithLifecycle()
     val members by viewModel.members.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle(initialValue = null)
+    val currency by viewModel.currency.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val householdRows by viewModel.householdRows.collectAsStateWithLifecycle()
     val householdDetailVisible by viewModel.householdDetailVisibleToAll.collectAsStateWithLifecycle()
@@ -72,10 +76,10 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
         item { SummarySection(viewModel) }
 
         item {
-            MoneyRow(stringResource(R.string.family_budget_pool), current.total)
-            MoneyRow(stringResource(R.string.family_budget_household_tier), current.householdTier)
-            MoneyRow(stringResource(R.string.family_budget_household_spent), current.householdSpent)
-            MoneyRow(stringResource(R.string.family_budget_left), current.remaining)
+            MoneyRow(stringResource(R.string.family_budget_pool), current.total, currency)
+            MoneyRow(stringResource(R.string.family_budget_household_tier), current.householdTier, currency)
+            MoneyRow(stringResource(R.string.family_budget_household_spent), current.householdSpent, currency)
+            MoneyRow(stringResource(R.string.family_budget_left), current.remaining, currency)
         }
 
         item {
@@ -90,6 +94,7 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
                 name = viewModel.displayName(allocation.memberId),
                 tag = tags[allocation.memberId],
                 allocation = allocation,
+                currency = currency,
             )
         }
 
@@ -104,7 +109,9 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
                 rows = householdRows,
                 detailVisibleToAll = householdDetailVisible,
                 householdSpent = current.householdSpent,
+                currency = currency,
             )
+
         }
 
         item {
@@ -123,6 +130,7 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
                         R.string.family_budget_request_from,
                         viewModel.displayName(assignment.createdByMemberId),
                     ),
+                    currency = currency,
                     accept = { assignmentsViewModel.answer(assignment, true) },
                     reject = { assignmentsViewModel.answer(assignment, false) },
                     canAnswer = assignmentsViewModel.canAnswer(assignment),
@@ -141,6 +149,7 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
                         R.string.family_budget_request_to,
                         viewModel.displayName(assignment.targetMemberId),
                     ),
+                    currency = currency,
                     accept = null,
                     reject = null,
                     canAnswer = false,
@@ -183,7 +192,18 @@ private fun SummarySection(viewModel: FamilyBudgetViewModel) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
     val loading by viewModel.summaryLoading.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.loadSummary() }
+    // Keyed on the period's identity rather than `Unit`, so reopening the sheet after a period change
+    // does not show last period's prose. Deliberately NOT keyed on the pool total: that would fire a
+    // model call on every keystroke in the split editor, and the offline text already re-renders live
+    // from the current figures underneath.
+    //
+    // `.value`, not the StateFlow. A LaunchedEffect key is compared by equals, and a StateFlow
+    // instance is always the same object however its contents change -- keying on it is `Unit` with
+    // extra steps, which is the bug this replaced.
+    val periodKey by viewModel.periodKey.collectAsStateWithLifecycle()
+    LaunchedEffect(periodKey) {
+        if (periodKey != null) viewModel.loadSummary()
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -273,19 +293,41 @@ private fun Footer(isHead: Boolean, detailVisibleToAll: Boolean, viewModel: Fami
 }
 
 @Composable
-private fun MoneyRow(label: String, amount: BigDecimal) {
+private fun MoneyRow(
+    label: String,
+    amount: BigDecimal,
+    currency: ExtendCurrency,
+) {
+    // A negative figure here is the difference between "a number" and "you are over". The arithmetic
+    // deliberately allows negatives -- clamping to zero hides the size of the hole while still making
+    // the next spend look affordable -- so the presentation has to carry the same information, or the
+    // clamp is undone at the last step and the user sees a positive number for an overspent budget.
+    val overspent = amount.signum() < 0
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium)
-        Text(text = amount.plainString(), style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = numberFormat(LocalContext.current, amount, currency, trimDecimalPlaces = true),
+            style = MaterialTheme.typography.titleMedium,
+            color = if (overspent) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        )
     }
 }
 
 @Composable
-private fun MemberAllocationRow(name: String, tag: MemberTag?, allocation: MemberAllocation) {
+private fun MemberAllocationRow(
+    name: String,
+    tag: MemberTag?,
+    allocation: MemberAllocation,
+    currency: ExtendCurrency,
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -293,22 +335,33 @@ private fun MemberAllocationRow(name: String, tag: MemberTag?, allocation: Membe
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = name, style = MaterialTheme.typography.bodyLarge)
-            Text(text = allocation.remaining.plainString(), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = numberFormat(LocalContext.current, allocation.remaining, currency, trimDecimalPlaces = true),
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (allocation.remaining.signum() < 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
         Text(
             text = stringResource(
                 R.string.family_budget_allocation_detail,
-                allocation.allocation.plainString(),
-                allocation.spent.plainString(),
-                allocation.shareOfHousehold.plainString(),
+                numberFormat(LocalContext.current, allocation.allocation, currency, trimDecimalPlaces = true),
+                numberFormat(LocalContext.current, allocation.spent, currency, trimDecimalPlaces = true),
+                numberFormat(LocalContext.current, allocation.shareOfHousehold, currency, trimDecimalPlaces = true),
             ),
             style = MaterialTheme.typography.bodySmall,
         )
         // Only ever the member's own positive labels. A person is not shown the app's opinion of them.
+        // A plain Text rather than a chip: an onClick that does nothing still draws a ripple and reads
+        // as a control, so the control is a lie about what is tappable.
         tag?.takeIf { it.isSelfVisible }?.let { shown ->
-            AssistChip(
-                onClick = {},
-                label = { Text(stringResource(tagLabel(shown))) },
+            Text(
+                text = stringResource(tagLabel(shown)),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -328,6 +381,7 @@ private fun HouseholdSection(
     rows: List<com.danilkinkin.buckwheat.data.entities.Transaction>,
     detailVisibleToAll: Boolean,
     householdSpent: BigDecimal,
+    currency: ExtendCurrency,
 ) {
     var amountText by remember { mutableStateOf("") }
     var comment by remember { mutableStateOf("") }
@@ -343,13 +397,15 @@ private fun HouseholdSection(
                 text = stringResource(R.string.family_budget_household_title),
                 style = MaterialTheme.typography.titleMedium,
             )
-            MoneyRow(stringResource(R.string.family_budget_household_spent), householdSpent)
+            MoneyRow(stringResource(R.string.family_budget_household_spent), householdSpent, currency)
 
             if (showDetail) {
                 if (rows.isEmpty()) {
                     Text(stringResource(R.string.family_budget_household_empty))
                 }
-                rows.forEach { row ->
+                // Capped: an unbounded list inside a Column measures every row on every recomposition, and a
+                // year of groceries is more rows than a sheet should build to show five.
+                rows.takeLast(6).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -358,7 +414,11 @@ private fun HouseholdSection(
                             text = row.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Text(text = row.value.plainString(), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = numberFormat(LocalContext.current, row.value, currency, trimDecimalPlaces = true),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (row.value.signum() < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                 }
             } else {
@@ -407,6 +467,7 @@ private fun HouseholdSection(
 private fun AssignmentRow(
     assignment: SpendAssignment,
     title: String,
+    currency: ExtendCurrency,
     accept: (() -> Unit)?,
     reject: (() -> Unit)?,
     canAnswer: Boolean,
@@ -420,7 +481,7 @@ private fun AssignmentRow(
             Text(
                 text = stringResource(
                     R.string.family_budget_request_detail,
-                    assignment.amount.plainString(),
+                    numberFormat(LocalContext.current, assignment.amount, currency, trimDecimalPlaces = true),
                     assignment.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
                 ),
                 style = MaterialTheme.typography.bodySmall,
@@ -564,10 +625,17 @@ private fun AllocationEditor(
 
     val saveProblem by viewModel.saveProblem.collectAsStateWithLifecycle()
 
-    var poolText by remember { mutableStateOf(total.plainString()) }
-    var householdText by remember { mutableStateOf(householdTier.plainString()) }
-    var household by remember { mutableStateOf(CommonSplitRule.EQUAL) }
-    var allocations by remember { mutableStateOf(memberIds.associateWith { "" }) }
+    // Re-seeded when the stored pool changes. Keyed on `total`, not a bare `remember`, because a
+    // bare one never re-seeds: opening the editor after the head saved showed the previous values,
+    // and a field initialised blank forces the whole pool to be retyped.
+    var poolText by remember(total) { mutableStateOf(total.plainString()) }
+    var householdText by remember(householdTier) { mutableStateOf(householdTier.plainString()) }
+    // The stored split rule, not EQUAL: opening the editor used to silently reset a family that had
+    // chosen proportional, and saving then wrote EQUAL over their choice.
+    var household by remember(viewModel.splitRule) { mutableStateOf(viewModel.splitRule.value) }
+    // Keyed on `memberIds`, like the fields above: a bare `remember` never re-seeds, so a member who
+    // joins while the sheet is open gets no row at all and the save is then refused for being short.
+    var allocations by remember(memberIds) { mutableStateOf(memberIds.associateWith { "" }) }
 
     val typedPool = parseAmount(poolText)
     val typedHousehold = parseAmount(householdText)
@@ -652,7 +720,8 @@ private fun assignmentStatusLabel(status: SpendAssignmentStatus): Int = when (st
 }
 
 private fun tagLabel(tag: MemberTag): Int = when (tag) {
-    MemberTag.NOT_ENOUGH_DATA -> R.string.family_tag_not_enough_data
+    MemberTag.TOO_EARLY -> R.string.family_tag_too_early
+        MemberTag.NOT_ENOUGH_DATA -> R.string.family_tag_not_enough_data
     MemberTag.SUPER_SAVER -> R.string.family_tag_super_saver
     MemberTag.ON_PLAN -> R.string.family_tag_on_plan
     MemberTag.NEAR_LIMIT -> R.string.family_tag_near_limit

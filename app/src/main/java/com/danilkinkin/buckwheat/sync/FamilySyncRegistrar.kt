@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.sync
 
+import android.util.Log
 import javax.inject.Inject
 
 class FamilySyncRegistrar @Inject constructor(
@@ -45,6 +46,11 @@ class FamilySyncRegistrar @Inject constructor(
         }
     }
 
+    /** Fills the roster cache for a session that is not in the store yet. */
+    private suspend fun fetchMembers(baseUrl: String, token: String) {
+        membersCache.replaceMembers(familyApiFactory.create(baseUrl).members(token))
+    }
+
     suspend fun signOut() {
         sessionStore.clear()
         membersCache.clear()
@@ -58,6 +64,15 @@ class FamilySyncRegistrar @Inject constructor(
             familyId = credentials.familyId,
             memberId = credentials.memberId,
         )
+        // Fetch the roster straight away rather than waiting for the caller to notice it is empty.
+        //
+        // Clearing the cache is required -- the previous family's names must not survive -- but that
+        // leaves every family screen showing a roster of nobody until something happens to refresh it.
+        // Enrolling is exactly the moment somebody is about to open the budget sheet, so the fetch
+        // belongs here. A failure is swallowed on purpose: the roster is a cache, and being unable to
+        // reach the server at this moment must not fail the enrolment that succeeded.
+        runCatching { fetchMembers(baseUrl, credentials.token) }
+            .onFailure { Log.d("FamilySync", "roster fetch failed after enrolment: ${it.message}") }
         return FamilySession(
             baseUrl = baseUrl,
             token = credentials.token,

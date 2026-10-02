@@ -11,6 +11,8 @@ import java.util.UUID
 data class MemberAmount(
     val memberId: String,
     val amount: BigDecimal,
+    /** Personal transactions behind [amount]. The tag engine refuses to judge one or two purchases. */
+    val transactionCount: Int = 0,
 )
 
 /** One member's line in the family budget: what they were given, what they used, what is left. */
@@ -20,6 +22,7 @@ data class MemberAllocation(
     val spent: BigDecimal,
     val shareOfHousehold: BigDecimal,
     val remaining: BigDecimal,
+    val transactionCount: Int = 0,
 )
 
 /** Everything the family budget screen renders, derived from stored rows and nothing else. */
@@ -127,6 +130,7 @@ fun familyBudget(
     val memberCount = limits.size
     val totalAllocation = limits.fold(BigDecimal.ZERO) { acc, it -> acc.add(it.limitValue) }
     val spentById = spentByMember.associate { it.memberId to it.amount }
+    val spentCounts = spentByMember.associate { it.memberId to it.transactionCount }
     val household = householdSpent.setScale(2, RoundingMode.HALF_EVEN)
 
     val shares = limits.map { limit ->
@@ -139,6 +143,7 @@ fun familyBudget(
     val allocations = limits.mapIndexed { index, limit ->
         val share = shares[index].second.let { if (index == shares.lastIndex) it.add(remainder) else it }
         val spent = (spentById[limit.memberId] ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN)
+        val count = spentCounts[limit.memberId] ?: 0
         val allocation = limit.limitValue.setScale(2, RoundingMode.HALF_EVEN)
         MemberAllocation(
             memberId = limit.memberId,
@@ -149,6 +154,7 @@ fun familyBudget(
             // here, never subtracted, so an under-allocated split cannot make a member's own number
             // look worse than their own spending.
             remaining = allocation.subtract(spent).subtract(share),
+            transactionCount = count,
         )
     }
 

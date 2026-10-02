@@ -3,7 +3,12 @@ package com.danilkinkin.buckwheat.family
 import com.danilkinkin.buckwheat.data.entities.CommonSplitRule
 import com.danilkinkin.buckwheat.data.entities.FamilyState
 import com.danilkinkin.buckwheat.data.entities.PeriodLimit
+import com.danilkinkin.buckwheat.data.entities.SpendBucket
+import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.asHouseholdSpend
 import java.math.BigDecimal
+import java.util.Date
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -241,5 +246,38 @@ class AllocationValidationTest {
                 2,
             )
         )
+    }
+}
+/**
+ * A household expense is in the household total OR a member's personal spend, never both.
+ *
+ * This is arithmetic, not authorization, and no server rule can catch it: `write` binds `member_id`
+ * from the caller, so a household row carries the head's id. A member rollup that did not filter on
+ * the bucket would count the rent against them as well as in the household total, and every remaining
+ * figure would be wrong on every device.
+ */
+/**
+ * One test, because it is the only assertion here that can fail.
+ *
+ * The first version of this file had a companion test named
+ * `aHouseholdRowIsExcludedFromTheMemberRollup` which built a transaction and asserted that the
+ * constructor arguments it had just passed in came back out. Deleting the `filterNot` from the rollup
+ * entirely would have left it passing. That is the exact unfalsifiable shape this project has now
+ * written three times; the real coverage is `PersonalSpendRollupTest`, which calls the rollup.
+ */
+class HouseholdSpendIsNotAlsoAMemberSpendTest {
+
+    @Test
+    fun aHouseholdRowBuiltByTheHeadCarriesNoMemberSoTheTwoTotalsCannotOverlap() {
+        val asHousehold = Transaction(
+            type = TransactionType.SPENT,
+            value = BigDecimal("2500.00"),
+            date = Date(),
+            comment = "rent",
+            memberId = "member-1",
+        ).asHouseholdSpend()
+
+        assertNull("a household row must not name a member", asHousehold.memberId)
+        assertEquals(SpendBucket.HOUSEHOLD.name, asHousehold.bucket)
     }
 }

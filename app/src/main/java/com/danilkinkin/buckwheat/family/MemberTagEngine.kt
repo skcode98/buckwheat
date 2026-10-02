@@ -6,13 +6,26 @@ import java.math.RoundingMode
 /**
  * What a member's spending looks like this period.
  *
- * The declaration order is *severity* order and is not the evaluation order. [memberTag] checks
- * OVER_PLAN first, then NEAR_LIMIT, then SPENDING_UP, then SUPER_SAVER, then ON_PLAN. The two differ on
- * purpose: a member can be both well under pace and sharply up on last period, and the rising figure is
- * the one worth saying out loud, so it is asked before the compliment.
+* The declaration order is severity order and is not the evaluation order. [memberTag] returns the
+ * first of: NOT_ENOUGH_DATA, ON_PLAN, OVER_PLAN, TOO_EARLY, NEAR_LIMIT, SPENDING_UP, SUPER_SAVER.
+ *
+ * Two orderings are deliberate. OVER_PLAN is checked before TOO_EARLY, because being over budget is a
+ * fact about the money rather than a judgement about the period, and reporting a member who is far
+ * past their allocation as "just getting started" under-reports the one person the head most needs to
+ * see. And SPENDING_UP is asked before SUPER_SAVER, because a member can be both well under pace and
+ * sharply up on last period, and the rising figure is the one worth saying out loud.
  */
 enum class MemberTag {
     NOT_ENOUGH_DATA,
+    /**
+     * Too early in the period to say anything.
+     *
+     * Distinct from [NOT_ENOUGH_DATA] because the two are different facts and a member should not be
+     * told they have not been active when they have: there simply is not enough month yet to judge
+     * anything. Flooring the pace so nobody reads "near their limit" in the first days would otherwise
+     * hand them the mirror-image lie -- "super saver", two days into the month, for spending 6% of it.
+     */
+    TOO_EARLY,
     SUPER_SAVER,
     ON_PLAN,
     NEAR_LIMIT,
@@ -21,7 +34,7 @@ enum class MemberTag {
     ;
 
     /** Whether this is a judgement about someone rather than a statement about their money. */
-    val isPositive: Boolean get() = this == NOT_ENOUGH_DATA || this == SUPER_SAVER
+    val isPositive: Boolean get() = this == NOT_ENOUGH_DATA || this == SUPER_SAVER || this == TOO_EARLY
 
     /**
      * Never shown to the member it describes, whatever the family's setting says.
@@ -66,6 +79,15 @@ data class MemberTagThresholds(
     val trendFloor: BigDecimal = BigDecimal("500"),
     /** And the period total has to have risen by at least this much to count. */
     val trendRatio: BigDecimal = BigDecimal("0.50"),
+/**
+     * How much of a period must have passed before any band is claimed at all.
+     *
+     * A gate, not a floor on the paced allowance. Two bands are unjustifiable in the first days:
+     * measured literally against `allocation * progress`, a member who spends anything at all is "ahead
+     * of pace"; and even after flooring the pace they become a "super saver" for spending a few per cent
+     * of the month. Before this much of the period has passed there is nothing to say.
+     */
+    val minProgress: BigDecimal = BigDecimal("0.15"),
 )
 
 /** Everything the engine is allowed to know about one member for one period. */
@@ -98,14 +120,24 @@ fun memberTag(
     if (allocation.signum() <= 0) return MemberTag.ON_PLAN
 
     val spent = spending.spent.setScale(2, RoundingMode.HALF_EVEN)
+
+    // Over budget is checked BEFORE the early return. Being over is a fact about the money, not a
+    // judgement about the period, and nothing makes it less true in the first days of the month.
+    // Returning TOO_EARLY first would report a member spending far past their allocation as "just
+    // getting started" -- under-reporting the one person the head most needs to see.
+    if (spent > allocation) return MemberTag.OVER_PLAN
+
+    // With that out of the way, no band is claimed before there is enough month to judge: both the
+    // remaining alarming band and the flattering one are unjustifiable in the first days.
+    if (progress < thresholds.minProgress) return MemberTag.TOO_EARLY
+
+    // Past the end of the period there is no pace left to be ahead of, so the paced figure becomes the
+    // whole allocation and every member is judged on the allocation alone.
     val pacedAllocation = allocation.multiply(progress).setScale(2, RoundingMode.HALF_EVEN)
 
-    // Past the end of the period there is no pace left to be ahead of, so the paced figure is the
-    // whole allocation and every member is judged on the allocation alone.
     val denominator = if (pacedAllocation.signum() > 0) pacedAllocation else allocation
     val aheadOfPace = spent.divide(denominator, 4, RoundingMode.HALF_EVEN)
 
-    if (spent > allocation) return MemberTag.OVER_PLAN
     if (aheadOfPace > thresholds.aheadOfPaceAt) return MemberTag.NEAR_LIMIT
 
     // Rising is checked before the compliment bands, and that ordering is deliberate rather than

@@ -76,6 +76,12 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // android.util.Log and the other framework stubs throw "not mocked" by default, so any
+            // failure path that logs is untestable and every test that reaches one dies for a reason
+            // that has nothing to do with what it is testing. Returning default values instead makes
+            // the stubs inert; about twenty classes in main log on paths that only run when something
+            // has already gone wrong.
+            isReturnDefaultValues = true
             all { it.jvmArgs("-ea") }
         }
     }

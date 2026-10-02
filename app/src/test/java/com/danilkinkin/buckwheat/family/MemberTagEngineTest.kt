@@ -112,9 +112,10 @@ fun aSmallRiseUnderTheRatioIsNotTrending() {
 
     @Test
     fun pacingMeansTheFirstDaysDoNotProduceALabel() {
-        // 10% through the month having spent 10% of the allocation: exactly on pace.
+        // 10% through the month having spent 10% of the allocation is exactly on pace -- and there is
+        // still too little month to judge it by, so no band is claimed rather than a flattering one.
         assertEquals(
-            MemberTag.ON_PLAN,
+            MemberTag.TOO_EARLY,
             memberTag(spending(spent = "1000.00"), full, BigDecimal("0.1000")),
         )
     }
@@ -144,6 +145,41 @@ fun aSmallRiseUnderTheRatioIsNotTrending() {
     }
 
     @Test
+    fun theFirstWeekIsNotJudgedAgainstASliverOfThePeriod() {
+        // 2% through the month, three purchases of 600, on a 10000 allocation. Measured literally the
+        // paced allowance is 200 and every purchase is ahead of it. Flooring the pace alone would have
+        // handed back the mirror-image lie -- SUPER_SAVER, two days in, for spending 6% of the month --
+        // so before the floor there is enough month to judge, no band is claimed at all.
+        assertEquals(
+            MemberTag.TOO_EARLY,
+            memberTag(spending(count = 3, spent = "600.00"), full, BigDecimal("0.02")),
+        )
+    }
+
+    @Test
+    fun aMemberOverBudgetIsStillReportedInsideTheEarlyWindow() {
+        // Sits BELOW the floor, where the floor is actually active, and the spend is genuinely past the
+        // allocation -- 12000 against 10000, not 9000, which would merely be ahead of pace.
+        //
+        // Being over budget is a fact about the money rather than a judgement about the period, so it
+        // must be reported even in the first days. Returning TOO_EARLY first would describe a member
+        // spending far past their allocation as "just getting started", which under-reports the one
+        // person the head most needs to see.
+        assertEquals(
+            MemberTag.OVER_PLAN,
+            memberTag(spending(count = 3, spent = "12000.00"), full, BigDecimal("0.02")),
+        )
+    }
+
+@Test
+    fun aMemberAheadOfPaceLaterInThePeriodIsStillCaught() {
+        assertEquals(
+            MemberTag.NEAR_LIMIT,
+            memberTag(spending(count = 5, spent = "9000.00"), full, BigDecimal("0.25")),
+        )
+    }
+
+@Test
     fun onlyPositiveTagsAreEverVisibleToTheirOwnSubject() {
         // The point of the feature: a person is never labelled by the app, whatever the family setting.
         assertEquals(true, MemberTag.SUPER_SAVER.isSelfVisible)

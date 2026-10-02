@@ -707,6 +707,7 @@
   <string name="family_budget_amount_invalid">Enter an amount above zero.</string>
   <string name="family_budget_no_target">Choose who this is for.</string>
   <string name="family_budget_cannot_ask_self">You cannot ask yourself — record it as your own spend instead.</string>
+  <string name="family_tag_too_early">Just getting started</string>
   <string name="family_tag_not_enough_data">Not enough activity yet</string>
   <string name="family_tag_super_saver">Super saver</string>
   <string name="family_tag_on_plan">On plan</string>

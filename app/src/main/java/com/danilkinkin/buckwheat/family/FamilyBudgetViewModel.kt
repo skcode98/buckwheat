@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.family
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
 import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
 import com.danilkinkin.buckwheat.data.entities.CommonSplitRule
@@ -11,6 +12,8 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.asHouseholdSpend
 import com.danilkinkin.buckwheat.di.SpendsRepository
+import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.sync.FamilyMembersCache
 import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,12 +46,24 @@ class FamilyBudgetViewModel @Inject constructor(
     private val familyStateDao: FamilyStateDao,
     private val periodLimitDao: PeriodLimitDao,
     private val spendsRepository: SpendsRepository,
-    private val sessionStore: FamilySessionStore,
+private val sessionStore: FamilySessionStore,
     private val membersCache: FamilyMembersCache,
     private val insightService: FamilyInsightService,
+    private val dirtyMarker: SyncDirtyMarker,
 ) : ViewModel() {
 
     val session = sessionStore.session()
+
+    /**
+     * The currency every figure on this screen is shown in.
+     *
+     * Read through the repository rather than the device locale, because the user's own budget can be
+     * in a currency that has nothing to do with where their phone is set -- and a shared family pool
+     * may well be. Formatting these amounts from the locale would show a household's rent in a
+     * currency nobody in it uses.
+     */
+    val currency: StateFlow<ExtendCurrency> = spendsRepository.getCurrency()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ExtendCurrency.none())
 
     val members: StateFlow<Map<String, String>> = membersCache.members()
         .map { list -> list.associate { it.id to it.displayName } }
@@ -69,8 +84,19 @@ class FamilyBudgetViewModel @Inject constructor(
      * Exposed because a request has to be filed against the same period as the split it draws on, and
      * recomputing it in the sheet would mean two copies of the derivation that must agree.
      */
-    val activePeriodKey: String?
+val activePeriodKey: String?
         get() = periodBounds.value?.let { poolPeriodId(it.first) }
+
+    /**
+     * A key that changes when the active period does, for an effect that should re-run then.
+     *
+     * Distinct from [activePeriodKey] on purpose: that is the id allocations are stored under and
+     * belongs in a payload, whereas this only has to change. Exposing the raw id invites using it as
+     * the key, and a key that is also data is one somebody will accidentally send.
+     */
+    val periodKey: StateFlow<String?> = periodBounds
+        .map { bounds -> bounds?.let { "${it.first}:${it.second}" } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * A spending tag per member, for the current period.
@@ -97,7 +123,7 @@ class FamilyBudgetViewModel @Inject constructor(
                                 state = state,
                                 limits = limits,
                                 spentByMember = spent.mapNotNull { memberSpend ->
-                                    memberSpend.memberId?.let { MemberAmount(it, memberSpend.total) }
+                                    memberSpend.memberId?.let { MemberAmount(it, memberSpend.total, memberSpend.transactionCount) }
                                 },
                                 householdSpent = household,
                             )
@@ -123,7 +149,17 @@ class FamilyBudgetViewModel @Inject constructor(
             } else {
                 val progress = periodProgress(bounds.first, bounds.second, System.currentTimeMillis())
                 memberTags(
-                    spendings = emptyList(),
+                    // Previous-period spend is set equal to the current figure, which makes the
+                    // rising-spend check unable to fire. Claiming a trend needs history this does not
+                    // have, and a tag that is always right for the wrong reason is worse than none.
+                    spendings = budget.allocations.map { allocation ->
+                        MemberSpending(
+                            memberId = allocation.memberId,
+                            transactionCount = allocation.transactionCount,
+                            spent = allocation.spent,
+                            previousSpent = allocation.spent,
+                        )
+                    },
                     allocations = budget.allocations,
                     progress = progress,
                 )
@@ -195,7 +231,7 @@ class FamilyBudgetViewModel @Inject constructor(
             // `session` is a plain Flow, so it has no `.value`; the suspending read is correct here and
             // is also the right thing to want: it sees an enrolment that completed a moment ago.
             val familyId = sessionStore.current()?.familyId
-            spendsRepository.addSpent(
+spendsRepository.addSpent(
                 Transaction(
                     type = TransactionType.SPENT,
                     value = amount,
@@ -252,6 +288,26 @@ class FamilyBudgetViewModel @Inject constructor(
         }
     }
 
+    /**
+ * The split rule currently on the pool, so the editor opens showing what is actually set rather than
+ * resetting a family that chose proportional back to equal on every visit.
+ */
+    // Declared before splitRule below, which reads it: a property initializer cannot reference a
+    // property declared further down.
+    private val storedPool: StateFlow<FamilyState?> =
+        combine(session, budget) { s, _ -> s?.familyId }
+            .distinctUntilChanged()
+            .flatMapLatest { familyId ->
+                if (familyId == null) flowOf<FamilyState?>(null) else familyStateDao.observe(familyId)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val splitRule: StateFlow<CommonSplitRule> = combine(session, storedPool) { s, pool ->
+        if (s == null || pool == null) CommonSplitRule.EQUAL else pool.splitRule
+    }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CommonSplitRule.EQUAL)
+
+
     private val _saveProblem = MutableStateFlow<AllocationProblem?>(null)
 
     /** Null means the last save was accepted. Surfaced as a state rather than thrown. */
@@ -290,6 +346,8 @@ class FamilyBudgetViewModel @Inject constructor(
         householdTier: BigDecimal,
         allocations: Map<String, BigDecimal>,
     ): AllocationProblem? {
+        // The server refuses a non-owner anyway, but a rule that lives only in the UI is not a rule.
+        if (!isHead.value) return AllocationProblem.NO_ALLOCATION
         val session = sessionStore.current() ?: return AllocationProblem.NO_ALLOCATION
         val bounds = periodBounds.value ?: return AllocationProblem.NO_ALLOCATION
         if (allocations.isEmpty()) return AllocationProblem.NO_ALLOCATION
@@ -316,8 +374,9 @@ class FamilyBudgetViewModel @Inject constructor(
                 commonSplitRule = existing?.commonSplitRule ?: CommonSplitRule.EQUAL.name,
                 tagsVisibleToSelf = existing?.tagsVisibleToSelf ?: true,
                 familyAiEnabled = existing?.familyAiEnabled ?: true,
-            )
+            ),
         )
+        dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, session.familyId)
 
         val stored = periodLimitDao.getForPeriod(periodId)
         val keep = candidate.map { limit ->
@@ -329,37 +388,50 @@ class FamilyBudgetViewModel @Inject constructor(
             )
         }
         val keepIds = keep.map { it.memberId }.toSet()
-        stored.filterNot { it.memberId in keepIds }.forEach { periodLimitDao.deleteById(it.id) }
-        keep.forEach { periodLimitDao.upsert(it) }
+        stored.filterNot { it.memberId in keepIds }.forEach { stale ->
+            periodLimitDao.deleteById(stale.id)
+            dirtyMarker.markDelete(SyncTables.PERIOD_LIMITS, stale.id, session.familyId, stale.syncSeq)
+        }
+        keep.forEach { limit ->
+            periodLimitDao.upsert(limit)
+            dirtyMarker.markUpsert(SyncTables.PERIOD_LIMITS, limit.id)
+        }
+        dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, session.familyId)
         return null
     }
 
     fun setHouseholdTier(tier: BigDecimal) {
+        if (!isHead.value) return
         viewModelScope.launch {
             val session = sessionStore.current() ?: return@launch
             val current = familyStateDao.getByFamilyId(session.familyId) ?: return@launch
-            familyStateDao.upsert(
-                current.copy(
-                    householdTier = tier,
-                    budget = tier.add(current.memberTier),
+familyStateDao.upsert(
+                    current.copy(
+                        householdTier = tier,
+                        budget = tier.add(current.memberTier),
+                    )
                 )
-            )
-        }
+                dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, current.familyId)
+            }
     }
 
     fun setSplitRule(rule: CommonSplitRule) {
+        if (!isHead.value) return
         viewModelScope.launch {
             val session = sessionStore.current() ?: return@launch
             val current = familyStateDao.getByFamilyId(session.familyId) ?: return@launch
             familyStateDao.upsert(current.copy(commonSplitRule = rule.name))
+            dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, current.familyId)
         }
     }
 
     fun setHouseholdDetailVisibleToAll(visible: Boolean) {
+        if (!isHead.value) return
         viewModelScope.launch {
             val session = sessionStore.current() ?: return@launch
             val current = familyStateDao.getByFamilyId(session.familyId) ?: return@launch
             familyStateDao.upsert(current.copy(householdDetailVisibleToAll = visible))
+            dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, current.familyId)
         }
     }
 }
