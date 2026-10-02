@@ -165,6 +165,39 @@ class FamilySyncRegistrarTest {
     }
 
     @Test
+    fun enrolmentDiscardsARosterLeftBehindByAnEarlierFamily() = runTest {
+        cache.replaceMembers(defaultRoster)
+
+        registrar.enrol("https://sync.example.com", "Suraj")
+
+        assertTrue(cache.cleared)
+        assertEquals(emptyList<FamilyMember>(), cache.readMembers())
+    }
+
+    @Test
+    fun joiningDiscardsARosterLeftBehindByAnEarlierFamily() = runTest {
+        store.save("https://sync.example.com", "token-old", "family-old", "member-1")
+        cache.replaceMembers(defaultRoster)
+
+        registrar.join("https://sync.example.com", "CODE", "Suraj")
+
+        assertTrue(cache.cleared)
+        assertEquals(emptyList<FamilyMember>(), cache.readMembers())
+    }
+
+    @Test
+    fun aFailedRefreshAfterJoiningCannotSurfaceThePreviousFamily() = runTest {
+        store.save("https://sync.example.com", "token-old", "family-old", "member-1")
+        cache.replaceMembers(defaultRoster)
+        registrar.join("https://sync.example.com", "CODE", "Suraj")
+        api.membersFailure = IOException("family HTTP 503 service_unavailable")
+
+        val members = registrar.members()
+
+        assertEquals(emptyList<FamilyMember>(), members)
+    }
+
+    @Test
     fun signOutClearsTheStoredCredentialsAndTheRoster() = runTest {
         store.save("https://sync.example.com", "token-1", "family-1", "member-1")
         cache.replaceMembers(defaultRoster)

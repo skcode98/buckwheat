@@ -51,6 +51,7 @@ class FamilySyncRegistrar @Inject constructor(
     }
 
     private suspend fun persist(baseUrl: String, credentials: FamilyCredentials): FamilySession {
+        membersCache.clear()
         sessionStore.save(
             baseUrl = baseUrl,
             token = credentials.token,
