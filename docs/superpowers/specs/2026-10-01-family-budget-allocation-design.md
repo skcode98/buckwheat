@@ -1,0 +1,659 @@
+# Family Budget & Allocation Design
+
+**Date:** 2026-10-01
+**Status:** Refined requirement, partly implemented. Phases 0 and 1 landed in `0b93a2d3`. Decisions in `## Open Questions` still open.
+**Classification:** Architectural (extension of the shipped family sync subsystem)
+**Supersedes:** nothing. **Extends:** `docs/superpowers/specs/2026-09-26-family-sync-design.md`
+
+## Goal
+
+Give an enrolled family one shared household budget, split into a household tier and
+per-member allocations, with head-of-family powers over common spending and over
+assigning a spend to another member. Local personal tracking stays byte-for-byte the
+system of record and must never degrade because a family feature exists.
+
+## What the raw request asked for, and what it means here
+
+The original request was five loose points. Each is restated below as a testable
+requirement, with the ambiguity that had to be resolved to make it testable.
+
+| # | Raw request | Refined requirement |
+|---|---|---|
+| 1 | Family budget funds every member; 30k split 13k / 10k / 7k; "calculated collectively" | The family pool is authored as **household tier + member allocations**, and allocations must sum exactly to the member tier. Every member sees the full split; only the head may change it. "Collectively" is resolved as *the pool is derived from the sum, never stored as a second independent number* — see Open Question 1 for who may propose a change. |
+| 2 | Family budget also carries common spend (rent, insurance, parents' fund, investments); "only managed and seen by the head" | Common spend is a **first-class bucket**, not a special member. Rent, insurance, parents' fund and investment rows post to `bucket = HOUSEHOLD` with `memberId = null`. Only the head can create, edit or delete an individual household row. Visibility is split: the **detail** (amount, comment, category, date) is head-only, while the **aggregate** stays visible to all so member budget arithmetic reconciles. This is a deliberate deviation from the shipped full-transparency decision and is listed as Open Question 2. |
+| 3 | Local tracking is entirely separate and wins; head can assign a spend to any member; the member accepts or rejects it; head reuses audio and AI on family pages | Local personal budget and history are never written by family code. An assignment is a first-class object with `PENDING → ACCEPTED | REJECTED`, resolved only by the target member. Audio and AI on family screens reuse the existing `SpeechRecognizer` and `AiBackend` paths with no new provider, key or endpoint. |
+| 4 | Reuse existing AI; local tracking, backup/restore, add spend, add budget and reports must keep working exactly as they do | Stated as a testable invariant in `## Local-first guarantee`, and as an explicit `BACKUP_VERSION`-compatible codec extension in `## Backup and restore`. |
+| 5 | Tag members by spend: super saver, and so on, positive or negative | A deterministic, explainable, local-only tag engine. Tags are computed from transactions, never synced, never backed up, never sent to the AI provider, and rate-limited so a ₹20 overspend cannot produce a label. |
+
+## Non-Goals
+
+- No bank accounts, card linking, transaction import from a bank, or payment
+  initiation. The app records what the user types.
+- No household accounts ledger, no double-entry bookkeeping, no multi-currency
+  within a family. The family pool uses one currency from `family_state`.
+- No private per-member spending. Full transparency is retained except for the
+  household-detail carve-out in Open Question 2.
+- No rollover of unspent allocation, matching the existing family sync decision.
+- No realtime push. Delta sync every 6 hours plus manual `Sync now`, as shipped.
+- No household AI that trains, remembers or stores anything server-side. The AI
+  endpoint is the user's own configured provider; this feature adds no server AI.
+- No multi-family membership. One device belongs to at most one family, as shipped.
+
+## Decisions
+
+| Question | Decision | Why |
+|---|---|---|
+| Where does the family pool live? | Pool for the **active** period lives in a `family_state` row introduced by a new migration; pool for a **closed** period lives in `budget_periods.budget`, with its allocations in `period_limits` | One table per concern, reusing `budget_periods` for closed periods. The originals were dropped in 19 to 20 for being permanently empty, so these are new tables under the same names rather than resurrected ones |
+| Where does the *local personal* budget live? | Unchanged: `budgetDataStore` in `SpendsRepository`. Family code never reads or writes it | The strongest possible structural guarantee that local tracking is unaffected: the two budgets share no storage, no key and no code path |
+| Pool shape | Two tiers: `householdTier` and `Σ memberAllocations`, both inputs, pool is their sum | Matches the request. Relaxes the earlier "pool equals the sum of `period_limits`" invariant, which was never implemented, so nothing has to be migrated |
+| Bucket model | New `transactions.bucket ∈ {MEMBER, HOUSEHOLD}`, default `MEMBER` | One flag answers "whose money is this", instead of overloading `memberId = null`, which currently means "not yet enrolled" on some paths |
+| Attribution | `memberId` is chosen **locally at write time**, from the session member plus an optional in-app "acting as" override | Until `0b93a2d3` nothing set `memberId` on write at all: it was stamped by `enrolAll` or by the server from the bearer token, so logging a spend for another person on your own phone was impossible. `Transaction.attributedTo` now fills it in `SpendsViewModel.addSpent`, and only ever fills a blank, so an undo or an edit cannot have a recorded member silently rewritten |
+| Roster | Server-sourced `FamilyMembersCache` in preferences, not a synced `Member` table | See `## What the roster turned out to be`. It removes a migration and a contract change, and `isOwner` arrives from the API |
+| Assignment | New synced table `spend_assignments`; on accept it materialises a normal `Transaction` with `assignment_id` and `assigned_by_member_id` set | The member, not the head, owns the resulting row: they can edit or delete it later, and the assignment row stays as the audit trail. History is never silently rewritten |
+| Assignment resolution | Only the target member may resolve. The head may not self-assign (`createdByMemberId != targetMemberId`) | Prevents the head from manufacturing consent |
+| Assignment visibility | Head sees all with status; target sees own; other members see status only, per full transparency | Consistent with the existing transparency decision and the already-translated notice string |
+| Household visibility | Detail head-only, aggregate to all | If members cannot see the household total, `pool − household − own spend` no longer reconciles and the remaining-budget figure becomes a lie. Open Question 2 asks for explicit confirmation of the carve-out |
+| Member tags | Derived on the fly by a pure `MemberTagEngine`, no table | Same precedent as `BudgetCalculator`, `PatternEngine`, `SpendForecast`. Nothing to store, nothing to sync, nothing to back up, nothing to leak |
+| Household policies | Four policy columns added to `family_state`: `household_detail_visible_to_all`, `common_split_rule`, `tags_visible_to_self`, `family_ai_enabled` | Avoids standing up `family_settings` as a fifth synced table and the contract churn that comes with it |
+| Voice on family screens | Extend the existing parse path with an optional bucket and target member, defaulting to `MEMBER` + self | Voice must never silently attribute a spend to another person |
+| AI on family screens | Same `AiBackend.callAi`, same `aiIntelligenceEnabled` gate, same deterministic offline renderer runs first | The request explicitly asks for reuse. `.track/SECURITY.md` forbids a new outbound endpoint |
+| Backup format | Keep `BACKUP_VERSION = 1`; add new collections with empty-list defaults | An old backup file must keep restoring. Bumping the version would strand every existing backup |
+| Wire contract | `SCHEMA_VERSION` 1 → 2, regenerate `.kilo/sync-contract.json` and `app/src/test/resources/sync-contract.json` | The contract is frozen and cross-verified by `SyncPayloadContractTest` and the Node server's own test. It cannot change without a coordinated bump |
+
+## Local-first guarantee
+
+This is the load-bearing constraint and is stated as an invariant, not a goal.
+
+> **Invariant L1.** With no network, no enrolled family, a revoked token, a sleeping
+> host, or AI unconfigured, every existing feature must behave exactly as it does
+> today: add spend, add budget, change budget, finish period, reports, analytics,
+> categories, tags, caps, recurring, goals, CSV import/export, backup, restore,
+> widgets, notifications, AI-free categorisation and voice input.
+
+Four structural rules enforce it. Each is reviewable and testable.
+
+1. **Family code never sits on the local write path.** `SpendsRepository.addSpent`
+   must not call into `sync/`, `ai/` or any family package. The only family touch
+   today is `SyncDirtyMarker.markUpsert`, which is a Room write and must stay
+   non-throwing and local. `SyncDirtyMarkerTest` is the guard.
+2. **Family reads are an additive layer, never a replacement.** Family screens read
+   the same Room tables and add their own `Flow`s. They do not change what
+   `SpendsViewModel` exposes, and they are not a precondition for the home screen
+   rendering.
+3. **Family work never blocks the editor.** Adding a spend commits the row, updates
+   DataStore and returns. Attribution resolution, category AI and family fan-out run
+   behind `CategoryAssignmentScheduler`-style background scheduling. The editor's
+   return path must not await a network round trip. This is testable by asserting
+   `addSpent` returns with the sync client throwing on every call.
+4. **Every family entry point is behind one gate.** A `FamilyEnabledGate` returning
+   `false` when `FamilySessionStore.session()` is `null` guards every family
+   navigation constant and every family ViewModel init. Family sheets that are
+   opened while not enrolled render an explanatory empty state rather than throwing.
+
+### Failure handling
+
+| Condition | Local tracking | Family surfaces |
+|---|---|---|
+| Device offline | Full function | Last-synced time, queued mutation count from the already-translated `family_sync_pending` plural |
+| Server unreachable | Full function | Silent background failure, existing conflict/status UI |
+| Render host asleep | Full function | Syncing state; first sync after idle costs about a minute |
+| Not enrolled | Full function; no behavioural difference whatsoever | Entry point shows how to create or join a family |
+| Token revoked | Full function; sync payload stops, nothing local is deleted | "Your family access expired, re-join with a new code" |
+| AI unconfigured or disabled | Full function; offline categoriser and offline report as today | Offline family summary renders first, upgrades in the background |
+| Conflict on a family record | Full function | Dismissible snackbar naming the record and the winning member, as shipped |
+| Room migration 20 → 21 | Full function; migration is additive with defaults | Family state defaults to not-enrolled-equivalent |
+
+## Roles and permissions
+
+Head of family is `members.is_owner`, which already exists on both sides. No new role
+enum is introduced; adding one would mean migrating an authority that already has a
+single source of truth.
+
+| Capability | Head | Member |
+|---|---|---|
+| Set family pool, household tier, member allocations | Yes | No |
+| See full allocation breakdown | Yes | Yes |
+| Create, edit, delete an individual household row | Yes | No |
+| See household row detail (amount, comment, category, date) | Yes | Only if `household_detail_visible_to_all`; aggregate always visible |
+| Create a spend assignment to another member | Yes | No |
+| Resolve an assignment addressed to them | Yes | Yes |
+| See assignment status across the family | Yes | Yes |
+| Invite a new member | Yes (owner-only endpoint exists) | No |
+| See a member's spend tag | Yes | Own tag only if `tags_visible_to_self` |
+| Trigger family AI summary | Yes | Yes |
+
+`POST /v1/family/invite` is already owner-only server-side. The assignment endpoints
+must be equally owner-only, and the server must verify `targetMemberId` belongs to
+the caller's family — the same scoping discipline `FamilyScopeTest` already enforces.
+
+## Money model
+
+Three buckets of spending, one pool.
+
+```
+Family pool for a period
+├── Household tier
+│   └── HOUSEHOLD rows: rent, insurance, parents' fund, investment contributions
+└── Member tier  = Σ period_limits.limit_value, validated to sum exactly
+    └── MEMBER rows, each with member_id
+```
+
+Derived, never stored:
+
+```
+householdSpent   = Σ HOUSEHOLD rows in period
+memberSpent(M)   = Σ MEMBER rows in period where member_id = M
+familyRemaining  = pool − householdSpent − Σ memberSpent
+memberRemaining(M) = allocation(M) − memberSpent(M) − shareOfHousehold(M)
+shareOfHousehold(M) = householdSpent × weight(M)
+```
+
+- `weight(M)` comes from `common_split_rule` on `family_state`. `EQUAL` (the
+  default) divides by member count, including the head. `PROPORTIONAL` weights by
+  allocation. Open Question 4 covers this.
+- `familyRemaining` is allowed to go negative and is displayed as over-budget, matching
+  today's behaviour. Member remaining floors at the member's own overspend; the
+  household share is never allowed to push a member into a negative-looking number
+  that hides their own overspend. Both surfaces show the raw figure.
+- Money is `BigDecimal` at scale 2 with `RoundingMode.HALF_EVEN`, as
+  `RoomConverters` already enforces. No `Double` anywhere in this path.
+- The pool is **authored**, not derived, for the household tier; it is **derived** for
+  the member tier. Allocation edits are validated in the editor: the sum must equal
+  the member tier, and a partial allocation is not a storable state, matching the
+  existing family sync decision.
+
+## Architecture
+
+What already ships and is reused as-is: the `sync/` package (19 files), the Ktor
+backend in `server/`, `family_state`, `members`, `period_limits` in both schemas,
+`FamilySyncSheet`, `SyncConflictsSheet`, `FamilyApi`, `SyncScheduler`, the
+`family_state`/`period_limits`/`members` Postgres tables, the owner-only invite
+endpoint, `GET /v1/family/members`, and the ~67 already-translated `family_sync_*`
+strings, most of which have zero Kotlin references today and can be wired up rather
+than re-authored.
+
+What is new: three Room DAOs (`MemberDao`, `FamilyStateDao`, `PeriodLimitDao`), one
+new synced table (`spend_assignments`), two new columns on `transactions` and
+`archived_transactions` (`bucket`, plus provenance), four policy columns on
+`family_state`, two new server endpoints, and a `family/` UI package.
+
+### The dead-schema tables were dropped, not built on
+
+`family_state` and `period_limits` were created by `Migration16to17` and existed in
+Postgres, but had **no DAO, no read path and no write path on either side**. A
+search for `family_state` and `period_limits` across `server/` returned nothing:
+the server never read or wrote them.
+
+Rather than build on them, `Migration19to20` drops both tables and removes the two
+entities, so the real schema matches exactly what Room validates against. The
+reasoning is sound: the rows they held were always empty, and a table that exists
+only to be filled later is a liability that invites the belief it is live.
+
+The consequence for this feature is a change of plan, not a change of goal:
+
+- The family pool is introduced by a **fresh migration from 20 to 21**, with new
+  tables rather than resurrected ones. `20.json` is already exported, so 20 is
+  spoken for.
+- This removes nothing from the requirement. The pool, the household tier and the
+  member allocations are all still needed; only their storage starts from scratch,
+  which is cheaper than migrating a table nobody ever wrote to.
+
+## What the roster turned out to be
+
+The original draft of this document recommended a `MemberDao` over the `members`
+Room table. That was wrong, and `0b93a2d3` corrected it.
+
+The roster is a **server-sourced cache**, not a synced table:
+
+- `GET /v1/family/members` returns `id`, `displayName`, `isOwner` and `joinedAt`,
+  so a client holding a `Transaction.memberId` or a `ConflictNotice.wonByMemberId`
+  can resolve either to a person. It previously returned bare names, which made
+  attribution impossible.
+- `FamilyMembersCache` stores it as JSON in `syncStateDataStore` under
+  `syncFamilyMembers`, seeded from the network and read offline. A Room table
+  would have meant a migration for data the server already owns.
+- `FamilyApi.members()` is implemented, and `isOwner` therefore arrives from the
+  API. **Head-of-family detection needs no local table at all.**
+- The cache is deliberately never in a backup: `BackupRepository` exports only
+  `budgetDataStore` and `settingsDataStore`, so member display names, the sync
+  cursor, conflicts and the last-synced stamp are all outside the backup and are
+  re-fetched after a restore.
+- `FamilySyncRegistrar.persist()` clears the cache before storing a new session.
+  Without that, joining a second family after a failed roster fetch rendered the
+  previous family's names, because `members()` deliberately falls back to the
+  cached roster rather than propagating an `IOException`.
+
+So: no `MemberDao`. The family pool arrives as new tables in a migration from 20
+to 21, because 19 to 20 was spent dropping the two that were always empty.
+
+## Two unrelated defects fixed alongside
+
+`@Update` writes every column, so taking a stale row snapshot from a list and
+writing it back silently nulls `family_id`, `sync_seq` and `version` and severs the
+row from the family. `RecurringPaymentsViewModel.toggleEnabled` and
+`updateTemplate` now re-read the stored row first. `GoalsViewModel.allocateToGoal`
+now returns its `Job` so a caller can await "marked and queued" rather than assume
+it. Neither is part of this feature; both are recorded here because they sit on the
+same write path the family pool will use.
+
+## Data Model
+
+### Room migration 20 → 21
+
+Additive only. Every new column carries a default, so a user with data upgrades
+without a decision and without losing a row.
+
+`transactions` and `archived_transactions`:
+
+```
+bucket                  TEXT    NOT NULL DEFAULT 'MEMBER'   -- MEMBER | HOUSEHOLD
+assignment_id           TEXT    NULL
+assigned_by_member_id   TEXT    NULL
+```
+
+`family_state`, extended:
+
+```
+household_detail_visible_to_all  INTEGER NOT NULL DEFAULT 0
+common_split_rule                TEXT    NOT NULL DEFAULT 'EQUAL'
+tags_visible_to_self             INTEGER NOT NULL DEFAULT 1
+family_ai_enabled                INTEGER NOT NULL DEFAULT 1
+```
+
+New table `spend_assignments`:
+
+```
+id                     TEXT PRIMARY KEY          -- UUID, newSyncId()
+period_id              TEXT NOT NULL
+target_member_id       TEXT NOT NULL
+created_by_member_id   TEXT NOT NULL
+amount                 NUMERIC NOT NULL
+category               TEXT NULL
+comment                TEXT NOT NULL DEFAULT ''
+date                   INTEGER NOT NULL
+status                 TEXT NOT NULL             -- PENDING | ACCEPTED | REJECTED
+resolved_at            INTEGER NULL
+family_id / sync_seq / updated_at / deleted_at / version   -- standard sync columns
+```
+
+Unique index on `(id)` only. A second assignment for the same target and amount is
+allowed; deduplication is the member's decision, not the schema's.
+
+### Column-sync discipline
+
+Every synced `upsert*` in this codebase is a hand-written
+`INSERT … ON CONFLICT(id) DO UPDATE SET`, deliberately not `@Upsert` and not
+`@Insert(REPLACE)`, because `REPLACE` cascades `archived_transactions` away through
+the `period_id` foreign key and `@Upsert` silently freezes the sync columns. The KDoc
+on each is emphatic and both alternatives have caused real bugs.
+
+Therefore, for each new or changed synced column, all four of these must change
+together, in the same commit:
+
+1. the entity field
+2. the DAO `upsert*` SET list
+3. the server `SyncTables` / `TableSpec` payload column list
+4. the regenerated `sync-contract.json` on both sides
+
+`SyncUpsertWritesEveryColumnTest`, `SyncPayloadContractTest` and the Node server's
+`SyncContractExportTest` guard this. Dropping a column from the SET list silently
+stops it syncing, which is the failure mode to fear here.
+
+### Wire contract
+
+`SCHEMA_VERSION` 1 → 2. New payload keys: `bucket`, `assignmentId`,
+`assignedByMemberId` on both transaction tables; the four policy keys on
+`family_state`; the whole `spend_assignments` table. Regenerate
+`.kilo/sync-contract.json` and the mirrored copy at
+`app/src/test/resources/sync-contract.json`.
+
+Two new endpoints, both owner-only for creation, both family-scoped:
+
+```
+POST /v1/family/assignments        (Bearer, owner) {targetMemberId, periodId, amount, category, comment, date}
+POST /v1/family/assignments/:id/resolve (Bearer, target only) {accept: boolean}
+```
+
+`GET /v1/family/members` must start returning `isOwner` per member, and
+`FamilyApi` must gain a `members()` method — the endpoint exists today and
+`HttpFamilyApi` does not implement it.
+
+## Feature Specifications
+
+### F1 — Member attribution on every spend
+
+**Behavior.** A spend is attributed to a member at the moment it is written. The
+default is the session's own member. A member with a shared device can switch the
+"acting as" target from the editor toolbar; the choice is per-transaction and never
+persisted as a device default.
+
+**Key rules.** `SpendsRepository.addSpent` stamps `memberId` from an explicit
+parameter, defaulting to the session member, and stamps `bucket = MEMBER`. No
+`Transaction(...)` construction anywhere in `app/src/main` may leave `memberId` null.
+Existing rows keep whatever `enrolAll` already gave them; the existing disclosure
+that enrolment attributes your history to you as owner is retained and its copy is
+reused.
+
+**Cascade.** `TransactionDao.upsertOne` and `BudgetPeriodDao.upsertArchivedTransaction`
+SET lists gain the three new columns. `SyncPayloads` gains the three wire keys.
+`SyncBindings` gains a `spend_assignments` gateway and the `family_state` gateway, and
+`SyncTables.APPLY_ORDER` must place `family_state`, `members` and `budget_periods`
+before `spend_assignments` and before `archived_transactions`.
+
+### F2 — Family budget screen
+
+**Behavior.** A new `FAMILY_BUDGET_SHEET` shows the pool for the active period,
+split into the household tier and each member's allocation, with household spend,
+each member's spend, and the derived remaining figures. It is a display and edit
+surface over the same data, at the same sheet-routing level as `GOALS_SHEET` and
+`CATEGORY_CAPS_SHEET`, registered in `home/BottomSheets.kt` and opened with
+`appViewModel.openSheet(PathState(FAMILY_BUDGET_SHEET))`.
+
+**Key rules.** Editing allocations requires the head role; a member sees a read-only
+breakdown. Allocation edits are validated to sum exactly to the member tier before
+they are stored. The existing unused strings `family_sync_spent_by_member_title`,
+`family_sync_spent_by`, `family_sync_spent_of_total` and
+`family_sync_transparency_notice` are wired up rather than re-authored. Household
+detail obeys the policy column; the household aggregate is always rendered.
+
+**Cascade.** New `FamilyBudgetViewModel` in a new `family/` package. Reuses the
+`CategoryBatteryChip` fill idiom for allocation bars, which already exists and is
+already used by `SpendCategoriesCard` and `CategoryCapsSheet`. New strings get the
+`family_budget_*` prefix and go into `values/strings.xml` only; the 23 other locales
+arrive through Crowdin per `crowdin.yml`, and no locale file is hand-edited.
+
+### F3 — Household common spend
+
+**Behavior.** The head records rent, insurance, parents' fund or an investment
+contribution as a household row. It reduces the pool. It does not reduce any single
+member's allocation except through the visible `shareOfHousehold`.
+
+**Key rules.** Only the head may create, edit or delete a household row. The server
+rejects a household row from a non-owner principal as `cross_member_write`, alongside
+the existing `stale_version` and `deleted_remotely` reasons. A household row with a
+non-null `member_id` is rejected as invalid, because `bucket = HOUSEHOLD` already
+means memberless.
+
+### F4 — Head assigns a spend, member accepts or rejects
+
+**Behavior.** From the family budget screen the head picks a member, an amount, a
+category, an optional comment and a date, and creates a `PENDING` assignment. The
+target member sees a prompt with accept and reject. Accept materialises a `MEMBER`
+transaction attributed to the target, with `assignment_id` and
+`assigned_by_member_id` set. Reject creates no transaction. The head sees the
+resolved status.
+
+**Key rules.** Only the target member resolves. `created_by_member_id` must differ
+from `target_member_id`. Resolution is idempotent: a second resolve of the same
+assignment is a no-op, not a second transaction. Materialisation runs inside the same
+Room transaction as the status flip, so an assignment can never be `ACCEPTED` without
+its transaction. The created transaction is an ordinary row the target can later edit
+or delete, and it carries an "assigned by" note so the provenance survives a
+cross-device sync where the assignment row is not on screen. The head may assign an
+amount exceeding the member's remaining allocation; it is allowed and flagged in the
+editor rather than blocked, because a blocking rule would push the head back to an
+untracked workaround.
+
+**Cascade.** `SyncMerge` gains an assignment-resolution case: a pulled `ACCEPTED`
+assignment with no matching local transaction materialises one. `PendingMutation`
+already covers offline durability, so an accept made offline flushes on the next
+sync without new plumbing.
+
+### F5 — Member spend tags
+
+**Behavior.** A pure function tags each member for the current period, with at most
+one tag per member drawn from a fixed ladder. Rules are evaluated against elapsed
+period progress, not raw totals, so a member is not labelled in the first three days
+of a month.
+
+| Tag | Condition |
+|---|---|
+| `NOT_ENOUGH_DATA` | Fewer than `MIN_SAMPLE_TRANSACTIONS` member transactions in the period |
+| `SUPER_SAVER` | `spent ≤ 0.60 × allocation × elapsedFraction` |
+| `ON_PLAN` | above `SUPER_SAVER` and below `NEAR_LIMIT` |
+| `NEAR_LIMIT` | `spent ≥ 0.90 × allocation × elapsedFraction` |
+| `OVER_PLAN` | `spent > allocation` |
+| `SPENDING_UP` | period spend is at least `TREND_FLOOR` in absolute currency and rose more than `TREND_RATIO` versus the previous comparable window |
+
+**Key rules.** Deterministic, pure, unit-testable, no network, no AI, no storage.
+`MIN_SAMPLE_TRANSACTIONS`, `TREND_FLOOR` and `TREND_RATIO` are named constants, not
+literals scattered through the function. An absolute floor prevents a trivial amount
+from producing a label. Because the same member can satisfy `OVER_PLAN` and
+`SPENDING_UP`, the ladder is ordered and the first match wins, with `OVER_PLAN`
+taking precedence over `TRENDING`. The head sees every member's tag. A member sees
+their own tag only when `tags_visible_to_self` is set, and only positive tags are
+shown to them regardless, so a person is never labelled by the app.
+
+**Cascade.** `MemberTagEngine` in the `family/` package, a
+`FamilyBudgetViewModel` field, and a chip row in the members list. New strings get
+the `family_tag_*` prefix.
+
+### F6 — Audio and AI on family screens
+
+**Behavior.** Voice input and AI assistance work anywhere a family row is entered,
+reusing the shipped paths exactly.
+
+**Key rules.**
+- Voice reuses `Keyboard`'s `SpeechRecognizer` flow and `RECORD_AUDIO` handling
+  unchanged. `VoiceInputParser` and `VoiceAi` gain an optional bucket and target
+  member, defaulting to `MEMBER` and self. Voice must never attribute a spend to
+  another member without an explicit on-screen confirmation step. No new audio
+  permission, no `TextToSpeech`, no audio upload — the repo has no TTS today and this
+  feature does not introduce any.
+- AI reuses `AiBackend.callAi` with the same `AiBackendConfig`, the same
+  `aiIntelligenceEnabled` gate, the same retry and timeout constants. There is no
+  second provider URL, no second model field and no second key. The settings sheet
+  stays the single place to configure AI.
+- New family prompts: household summary, per-member summary, allocation suggestion.
+  Each has a deterministic offline renderer that produces the same output shape, and
+  that offline text renders first and upgrades in the background, exactly as
+  `buildOfflineReport` already does for the monthly report. A family page with no
+  key, no network and `family_ai_enabled = false` still shows a full offline summary.
+- **Privacy.** Family prompts must not contain member display names. They use stable
+  per-family pseudonyms such as "Member A" and "Member B", so a prompt is not a
+  de-anonymisation vector. This closes the same class of leak as the open
+  `AUDIT.md` H5 finding, where raw `template.comment` reaches the external provider.
+- No new outbound endpoint. The only permitted destinations remain the user-configured
+  AI provider and the user-configured sync host, per `.track/SECURITY.md`.
+
+### F7 — Privacy policy and disclosure
+
+**Behavior.** `POLICY.md` currently claims no personal information is collected. That
+was true before family sync and before AI, and it is false now. This feature MUST NOT
+ship without the policy being updated.
+
+**Key rules.** The policy must state that an enrolled family stores transactions,
+comments, categories and member display names on the user's own configured server;
+that the AI provider, if configured, receives a pseudonymous summary and never
+member names; that household detail is head-only under the default policy; that
+member tags are computed on-device, never transmitted and never stored; and that
+leaving a family revokes the token and detaches local rows. The
+`family_sync_transparency_notice` string already shipped in all 23 locales is the
+in-app half of this and must be shown on the family budget screen, not only in the
+sync settings sheet.
+
+## Backup and restore
+
+`BACKUP_VERSION` stays at 1.
+
+- `BackupData` gains `spendAssignments: List<...> = emptyList()` and the household
+  policy keys on the preferences map. Defaults mean a v1 file produced before this
+  feature parses and restores cleanly with an empty assignment list.
+- The codec extension point is the per-entity private extension functions already in
+  `backup/BackupData.kt`. New codecs go there; no codec writes `family_id`,
+  `member_id`, `sync_seq`, `updated_at` or `version`, so restored family rows come
+  back as pre-enrolment local data, which is the existing behaviour.
+- The never-backed-up set is unchanged and still contains `syncTokenStoreKey`,
+  `syncFamilyIdStoreKey`, `syncMemberIdStoreKey`, `syncBaseUrlStoreKey` and the AI
+  key. Restore still force-removes them, so a crafted backup cannot enrol a device.
+- Restore still wipes and re-inserts inside one `database.withTransaction {}` in
+  FK-safe order. `spend_assignments` references `budget_periods` loosely by
+  `period_id` but has **no foreign key**, deliberately, so a restore never fails on a
+  dangling period. The new insert order is `budget_periods` → `family_state` →
+  `members` → `archived_transactions` → `transactions` → `spend_assignments` → the
+  rest.
+- Alarms are re-armed after restore exactly as today.
+- Tags are not backed up because they are not stored.
+
+## Testing Strategy
+
+No emulator is available, so everything load-bearing is a pure function over plain
+data classes, tested with JUnit 4 and `runTest`, Robolectric with `@Config(sdk = [35])`
+where Android context is genuinely required.
+
+New and extended test files:
+
+- `family/MemberTagEngineTest` — each rung of the ladder, the minimum-sample floor,
+  the absolute trend floor, elapsed-fraction normalisation, precedence of `OVER_PLAN`
+  over `SPENDING_UP`, empty input, and a property test that the sum of per-member
+  spend plus household spend equals the period total
+- `family/FamilyBudgetMathTest` — pool split, `weight` under `EQUAL` and
+  `PROPORTIONAL`, negative remaining allowed, assignment exceeding allocation
+- `family/SpendAssignmentTest` — accept materialises exactly one transaction, reject
+  materialises none, second resolve is a no-op, head cannot resolve a head-issued
+  assignment, self-assignment rejected, head-only household write rejected
+- `data/Migration20To21Test` — Robolectric `MigrationTestHelper` against the exported
+  `app/schemas`, inserting v19 rows then migrating and asserting data survived,
+  `bucket` defaulted to `MEMBER`, the four `family_state` policy columns defaulted,
+  and `spend_assignments` created empty
+- `sync/SyncUpsertWritesEveryColumnTest` — extended to assert the three new
+  transaction columns and the four policy columns appear in every relevant SET list
+- `sync/SyncPayloadContractTest` — asserts the regenerated contract contains the new
+  keys and that `SyncTables.APPLY_ORDER` puts parents before children
+- `sync/SyncMergeTest` — extended with the pulled-`ACCEPTED`-assignment materialisation
+  case and the idempotent-resolve case
+- `di/SpendsRepositoryTest` — the local-first proof: with a `SyncClient` that throws on
+  every call, `addSpent`, `removeSpent`, `setBudget`, `changeBudget`,
+  `importTransactions` and `finishBudget` all complete and produce identical DataStore
+  and Room state to the pre-feature baseline
+- `backup/BackupDataTest` — round-trip of the new fields, and a v1 fixture file still
+  restoring into a valid `BackupData` with an empty assignment list
+- `keyboard/VoiceInputParserTest` — extended for the optional bucket and target member,
+  and for the rule that a bare utterance resolves to self and `MEMBER`
+- `ai/AiBackendTest`, `ai/AiInsightTest` — family prompts use pseudonyms; assert no
+  display name appears in any generated prompt
+- server: `FamilyAssignmentRoutesTest`, extended `FamilyScopeTest` for a non-owner
+  attempting a household write or an assignment, and extended `SyncContractExportTest`
+
+Existing suites that must stay green untouched: `BackupRepositoryTest`,
+`Migration16To17Test`, `Migration17To18Test`, `SpendsRepositoryTest`,
+`CategoryCapTracker` and `CategoryCapsTest`, all `analytics/` tests, all `sync/` tests,
+all `notifications/` tests, and the entire server suite.
+
+`AppLockViewModelTest` is documented here and in the family sync spec as something
+that "must be excluded from every run", but it is **not actually excluded anywhere**
+— `app/build.gradle.kts` has no filter, and it lives in the `com.danilkinkin.buckwheat.data`
+package, so a `--tests "…data.*"` scope does not keep it out. It hangs the suite and it
+fails on `checkSmartTimeout_skipsLockWithinWindow`. Until that is fixed, verify with
+explicit test-class filters rather than package wildcards.
+
+Known-failing on `0b93a2d3`, unrelated to family sync and not to be fixed here:
+`GoalsViewModelTest`, `RecurringPaymentsViewModelTest`, four in `AiBackendTest`,
+`BackupDataTest.roundTripPreservesAllData` and `AppLockViewModelTest`.
+
+The golden pipeline from `.track/SECURITY.md` §8 is unchanged:
+`:app:spotlessApply :app:testDebugUnitTest :app:assembleDebug`, each Gradle
+invocation under the monitored wrapper procedure in `AGENTS.md`.
+
+## Phasing
+
+| Phase | Work | Independently verifiable |
+|---|---|---|
+| 0 | ~~Wire up the roster~~ **Done in `0b93a2d3`**: `FamilyApi.members()`, server returns ids, `FamilyMembersCache`, `FamilyMembersSection`, 32 new strings | Done |
+| 1 | Member attribution on write **done in `0b93a2d3`**; remaining: the "acting as" override in the editor | Partly done |
+| 2 | Migration 20 → 21 introducing the family pool tables, `FamilyStateDao` + `PeriodLimitDao`, then F2 family budget screen read-only | Yes — the screen shows a real split with no editing |
+| 3 | Allocation editing for the head, with exact-sum validation | Yes |
+| 4 | F3 household spend | Yes |
+| 5 | F4 assignments, end to end including offline accept | Yes — two real devices, manual acceptance |
+| 6 | F5 tags | Yes — pure function, fully unit-tested |
+| 7 | F6 family voice and AI | Yes |
+| 8 | F7 policy and disclosure | Yes |
+
+Phase 5 is the first phase that cannot be verified without two physical devices
+and a deployed backend, and that is the most likely place to be surprised.
+
+## Definition of done
+
+- [ ] `FamilyStateDao` and `PeriodLimitDao` exist and are read by a UI surface
+- [x] `FamilyApi.members()` implemented and returning `isOwner`
+- [x] No `Transaction(...)` in `app/src/main` leaves `memberId` null on the interactive add path
+- [ ] Migration 20 → 21 ships with defaults and a Robolectric migration test
+- [ ] `SCHEMA_VERSION` bumped and both `sync-contract.json` copies regenerated
+- [ ] Allocation edit rejects a sum that does not equal the member tier
+- [ ] Only the head can create a household row, enforced in UI *and* server
+- [ ] Only the target member can resolve an assignment, enforced in UI *and* server
+- [ ] Resolution is idempotent and transactional
+- [ ] Tags are pure, local, unstored, and never sent to the provider
+- [ ] Family prompts contain no member display names
+- [ ] Every family AI path renders a full offline summary with no network and no key
+- [ ] `BACKUP_VERSION` unchanged; a v1 backup file still restores
+- [ ] New secrets still excluded from every backup path
+- [ ] `POLICY.md` updated before release
+- [ ] Full unit suite green with `AppLockViewModelTest` excluded
+- [ ] Every new user-facing string added to `values/strings.xml` only
+
+## Open Questions
+
+These cannot be resolved from the request as written and each changes the schema or
+the UI. Recommended answers are given so this document can be reviewed rather than
+discussed.
+
+1. **Who may change an allocation?** The request says allocations are calculated
+   "collectively", which does not say whether a member can propose their own
+   increase. Recommended: head sets allocations unilaterally; members may request a
+   change, which the head sees as a notification. A proposal queue is a second
+   workflow and a second table.
+2. **Is household detail genuinely head-only?** The shipped family sync decision is
+   full transparency, and `family_sync_transparency_notice` is already translated into
+   23 locales and says everyone sees all spending including every comment. Household
+   detail being head-only contradicts that string. Recommended: keep the default
+   head-only carve-out for household rows, rewrite the transparency notice to describe
+   the household carve-out explicitly, and keep `household_detail_visible_to_all` so a
+   family can opt back in. This is the single most consequential question here,
+   because the notice text must not lie.
+3. **How is household spend funded?** Recommended: a separate tier carved out of the
+   pool, as modelled above. The alternative — household spend draining member
+   allocations pro-rata as it is incurred — makes each member's remaining figure move
+   for a transaction they never saw, which is worse.
+4. **How is the household share split?** `EQUAL` (recommended default) or
+   `PROPORTIONAL` to allocation. Weighted custom splits are out of scope.
+5. **May the head assign more than a member's remaining allocation?** Recommended:
+   yes, allowed and flagged, never blocked.
+6. **Can a member see their own negative tag?** Recommended: no. The head sees all
+   tags; a member sees only positive tags about themselves, and only when
+   `tags_visible_to_self` is set.
+7. **Is the family AI report per-member or one shared household report?** Recommended:
+   both — a household summary everyone can see, and a personal "your spending this
+   period" summary that is per-device.
+8. **One person, two devices, or one shared family tablet?** `memberId` comes from the
+   session token, so a shared tablet needs the "acting as" switcher from F1. Confirm
+   whether shared-device use is a real scenario, because it drives the placement of
+   that control.
+
+## Known Risks
+
+- **The Node rewrite is a second implementation of the wire contract.** A Node
+  rewrite exists at `D:\Just-try\buckwheat-sync` with 181 tests and phases 6 to 8
+  blocked on external accounts. Every contract change in this document must land in
+  both implementations, or the cutover will break. This is the largest schedule
+  risk in the feature.
+- **The contract is frozen and cross-verified.** `SCHEMA_VERSION` 1 → 2 touches
+  three files across two repositories. A half-applied bump fails
+  `SyncPayloadContractTest` and the server's own export test, which is the intended
+  behaviour, but it means the bump cannot be split across commits.
+- **`family_state` is a single row per family.** It holds the pool for the *active*
+  period only. Closed periods rely on `budget_periods.budget`. Any future need for
+  per-period household tiers needs a new table; do not grow `family_state` past its
+  four policy columns.
+- **Hand-written `ON CONFLICT` upserts fail silently when a column is dropped from
+  the SET list.** This has bitten the project before. The guard tests must be
+  extended in the same commit as the column, never after.
+- **Two-device round trips remain unverifiable in development.** Phases 1, 4 and 5
+  are manual acceptance steps on real hardware against a deployed backend. They are
+  the most likely place to be surprised, and no amount of unit testing substitutes.
+- **Tagging people is a sensitive feature.** A deterministic, inspectable, on-device
+  rule set with an absolute floor and a positive-only self-view is the mitigation.
+  Shipping anything that looks like a judgement of a person, computed by an opaque
+  model or stored server-side, would be a different and worse feature.
+- **A family that loses every device cannot recover.** Inherited from the existing
+  design; there are no passwords. Unchanged here.
