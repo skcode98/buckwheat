@@ -33,6 +33,24 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE type = :type AND date >= :startDate AND date <= :endDate ORDER BY date ASC")
     suspend fun getAllNow(type: TransactionType, startDate: Long, endDate: Long): List<Transaction>
 
+    /**
+     * Money that belongs to the household rather than to a person.
+     *
+     * Matched on the bucket column and not on `member_id IS NULL`, because a row created before
+     * enrolment also has a null member and is not household money. Filtering on the column that
+     * actually carries the meaning is the difference between a correct total and one that quietly
+     * includes the other device's un-attributed history.
+     */
+    @Query(
+        "SELECT * FROM transactions WHERE type = 'SPENT' AND bucket = 'HOUSEHOLD' AND date >= :startDate AND date <= :endDate ORDER BY date ASC"
+    )
+    fun getHouseholdSpends(startDate: Long, endDate: Long): Flow<List<Transaction>>
+
+    @Query(
+        "SELECT * FROM transactions WHERE type = 'SPENT' AND bucket = 'HOUSEHOLD' AND date >= :startDate AND date <= :endDate ORDER BY date ASC"
+    )
+    suspend fun getHouseholdSpendsNow(startDate: Long, endDate: Long): List<Transaction>
+
     @Query("SELECT COUNT(*) FROM transactions WHERE type = 'SPENT' AND (category IS NULL OR category = '')")
     fun getUncategorizedCount(): Flow<Int>
 
@@ -56,10 +74,11 @@ interface TransactionDao {
         """
         INSERT INTO `transactions` (
             `id`, `type`, `value`, `date`, `comment`, `category`,
-            `member_id`, `family_id`, `sync_seq`, `updated_at`, `deleted_at`, `version`
+            `member_id`, `family_id`, `sync_seq`, `updated_at`, `deleted_at`, `version`, `bucket`, `assignment_id`, `assigned_by_member_id`
         ) VALUES (
             :id, :type, :value, :date, :comment, :category,
-            :memberId, :familyId, :syncSeq, :updatedAt, :deletedAt, :version
+            :memberId, :familyId, :syncSeq, :updatedAt, :deletedAt, :version, :bucket,
+            :assignmentId, :assignedByMemberId
         )
         ON CONFLICT(`id`) DO UPDATE SET
             `type` = excluded.`type`,
@@ -72,7 +91,10 @@ interface TransactionDao {
             `sync_seq` = excluded.`sync_seq`,
             `updated_at` = excluded.`updated_at`,
             `deleted_at` = excluded.`deleted_at`,
-            `version` = excluded.`version`
+            `version` = excluded.`version`,
+            `bucket` = excluded.`bucket`,
+            `assignment_id` = excluded.`assignment_id`,
+            `assigned_by_member_id` = excluded.`assigned_by_member_id`
         """
     )
     suspend fun upsertOne(
@@ -88,6 +110,9 @@ interface TransactionDao {
         updatedAt: Long,
         deletedAt: Long?,
         version: Int,
+        bucket: String,
+        assignmentId: String?,
+        assignedByMemberId: String?,
     )
 
     /**
@@ -111,6 +136,9 @@ interface TransactionDao {
                 updatedAt = it.updatedAt,
                 deletedAt = it.deletedAt,
                 version = it.version,
+                bucket = it.bucket,
+                assignmentId = it.assignmentId,
+                assignedByMemberId = it.assignedByMemberId,
             )
         }
     }

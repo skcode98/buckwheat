@@ -143,10 +143,11 @@ interface BudgetPeriodDao {
         """
         INSERT INTO `archived_transactions` (
             `id`, `period_id`, `type`, `value`, `date`, `comment`, `category`,
-            `member_id`, `family_id`, `sync_seq`, `updated_at`, `deleted_at`, `version`
+            `member_id`, `family_id`, `sync_seq`, `updated_at`, `deleted_at`, `version`, `bucket`, `assignment_id`, `assigned_by_member_id`
         ) VALUES (
             :id, :periodId, :type, :value, :date, :comment, :category,
-            :memberId, :familyId, :syncSeq, :updatedAt, :deletedAt, :version
+            :memberId, :familyId, :syncSeq, :updatedAt, :deletedAt, :version, :bucket,
+            :assignmentId, :assignedByMemberId
         )
         ON CONFLICT(`id`) DO UPDATE SET
             `period_id` = excluded.`period_id`,
@@ -160,7 +161,10 @@ interface BudgetPeriodDao {
             `sync_seq` = excluded.`sync_seq`,
             `updated_at` = excluded.`updated_at`,
             `deleted_at` = excluded.`deleted_at`,
-            `version` = excluded.`version`
+            `version` = excluded.`version`,
+            `bucket` = excluded.`bucket`,
+            `assignment_id` = excluded.`assignment_id`,
+            `assigned_by_member_id` = excluded.`assigned_by_member_id`
         """
     )
     suspend fun upsertArchivedTransaction(
@@ -177,6 +181,9 @@ interface BudgetPeriodDao {
         updatedAt: Long,
         deletedAt: Long?,
         version: Int,
+        bucket: String,
+        assignmentId: String?,
+        assignedByMemberId: String?,
     )
 
     /**
@@ -201,6 +208,9 @@ interface BudgetPeriodDao {
                 updatedAt = it.updatedAt,
                 deletedAt = it.deletedAt,
                 version = it.version,
+                bucket = it.bucket,
+                assignmentId = it.assignmentId,
+                assignedByMemberId = it.assignedByMemberId,
             )
         }
     }

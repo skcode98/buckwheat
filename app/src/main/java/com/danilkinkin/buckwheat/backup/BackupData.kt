@@ -2,10 +2,14 @@ package com.danilkinkin.buckwheat.backup
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
+import com.danilkinkin.buckwheat.data.entities.SpendAssignment
+import com.danilkinkin.buckwheat.data.entities.SpendAssignmentStatus
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
+import com.danilkinkin.buckwheat.data.entities.SpendBucket
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.newSyncId
@@ -67,6 +71,14 @@ sealed class BackupValue {
     }
 }
 
+/**
+ * The family tables carry no defaults, so a backup taken before this feature existed still parses:
+ * each list is absent from the JSON and becomes empty.
+ *
+ * None of them writes `family_id`, `member_id`, `sync_seq`, `updated_at` or `version`, so a restored
+ * family budget comes back as local data that is not attached to any family. That is deliberate and is
+ * the same rule the transactions follow: a restore must never be able to enrol a device.
+ */
 data class BackupData(
     val version: Int,
     val exportedAt: Long,
@@ -77,6 +89,8 @@ data class BackupData(
     val savedCategories: List<SavedCategory>,
     val recurringTemplates: List<RecurringTemplate>,
     val savingsGoals: List<SavingsGoal>,
+    val periodLimits: List<PeriodLimit> = emptyList(),
+    val spendAssignments: List<SpendAssignment> = emptyList(),
     val budgetPreferences: Map<String, BackupValue>,
     val settingsPreferences: Map<String, BackupValue>,
 )
@@ -95,6 +109,8 @@ fun BackupData.toJsonString(): String {
         .put("savedCategories", JSONArray(savedCategories.map { it.toJson() }))
         .put("recurringTemplates", JSONArray(recurringTemplates.map { it.toJson() }))
         .put("savingsGoals", JSONArray(savingsGoals.map { it.toJson() }))
+        .put("periodLimits", JSONArray(periodLimits.map { it.toJson() }))
+        .put("spendAssignments", JSONArray(spendAssignments.map { it.toJson() }))
         .put("budgetPreferences", preferencesToJson(budgetPreferences))
         .put("settingsPreferences", preferencesToJson(settingsPreferences))
     return root.toString()
@@ -122,6 +138,9 @@ fun parseBackupData(json: String): BackupData? {
             recurringTemplates = root.optJSONArray("recurringTemplates")
                 ?.toRecurringTemplateList() ?: emptyList(),
             savingsGoals = root.optJSONArray("savingsGoals")?.toSavingsGoalList() ?: emptyList(),
+            periodLimits = root.optJSONArray("periodLimits")?.toPeriodLimitList() ?: emptyList(),
+            spendAssignments = root.optJSONArray("spendAssignments")
+                ?.toSpendAssignmentList() ?: emptyList(),
             budgetPreferences = preferencesFromJson(
                 root.optJSONObject("budgetPreferences") ?: JSONObject()
             ),
@@ -136,6 +155,16 @@ fun parseBackupData(json: String): BackupData? {
 
 // ---------- Entity codecs ----------
 
+/**
+ * The sync columns are deliberately absent, so a restored row comes back as pre-enrolment local
+ * data and is never silently attached to a family. `bucket` is the exception: it is not sync
+ * metadata, it changes what the money *is*. Restoring a household rent as a member spend would move
+ * it out of the household tier and into an anonymous bucket, which is a different ledger rather than
+ * a lossy one.
+ *
+ * The assignment provenance is not written, because it points at a `spend_assignments` row that is
+ * itself not backed up. A dangling link would be worse than none.
+ */
 private fun Transaction.toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("type", type.name)
@@ -143,6 +172,7 @@ private fun Transaction.toJson(): JSONObject = JSONObject()
     .put("date", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
+    .put("bucket", bucket)
 
 private fun JSONObject.toTransaction(): Transaction = Transaction(
     id = optString("id").ifBlank { newSyncId() },
@@ -151,6 +181,7 @@ private fun JSONObject.toTransaction(): Transaction = Transaction(
     date = Date(optLong("date")),
     comment = optString("comment"),
     category = if (isNull("category")) null else optString("category", null),
+    bucket = optString("bucket", SpendBucket.MEMBER.name),
 )
 
 private fun BudgetPeriod.toJson(): JSONObject = JSONObject()
@@ -182,6 +213,7 @@ private fun ArchivedTransaction.toJson(): JSONObject = JSONObject()
     .put("date", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
+    .put("bucket", bucket)
 
 private fun JSONObject.toArchivedTransaction(): ArchivedTransaction = ArchivedTransaction(
     id = optString("id").ifBlank { newSyncId() },
@@ -191,6 +223,50 @@ private fun JSONObject.toArchivedTransaction(): ArchivedTransaction = ArchivedTr
     date = Date(optLong("date")),
     comment = optString("comment"),
     category = if (isNull("category")) null else optString("category", null),
+    bucket = optString("bucket", SpendBucket.MEMBER.name),
+)
+
+/**
+ * No `family_id` on any of these, on purpose. A restored allocation is a number the person typed, not
+ * a claim about a family they may no longer be in, and re-attaching it to one silently would put
+ * somebody else's budget back on their screen.
+ */
+private fun PeriodLimit.toJson(): JSONObject = JSONObject()
+    .put("id", id)
+    .put("periodId", periodId)
+    .put("memberId", memberId)
+    .put("limitValue", limitValue.toPlainString())
+
+private fun JSONObject.toPeriodLimit(): PeriodLimit = PeriodLimit(
+    id = optString("id").ifBlank { newSyncId() },
+    periodId = optString("periodId"),
+    memberId = optString("memberId"),
+    limitValue = BigDecimal(optString("limitValue", "0")),
+)
+
+private fun SpendAssignment.toJson(): JSONObject = JSONObject()
+    .put("id", id)
+    .put("periodId", periodId)
+    .put("targetMemberId", targetMemberId)
+    .put("createdByMemberId", createdByMemberId)
+    .put("amount", amount.toPlainString())
+    .put("category", category ?: JSONObject.NULL)
+    .put("comment", comment)
+    .put("date", date.time)
+    .put("status", status)
+    .put("resolvedAt", resolvedAt?.time ?: JSONObject.NULL)
+
+private fun JSONObject.toSpendAssignment(): SpendAssignment = SpendAssignment(
+    id = optString("id").ifBlank { newSyncId() },
+    periodId = optString("periodId"),
+    targetMemberId = optString("targetMemberId"),
+    createdByMemberId = optString("createdByMemberId"),
+    amount = BigDecimal(optString("amount", "0")),
+    category = if (isNull("category")) null else optString("category", null),
+    comment = optString("comment"),
+    date = Date(optLong("date")),
+    status = optString("status", SpendAssignmentStatus.PENDING.name),
+    resolvedAt = if (isNull("resolvedAt")) null else Date(optLong("resolvedAt")),
 )
 
 private fun SavedTag.toJson(): JSONObject = JSONObject()
@@ -306,5 +382,17 @@ private fun JSONArray.toRecurringTemplateList(): List<RecurringTemplate> = build
 private fun JSONArray.toSavingsGoalList(): List<SavingsGoal> = buildList {
     for (i in 0 until length()) {
         optJSONObject(i)?.let { add(it.toSavingsGoal()) }
+    }
+}
+
+private fun JSONArray.toPeriodLimitList(): List<PeriodLimit> = buildList {
+    for (i in 0 until length()) {
+        optJSONObject(i)?.let { add(it.toPeriodLimit()) }
+    }
+}
+
+private fun JSONArray.toSpendAssignmentList(): List<SpendAssignment> = buildList {
+    for (i in 0 until length()) {
+        optJSONObject(i)?.let { add(it.toSpendAssignment()) }
     }
 }
