@@ -33,7 +33,7 @@ import kotlinx.serialization.json.put
 object SyncContractExport {
 
     /** Bumped whenever the emitted shape changes, so a consumer can detect a stale copy. */
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
 
     const val DEFAULT_OUTPUT = "../.kilo/sync-contract.json"
 

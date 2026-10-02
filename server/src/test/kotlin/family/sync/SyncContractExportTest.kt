@@ -45,6 +45,55 @@ class SyncContractExportTest {
         assertEquals(SyncContractExport.render(serverDir), SyncContractExport.render(serverDir))
     }
 
+    /**
+     * The rendered contract must describe every table the server can actually push.
+     *
+     * This is the check that belongs here, and the obvious one -- "is the committed JSON stale" -- is
+     * deliberately NOT, because there is no committed JSON in this repository: `.kilo/` is gitignored
+     * (`.gitignore:25`) and the generated file is a local build artefact. The copy a consumer actually
+     * reads lives in a separate Node repository at `contract/sync-contract.json`, so a staleness guard
+     * here would either fail on a fresh clone or quietly compare a file nobody ships.
+     *
+     * Staleness is instead caught where it bites: `SyncPayloadContractTest` on the client parses this
+     * server's source directly, so a table or column added here without a matching client entry fails
+     * a build. The Node copy is refreshed by hand from `generateSyncContract` output.
+     */
+    @Test
+    fun theRenderedContractDescribesEveryTableTheServerAccepts() {
+        val contract = Json.parseToJsonElement(SyncContractExport.render(serverDir())).jsonObject
+        val tables = contract["tables"]!!.jsonArray.map { it.jsonObject }
+        val names = tables.map { it["name"]!!.jsonPrimitive.content }
+
+        assertEquals(
+            "the contract does not list every table in SyncTables.ALL",
+            SyncTables.ALL.map { it.name }.toSet(),
+            names.toSet(),
+        )
+    }
+
+    /**
+     * The columns the household feature depends on must reach the contract, since a consumer builds
+     * its own table definitions from this and a missing column is a silent push failure there rather
+     * than an error here.
+     */
+    @Test
+    fun theContractCarriesTheHouseholdColumns() {
+        val contract = Json.parseToJsonElement(SyncContractExport.render(serverDir())).jsonObject
+        val tables = contract["tables"]!!.jsonArray.associate { table ->
+            val obj = table.jsonObject
+            obj["name"]!!.jsonPrimitive.content to
+                obj["columns"]!!.jsonArray.map { it.jsonObject["key"]!!.jsonPrimitive.content }
+        }
+
+        listOf("transactions", "archived_transactions").forEach { table ->
+            listOf("bucket", "assignmentId", "assignedByMemberId").forEach { key ->
+                assertTrue("$table is missing $key", key in tables.getValue(table))
+            }
+        }
+        assertTrue("family_state.householdTier is missing", "householdTier" in tables.getValue("family_state"))
+        assertTrue("spend_assignments.targetMemberId is missing", "targetMemberId" in tables.getValue("spend_assignments"))
+    }
+
     @Test
     fun everyErrorCodeLooksLikeAnErrorCode() {
         val contract = Json.parseToJsonElement(SyncContractExport.render(serverDir())).jsonObject

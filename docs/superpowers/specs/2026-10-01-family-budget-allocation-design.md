@@ -10,50 +10,75 @@
 Appended as each phase lands. "Verified" means a named test ran and passed on this machine, not
 merely that the code compiles.
 
+**Verified green:** Android 267/267 across 24 classes, server 150/150 across 9 suites, both genuinely
+executed rather than reported UP-TO-DATE.
+
 | Phase | State | Notes |
 |---|---|---|
 | 0 — roster | Done | `0b93a2d3`. `FamilyApi.members()`, server returns ids, `FamilyMembersCache` |
 | 1 — attribution | Done | `33b991b1`. `Transaction.attributedTo` + `SpendsViewModel.addSpent` |
 | 1 — roster leak fix | Done | `5de53c6b`. `persist()` clears the cache before storing a new session |
-| 1 — acting-as override | Not started | Needs an editor control; the plumbing is in place |
+| 1 — acting-as override | Done | `ActingAsViewModel` + a selector in the keyboard, all four add paths |
 | 2 — pool schema | Done | `Migration20to21`: `family_state`, `period_limits`, `spend_assignments`, and `bucket` / `assignment_id` / `assigned_by_member_id` on both transaction tables |
-| 2 — money math | Done | `FamilyBudgetMath.kt`, pure. 17 tests green |
-| 2 — budget screen | Done | `FamilyBudgetSheet`, read-only for members, editor gated on `isHead` |
-| 3 — household spend | Partial | The `bucket` column and the rollup exist and sync. **No entry UI yet** — a household row cannot be created by a person |
-| 4 — assignments | Partial | Entity, DAO, pure rules and `SpendAssignmentsViewModel` exist. **No UI yet** — nobody can accept or reject |
-| 5 — tags | Done | `MemberTagEngine.kt`, pure, 16 tests green. **Not yet surfaced in the UI** |
-| 6 — family AI and audio | Not started | |
-| 7 — policy and disclosure | Done | `POLICY.md` rewritten; it claimed no personal information was collected |
+| 2 — money math | Done | `FamilyBudgetMath.kt`, pure, 17 tests green |
+| 2 — budget screen | Done | Reachable from Settings, read-only for members, editor gated on `isHead` |
+| 3 — household spend | Done | Head can record it; aggregate always visible, entries head-only unless the family opts in |
+| 4 — assignments | Done | Head raises, target accepts or rejects, resolution and spend written together |
+| 5 — tags | Done | `MemberTagEngine.kt`, 16 tests green, surfaced as self-visible chips only |
+| 6 — family AI | Done | Pseudonymous prompt, offline renderer first, wired into the sheet |
+| 7 — policy and disclosure | Done | `POLICY.md` rewritten |
 | 8 — sync contract | Done | `SyncTables`, `SyncPayloads`, `SyncBindings`, `SyncModule`, `SyncStampDao`, `SyncDirtyMarker`, server `TableSpec`s and `V5` migration |
 
-**Verified green:** Android 256/256, server 148/148, both executed live.
+### Where the contract actually lives, which was not where I assumed
 
-### Four defects the verification found, and what each teaches
+There is **no committed contract JSON in this repository**. `.kilo/` is gitignored
+(`.gitignore:25`), so the generated file is a local build artefact. The copy a consumer reads lives
+in a separate Node repository at `buckwheat-sync/contract/sync-contract.json`, which builds its table
+definitions from it.
 
-**`bucket` as a required payload key would have bricked existing installs.** A client older than
-this change sends no `bucket`, so `payload_incomplete` rejects the *entire* sync and none of that
-user's transactions ever leave the device — silently, with nothing in the UI. It is now optional, and
-so were 26 server tests that had hardcoded a five-column transaction payload. In a synced app the
-payload contract has two audiences: the server you are syncing with now, and the version of your own
-app already sitting on someone's phone. Designing only for the first one is a data-loss bug.
+I first wrote a test asserting the committed JSON was not stale. It could only ever fail — on a fresh
+clone the file does not exist — and the honest fix was to delete it rather than to make it pass. What
+replaced it asserts something true on every checkout: the rendered contract lists every table the
+server accepts, and carries the household columns. Staleness of the Node copy is still caught, but by
+`SyncPayloadContractTest`, which parses this server's source directly.
+
+`app/src/test/resources/sync-contract.json` also existed, read by nothing in either repository. It has
+been deleted. A committed file that looks maintained and is verified by no test is worse than no file.
+
+### Six defects the verification passes found, and what each teaches
+
+**`bucket` as a required payload key would have bricked existing installs.** A client older than this
+change sends no `bucket`, so `payload_incomplete` rejects the *entire* sync and none of that user's
+transactions ever leave the device — silently, with nothing in the UI. It is now optional, and so were
+26 server tests that had hardcoded a five-column transaction payload. In a synced app the payload
+contract has two audiences: the server you are syncing with now, and the version of your own app
+already installed on someone's phone. Designing only for the first is a data-loss bug.
 
 **Recreating a table destroyed its row level security.** V5 dropped and recreated `family_state`,
 which threw away the RLS V3 had applied, and `spend_assignments` was created with no RLS at all —
 because a brand new table inherits nothing, and those protections were established per table by an
 earlier migration rather than by a convention. Both are reachable through the public sync API, where
-scoping lives in application code. Check the security posture of a new table before its first commit,
-not after it ships.
+scoping lives in application code. Check the security posture of a new table before its first commit.
 
 **The contract test could not see a new table.** It asserted the server knew a hand-written set of
 seven, so adding an eighth on the client left it green. It now derives from `SyncTables.ALL`. The same
-shape of bug hid the missing `spend_assignments` RLS check, and the `everyFamilyTableHasRowLevelSecurityEnabled`
-table list is still a literal that needs adding to by hand — the remaining instance of this class.
+shape of bug hid the missing `spend_assignments` RLS check, and `everyFamilyTableHasRowLevelSecurityEnabled`
+is still a literal needing hand-editing — the remaining instance of this class.
 
 **The tag bands were inverted.** `nearLimitAt` was 0.90 *of the pace*, so a member spending exactly on
 plan scored 1.0 and came back `NEAR_LIMIT`: the most ordinary case was reported as the dangerous one,
 and `ON_PLAN` was reachable only when *under* pace. The threshold is now `aheadOfPaceAt = 1.00`. A
 `trendRatio` parameter was also declared and documented but never referenced, the code hardcoding a
 full doubling instead.
+
+**A privacy test that could not fail.** `theSameMemberGetsTheSameLabelEveryTime` called a pure function
+twice with identical arguments and asserted the results were equal, which holds for any implementation
+including a random one. Replaced by a test that pins the exact id-to-letter mapping, and one that
+documents a real cost: a roster change *can* relabel somebody.
+
+**A stale-green report, and a broken test source set.** A regex edit removed an import still in use and
+stopped the entire Android test source set compiling — so zero tests ran, in a state I had already
+reported as green. A report is only evidence about the tree that existed when it ran.
 
 ### Verification is not possible on this machine for most of this
 

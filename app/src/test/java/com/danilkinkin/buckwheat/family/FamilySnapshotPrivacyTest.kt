@@ -77,14 +77,39 @@ class FamilySnapshotPrivacyTest {
         assertTrue(text.contains("Member B"))
     }
 
-    @Test
-    fun theSameMemberGetsTheSameLabelEveryTime() {
-        // A pseudonym that changed between summaries would be useless: the reader could not follow one
-        // person, and could not tell a real change from a renaming.
-        val first = buildFamilySnapshot(budget(), listOf("m1", "m2"))
-        val second = buildFamilySnapshot(budget(), listOf("m1", "m2"))
+    /**
+ * Pins the mapping itself, which is the part that can actually break.
+ *
+ * An earlier version of this test called the builder twice with identical arguments and asserted the
+ * two results were equal. It passed for any implementation whatsoever, including one that returned a
+ * random label every time: the function is pure, so identical inputs are identical outputs no matter
+ * what the labelling logic says. Asserting the specific id-to-letter mapping is what can fail when the
+ * logic changes.
+ */
+@Test
+    fun aMemberIsMappedByTheirPositionInTheRoster() {
+        val text = snapshot().lines.joinToString("\n")
 
-        assertEquals(first.lines, second.lines)
+        // m1 is first in the roster, m2 second.
+        assertTrue(text.contains("Member A was given 13000.00"))
+        assertTrue(text.contains("Member B was given 8000.00"))
+    }
+
+    /**
+     * A roster change CAN relabel somebody, and that is a real cost of deriving the label from
+     * position rather than storing it.
+     *
+     * Recorded here deliberately rather than left for someone to discover from a report that suddenly
+     * describes last month's figures differently. A label that never moved would need persisting, and
+     * persisting it means the server holding one more thing per member per family forever.
+     */
+@Test
+    fun removingAMemberEarlierInTheRosterRelabelsTheOnesAfterThem() {
+        val before = buildFamilySnapshot(budget(), listOf("m1", "m2"))
+        val after = buildFamilySnapshot(budget(), listOf("m2"))
+
+        assertTrue(before.lines.any { it.startsWith("Member B was given 8000.00") })
+        assertTrue(after.lines.any { it.startsWith("Member A was given 8000.00") })
     }
 
     @Test
