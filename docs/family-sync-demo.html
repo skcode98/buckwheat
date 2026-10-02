@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buckwheat Family Sync &mdash; demo UI</title>
+<style>
+  :root{
+    --page:#0b0d11; --s1:#101317; --s2:#171b22; --s3:#1f242d; --s4:#272d38; --s5:#323a47;
+    --line:#333b48; --line-soft:#242a34; --ink:#e8ecf3; --ink2:#9aa5b6; --ink3:#6b7688;
+    --primary:#7aa2f7; --on-primary:#081020; --primary-dim:#2a3a5c;
+    --ok:#5ddc9a; --ok-dim:#16352a; --warn:#f5c451; --warn-dim:#3a2f14; --bad:#ff7a7a; --bad-dim:#3d1f22;
+    --fam:#c39bf5; --fam-dim:#33254a; --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font:14.5px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;overflow-x:auto}
+  header{position:sticky;top:0;z-index:10;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:16px 24px 10px;background:linear-gradient(to bottom,rgba(11,13,17,.96),rgba(11,13,17,.92) 70%,rgba(11,13,17,0));backdrop-filter:saturate(120%) blur(8px);border-bottom:1px solid transparent}
+  header h1{margin:0;font-size:18px;letter-spacing:-.25px}
+  header p{margin:2px 0 0;color:var(--ink2);font-size:13px}
+  .stage{display:flex;align-items:flex-start;justify-content:flex-start;gap:28px;padding:18px 24px 80px;max-width:1400px}
+  .rail{display:flex;flex-direction:column;gap:8px;width:230px;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow:auto;padding-right:4px}
+  .rail .btn{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;gap:2px;padding:9px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--ink2);cursor:pointer;transition:all .12s ease}
+  .rail .btn:hover{background:var(--s1);color:var(--ink)}
+  .rail .btn.active{background:var(--s2);border-color:var(--line);color:var(--ink)}
+  .rail .btn .t{font-weight:600;font-size:13.5px;letter-spacing:-.1px}
+  .rail .btn .st{font-size:12px;color:var(--ink3)}
+  .phone{position:relative;flex:0 0 390px;width:390px;height:844px;border-radius:46px;padding:11px;background:radial-gradient(120% 120% at 50% 10%,#1b2130 0%,#0b0f16 70%);box-shadow:0 40px 120px -40px rgba(10,12,18,.9),0 0 0 1px #23272e inset,0 0 120px -60px rgba(122,162,247,.25);margin-left:8px}
+  .phone .screen{position:relative;height:100%;border-radius:36px;background:var(--page);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}
+  .statusbar{position:absolute;top:0;left:0;right:0;height:44px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;z-index:5;background:linear-gradient(to bottom,rgba(11,13,17,.98),rgba(11,13,17,.92) 60%,rgba(11,13,17,0))}
+  .statusbar .time{font-size:12px;font-weight:600;padding-left:6px}
+  .statusbar .icons{display:flex;align-items:center;gap:6px}
+  .statusbar svg{display:block}
+  .navbar{position:absolute;bottom:0;left:0;right:0;height:34px;display:flex;align-items:center;justify-content:center;z-index:5;border-top:1px solid rgba(255,255,255,.05);background:linear-gradient(to top,rgba(11,13,17,.98),rgba(11,13,17,.92) 70%,rgba(11,13,17,0))}
+  .navbar .bar{width:120px;height:3px;border-radius:2px;background:rgba(232,236,243,.4)}
+  #views{position:absolute;inset:42px 0 34px 0;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--page)}
+  .view{position:absolute;inset:0;opacity:0;visibility:hidden;transform:translateY(2px);transition:opacity .22s ease,transform .22s ease,visibility 0s linear .22s;z-index:1}
+  .view.on{opacity:1;visibility:visible;transform:translateY(0);transition:opacity .22s ease,transform .22s ease,visibility 0s;z-index:2}
+  .viewinner{padding:6px 16px 12px}
+  @media (max-width:1180px){.stage{gap:18px}.rail{width:200px}}
+  @media (max-width:960px){.rail{position:relative;top:auto;width:auto;flex-direction:row;overflow:auto;max-width:none;padding:0 0 4px}.stage{flex-direction:column;align-items:center}.phone{margin-left:0}}
+  @media (max-width:560px){.phone{transform:scale(.96)}}
+</style>
+
+<style>
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 4px}
+  .appbar h2{margin:0;font-size:16px;letter-spacing:-.15px}
+  .subhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 4px 2px;color:var(--ink2);font-size:12.5px}
+  .list{display:flex;flex-direction:column;gap:6px;margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid var(--line-soft);background:var(--s1)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px;background:var(--s1);border-bottom:1px solid var(--line-soft)}
+  .row:last-child{border-bottom:none}
+  .row.click{cursor:pointer}
+  .row.click:hover{background:var(--s2)}
+  .row .left{display:flex;align-items:center;gap:12px;min-width:0}
+  .row .main{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .row .title{font-size:14px;letter-spacing:-.05px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .sub{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line-soft)}
+  .ic.mint{background:radial-gradient(120% 120% at 50% 30%,rgba(93,220,154,.22),rgba(93,220,154,.08));border-color:rgba(93,220,154,.25)}
+  .ic.blue{background:radial-gradient(120% 120% at 50% 30%,rgba(122,162,247,.22),rgba(122,162,247,.08));border-color:rgba(122,162,247,.25)}
+  .ic.purple{background:radial-gradient(120% 120% at 50% 30%,rgba(195,155,245,.22),rgba(195,155,245,.08));border-color:rgba(195,155,245,.25)}
+  .ic.amber{background:radial-gradient(120% 120% at 50% 30%,rgba(245,196,81,.22),rgba(245,196,81,.08));border-color:rgba(245,196,81,.25)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--line-soft);background:var(--s3);color:var(--ink2);font-family:var(--mono);white-space:nowrap}
+  .chip.ok{background:var(--ok-dim);color:var(--ok);border-color:rgba(93,220,154,.35)}
+  .chip.warn{background:var(--warn-dim);color:var(--warn);border-color:rgba(245,196,81,.4)}
+  .chip.bad{background:var(--bad-dim);color:var(--bad);border-color:rgba(255,122,122,.4)}
+  .chip.fam{background:var(--fam-dim);color:var(--fam);border-color:rgba(195,155,245,.4)}
+  .chip.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px;border:1px solid transparent;background:var(--primary);color:var(--on-primary);font-weight:600;font-size:13.5px;cursor:pointer;transition:all .12s ease;white-space:nowrap}
+  .btn:hover{filter:brightness(1.05)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.outline{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn.outline:hover{background:var(--s2)}
+  .btn.danger{background:transparent;color:var(--bad);border-color:rgba(255,122,122,.45)}
+  .btn.sm{padding:5px 9px;font-size:12.5px}
+  .field{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+  label.f{font-size:11.5px;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px}
+  .in{display:flex;align-items:center;gap:8px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--s2)}
+  .in input{flex:1;border:none;background:transparent;color:var(--ink);padding:9px 0;font-size:14px;font-family:inherit}
+  .in input::placeholder{color:var(--ink3)}
+  .in input:focus{outline:none}
+  .ph{color:var(--ink3);font-size:12.5px}
+  .caret{display:inline-block;width:1px;height:14px;background:var(--ink);animation:blink 1.1s steps(1,end) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .tabs{display:flex;gap:6px;margin-top:10px;padding:4px;border-radius:11px;background:var(--s2);border:1px solid var(--line-soft)}
+  .tabs button{flex:1;justify-content:center;padding:6px 8px;border-radius:9px;background:transparent;color:var(--ink2);border:none;font-weight:600;font-size:13px;cursor:pointer}
+  .tabs button[aria-selected="true"]{background:var(--s3);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-soft)}
+  .panel{margin-top:10px;display:none;flex-direction:column;gap:8px}
+  .panel.on{display:flex}
+  .kv{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--line-soft);background:var(--s2)}
+  .kv .k{font-size:11.5px;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px}
+  .kv .v{font-size:13.5px;font-family:var(--mono);word-break:break-word}
+  .conflict{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;border:1px solid var(--line-soft);background:var(--s2)}
+  .conflict header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0;background:transparent;border:none;position:static}
+  .conflict .title{font-weight:600}
+  .conflict .meta{color:var(--ink2);font-size:12.5px}
+  .av{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .versus{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:10px;border:1px dashed var(--line);background:rgba(255,255,255,.02);display:none}
+  .versus.on{display:flex}
+  .versus .rowv{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .versus .lab{color:var(--ink2);font-size:12px}
+  .verdict{font-size:12.5px;color:var(--ink2)}
+  .empty{padding:18px 10px;text-align:center;color:var(--ink2);font-size:13px}
+  .syncdot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .syncdot.spin{animation:spin .9s linear infinite;border:1px solid rgba(93,220,154,.4);border-top-color:transparent;background:transparent}
+  .syncdot.pulse{animation:pulse 1.2s ease-in-out infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{transform:scale(.96);opacity:.9}50%{transform:scale(1.08);opacity:1}}
+  .tint.info{color:var(--primary)}
+  .tint.warn{color:var(--warn)}
+  .tint.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Buckwheat Family Sync &mdash; demo UI</h1>
+    <p>Phone mockup showing how the enrol/join/sync/conflicts flow works. Design notes toggle explains the choices.</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <button id="notesBtn" class="btn outline sm" onclick="toggleNotes()">Design notes: off</button>
+    <span class="ph">Zero deps &middot; dark theme</span>
+  </div>
+</header>
+<div class="stage">
+  <nav id="rail" class="rail"></nav>
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar">
+        <div class="time">9:41</div>
+        <div class="icons">
+          <svg width="17" height="12" viewBox="0 0 17 12" aria-hidden="true"><path d="M1 8h1V5a3 3 0 0 1 6 0v3h1a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm3-3a1 1 0 1 0 2 0V5a1 1 0 1 0-2 0v0z" fill="currentColor" opacity=".9"/></svg>
+          <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><path d="M9 10c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm5.5-2c0-1.8-1.1-3.4-2.8-4.2.2-.4.3-.8.3-1.3C12 1.3 10.7 0 9 0S6 1.3 6 3c0 .5.1.9.3 1.3C4.6 4.6 3.5 6.2 3.5 8c0 3 2.5 5.5 5.5 5.5s5.5-2.5 5.5-5.5z" fill="currentColor" opacity=".95"/></svg>
+          <svg width="24" height="12" viewBox="0 0 24 12" aria-hidden="true"><rect x="1" y="1" width="20" height="10" rx="2" ry="2" stroke="currentColor" stroke-width="1" fill="none" opacity=".9"/><rect x="2" y="2" width="16" height="8" rx="1" fill="currentColor" opacity=".95"/><rect x="22" y="4" width="1" height="4" rx=".5" fill="currentColor" opacity=".9"/></svg>
+        </div>
+      </div>
+      <div class="navbar"><div class="bar"></div></div>
+      <div id="views"></div>
+    </div>
+  </div>
+  <aside class="notes" id="notesAside" style="display:none;width:320px;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow:auto;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--s1)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 4px">
+      <div style="font-weight:600;font-size:13.5px">Design notes</div>
+      <button class="btn outline sm" onclick="toggleNotes()">Close</button>
+    </div>
+    <div id="nlist" style="display:flex;flex-direction:column;gap:6px"></div>
+  </aside>
+</div>
+<script>"use strict";
+const SCREENS=[
+  {id:"settings",t:"Settings",st:"where sync lives"},
+  {id:"enrol",t:"Enrol",st:"create or join"},
+  {id:"join",t:"Join",st:"invite code"},
+  {id:"status",t:"Sync status",st:"signed in"},
+  {id:"conflicts",t:"Conflicts",st:"who won"}
+];
+const NOTES=[
+  [1,"One-row rail","Rail uses one choice per screen. Labels short; subtitles explain purpose. Sticky on desktop, horizontal on mobile."],
+  [2,"Status lives in the row, not a screen","The Family Sync row shows a live chip (synced/syncing/offline). That keeps Settings scannable and matches the real app."],
+  [3,"Single enrol surface","Create/Join in one panel with tabs. Same URL field, same naming. Reduces branching in the UI."],
+  [4,"Invite is paste-first","Join screen has a paste affordance and enables Join only when both fields valid. Matches single-use invite flow."],
+  [5,"Identity visible","Status shows familyId/memberId (truncated) so you can tell you're in the right family at a glance."],
+  [6,"Per-table feedback","Sync now walks the 7 tables and lights each state. Shows it's one transaction covering all of them, not per-table calls."],
+  [7,"Family-wide conflicts marked","Conflict card 1 is a budget period (no member owner) and shows <code>winner unknown</code> (purple). That matches fix 04 exactly."],
+  [8,"Yours vs theirs","Expanding a conflict shows both sides side by side. Keeps the decision traceable without guessing."],
+  [9,"Dark matches explainer","Uses the same palette as <code>docs/family-sync.html</code> for visual consistency across the two pages."],
+  [10,"Zero network by design","Every action here is faked. The live probe is a separate tool because CORS blocks <code>file://</code> fetches."],
+  [11,"Notes are anchored","Every note is anchored to real UI via <code>data-note</code>. Clicking a note navigates to that screen and highlights the target."]
+];
+const V_SETTINGS = `<div class="viewinner" data-view="settings">
+  <div class="appbar"><h2>Settings</h2></div>
+  <div class="subhead"><span>General</span></div>
+  <div class="list">
+    <div class="row">
+      <div class="left">
+        <div class="ic mint"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6 6 .9-4.5 4.4 1.1 6.5L12 16l-5.6 2.8 1.1-6.5L3 8.9 9 8l3-6z" fill="currentColor"/></svg></div>
+        <div class="main"><div class="title">Appearance</div><div class="sub">Dark theme</div></div>
+      </div>
+      <span class="chip">System</span>
+    </div>
+    <div class="row click" data-note="2" onclick="go('enrol')">
+      <div class="left">
+        <div class="ic blue"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/></svg></div>
+        <div class="main"><div class="title">Family Sync</div><div class="sub">Share budget between devices</div></div>
+      </div>
+      <span id="setchip" class="chip ok dot" data-note="2">synced</span>
+    </div>
+    <div class="row">
+      <div class="left">
+        <div class="ic purple"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/></svg></div>
+        <div class="main"><div class="title">About</div><div class="sub">Buckwheat v10.0.0</div></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+const V_ENROL = `<div class="viewinner" data-view="enrol">
+  <div class="appbar"><h2>Family Sync</h2><button class="btn outline sm" onclick="go('settings')">Back</button></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" onclick="tab('enrol','create')">Create family</button>
+    <button role="tab" aria-selected="false" onclick="tab('enrol','join')">Join family</button>
+  </div>
+  <div id="p-create" class="panel on">
+    <div class="field"><label class="f">Server URL</label><div class="in"><input id="f-url" value="https://buckwheat-family-sync.onrender.com" placeholder="https://..."/><span class="ph">required</span></div></div>
+    <div class="field"><label class="f">Your display name</label><div class="in"><input id="f-name" placeholder="Alex" oninput="enrolCreate()"/><span id="f-name-caret" class="caret"></span></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button id="f-create" class="btn" disabled onclick="enrolCreate()">Create family</button><button class="btn outline" onclick="go('settings')">Cancel</button></div>
+    <div id="f-created" style="display:none;flex-direction:column;gap:8px;margin-top:10px">
+      <div class="kv"><div class="k">Family ID</div><div class="v">f7b7f7b7-1111-4a42-9b42-7f7f7f7f7f7f</div></div>
+      <div class="kv"><div class="k">Member ID</div><div class="v">m1a1a1a1-2222-4e10-8a60-1a1a1a1a1a1a</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="tab('enrol','join');go('join')">Create invite</button><button class="btn outline" onclick="go('status')">Go to sync status</button></div>
+    </div>
+  </div>
+  <div id="p-join" class="panel">
+    <div class="field"><label class="f">Server URL</label><div class="in"><input value="https://buckwheat-family-sync.onrender.com" placeholder="https://..."/></div></div>
+    <div class="field"><label class="f">Invite code</label><div class="in"><input id="j-code" placeholder="ABCD-1234" oninput="joinFamily()"/><button class="btn sm outline" onclick="fillCode()">Paste</button></div></div>
+    <div class="field"><label class="f">Your display name</label><div class="in"><input id="j-name" placeholder="Jordan" oninput="joinFamily()"/></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button id="j-join" class="btn" disabled onclick="joinFamily()">Join family</button><button class="btn outline" onclick="go('settings')">Cancel</button></div>
+  </div>
+</div>`;
+const V_JOIN = `<div class="viewinner" data-view="join" data-note="4">
+  <div class="appbar"><h2>Join family</h2><button class="btn outline sm" onclick="go('enrol')">Back</button></div>
+  <div class="field"><label class="f">Invite code</label><div class="in"><input id="jj-code" value="ABCD-1234" placeholder="ABCD-1234" oninput="joinFamily()"/><button class="btn sm outline" onclick="clearCode()">Clear</button></div></div>
+  <div class="field"><label class="f">Your display name</label><div class="in"><input id="jj-name" value="Jordan" placeholder="Jordan" oninput="joinFamily()"/></div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button id="jj-join" class="btn" onclick="joinFamily();go('status')">Join</button><button class="btn outline" onclick="go('enrol')">Cancel</button></div>
+</div>`;
+const V_STATUS = `<div class="viewinner" data-view="status" data-note="5" data-note="6">
+  <div class="appbar"><h2>Sync status</h2><button class="btn outline sm" onclick="go('settings')">Back</button></div>
+  <div class="kv"><div class="k">Signed in</div><div class="v">Yes &middot; owner</div></div>
+  <div class="kv"><div class="k">Family ID</div><div class="v">f7b7f7b7-1111-4a42-9b42-7f7f7f7f7f7f</div></div>
+  <div class="kv"><div class="k">Member ID</div><div class="v">m1a1a1a1-2222-4e10-8a60-1a1a1a1a1a1a</div></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 4px 2px"><div style="font-size:12.5px;color:var(--ink2)">Last synced</div><div style="display:flex;align-items:center;gap:8px"><span id="s-chip" class="chip ok dot">synced</span><span id="s-time" style="font-size:12.5px;color:var(--ink2)">just now</span></div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" onclick="syncNow()">Sync now</button><button class="btn outline" onclick="go('conflicts')">View conflicts</button><button class="btn outline danger" onclick="go('settings')">Sign out</button></div>
+  <div class="subhead"><span>Tables</span><span style="font-size:12px;color:var(--ink2)">7 tables, one transaction</span></div>
+  <div id="st-tables" class="list"></div>
+</div>`;
+const V_CONFLICTS = `<div class="viewinner" data-view="conflicts" data-note="7" data-note="8">
+  <div class="appbar"><h2>Sync conflicts</h2><button class="btn outline sm" onclick="go('status')">Back</button></div>
+  <div class="conflict" data-note="7">
+    <header onclick="tog('c1')">
+      <div><div class="title">budget_periods</div><div class="meta">id: p-9f43 &middot; family-wide</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="chip fam">winner unknown</span><span style="color:var(--ink2)">▾</span></div>
+    </header>
+    <div id="c1" class="versus">
+      <div class="rowv"><div class="lab">Field</div><div class="lab">Yours</div><div class="lab">Theirs</div></div>
+      <div class="rowv"><div>budget</div><div class="mono">5000.00</div><div class="mono">5500.00</div></div>
+      <div class="rowv"><div>currency</div><div class="mono">USD</div><div class="mono">USD</div></div>
+      <div class="rowv"><div>updatedAt</div><div class="mono">1759200000000</div><div class="mono">1759203600000</div></div>
+      <div class="verdict">Both edited concurrently. Server stored theirs; no member id to attribute (family-wide). Conflict notice emitted.</div>
+    </div>
+  </div>
+  <div class="conflict">
+    <header onclick="tog('c2')">
+      <div><div class="title">transactions</div><div class="meta">id: t-a41f &middot; Jordan won</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="chip ok">Jordan</span><span style="color:var(--ink2)">▾</span></div>
+    </header>
+    <div id="c2" class="versus">
+      <div class="rowv"><div class="lab">Field</div><div class="lab">Yours</div><div class="lab">Theirs</div></div>
+      <div class="rowv"><div>value</div><div class="mono">-12.50</div><div class="mono">-15.00</div></div>
+      <div class="rowv"><div>comment</div><div class="mono">coffee</div><div class="mono">latte</div></div>
+      <div class="rowv"><div>updatedAt</div><div class="mono">1759196400000</div><div class="mono">1759197000000</div></div>
+      <div class="verdict">Later timestamp won. Your local edit remains queued if still dirty.</div>
+    </div>
+  </div>
+  <div class="conflict">
+    <header onclick="tog('c3')">
+      <div><div class="title">savings_goals</div><div class="meta">id: g-7e22 &middot; family-wide</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="chip fam">winner unknown</span><span style="color:var(--ink2)">▾</span></div>
+    </header>
+    <div id="c3" class="versus">
+      <div class="rowv"><div class="lab">Field</div><div class="lab">Yours</div><div class="lab">Theirs</div></div>
+      <div class="rowv"><div>targetAmount</div><div class="mono">2000.00</div><div class="mono">2500.00</div></div>
+      <div class="rowv"><div>name</div><div class="mono">Vacation</div><div class="mono">Holiday</div></div>
+      <div class="verdict">Concurrent edit with no member owner. Notice emitted with empty winner string.</div>
+    </div>
+  </div>
+  <div class="empty">Resolved conflicts clear after next sync.</div>
+</div>`;
+</script>
+<script>
+const TABLES=[
+  {name:"transactions"},{name:"archived_transactions"},{name:"budget_periods"},{name:"saved_categories"},{name:"saved_tags"},{name:"recurring_templates"},{name:"savings_goals"}
+];
+const SPEC={
+  transactions:[["type","text",false],["value","numeric",false],["spentAt","bigint",false],["comment","text",false],["category","text",true]],
+  archived_transactions:[["type","text",false],["value","numeric",false],["spentAt","bigint",false],["comment","text",false],["category","text",true],["periodId","text",false]],
+  budget_periods:[["budget","numeric",false],["startDate","bigint",false],["finishDate","bigint",false],["actualFinishDate","bigint",true],["currency","text",false],["totalSpent","numeric",false],["isImported","boolean",false]],
+  saved_categories:[["name","text",false],["emoji","text",false]],
+  saved_tags:[["name","text",false]],
+  recurring_templates:[["amount","numeric",false],["comment","text",false],["dayOfMonth","integer",false],["enabled","boolean",false]],
+  savings_goals:[["name","text",false],["targetAmount","numeric",false],["currentAmount","numeric",false],["deadline","bigint",true],["createdAt","bigint",false],["completed","boolean",false]]
+};
+const SAMPLES={
+  transactions:{type:"EXPENSE",value:-12.50,spentAt:1759196400000,comment:"coffee",category:"food"},
+  archived_transactions:{type:"EXPENSE",value:-20,spentAt:1759100000000,comment:"snacks",category:null,periodId:"p-001"},
+  budget_periods:{budget:5000,startDate:1759104000000,finishDate:1761696000000,actualFinishDate:null,currency:"USD",totalSpent:123.45,isImported:false},
+  saved_categories:{name:"Food",emoji:"🍔"},
+  saved_tags:{name:"groceries"},
+  recurring_templates:{amount:-50,comment:"internet",dayOfMonth:1,enabled:true},
+  savings_goals:{name:"Vacation",targetAmount:2000,currentAmount:350,deadline:1770000000000,createdAt:1759000000000,completed:false}
+};
+function el(id){return document.getElementById(id)}
+function qs(s,r){return (r||document).querySelector(s)}
+function qsa(s,r){return Array.from((r||document).querySelectorAll(s))}
+function mount(){
+  const rail=el('rail'); SCREENS.forEach(s=>{const b=document.createElement('button');b.className='btn';b.dataset.target=s.id;b.innerHTML='<span class="t">'+s.t+'</span><span class="st">'+s.st+'</span>';b.onclick=()=>go(s.id);rail.appendChild(b)});
+  const views=el('views'); [V_SETTINGS,V_ENROL,V_JOIN,V_STATUS,V_CONFLICTS].forEach(ht=>{const d=document.createElement('div');d.className='view';const i=document.createElement('div');i.className='viewinner';i.innerHTML=ht;const v=i.querySelector('[data-view]');if(v)d.dataset.view=v.dataset.view;d.appendChild(i);views.appendChild(d)});
+  renderNotes(); renderTables('done');
+  const fname=document.getElementById('f-name'); if(fname){fname.addEventListener('focus',()=>{const c=document.getElementById('f-name-caret');if(c)c.style.display='none'});fname.addEventListener('blur',()=>{const c=document.getElementById('f-name-caret');if(c)c.style.display='inline-block'})}
+  const tabs=qsa('.tabs button'); tabs.forEach((t,i)=>t.tabIndex=0);
+  const vsel=el('vtable'); if(vsel){Object.keys(SPEC).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;vsel.appendChild(o)});prefill()}
+  go('settings');
+}
+function go(id){
+  qsa('.view').forEach(v=>v.classList.toggle('on',v.dataset.view===id));
+  qsa('.rail .btn').forEach(b=>b.classList.toggle('active',b.dataset.target===id));
+}
+function pick(view,which){
+  const p1=document.getElementById('p-create'),p2=document.getElementById('p-join');
+  if(p1&&p2){const c=(which==='create');p1.classList.toggle('on',c);p2.classList.toggle('on',!c);qsa('#p-create button[role="tab"],#p-join button[role="tab"]').forEach((x,i)=>x.setAttribute('aria-selected',i=== (c?0:1)?'true':'false'))}
+}
+function tab(view,which){go(view);pick(view,which);if(which==='join')go('join')}
+function enrolCreate(){
+  const n=document.getElementById('f-name');const b=document.getElementById('f-create');const c=document.getElementById('f-created');
+  if(b&&n){const ok=n.value.trim().length>0;b.disabled=!ok}
+  if(c&&n&&n.value.trim().length>1){setTimeout(()=>{if(n.value.trim().length>1){c.style.display='flex'}},1100)}
+}
+function fillCode(){const x=document.getElementById('jj-code')||document.getElementById('j-code');if(x){x.value='ABCD-1234';joinFamily()}}
+function clearCode(){const x=document.getElementById('jj-code')||document.getElementById('j-code');if(x){x.value='';joinFamily()}}
+function joinFamily(){
+  const c1=document.getElementById('j-code'),n1=document.getElementById('j-name'),b1=document.getElementById('j-join');
+  if(b1&&c1&&n1){b1.disabled=!(c1.value.trim()&&n1.value.trim())}
+  const c2=document.getElementById('jj-code'),n2=document.getElementById('jj-name'),b2=document.getElementById('jj-join');
+  if(b2&&c2&&n2){b2.disabled=!(c2.value.trim()&&n2.value.trim())}
+}
+function tog(id){const e=document.getElementById(id);if(e)e.classList.toggle('on')}
+function renderTables(state){
+  const elT=document.getElementById('st-tables');if(!elT)return;elT.innerHTML='';
+  TABLES.forEach((t,i)=>{
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div class="left"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" fill="currentColor"/></svg></div><div class="main"><div class="title mono">'+t.name+'</div><div class="sub">family-wide/attributed</div></div></div><span id="s-'+i+'" class="chip ok dot">done</span>';
+    elT.appendChild(r);
+  });
+}
+function syncNow(){
+  const chip=document.getElementById('s-chip'),t=document.getElementById('s-time');
+  if(chip){chip.className='chip warn dot';chip.textContent='syncing'}
+  if(t)t.textContent='now';
+  TABLES.forEach((x,i)=>{const c=document.getElementById('s-'+i);if(c){c.className='chip warn dot';c.textContent='syncing'}});
+  let step=0;const iv=setInterval(()=>{
+    if(step<TABLES.length){const c=document.getElementById('s-'+step);if(c){c.className='chip ok dot';c.textContent='done'};step++}
+    else{clearInterval(iv);if(chip){chip.className='chip ok dot';chip.textContent='synced'};if(t)t.textContent='just now'}
+  },230);
+}
+function prefill(){const t=el('vtable').value;const ta=el('vjson');if(ta)ta.value=JSON.stringify(SAMPLES[t]||{},null,2)}
+function fmt(){try{const ta=el('vjson');const o=JSON.parse(ta.value);ta.value=JSON.stringify(o,null,2)}catch(e){}}
+function breakIt(){const t=el('vtable').value;const s=SAMPLES[t]||{};const o=JSON.parse(JSON.stringify(s));const keys=Object.keys(o);if(keys.length){delete o[keys[0]]}o._TYPO='oops';if('currency' in o)o.currency='not-a-number';if('value' in o)o.value='not-a-number';if('dayOfMonth' in o)o.dayOfMonth='x';el('vjson').value=JSON.stringify(o,null,2)}
+function validate(){
+  const ta=el('vjson'),vd=el('vverdict'),vo=el('vout');vd.className='verdict';vd.style.display='none';vo.className='out';vo.style.display='none';
+  let obj;try{obj=JSON.parse(ta.value)}catch(e){vd.className='verdict fail show';vd.innerHTML='<div class="st">REJECTED &middot; body_invalid</div><ul><li>JSON parse failed: '+e.message+'</li></ul>';return}
+  if(obj===null||typeof obj!=='object'||Array.isArray(obj)){vd.className='verdict fail show';vd.innerHTML='<div class="st">REJECTED &middot; payload_invalid</div><ul><li>payload must be a JSON object</li></ul>';return}
+  const t=el('vtable').value;const sp=SPEC[t]||[];const errs=[];sp.forEach(([k,typ,nullable])=>{if(!(k in obj)){errs.push('missing required key <code>'+k+'</code>');return}const v=obj[k];if(v===null){if(!nullable)errs.push('<code>'+k+'</code> is null but required');return}if(typ==='text'){if(typeof v!=='string')errs.push('<code>'+k+'</code> must be text, got '+typeof v)}if(typ==='numeric'){const ok=(typeof v==='number'&&!isNaN(v))||(typeof v==='string'&&!isNaN(Number(v)));if(!ok)errs.push('<code>'+k+'</code> must be numeric')}if(typ==='bigint'||typ==='integer'){const ok=(typeof v==='number'&&!isNaN(v)&&Number.isInteger(v))||(typeof v==='string'&&!isNaN(Number(v))&&Number.isInteger(Number(v)));if(!ok)errs.push('<code>'+k+'</code> must be integer')}if(typ==='boolean'){if(typeof v!=='boolean')errs.push('<code>'+k+'</code> must be boolean')}});
+  if(errs.length){vd.className='verdict fail show';vd.innerHTML='<div class="st">REJECTED &middot; payload_incomplete / payload_invalid</div><ul>'+errs.map(e=>'<li>'+e+'</li>').join('')+'</ul>';return}
+  const next=1;vd.className='verdict pass show';vd.innerHTML='<div class="st">ACCEPTED</div><ul><li>contract matches <code>'+t+'</code></li><li>stored version would become <code>max(stored,'+next+')+1</code> (monotonic)</li></ul>';vo.className='out show';vo.textContent='OK';
+}
+function renderNotes(){
+  const nl=el('nlist');if(!nl)return;nl.innerHTML='';NOTES.forEach(([id,t,b])=>{const x=document.createElement('button');x.className='nitem';x.dataset.n=id;x.style.textAlign='left';x.style.padding='8px 10px';x.style.borderRadius='10px';x.style.border='1px solid var(--line-soft)';x.style.background='var(--s2)';x.style.color='var(--ink)';x.style.cursor='pointer';x.innerHTML='<div style="font-weight:600;font-size:13px">'+t+'</div><div style="color:var(--ink2);font-size:12.5px;margin-top:2px">'+b+'</div>';x.onclick=()=>lit(id);nl.appendChild(x)});
+}
+function placeBadges(){
+  qsa('.nb').forEach(n=>n.remove());
+  const host=document.querySelector('.view.on');if(!host)return;
+  qsa('[data-note]',host).forEach(elm=>{
+    const ids=(elm.dataset.note||'').split(',').map(s=>s.trim()).filter(Boolean);
+    ids.forEach(id=>{
+      const b=document.createElement('button');b.className='nb';b.dataset.n=id;b.textContent=id;b.style.position='absolute';b.style.top='-6px';b.style.right='-6px';b.style.width='19px';b.style.height='19px';b.style.borderRadius='50%';b.style.border='1px solid var(--line)';b.style.background='var(--primary)';b.style.color='var(--on-primary)';b.style.fontSize='11px';b.style.fontWeight='700';b.style.cursor='pointer';b.style.display='flex';b.style.alignItems='center';b.style.justifyContent='center';b.style.boxShadow='0 0 0 2px var(--page)';b.onclick=(e)=>{e.stopPropagation();lit(id)};elm.style.position='relative';elm.appendChild(b);
+    });
+  });
+}
+function lit(id){
+  const target=document.querySelector('#views [data-note="'+id+'"]');
+  if(target){const v=target.closest('.view');if(v&&!v.classList.contains('on'))go(v.dataset.view)}
+  placeBadges();
+  qsa('.nb,.nitem,[data-note]').forEach(n=>{const m=(n.dataset.n===id||n.dataset.note===id);n.classList.toggle('lit',m)});
+  const item=document.querySelector('.nitem[data-n="'+id+'"]');if(item)item.scrollIntoView({block:'nearest'});
+}
+function toggleNotes(){
+  const b=el('notesBtn'),a=el('notesAside');const on=document.body.classList.toggle('notes-on');
+  if(b)b.textContent='Design notes: '+(on?'on':'off');
+  if(a)a.style.display=on?'block':'none';placeBadges();
+}
+mount();
+</script></body></html>
