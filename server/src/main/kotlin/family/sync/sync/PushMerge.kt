@@ -21,8 +21,10 @@ data class StoredRecord(
 enum class RejectReason(val wire: String) {
     STALE_VERSION("stale_version"),
     DELETED_REMOTELY("deleted_remotely"),
-    CROSS_FAMILY_WRITE("cross_family_write"),
-}
+CROSS_FAMILY_WRITE("cross_family_write"),
+       CROSS_MEMBER_WRITE("cross_member_write"),
+       OWNER_ONLY("owner_only"),
+   }
 
 sealed interface MergeDecision {
     data class Accept(val version: Int) : MergeDecision

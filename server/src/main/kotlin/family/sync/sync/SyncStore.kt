@@ -80,7 +80,7 @@ object SyncTables {
                 // `payload_incomplete` so its transactions would never leave the device. Absent means
                 // MEMBER, which is what those builds meant anyway. Widen to non-nullable only once no
                 // client in the field is old enough to omit it.
-                PayloadColumn("bucket", "bucket", SqlType.TEXT, true),
+                PayloadColumn("bucket", "bucket", SqlType.TEXT, true, BUCKETS),
                 PayloadColumn("assignmentId", "assignment_id", SqlType.UUID, true),
                 PayloadColumn("assignedByMemberId", "assigned_by_member_id", SqlType.UUID, true),
             ),
@@ -95,7 +95,7 @@ object SyncTables {
                 PayloadColumn("comment", "comment", SqlType.TEXT, false),
                 PayloadColumn("category", "category", SqlType.TEXT, true),
                 PayloadColumn("periodId", "period_id", SqlType.UUID, false),
-                PayloadColumn("bucket", "bucket", SqlType.TEXT, true),
+                PayloadColumn("bucket", "bucket", SqlType.TEXT, true, BUCKETS),
                 PayloadColumn("assignmentId", "assignment_id", SqlType.UUID, true),
                 PayloadColumn("assignedByMemberId", "assigned_by_member_id", SqlType.UUID, true),
             ),
@@ -189,7 +189,7 @@ object SyncTables {
                 PayloadColumn("category", "category", SqlType.TEXT, true),
                 PayloadColumn("comment", "comment", SqlType.TEXT, false),
                 PayloadColumn("date", "date", SqlType.BIGINT, false),
-                PayloadColumn("status", "status", SqlType.TEXT, false),
+                PayloadColumn("status", "status", SqlType.TEXT, false, ASSIGNMENT_STATUSES),
                 PayloadColumn("resolvedAt", "resolved_at", SqlType.BIGINT, true),
             ),
         ),
@@ -251,6 +251,23 @@ private const val LOCK_TIMEOUT_SQL_STATE = "55P03"
 class SyncWriteException(val table: String, val id: String, cause: Throwable) :
     RuntimeException("sync write failed for $table/$id: ${cause.message}", cause)
 
+/**
+ * The tables whose contents are governed by *who wrote them*, as opposed to being governed only by
+ * family scoping in the SQL.
+ *
+ * Top level rather than a member of [SyncStore] so a test can read it without an instance, and listed
+ * explicitly rather than implied by the `when` in [SyncStore.authorize] -- because default-allow is
+ * what lets an ordinary member save a tag or close a period, and a default cannot catch a table that
+ * was added to the contract and then forgotten here.
+ */
+internal val FAMILY_GOVERNED_TABLES = setOf(
+    "family_state",
+    "period_limits",
+    "spend_assignments",
+    "transactions",
+    "archived_transactions",
+)
+
 class SyncStore(private val dataSource: DataSource) {
 
     private val uuidPattern =
@@ -294,6 +311,24 @@ class SyncStore(private val dataSource: DataSource) {
                 for (entry in prepared) {
                     val change = entry.change
                     val stored = loadStored(connection, entry.spec, change.id, familyId)
+                    when (
+                        val authorization = authorize(
+                            connection = connection,
+                            familyId = familyId,
+                            entry = entry,
+                            stored = stored,
+                            memberId = memberId,
+                        )
+                    ) {
+                        is Authorization.Denied -> {
+                            rejected.add(
+                                RejectedWrite(change.table, change.id, authorization.reason, null)
+                            )
+                            continue
+                        }
+
+                        Authorization.Allowed -> Unit
+                    }
                     when (val decision = decidePush(stored, change)) {
                         is MergeDecision.Accept -> {
                             val written = try {
@@ -392,6 +427,227 @@ class SyncStore(private val dataSource: DataSource) {
      * Returns false when the id belongs to another family, so the family-guarded upsert matched
      * nothing. A tombstone for an absent row is accepted and writes nothing.
      */
+    private sealed interface Authorization {
+        data object Allowed : Authorization
+        data class Denied(val reason: RejectReason) : Authorization
+    }
+
+    /**
+     * Who may write what, enforced here rather than in the app.
+     *
+     * Every one of these rules exists because the client cannot be the only place they live: the
+     * client is whatever version somebody installed, and a stale or modified one would happily write
+     * a household expense or resolve a request on somebody else's behalf. The app already refuses all
+     * of these; this is the same rule stated once, where it cannot be skipped.
+     *
+     * - `family_state` and `period_limits` are the head's to set.
+     * - A `HOUSEHOLD` transaction spends from the shared tier, so only the head may write one.
+     * - An `ARCHIVED_TRANSACTIONS` row records a closed period's history, including its bucket, so the
+     *   household rule applies to it too; otherwise a member could archive their way to a rent.
+     * - A `spend_assignments` row may be *raised* only by the head. It may be *answered* only by the
+     *   member it is aimed at, and only on a row that is actually pending. That last pair is the
+     *   consent guarantee: without it a member could accept a request on someone else's behalf, or
+     *   resolve their own and skip the question.
+     *
+     * Deletes are judged from the stored row rather than the incoming payload, which is empty for a
+     * tombstone. Deciding deletes from the payload would mean every rule above could be stepped around
+     * by deleting the row instead of writing it.
+     */
+    private fun authorize(
+        connection: Connection,
+        familyId: String,
+        entry: PreparedChange,
+        stored: StoredRecord?,
+        memberId: String,
+    ): Authorization {
+        val change = entry.change
+        val tombstone = change.deletedAt != null
+        val isOwner = isOwnerFor(connection, familyId, memberId)
+
+        // The authoritative copy. Every business column is a real SQL column, so the stored row is read
+        // from the table rather than reconstructed from a payload blob. That matters twice over: it is
+        // the only place a delete can be judged (an incoming tombstone carries no payload at all), and
+        // it cannot disagree with what `write` will actually persist.
+        val existing = storedFacts(connection, familyId, change.table, change.id)
+
+        // A tombstone for a row the server has never seen is a no-op that `write` already handles, and the
+        // existing contract accepts it. Denying it here broke a long-standing behaviour for no gain: a
+        // member deleting their own row that never synced cannot affect anyone else's data. What must
+        // not happen is a member deleting a row that *is* stored and is a household row, and that is
+        // judged below from the stored bucket.
+        if (tombstone && existing == null) {
+            return Authorization.Allowed
+        }
+
+        when (change.table) {
+            "family_state", "period_limits" ->
+                return if (isOwner) Authorization.Allowed else Authorization.Denied(RejectReason.OWNER_ONLY)
+
+            "spend_assignments" -> {
+                // Facts come from the stored row whenever it exists. An incoming value is never trusted
+                // for an existing row, because a client could otherwise re-target somebody else's
+                // request at themselves and then answer it.
+                val target = existing?.target ?: entry.incoming("targetMemberId")
+                val creator = existing?.creator ?: entry.incoming("createdByMemberId")
+                val alreadyResolved = existing?.resolved == true
+
+                return when {
+                    // Withdrawing: the head raised it, the target owns it, so either may remove it, and
+                    // to nobody else.
+                    tombstone -> when {
+                        isOwner || creator == memberId || target == memberId -> Authorization.Allowed
+                        else -> Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+                    }
+
+                    // Answering. Requires a stored row, so a member cannot invent an already-answered
+                    // request aimed at themselves and skip the question entirely. Only the target may
+                    // answer, and neither the target nor the creator nor the amount may be restated on
+                    // the way through: "the head proposes, the member consents" means the amount
+                    // consented to is the amount proposed.
+                    existing != null -> when {
+                        alreadyResolved ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        target != memberId ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        entry.incoming("targetMemberId") != null &&
+                            entry.incoming("targetMemberId") != existing.target ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        entry.incoming("amount") != null &&
+                            !sameAmount(entry.incoming("amount"), existing.amount) ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        // Who asked may not be restated either. Not privilege escalation -- the target
+                        // could simply delete the request -- but a row that later reads as self-raised
+                        // is a different row from the one the head wrote, and the audit trail is the
+                        // whole point of keeping the assignment after it is answered.
+                        entry.incoming("createdByMemberId") != null &&
+                            entry.incoming("createdByMemberId") != existing.creator ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        else -> Authorization.Allowed
+                    }
+
+                    // Raising. The head only, never aimed at themselves: that would be a member writing
+                    // their own spend by another route, bypassing the consent this object exists for.
+                    //
+                    // And a new request has to be genuinely new. Without the status and resolvedAt
+                    // check the head could raise one already marked ACCEPTED, which the target could
+                    // then never answer -- the money committed and the consent step skipped. Closing
+                    // the set of legal values did not stop this; it only made the payload tidier on its
+                    // way to the hole.
+                    else -> if (
+                        isOwner &&
+                        creator == memberId &&
+                        target != null &&
+                        target != memberId &&
+                        (entry.incoming("status") ?: "PENDING") == "PENDING" &&
+                        entry.incoming("resolvedAt").isNullOrBlank()
+                    ) {
+                        Authorization.Allowed
+                    } else {
+                        Authorization.Denied(RejectReason.OWNER_ONLY)
+                    }
+                }
+            }
+
+            "transactions", "archived_transactions" -> {
+                // A household row spends from the shared tier. BOTH sides of the comparison matter:
+                // the stored bucket, so a member cannot downgrade the head's rent to a personal spend;
+                // and the incoming one, so a member cannot upgrade their own personal spend into the
+                // shared tier and have the head's household total absorb it. Testing only the stored
+                // value silently permitted the second direction.
+                val storedBucket = existing?.bucket
+                val incomingBucket = entry.incoming("bucket")
+                if ((storedBucket == "HOUSEHOLD" || incomingBucket == "HOUSEHOLD") && !isOwner) {
+                    return Authorization.Denied(RejectReason.OWNER_ONLY)
+                }
+                // No check on member_id, because there is nothing to check: the write path binds it from
+                // the authenticated principal, so a client-declared member is already overwritten.
+                // Attribution is server-assigned rather than self-reported, and that is what makes a
+                // per-member ledger worth anything.
+                return Authorization.Allowed
+            }
+
+            // Personal tables: budget periods, saved categories and tags, recurring templates, savings
+            // goals. Governed by the family scoping in the SQL itself -- every read and write filters on
+            // `family_id` -- and by nothing else, so they pass through untouched. Failing closed here
+            // would deny everybody their own spending, which is the worst possible failure mode for a
+            // security rule. A table that *is* family-governed belongs in FAMILY_GOVERNED_TABLES, and
+            // `aGovernedTableHasARule` fails if one is listed without a branch above.
+            else -> return Authorization.Allowed
+        }
+    }
+
+/** The stored row's business columns, as the database holds them. */
+    private data class StoredFacts(
+        val bucket: String?,
+        val target: String?,
+        val creator: String?,
+        val amount: String?,
+        val status: String?,
+    ) {
+        val resolved: Boolean get() = status != null && status != "PENDING"
+    }
+
+    private fun storedFacts(
+        connection: Connection,
+        familyId: String,
+        table: String,
+        id: String,
+    ): StoredFacts? {
+        val columns = when (table) {
+            "transactions", "archived_transactions" -> "bucket, null, null, null, null"
+            "spend_assignments" -> "null, target_member_id, created_by_member_id, amount, status"
+            else -> return null
+        }
+        return connection.prepareStatement(
+            "select $columns from $table where id = ?::uuid and family_id = ?::uuid"
+        ).use { statement ->
+            statement.setString(1, id)
+            statement.setString(2, familyId)
+            statement.executeQuery().use { rows ->
+                if (!rows.next()) return null
+                StoredFacts(
+                    bucket = rows.getString(1),
+                    target = rows.getString(2),
+                    creator = rows.getString(3),
+                    amount = rows.getString(4),
+                    status = rows.getString(5),
+                )
+            }
+        }
+    }
+
+    private fun PreparedChange.incoming(key: String): String? =
+        values?.getOrNull(spec.columns.indexOfFirst { it.key == key })?.takeIf { it.isNotBlank() }
+
+    /**
+     * Compares two amounts by value, not by text.
+     *
+     * The stored row comes back from a `numeric` column and the incoming one arrives as whatever the
+     * client typed, so `"250"`, `"250.0"` and `"250.00"` are the same money written three ways. Plain
+     * string equality would read a target restating the amount they were asked for as an attempt to
+     * change it, and refuse the one request they were entitled to make.
+     */
+    private fun sameAmount(incoming: String?, stored: String?): Boolean {
+        if (incoming == null || stored == null) return incoming == stored
+        val left = runCatching { java.math.BigDecimal(incoming) }.getOrNull() ?: return incoming == stored
+        val right = runCatching { java.math.BigDecimal(stored) }.getOrNull() ?: return incoming == stored
+        return left.compareTo(right) == 0
+    }
+
+    private fun isOwnerFor(connection: Connection, familyId: String, memberId: String): Boolean =
+        connection.prepareStatement(
+            "select is_owner from members where id = ?::uuid and family_id = ?::uuid"
+        ).use { statement ->
+            statement.setString(1, memberId)
+            statement.setString(2, familyId)
+            statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
+        }
+
     private fun write(
         connection: Connection,
         entry: PreparedChange,
