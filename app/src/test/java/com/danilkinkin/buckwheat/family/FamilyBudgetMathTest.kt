@@ -6,6 +6,7 @@ import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import java.math.BigDecimal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private fun state(
@@ -149,8 +150,27 @@ class FamilyBudgetMathTest {
     }
 
     @Test
-    fun thePoolKeyIsDerivedFromTheStartSoBothPeriodsAgree() {
-        assertEquals("pool_1760000000000", poolPeriodId(1_760_000_000_000L))
+    fun thePoolKeyIsAUuidBecauseTheServerValidatesItAsOne() {
+        // This is a contract with the sync server, not an internal detail. `period_id` is declared
+        // SqlType.UUID there, so a readable key is rejected outright with `payload_invalid` -- and the
+        // failure is silent: the spend still lands on the device that recorded it, and never arrives on
+        // the others. That is exactly what a readable `pool_1760000000000` did.
+        val key = poolPeriodId(1_760_000_000_000L)
+
+        assertEquals(key, java.util.UUID.fromString(key).toString())
+    }
+
+    @Test
+    fun thePoolKeyIsTheSameOnEveryDevice() {
+        assertEquals(poolPeriodId(1_760_000_000_000L), poolPeriodId(1_760_000_000_000L))
+    }
+
+    @Test
+    fun differentPeriodsGetDifferentKeys() {
+        val first = java.util.UUID.fromString(poolPeriodId(1_760_000_000_000L))
+        val second = java.util.UUID.fromString(poolPeriodId(1_760_000_086_400_000L))
+
+        assertTrue(first != second)
     }
 }
 

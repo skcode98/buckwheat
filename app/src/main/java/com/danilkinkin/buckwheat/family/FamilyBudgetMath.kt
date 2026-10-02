@@ -5,6 +5,7 @@ import com.danilkinkin.buckwheat.data.entities.FamilyState
 import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.UUID
 
 /** What one member has spent, already grouped. Mirrors `MemberSpend` in the repository read path. */
 data class MemberAmount(
@@ -47,8 +48,15 @@ data class FamilyBudget(
  * generating one fixes both cases with the same value: a period that is later closed keeps the
  * allocations it had while it was open, without `finishBudget` having to know this exists, and two
  * devices agree on the key without talking to each other.
+ *
+ * It has to be a UUID, not a readable string. The sync server validates `period_id` as a UUID and
+ * rejects anything else with `payload_invalid`, which would mean every allocation and every request
+ * the app pushed was silently refused and the pool never synced between devices. A name-based UUID
+ * keeps the determinism while satisfying that, and `UUID.fromString` is guaranteed to accept it
+ * because `nameUUIDFromBytes` produced it.
  */
-fun poolPeriodId(startDate: Long): String = "pool_$startDate"
+fun poolPeriodId(startDate: Long): String =
+    UUID.nameUUIDFromBytes("pool:$startDate".toByteArray(Charsets.UTF_8)).toString()
 
 /**
  * How far through the period is, as a fraction, from the stored bounds.
