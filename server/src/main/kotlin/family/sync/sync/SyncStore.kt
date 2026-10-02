@@ -316,7 +316,6 @@ class SyncStore(private val dataSource: DataSource) {
                             connection = connection,
                             familyId = familyId,
                             entry = entry,
-                            stored = stored,
                             memberId = memberId,
                         )
                     ) {
@@ -457,27 +456,21 @@ class SyncStore(private val dataSource: DataSource) {
         connection: Connection,
         familyId: String,
         entry: PreparedChange,
-        stored: StoredRecord?,
         memberId: String,
     ): Authorization {
         val change = entry.change
         val tombstone = change.deletedAt != null
         val isOwner = isOwnerFor(connection, familyId, memberId)
 
-        // The authoritative copy. Every business column is a real SQL column, so the stored row is read
-        // from the table rather than reconstructed from a payload blob. That matters twice over: it is
-        // the only place a delete can be judged (an incoming tombstone carries no payload at all), and
-        // it cannot disagree with what `write` will actually persist.
-        val existing = storedFacts(connection, familyId, change.table, change.id)
-
-        // A tombstone for a row the server has never seen is a no-op that `write` already handles, and the
-        // existing contract accepts it. Denying it here broke a long-standing behaviour for no gain: a
-        // member deleting their own row that never synced cannot affect anyone else's data. What must
-        // not happen is a member deleting a row that *is* stored and is a household row, and that is
-        // judged below from the stored bucket.
-        if (tombstone && existing == null) {
-            return Authorization.Allowed
-        }
+        // Facts come from the stored row via real columns rather than the incoming payload. That matters
+        // twice over: an incoming tombstone carries no payload at all, so deciding deletes from one
+        // would let a member step around every rule by deleting a row instead of writing it; and the
+        // stored copy cannot disagree with what `write` will persist.
+        //
+        // Every governed table has to appear here. A table missing from this lookup reads as "no such
+        // row", and any rule that consults the stored facts then sees nothing and permits the write --
+        // which is how a member came to be able to delete the head's pool outright.
+        val existing = storedFacts(connection, familyId, SyncTables.require(change.table).name, change.id)
 
         when (change.table) {
             "family_state", "period_limits" ->
@@ -492,9 +485,16 @@ class SyncStore(private val dataSource: DataSource) {
                 val alreadyResolved = existing?.resolved == true
 
                 return when {
-                    // Withdrawing: the head raised it, the target owns it, so either may remove it, and
-                    // to nobody else.
+                    // Withdrawing. The head may always withdraw a request they raised, and the target
+                    // may withdraw one while it is still unanswered -- that is what rejecting is.
+                    //
+                    // Once answered, the row is a consent record and nobody may delete it. Not the
+                    // target, who gave the consent; not the creator, who is always the head. Allowing
+                    // either would make "what was agreed" a matter of whoever tidied up last, and the
+                    // whole reason the row outlives the answer is that it can be looked at afterwards.
                     tombstone -> when {
+                        alreadyResolved -> Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
                         isOwner || creator == memberId || target == memberId -> Authorization.Allowed
                         else -> Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
                     }
@@ -509,6 +509,13 @@ class SyncStore(private val dataSource: DataSource) {
                             Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
 
                         target != memberId ->
+                            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+
+                        // A push against an existing row is an answer, so it has to actually answer.
+                        // `status` is a closed set, but being a legal value is not the same as moving
+                        // off PENDING: without this a target could push their row back to PENDING and
+                        // claim they had merely not replied yet, indefinitely.
+                        (entry.incoming("status") ?: "PENDING") == "PENDING" ->
                             Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
 
                         entry.incoming("targetMemberId") != null &&
@@ -559,15 +566,28 @@ class SyncStore(private val dataSource: DataSource) {
                 // and the incoming one, so a member cannot upgrade their own personal spend into the
                 // shared tier and have the head's household total absorb it. Testing only the stored
                 // value silently permitted the second direction.
+                // A tombstone for a row the server has never seen is a no-op that `write` already handles,
+                // and the existing contract accepts it. Checked here rather than before the `when`, so a
+                // governed table cannot reach it while looking absent.
+                if (tombstone && existing == null) return Authorization.Allowed
+
                 val storedBucket = existing?.bucket
                 val incomingBucket = entry.incoming("bucket")
                 if ((storedBucket == "HOUSEHOLD" || incomingBucket == "HOUSEHOLD") && !isOwner) {
                     return Authorization.Denied(RejectReason.OWNER_ONLY)
                 }
-                // No check on member_id, because there is nothing to check: the write path binds it from
-                // the authenticated principal, so a client-declared member is already overwritten.
-                // Attribution is server-assigned rather than self-reported, and that is what makes a
-                // per-member ledger worth anything.
+
+                // A row belongs to the member who wrote it, and nobody else may touch it.
+                //
+                // `member_id` is `on delete set null`, so when a member leaves the family their rows stay
+                // behind with no owner. The `null` case matters as much as the mismatch: `write` rebinds
+                // member_id to the caller, so a row with a null owner is a row that anybody who pushes
+                // it would silently take ownership of. A departed member's history is not up for
+                // adoption, and the head has no more claim on it than anyone else.
+                if (existing != null && existing.memberId != memberId) {
+                    return Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE)
+                }
+
                 return Authorization.Allowed
             }
 
@@ -588,6 +608,8 @@ class SyncStore(private val dataSource: DataSource) {
         val creator: String?,
         val amount: String?,
         val status: String?,
+        /** Whose row it is, for the tables that carry `member_id`. */
+        val memberId: String?,
     ) {
         val resolved: Boolean get() = status != null && status != "PENDING"
     }
@@ -598,9 +620,13 @@ class SyncStore(private val dataSource: DataSource) {
         table: String,
         id: String,
     ): StoredFacts? {
+        // Every governed table must appear here. One that does not reads as "no such row", and a rule
+        // that consults the stored facts then sees nothing and permits the write.
         val columns = when (table) {
-            "transactions", "archived_transactions" -> "bucket, null, null, null, null"
-            "spend_assignments" -> "null, target_member_id, created_by_member_id, amount, status"
+            "transactions", "archived_transactions" -> "bucket, null, null, null, null, member_id"
+            "spend_assignments" -> "null, target_member_id, created_by_member_id, amount, status, null"
+            "family_state" -> "null, null, null, null, null, null"
+            "period_limits" -> "null, null, null, null, null, member_id"
             else -> return null
         }
         return connection.prepareStatement(
@@ -616,6 +642,7 @@ class SyncStore(private val dataSource: DataSource) {
                     creator = rows.getString(3),
                     amount = rows.getString(4),
                     status = rows.getString(5),
+                    memberId = rows.getString(6),
                 )
             }
         }

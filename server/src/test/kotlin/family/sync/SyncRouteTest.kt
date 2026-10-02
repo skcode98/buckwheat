@@ -5,6 +5,7 @@ import family.sync.sync.MAX_PULL_ROWS
 import family.sync.sync.MAX_TEXT_LENGTH
 import family.sync.sync.FAMILY_GOVERNED_TABLES
 import family.sync.sync.SyncTables
+import io.ktor.client.statement.HttpResponse
 import io.ktor.server.testing.ApplicationTestBuilder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.util.UUID
 
 class SyncRouteTest {
@@ -134,7 +136,7 @@ class SyncRouteTest {
         )
 
         assertEquals(200, attack.status.value)
-        assertEquals(emptyList<String>(), attack.json().acceptedKeys())
+        assertDenied(attack)
         val conflict = attack.json().conflicts().single()
         assertEquals(id, conflict.text("id"))
         assertEquals("transactions", conflict.text("table"))
@@ -214,11 +216,15 @@ class SyncRouteTest {
         val family = newFamily()
         val id = UUID.randomUUID().toString()
 
+        // Both pushes are from the same member, which is what a stale write actually is: one member's
+        // two devices editing the same row. This used to use the guest's token, back when a guest could
+        // write anything at all, and it now trips the cross-member rule before the version check -- so
+        // the test had been asserting the reason for a different failure than the one it described.
         postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 5000L, spentPayload())), family.ownerToken)
         val response = postJson(
             "/v1/sync",
             syncBody(0, change("transactions", id, 1, 1000L, spentPayload())),
-            family.guestToken,
+            family.ownerToken,
         )
 
         val body = response.json()
@@ -228,6 +234,29 @@ class SyncRouteTest {
         assertEquals("transactions", conflict.text("table"))
         assertEquals("stale_version", conflict.text("reason"))
         assertEquals(family.ownerMemberId, conflict.text("wonByMemberId"))
+    }
+
+    /**
+     * A stale write from a *different* member is refused for the other reason.
+     *
+     * Both are true of the push -- it is stale and it is somebody else's row -- and authority is
+     * checked first on purpose: a member should not learn a row's current version when they have no
+     * business writing it, and "you may not write this" is more use than "your copy is old".
+     */
+    @Test
+    fun aStaleWriteFromAnotherMemberIsRefusedForBeingTheirs() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 5000L, spentPayload())), family.ownerToken)
+        val response = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 1, 1000L, spentPayload())),
+            family.guestToken,
+        )
+
+        assertDenied(response)
+        assertEquals("cross_member_write", response.json().conflicts()[0].text("reason"))
     }
 
     @Test
@@ -595,7 +624,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -609,7 +638,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -637,7 +666,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -654,7 +683,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -703,7 +732,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -722,7 +751,7 @@ class SyncRouteTest {
             family.ownerToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -747,7 +776,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -796,7 +825,7 @@ class SyncRouteTest {
             family.ownerToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -825,7 +854,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
 
         // And the row is untouched: still the guest's request, still unanswered.
         val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
@@ -856,7 +885,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     @Test
@@ -894,7 +923,445 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
+    }
+
+    /**
+ * A member may not delete the head's pool.
+     *
+     * The severe one. `storedFacts` did not list `family_state` or `period_limits`, so every write to
+     * them read as "no such row", and an early return for a tombstone with no stored row turned that
+     * into permission. A member could not *set* the pool and could wipe it.
+     */@Test
+    fun aMemberMayNotDeleteThePoolOrTheSplit() = runServer {
+        val family = newFamily()
+        val poolId = UUID.randomUUID().toString()
+        val limitId = UUID.randomUUID().toString()
+        postJson("/v1/sync", syncBody(0, change("family_state", poolId, 1, 1000L, poolPayload())), family.ownerToken)
+        postJson(
+            "/v1/sync",
+            syncBody(0, change("period_limits", limitId, 1, 1000L, limitPayload("13000.00", family.guestMemberId))),
+            family.ownerToken,
+        )
+
+        listOf(poolId to "family_state", limitId to "period_limits").forEach { (id, table) ->
+            val response = postJson(
+                "/v1/sync",
+                syncBody(0, change(table, id, 2, 2000L, tombstonePayload(), deletedAt = 2000L)),
+                family.guestToken,
+            )
+            assertDenied(response)
+        }
+
+        // And the head still sees their own pool afterwards.
+        val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
+        val tables = pull.json().recordKeys()
+        assertTrue("the pool was deleted by a member", tables.contains("family_state:$poolId"))
+    }
+
+    /**
+     * A member may not take over or delete another member's personal spend.
+     *
+     * `write` rebinds `member_id` to the caller on every write, so without an ownership check a member
+     * could push a new version of somebody else's row and have the amount and the attribution both
+     * move into their own ledger.
+     */
+    @Test
+    fun aMemberMayNotOverwriteOrDeleteSomebodyElsesSpend() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 1000L, spentPayload("20.00", "head"))), family.ownerToken)
+
+        val overwrite = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 2, 2000L, spentPayload("9000.00", "not mine"))),
+            family.guestToken,
+        )
+        assertDenied(overwrite)
+
+        val remove = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+            family.guestToken,
+        )
+        assertDenied(remove)
+
+        // Still the head's row, still 20.00, still undeleted.
+        val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
+        val stored = pull.json().recordAt(0)["payload"]!!.jsonObject
+        assertEquals("20.00", stored.text("value"))
+        assertEquals(family.ownerMemberId, pull.json().recordAt(0)["memberId"]!!.jsonPrimitive.content)
+    }
+
+    /**
+     * A member may still edit and delete their own spend, or the rules would break normal use.
+     */
+    @Test
+    fun aMemberMayStillEditAndDeleteTheirOwnSpend() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 1000L, spentPayload())), family.guestToken)
+
+        val edit = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 2, 2000L, spentPayload("30.00", "corrected"))),
+            family.guestToken,
+        )
+        assertEquals(listOf("transactions:$id"), edit.json().acceptedKeys())
+
+        val remove = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+            family.guestToken,
+        )
+        assertEquals(listOf("transactions:$id"), remove.json().acceptedKeys())
+    }
+
+    /**
+     * Every governed table is looked up by `storedFacts`, or a rule reading it sees nothing.
+     *
+     * The failure this guards is not hypothetical: `family_state` and `period_limits` were missing from
+     * that lookup, which made a member's delete of the head's pool look like a delete of a row that did
+     * not exist, and therefore permitted.
+     */
+    @Test
+    fun everyGovernedTableIsLookedUp() {
+        val source = File("src/main/kotlin/family/sync/sync/SyncStore.kt").readText()
+        val lookup = source.substringAfter("private fun storedFacts(").substringBefore("return connection.prepareStatement")
+
+        FAMILY_GOVERNED_TABLES.forEach {
+            assertTrue("$it is governed but storedFacts does not look it up", lookup.contains("\"$it\""))
+        }
+    }
+
+/**
+     * A member may not delete a household expense they did not record.
+     *
+     * The delete-side counterpart to `aMemberMayNotRecordAHouseholdExpense`. A tombstone carries no
+     * payload, so the bucket can only come from the stored row, and without that lookup the rule was
+     * bypassable by deleting the row rather than writing it.
+     */
+    @Test
+    fun aMemberMayNotDeleteAHouseholdExpense() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 1000L, householdPayload())), family.ownerToken)
+
+        val response = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 2, 2000L, tombstonePayload(), deletedAt = 2000L)),
+            family.guestToken,
+        )
+
+        assertDenied(response)
+    }
+
+    /**
+     * A member may not erase the request they already answered.
+     *
+     * The answer is a consent record: the head raised it, the member agreed, and the row is kept
+     * precisely so that agreement can be seen afterwards. Letting the member delete it afterwards makes
+     * the audit trail whatever they choose to keep.
+     */
+    @Test
+    fun aMemberMayNotDeleteARequestTheyAlreadyAnswered() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        raiseRequest(family, id)
+        postJson(
+            "/v1/sync",
+            syncBody(
+                0,
+                change("spend_assignments", id, 2, 2000L, answeredRequestPayload(family.ownerMemberId, family.guestMemberId)),
+            ),
+            family.guestToken,
+        )
+
+        val response = postJson(
+            "/v1/sync",
+            syncBody(0, change("spend_assignments", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+            family.guestToken,
+        )
+
+        assertDenied(response)
+    }
+
+    /**
+     * A push against a pending request has to actually answer it.
+     *
+     * `status` is a closed set, but membership in that set is not the same as moving off PENDING.
+     * Without requiring a real answer, the target could push their row straight back to PENDING and
+     * leave the request pending for ever -- a state the UI would never produce, and so not one the app
+     * can be trusted to avoid producing.
+     */
+    @Test
+    fun aTargetMayNotPushTheirOwnRequestBackToPending() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        raiseRequest(family, id)
+
+        val response = postJson(
+            "/v1/sync",
+            syncBody(
+                0,
+                change(
+                    "spend_assignments",
+                    id,
+                    2,
+                    2000L,
+                    requestPayload(family.ownerMemberId, family.guestMemberId),
+                ),
+            ),
+            family.guestToken,
+        )
+
+        assertDenied(response)
+    }
+
+/**
+     * A departed member's ledger is not up for adoption.
+     *
+     * `member_id` is `on delete set null`, so when somebody leaves the family their rows stay behind with
+     * no owner, and `write` rebinds member_id to whoever pushes next. The cross-member guard therefore
+     * has to treat an ownerless row as belonging to nobody rather than to anyone -- which is what the
+     * `!= null` clause it replaced got wrong, in the same shape as the `storedFacts` omission that let a
+     * member delete the pool.
+*/
+    @Test
+    fun aDepartedMembersSpendsAreNotClaimable() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        // The author has to be the one who leaves, or the row still has an owner and the ordinary
+        // cross-member rule refuses it for that reason instead -- the test would pass even if the
+        // ownerless case were wide open.
+        postJson("/v1/sync", syncBody(0, change("transactions", id, 1, 1000L, spentPayload("20.00", "theirs"))), family.ownerToken)
+
+        // The remaining member joins first, because only the owner can mint an invite and the owner is
+        // about to leave.
+        val survivor = joinMember("Survivor", family.ownerToken)
+
+        // Now the author leaves. `member_id` is `on delete set null`, so the row survives with no owner.
+        postJson("/v1/family/leave", "{}", family.ownerToken)
+
+        // And nobody may take it over: not the value, and not the row itself.
+        assertDenied(
+            postJson(
+                "/v1/sync",
+                syncBody(0, change("transactions", id, 2, 2000L, spentPayload("9000.00", "mine now"))),
+                survivor.guestToken,
+            )
+        )
+        assertDenied(
+            postJson(
+                "/v1/sync",
+                syncBody(0, change("transactions", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+                survivor.guestToken,
+            )
+        )
+
+        // The amount is untouched.
+        val pull = postJson("/v1/sync", syncBody(0), survivor.guestToken)
+        assertEquals("20.00", pull.json().recordAt(0)["payload"]!!.jsonObject.text("value"))
+    }
+
+    /**
+     * Nobody may delete a request that has been answered -- the target who agreed, nor the head who
+     * asked.
+     *
+     * The head is always the creator, so permitting the creator to delete an answered request permitted
+     * the head, and the consent record was one-sided. The row outlives the answer precisely so that what
+     * was agreed can be looked at afterwards, by both sides.
+     */
+    @Test
+    fun nobodyMayDeleteARequestThatHasBeenAnswered() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        raiseRequest(family, id)
+        postJson(
+            "/v1/sync",
+            syncBody(
+                0,
+                change("spend_assignments", id, 2, 2000L, answeredRequestPayload(family.ownerMemberId, family.guestMemberId)),
+            ),
+            family.guestToken,
+        )
+
+        assertDenied(
+            postJson(
+                "/v1/sync",
+                syncBody(0, change("spend_assignments", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+                family.ownerToken,
+            )
+        )
+        assertDenied(
+            postJson(
+                "/v1/sync",
+                syncBody(0, change("spend_assignments", id, 4, 4000L, tombstonePayload(), deletedAt = 4000L)),
+                family.guestToken,
+            )
+        )
+    }
+
+/**
+     * The owner can actually allocate a slice, and it comes back.
+     *
+     * Every other `period_limits` test here is a denial, and a suite made only of denials cannot show
+     * that a table works at all -- it can only show that it is refused. This is the test that would
+     * have caught the original bug, where the client sent a period key the server rejected outright: the
+     * symptom was a table that was refused everywhere, which is indistinguishable from a table that
+     * was never written.
+     */
+    @Test
+    fun anOwnerMayAllocateASliceAndItRoundTrips() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        val push = postJson(
+            "/v1/sync",
+            syncBody(0, change("period_limits", id, 1, 1000L, limitPayload("13000.00", family.guestMemberId))),
+            family.ownerToken,
+        )
+        assertEquals(listOf("period_limits:$id"), push.json().acceptedKeys())
+
+        val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
+        assertTrue(pull.json().recordKeys().contains("period_limits:$id"))
+        val payload = pull.json().recordAt(0)["payload"]!!.jsonObject
+        assertEquals("13000.00", payload.text("limitValue"))
+        assertEquals(family.guestMemberId, payload.text("memberId"))
+    }
+
+    /**
+     * The pool itself round-trips too, for the same reason.
+     */
+    @Test
+    fun thePoolRoundTrips() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        val push = postJson("/v1/sync", syncBody(0, change("family_state", id, 1, 1000L, poolPayload())), family.ownerToken)
+        assertEquals(listOf("family_state:$id"), push.json().acceptedKeys())
+
+        val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
+        val payload = pull.json().recordAt(0)["payload"]!!.jsonObject
+        assertEquals("30000.00", payload.text("budget"))
+        assertEquals("9000.00", payload.text("householdTier"))
+        assertEquals("EQUAL", payload.text("commonSplitRule"))
+    }
+
+    /**
+     * A request round-trips, and so does the answer.
+     *
+     * The consent flow is the one thing in this feature where a silent failure is worst: a request
+     * that never arrives means the target is never asked, and the spend is never recorded against
+     * them. Denials are tested elsewhere; this proves the happy path writes.
+     */
+    @Test
+    fun aRequestAndItsAnswerRoundTrip() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        assertEquals(
+            listOf("spend_assignments:$id"),
+            postJson(
+                "/v1/sync",
+                syncBody(0, change("spend_assignments", id, 1, 1000L, requestPayload(family.ownerMemberId, family.guestMemberId))),
+                family.ownerToken,
+            ).json().acceptedKeys(),
+        )
+
+        val answered = postJson(
+            "/v1/sync",
+            syncBody(0, change("spend_assignments", id, 2, 2000L, answeredRequestPayload(family.ownerMemberId, family.guestMemberId))),
+            family.guestToken,
+        )
+        assertEquals(listOf("spend_assignments:$id"), answered.json().acceptedKeys())
+
+        val pull = postJson("/v1/sync", syncBody(0), family.ownerToken)
+        val payload = pull.json().recordAt(0)["payload"]!!.jsonObject
+        assertEquals("ACCEPTED", payload.text("status"))
+        assertEquals("250.00", payload.text("amount"))
+        assertEquals(family.guestMemberId, payload.text("targetMemberId"))
+    }
+
+/**
+     * A family whose head leaves keeps a head.
+     *
+     * `isOwner` is the only thing gating the pool, the split and household spending, so with no owner a
+     * survivor is permanently unable to change the family budget and there is no route to appoint anyone.
+     * Failing closed is right for a security rule and wrong as an outcome: the family is stranded rather
+     * than protected. The earliest-joined remaining member is promoted, so the choice does not depend on
+     * who happened to press leave.
+     */
+    @Test
+    fun theEarliestRemainingMemberIsPromotedWhenTheHeadLeaves() = runServer {
+        val family = newFamily()
+        // `newFamily` already has a second member -- the guest it invited. The successor is that
+        // member, not "Second": asserting on the later joiner would pass even if the rule picked
+        // whoever happened to be last.
+        val later = joinMember("Later", family.ownerToken)
+
+        postJson("/v1/family/leave", "{}", family.ownerToken)
+
+        val members = postJson("/v1/family/members", "{}", family.guestToken)
+            .json()["members"]!!.jsonArray.map { it.jsonObject }
+
+        val promoted = members.first { it["id"]!!.jsonPrimitive.content == family.guestMemberId }
+        assertTrue("the earliest survivor was not promoted", promoted["isOwner"]!!.jsonPrimitive.content == "true")
+
+        val other = members.first { it["id"]!!.jsonPrimitive.content == later.guestMemberId }
+        assertTrue("a second head appeared", other["isOwner"]!!.jsonPrimitive.content != "true")
+    }
+
+    /**
+     * The point of the promotion: the survivor can actually change the budget afterwards. Without it
+     * this push is refused `owner_only` for ever and the family is stuck.
+     */
+@Test
+    fun theSurvivorCanActuallySetThePoolAfterwards() = runServer {
+        val family = newFamily()
+        joinMember("Second", family.ownerToken)
+        postJson("/v1/family/leave", "{}", family.ownerToken)
+
+        // The guest, not "Second": `newFamily` already made two members and the earliest survivor is
+        // promoted. Using the later joiner's token asserted that a *non*-owner could set the pool, which
+        // is a different test and correctly fails.
+        val id = UUID.randomUUID().toString()
+        val response = postJson(
+            "/v1/sync",
+            syncBody(0, change("family_state", id, 1, 1000L, poolPayload())),
+            family.guestToken,
+        )
+
+        assertEquals(listOf("family_state:$id"), response.json().acceptedKeys())
+    }
+
+    @Test
+    fun anOrdinaryMemberLeavingDoesNotChangeWhoTheHeadIs() = runServer {
+        val family = newFamily()
+        val second = joinMember("Second", family.ownerToken)
+
+        postJson("/v1/family/leave", "{}", second.guestToken)
+
+        val members = postJson("/v1/family/members", "{}", family.ownerToken)
+            .json()["members"]!!.jsonArray.map { it.jsonObject }
+        val head = members.first { it["id"]!!.jsonPrimitive.content == family.ownerMemberId }
+        assertTrue("the head was demoted when an ordinary member left", head["isOwner"]!!.jsonPrimitive.content == "true")
+    }
+
+/**
+     * Leaving with nobody behind is not an error.
+     *
+     * The second leave uses the guest's token on purpose: the head's token was just revoked, so
+     * reusing it would assert 401 and the test would be about token revocation rather than about
+     * there being nobody left to promote.
+     */
+@Test
+    fun theLastMemberLeavingIsNotAnError() = runServer {
+        val family = newFamily()
+
+        assertEquals(200, postJson("/v1/family/leave", "{}", family.ownerToken).status.value)
+        assertEquals(200, postJson("/v1/family/leave", "{}", family.guestToken).status.value)
     }
 
     private suspend fun ApplicationTestBuilder.raiseRequest(family: Family, id: String) {
@@ -951,6 +1418,17 @@ class SyncRouteTest {
             ),
             governed,
         )
+
+        // And it must match what authorize() *reads*, not just the literal above. An earlier version of
+        // this test compared the set against itself and so passed even if a branch were deleted from
+        // authorize() -- which is the drift its own comment claimed to catch.
+        val authorize = File("src/main/kotlin/family/sync/sync/SyncStore.kt")
+            .readText()
+            .substringAfter("private fun authorize(")
+            .substringBefore("private data class StoredFacts")
+        governed.forEach {
+            assertTrue("authorize() has no branch for the governed table $it", authorize.contains("\"$it\""))
+        }
     }
 
     /**
@@ -1019,7 +1497,7 @@ class SyncRouteTest {
             family.guestToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 
     /**
@@ -1050,7 +1528,7 @@ class SyncRouteTest {
             family.ownerToken,
         )
 
-        assertEquals(emptyList<String>(), response.json().acceptedKeys())
+        assertDenied(response)
     }
 }
 
@@ -1177,3 +1655,44 @@ private fun answeredRequestPayload(
  * nothing anywhere said so. Using a real uuid here is what makes these tests reach `authorize` at all.
  */
 private val PERIOD_UUID: String = java.util.UUID.nameUUIDFromBytes("pool:0".toByteArray(Charsets.UTF_8)).toString()
+/** A delete: an empty payload and a deletedAt, which is how a tombstone reaches the server. */
+private fun tombstonePayload(): String = "{}"
+/**
+ * Asserts a push was refused, and by name.
+ *
+ * A denial assertion on an empty list is satisfied by anything, including an HTTP 400 from a malformed
+ * payload, a renamed column, or a tightened allowed-value set. Nineteen of these assertions were
+ * written that way, which is exactly the mistake the design document warns about and which has
+ * already happened three times in this project. So: a 200, exactly one conflict, the right table and
+ * id, and a reason from the closed set. A 400 body has neither `accepted` nor `conflicts`, so it
+ * cannot satisfy this.
+ */
+private suspend fun assertDenied(response: HttpResponse) {
+    assertEquals("a denial must be a 200 with a conflict, not a 400", 200, response.status.value)
+    val conflicts = response.json().conflicts()
+    assertEquals("expected exactly one conflict", 1, conflicts.size)
+    assertTrue(
+        "the reason must come from the server's closed set, was \"${conflicts[0].text("reason")}\"",
+        conflicts[0].text("reason") in REJECT_REASONS,
+    )
+}
+
+private val REJECT_REASONS = setOf(
+    "owner_only",
+    "cross_member_write",
+    "stale_version",
+    "deleted_remotely",
+    "cross_family_write",
+)
+/** A third member, for the cases the two-member harness cannot reach. */
+private suspend fun ApplicationTestBuilder.joinMember(name: String, ownerToken: String): Family {
+    val code = postJson("/v1/family/invite", "{}", ownerToken).field("code")
+    val joined = postJson("/v1/family/join", """{"code":"$code","displayName":"$name"}""")
+    return Family(
+        familyId = "",
+        ownerMemberId = "",
+        ownerToken = ownerToken,
+        guestMemberId = joined.field("memberId"),
+        guestToken = joined.field("token"),
+    )
+}

@@ -132,6 +132,33 @@ class FamilyStore(
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
+                // Promote a successor before deleting the row, while the departing member can still be
+                // identified as the owner.
+                //
+                // Without this a family whose head leaves has no owner at all: `isOwner` is the only
+                // thing that gates the pool, the split and household spending, so the survivor would be
+                // permanently unable to change the family budget and there is no route to appoint
+                // anyone. Failing closed is right for a security rule and wrong as an outcome -- the
+                // family is stranded rather than protected.
+                //
+                // The earliest-joined remaining member is promoted, so the choice is deterministic and
+                // does not depend on who happened to press leave.
+                connection.prepareStatement(
+                    """
+                    update members set is_owner = true
+                    where id = (
+                        select id from members
+                        where family_id = ? and id <> ?
+                        order by joined_at asc, id asc
+                        limit 1
+                    )
+                    """.trimIndent()
+                ).use { statement ->
+                    statement.setUuid(1, principal.familyId)
+                    statement.setUuid(2, principal.memberId)
+                    statement.executeUpdate()
+                }
+
                 // The member row and every token that authenticates as it go in one transaction.
                 // Revoking the caller's token separately means a crash in between leaves a live
                 // token for a member that no longer exists, which is exactly the state leave exists
