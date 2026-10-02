@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
+import com.danilkinkin.buckwheat.data.entities.SpendBucket
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -82,11 +83,20 @@ data class MemberSpend(
     val memberId: String?,
     val displayName: String?,
     val total: BigDecimal,
+    /** Transactions folded into [total]. Needed because a tag engine cannot judge a trend from
+     * three purchases or from one, and the rollup is where that count actually exists. */
+    val transactionCount: Int = 0,
 )
 
-// The window total for a rollup, so a UI can render "320 of 1000" from the list it already has.
-// Every row is present (including the null-memberId bucket), so folding the list gives exactly
-// what one SQL SUM would have given.
+/** The members' total for a rollup, so a UI can render "320 of 1000" from the list it already has.
+ *
+ * NOT the window total. Household rows are excluded from the rollup, so folding this list gives the
+ * members' spending only; the period's real total is that plus `householdSpent`. Every row that is a
+ * member's is present, including the null-memberId bucket, so nothing is silently dropped.
+ *
+ * Unused today. If it is ever wired up, add household back in deliberately rather than reading this
+ * as complete.
+ */
 val List<MemberSpend>.grandTotal: BigDecimal
     get() = fold(BigDecimal.ZERO) { acc, spend -> acc + spend.total }
 
@@ -167,33 +177,14 @@ class SpendsRepository @Inject constructor(
      * disagree with every other query in the codebase.
      *
      * Rows with a null `member_id` predate enrolment. They are kept as their own null-keyed bucket
-     * instead of being dropped, so the rollup still adds up to the window total.
+     * instead of being dropped, so the rollup still adds up to the *members'* total for the window.
+     *
+     * Household rows are excluded entirely; see [rollupPersonalSpend], which does it.
      */
     private fun rollupSpentByMember(
         transactions: List<Transaction>,
         memberNames: Map<String, String>,
-    ): List<MemberSpend> {
-        val totals = LinkedHashMap<String?, BigDecimal>()
-        transactions.forEach { transaction ->
-            val running = totals[transaction.memberId] ?: BigDecimal.ZERO
-            totals[transaction.memberId] = running + transaction.value
-        }
-        return totals
-            .map { (memberId, total) ->
-                MemberSpend(
-                    memberId = memberId,
-                    // The roster is a cache owned elsewhere, so a name is only as good as the
-                    // caller's map; an unknown id keeps a null displayName rather than a placeholder.
-                    displayName = memberId?.let { memberNames[it] },
-                    total = total,
-                )
-            }
-            // Biggest spender first, with the unattributed bucket always last.
-            .sortedWith(
-                compareBy<MemberSpend> { it.memberId == null }
-                    .thenByDescending { it.total }
-            )
-    }
+    ): List<MemberSpend> = rollupPersonalSpend(transactions, memberNames)
 
     /**
      * Per-member spend for a date window as a one-shot snapshot. [memberNames] is taken as a
@@ -499,6 +490,18 @@ class SpendsRepository @Inject constructor(
         markUpsert(SyncTables.BUDGET_PERIODS, period.id)
         val periodId = period.id
 
+        /**
+         * Carried across whole, field for field.
+         *
+         * This used to copy only the six columns that predate attribution, so closing a period silently
+         * stripped the category and turned every household expense into a member spend -- which also
+         * defeats the server's archived-household rule, whose whole point is that a member cannot
+         * archive their way to recording a rent. The bucket is derived from a copy of these fields, so a
+         * field dropped here is not merely lost history, it is a different ledger.
+         *
+         * The id is deliberately NOT copied: an archived row is a new record with its own identity, and
+         * reusing the id would collide with the live row that still exists.
+         */
         val archived = inPeriod.map { tx ->
             ArchivedTransaction(
                 periodId = periodId,
@@ -506,6 +509,12 @@ class SpendsRepository @Inject constructor(
                 value = tx.value,
                 date = tx.date,
                 comment = tx.comment,
+                category = tx.category,
+                memberId = tx.memberId,
+                familyId = tx.familyId,
+                bucket = tx.bucket,
+                assignmentId = tx.assignmentId,
+                assignedByMemberId = tx.assignedByMemberId,
             )
         }
         budgetPeriodDao.insertArchivedTransactions(archived)
@@ -831,6 +840,8 @@ class SpendsRepository @Inject constructor(
                 budgetPeriodDao.updateTotalSpent(periodId, (currentTotal + spentDelta).setScale(2))
             }
             markUpsert(SyncTables.BUDGET_PERIODS, periodId)
+            // Carried across whole, for the same reason as archiveCurrentPeriod: an imported
+            // household expense must stay a household expense once it is closed.
             val archived = rows.map { tx ->
                 ArchivedTransaction(
                     periodId = periodId,
@@ -839,6 +850,11 @@ class SpendsRepository @Inject constructor(
                     date = tx.date,
                     comment = tx.comment,
                     category = tx.category,
+                    memberId = tx.memberId,
+                    familyId = tx.familyId,
+                    bucket = tx.bucket,
+                    assignmentId = tx.assignmentId,
+                    assignedByMemberId = tx.assignedByMemberId,
                 )
             }
             budgetPeriodDao.insertArchivedTransactions(archived)
@@ -939,4 +955,52 @@ class SpendsRepository @Inject constructor(
 
         categoryCapTracker.resyncCategoryCapNotified(transactionForRemove)
     }
+}
+
+
+/**
+ * Folds spends into one total per member, excluding household rows. Pure, so the arithmetic is
+ * testable on its own.
+ *
+ * The exclusion lives INSIDE this function rather than in a separate `personalSpendOnly` its callers
+ * must remember to apply. An earlier version of this file did exactly that, and the test written to
+ * guard the double-count went red immediately: the function everyone was about to trust would happily
+ * count the rent if handed a row list containing one. One function that owns both jobs is the only
+ * shape in which the guard cannot be bypassed by omitting a call.
+ *
+ * Rows with a null `member_id` predate enrolment and are kept as their own null-keyed bucket rather
+ * than dropped, so the rollup still adds up to the personal total for the window.
+ */
+internal fun rollupPersonalSpend(
+    transactions: List<Transaction>,
+    memberNames: Map<String, String>,
+): List<MemberSpend> {
+    val totals = LinkedHashMap<String?, BigDecimal>()
+    val counts = LinkedHashMap<String?, Int>()
+    transactions
+        // Household rows are excluded here and nowhere else, deliberately: `write` binds member_id from
+        // the caller, so a household expense carries the head's id, and every consumer keys on the
+        // bucket rather than on a null member. Filtering on `member_id IS NULL` would exclude nothing.
+        .filterNot { it.bucket == SpendBucket.HOUSEHOLD.name }
+        .forEach { transaction ->
+            val running = totals[transaction.memberId] ?: BigDecimal.ZERO
+            totals[transaction.memberId] = running + transaction.value
+            counts[transaction.memberId] = (counts[transaction.memberId] ?: 0) + 1
+        }
+    return totals
+        .map { (memberId, total) ->
+            MemberSpend(
+                memberId = memberId,
+                // The roster is a cache owned elsewhere, so a name is only as good as the caller's
+                // map; an unknown id keeps a null displayName rather than a placeholder.
+                displayName = memberId?.let { memberNames[it] },
+                total = total,
+                transactionCount = counts[memberId] ?: 0,
+            )
+        }
+        // Biggest spender first, with the unattributed bucket always last.
+        .sortedWith(
+            compareBy<MemberSpend> { it.memberId == null }
+                .thenByDescending { it.total }
+        )
 }
