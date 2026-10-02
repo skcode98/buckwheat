@@ -50,7 +50,12 @@ class RecurringPaymentsViewModel @Inject constructor(
 
     fun toggleEnabled(template: RecurringTemplate) {
         viewModelScope.launch {
-            recurringDao.update(template.copy(enabled = !template.enabled))
+            // Same hazard as updateTemplate: @Update writes every column, so flipping a field on the
+            // caller's stale snapshot silently nulls family_id/sync_seq and severs the template from
+            // the family. Toggling is the cheapest operation a user performs and it must not cost them
+            // their place in the family budget.
+            val stored = recurringDao.getById(template.id) ?: template
+            recurringDao.update(stored.copy(enabled = !stored.enabled))
             syncDirtyMarker.markUpsert(SyncTables.RECURRING_TEMPLATES, template.id)
         }
     }
@@ -58,8 +63,12 @@ class RecurringPaymentsViewModel @Inject constructor(
     fun updateTemplate(template: RecurringTemplate, amount: BigDecimal, comment: String, dayOfMonth: Int) {
         if (amount <= BigDecimal.ZERO || comment.isBlank() || dayOfMonth !in 1..31) return
         viewModelScope.launch {
+            // The caller owns only amount/comment/dayOfMonth. `template` is the list snapshot the
+            // UI holds, so a pull can have enrolled the row since: read the sync-owned columns back
+            // from the row, because @Update writes every column and markUpsert never restores them.
+            val stored = recurringDao.getById(template.id) ?: template
             recurringDao.update(
-                template.copy(
+                stored.copy(
                     amount = amount,
                     comment = comment.trim(),
                     dayOfMonth = dayOfMonth,

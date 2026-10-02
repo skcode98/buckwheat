@@ -1,10 +1,11 @@
 package com.danilkinkin.buckwheat.settings
 
+import androidx.datastore.preferences.core.edit
+import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.di.FakeSavingsGoalDao
+import com.danilkinkin.buckwheat.di.budgetStoreKey
 import com.danilkinkin.buckwheat.sync.SyncTables
-import com.danilkinkin.buckwheat.util.toDate
-import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -75,12 +76,14 @@ class GoalsViewModelTest {
         syncSeq = syncSeq,
     ).also { savingsGoalDao.insert(it) }
 
-    // Budget 1000 for 30 days so howMuchBudgetRest() is positive and allocations go through.
-    private suspend fun setBudget() {
-        fixture.spendsRepository.setBudget(
-            BigDecimal("1000"),
-            fixture.currentDateUseCase.value.toLocalDate().plusDays(30).toDate(),
-        )
+    // Only the `budget` key is written. SpendsRepository.howMuchBudgetRest() reads
+    // budget - spent - spentFromDailyBudget and defaults the two counters to zero, so one key is
+    // enough to get a positive rest. Going through SpendsRepository.setBudget instead chains five
+    // nested DataStore writes (archive check, setDailyBudget, hideOverspendingWarn, the
+    // category-cap reset), and those re-enter the write actor from inside its own dispatch —
+    // that is what left these allocation tests sitting until runTest's 60s timeout.
+    private suspend fun setBudgetRest(amount: String) {
+        fixture.context.budgetDataStore.edit { it[budgetStoreKey] = amount }
     }
 
     @Test
@@ -126,12 +129,14 @@ class GoalsViewModelTest {
 
     @Test
     fun `allocating marks the goal and the resulting spend`() = runTest(dispatcher) {
-        setBudget()
+        setBudgetRest("1000")
         seed("goal-1", targetAmount = "1000", currentAmount = "10")
         marker.upserts.clear()
         val viewModel = viewModel()
 
-        viewModel.allocateToGoal("goal-1", BigDecimal("20"))
+        // join() is the barrier: the allocation hops to real DataStore/IO work that runTest's
+        // scheduler cannot advance, so without it the assertions below race the dirty mark.
+        viewModel.allocateToGoal("goal-1", BigDecimal("20")).join()
 
         assertEquals(listOf("goal-1"), marker.upserted(SyncTables.SAVINGS_GOALS))
         assertEquals(1, marker.upserted(SyncTables.TRANSACTIONS).size)
@@ -140,11 +145,11 @@ class GoalsViewModelTest {
 
     @Test
     fun `allocating more than the budget rest marks nothing`() = runTest(dispatcher) {
-        setBudget()
         seed("goal-1", targetAmount = "100000")
         marker.upserts.clear()
 
-        viewModel().allocateToGoal("goal-1", BigDecimal("5000"))
+        // No budget is written, so howMuchBudgetRest() is zero and 5000 is over the rest.
+        viewModel().allocateToGoal("goal-1", BigDecimal("5000")).join()
 
         assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
         assertTrue(marker.upserted(SyncTables.TRANSACTIONS).isEmpty())
@@ -153,10 +158,10 @@ class GoalsViewModelTest {
 
     @Test
     fun `allocating to an unknown goal marks nothing`() = runTest(dispatcher) {
-        setBudget()
         marker.upserts.clear()
 
-        viewModel().allocateToGoal("missing", BigDecimal("20"))
+        // An unknown goal short-circuits before the budget is ever read.
+        viewModel().allocateToGoal("missing", BigDecimal("20")).join()
 
         assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
         assertTrue(marker.upserted(SyncTables.TRANSACTIONS).isEmpty())

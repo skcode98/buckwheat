@@ -14,10 +14,8 @@ import com.danilkinkin.buckwheat.data.dao.SyncStampDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.FamilyState
 import com.danilkinkin.buckwheat.data.entities.Member
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -319,9 +317,22 @@ val Migration18to19: Migration = object : Migration(18, 19) {
     }
 }
 
+// Drop the unused per-member sub-budget tables. `family_state` and `period_limits` were declared
+// for a per-member sub-budget feature that was never built: no DAO, no gateway in SyncBindings,
+// and no writer, so the rows they hold are always empty. They are dropped rather than merely
+// removed from the entity list so the real schema matches exactly what Room now validates against.
+val Migration19to20: Migration = object : Migration(19, 20) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Dropping the table also drops `index_period_limits_period_id_member_id` and
+        // `index_period_limits_family_id`, which belong to it.
+        database.execSQL("DROP TABLE IF EXISTS `period_limits`")
+        database.execSQL("DROP TABLE IF EXISTS `family_state`")
+    }
+}
+
 @Database(
-    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, FamilyState::class, PeriodLimit::class, PendingMutation::class],
-    version = 19,
+    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, PendingMutation::class],
+    version = 20,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -350,6 +361,6 @@ abstract fun pendingMutationDao(): PendingMutationDao
     abstract fun syncStampDao(): SyncStampDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19, Migration19to20)
     }
 }

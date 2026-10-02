@@ -21,6 +21,7 @@ import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,9 +65,12 @@ class GoalsViewModel @Inject constructor(
     // for a goal allocation now happen inside a single lock.
     private val allocationMutex = Mutex()
 
-    fun allocateToGoal(goalId: String, amount: BigDecimal) {
-        if (amount <= BigDecimal.ZERO) return
-        viewModelScope.launch {
+    // Returns the allocation's Job so a caller can await the whole effect (goal update, dirty mark,
+    // spend, milestone nudge) instead of assuming it finished. The dirty mark below is what makes
+    // the changed goal pushable, so "allocation finished" has to mean "marked and queued".
+    fun allocateToGoal(goalId: String, amount: BigDecimal): Job {
+        if (amount <= BigDecimal.ZERO) return Job().apply { complete() }
+        return viewModelScope.launch {
             allocationMutex.withLock {
                 val goal = savingsGoalDao.getById(goalId) ?: return@withLock
                 val budgetRest = spendsRepository.howMuchBudgetRest()
