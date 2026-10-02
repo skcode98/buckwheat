@@ -107,6 +107,54 @@ statement conflated a gitignored artefact with a tracked file. And I placed
 verdict, which is the only reason they are worth recording: a summary that quietly misstates what was
 checked is the same failure as a green build that hid no tests.
 
+### The period key shipped wrong, and only a careful diff found it
+
+`poolPeriodId` derived an allocation's period key as the readable string `"pool_$startDate"`. The sync
+server declares `period_id` as `SqlType.UUID` and rejects anything else with `payload_invalid`.
+
+The consequence was silent and total: every allocation and every request the app pushed was refused.
+The pool would have looked perfect on the phone that recorded it and simply never arrived on another
+member's device, with nothing in either UI to say so. It now returns `UUID.nameUUIDFromBytes("pool:$start")`,
+which two devices still compute identically from the same period start, and which the server accepts.
+
+This is worth dwelling on because it survived a "verified green" and a full round of review. Both
+the client and the server were individually correct and green; only the *pair* was broken, at a
+boundary neither side owns. The client test asserted the readable string, and the server tests used
+fixtures with no connection to what the client actually sends. A contract check that compared the
+client's real output against the server's real validator would have caught it on day one.
+
+### A test that passes on an HTTP 400 is not a test
+
+`acceptedKeys()` returns an empty list when the response body has no `accepted` key — and a 400 body
+has none. So every "this must be denied" assertion was satisfied by *anything at all*: a malformed
+payload, a typo in a column name, a server not running.
+
+Nine of the sixteen authorization tests I wrote were passing this way, because their fixtures sent
+`periodId: "pool_0"` and the server rejected them before `authorize` was ever reached. The rules they
+claimed to cover had never executed. They were caught only by a reviewer who asked whether each test
+actually reached the code, rather than reading the assertion and believing it.
+
+The rule now adopted: a test asserting a *denial* must require HTTP 200, exactly one conflict, and a
+named reason. Asserting on an absence is never enough. This is the third unfalsifiable test written in
+this project in one session — the same mistake three times, which is why it is written down rather
+than just fixed.
+
+### The authorization, and its two wrong first attempts
+
+The sync write path had **no role checks at all**: `isOwner` was consulted only for invites. Any
+member could set the pool, record a household expense, or answer a request aimed at someone else, which
+made the consent guarantee decorative.
+
+The first attempt was unsound twice over. It decided every rule from the *incoming* payload, so a
+tombstone — which carries none — stepped past all of them, and a member could delete the household's
+rent. Then a second attempt failed closed for every table, which denied ordinary personal spending and
+broke seven previously-green tests; the correct shape is fail-closed only for the five family-governed
+tables, and default-allow for personal ones that the SQL's `family_id` scoping already protects.
+
+Both closed value sets mattered too. `bucket` and `status` are compared against literals by
+`authorize`, so free text let a member send an unrecognised value that matched no rule — and a head
+could raise a request already marked `ACCEPTED`, permanently locking the target out of answering it.
+
 ### Verification is not possible on this machine for most of this
 
 `:app:compileDebugKotlin` takes minutes. Robolectric classes do not complete in a usable time, and
