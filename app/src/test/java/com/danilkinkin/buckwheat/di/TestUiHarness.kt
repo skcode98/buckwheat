@@ -16,6 +16,7 @@ data class TestUiHarness(
     val recurringPaymentsViewModel: RecurringPaymentsViewModel,
     val transactionDao: FakeTransactionDao,
     val settingsRepository: SettingsRepository,
+    val sessionStore: FakeSessionStore,
 )
 
 fun buildTestUiHarness(): TestUiHarness {
@@ -25,6 +26,7 @@ fun buildTestUiHarness(): TestUiHarness {
     val settingsRepository = SettingsRepository(context)
     val currentDateUseCase = FakeGetCurrentDateUseCase()
     val syncDirtyMarker = FakeSyncDirtyMarker()
+    val sessionStore = FakeSessionStore()
     val spendsRepository = SpendsRepository(
         context = context,
         transactionDao = transactionDao,
@@ -46,6 +48,7 @@ fun buildTestUiHarness(): TestUiHarness {
             spendsRepository = spendsRepository,
             recurringDao = FakeRecurringDao(),
             settingsRepository = settingsRepository,
+            sessionStore = sessionStore,
         ),
         recurringPaymentsViewModel = RecurringPaymentsViewModel(
             recurringDao = FakeRecurringDao(),
@@ -54,5 +57,6 @@ fun buildTestUiHarness(): TestUiHarness {
         ),
         transactionDao = transactionDao,
         settingsRepository = settingsRepository,
+        sessionStore = sessionStore,
     )
 }

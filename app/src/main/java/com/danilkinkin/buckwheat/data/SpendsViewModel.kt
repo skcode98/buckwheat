@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.attributedTo
 import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.notifications.PeriodFinishScheduler
@@ -16,6 +17,7 @@ import com.danilkinkin.buckwheat.patterns.PatternSpend
 import com.danilkinkin.buckwheat.patterns.TagSuggestion
 import com.danilkinkin.buckwheat.patterns.buildTagSuggestions
 import com.danilkinkin.buckwheat.patterns.forecast
+import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import com.danilkinkin.buckwheat.util.countDaysToToday
 import com.danilkinkin.buckwheat.util.isToday
 import com.danilkinkin.buckwheat.util.roundToDay
@@ -52,6 +54,7 @@ class SpendsViewModel @Inject constructor(
     private val spendsRepository: SpendsRepository,
     private val recurringDao: RecurringDao,
     private val settingsRepository: SettingsRepository,
+    private val sessionStore: FamilySessionStore,
 ) : ViewModel() {
     var tags: Flow<List<String>> = spendsRepository.getAllTags()
     var transactions: Flow<List<Transaction>> = spendsRepository.getAllTransactions()
@@ -268,7 +271,9 @@ class SpendsViewModel @Inject constructor(
 
     fun addSpent(transactionForAdd: Transaction) {
         viewModelScope.launch {
-            spendsRepository.addSpent(transactionForAdd)
+            spendsRepository.addSpent(
+                transactionForAdd.attributedTo(sessionStore.current()?.memberId)
+            )
         }
     }
 

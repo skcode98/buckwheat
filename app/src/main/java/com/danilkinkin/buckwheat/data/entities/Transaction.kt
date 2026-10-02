@@ -58,3 +58,20 @@ data class Transaction(
     @ColumnInfo(name = "version", defaultValue = "1")
     val version: Int = 1,
 )
+
+/**
+ * Fills in the member a spend belongs to, and only ever fills it in.
+ *
+ * Two callers need opposite precedence, and a single "resolve" function cannot serve both:
+ * `SpendsViewModel.addSpent` supplies the session member as a default for a row that was just
+ * built, while an undo replays a row that already carries whoever was chosen the first time and must
+ * not have that silently rewritten to whoever is signed in now. So an existing member wins, and the
+ * caller that means to change it sets the field on the row it constructs instead of passing an
+ * override here.
+ *
+ * A null member is a no-op rather than an un-attribution, because rows created before enrolment have
+ * no member and stay that way until `RoomSyncDatabase.enrolAll` gives them one. That is the only path
+ * allowed to fill them, and it writes the column directly.
+ */
+fun Transaction.attributedTo(memberId: String?): Transaction =
+    if (memberId == null || this.memberId != null) this else copy(memberId = memberId)
