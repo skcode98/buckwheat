@@ -210,6 +210,38 @@ class SpendsRepository @Inject constructor(
     )
 
     /**
+     * Household spend for a date window, i.e. the rows whose bucket says the money was not anyone's
+     * in particular.
+     *
+     * Folded in Kotlin for the same reason as [rollupSpentByMember]: `value` is a TEXT column, so
+     * `SUM(CAST(value AS REAL))` would quietly drop cent precision on real money.
+     */
+    suspend fun householdSpent(startDate: Long, endDate: Long): BigDecimal =
+        transactionDao.getHouseholdSpendsNow(startDate, endDate)
+            .fold(BigDecimal.ZERO) { acc, it -> acc + it.value }
+
+    /**
+     * The same figure as a live flow, following the active period's own dates.
+     *
+     * Absorbs the period bounds the same way [spentByMemberCurrentPeriodFlow] does, including the
+     * `flatMapLatest` on the Room flow, because a bucket that is read once and cached would keep
+     * reporting the household total the head entered ten minutes ago.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun householdSpentCurrentPeriodFlow(): Flow<BigDecimal> = combine(
+        getStartPeriodDate(),
+        getFinishPeriodDate(),
+    ) { start, finish -> start to finish }
+        .flatMapLatest { (start, finish) ->
+            if (finish == null) {
+                flowOf(BigDecimal.ZERO)
+            } else {
+                transactionDao.getHouseholdSpends(start.time, finish.time)
+                    .map { rows -> rows.fold(BigDecimal.ZERO) { acc, it -> acc + it.value } }
+            }
+        }
+
+    /**
      * The same rollup as a Flow, derived from the existing `getAll(type, startDate, endDate)` Room
      * query, so a UI observes it without re-querying on every frame. No new DAO Flow query is
      * needed. [memberNames] is a Flow so a roster that loads after the first emission renames the
