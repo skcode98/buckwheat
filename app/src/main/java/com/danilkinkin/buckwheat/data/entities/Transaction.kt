@@ -13,6 +13,28 @@ enum class TransactionType {
     SPENT
 }
 
+/**
+ * Whose money a spend came out of.
+ *
+ * [HOUSEHOLD] exists because "no member" was already overloaded: a row created before enrolment has
+ * a null `memberId` and means "not yet attributable", which is a different statement from "belongs
+ * to everybody". Rent and insurance need the second statement, and overloading the first would have
+ * made a shared tablet's unattributed rows indistinguishable from the household's rent.
+ *
+ * A HOUSEHOLD row always has a null `member_id`. Enforced rather than assumed so that a member
+ * remaining budget can never be reduced by someone else's expense without the split being visible.
+ */
+enum class SpendBucket {
+    MEMBER,
+    HOUSEHOLD,
+    ;
+
+    companion object {
+        fun fromStored(value: String?): SpendBucket =
+            entries.firstOrNull { it.name == value } ?: MEMBER
+    }
+}
+
 @Entity(
     tableName = "transactions",
     indices = [Index("type", "date"), Index("family_id")]
@@ -57,6 +79,23 @@ data class Transaction(
 
     @ColumnInfo(name = "version", defaultValue = "1")
     val version: Int = 1,
+
+    @ColumnInfo(name = "bucket", defaultValue = "MEMBER")
+    val bucket: String = SpendBucket.MEMBER.name,
+
+    /**
+     * The assignment this row came from, if any.
+     *
+     * Doubles as the row's own id, because a spend materialised from an assignment has to be
+     * convergent: two devices pulling the same accepted assignment must end up with one row, not two.
+     * Recorded on the row rather than looked up through the assignment so the provenance survives
+     * after the assignment is archived away.
+     */
+    @ColumnInfo(name = "assignment_id")
+    val assignmentId: String? = null,
+
+    @ColumnInfo(name = "assigned_by_member_id")
+    val assignedByMemberId: String? = null,
 )
 
 /**
@@ -75,3 +114,14 @@ data class Transaction(
  */
 fun Transaction.attributedTo(memberId: String?): Transaction =
     if (memberId == null || this.memberId != null) this else copy(memberId = memberId)
+
+/**
+ * Re-buckets a spend as household money.
+ *
+ * Clearing [memberId] here rather than trusting the caller is the point: a household row with a
+ * member attached would be counted twice, once against the pool and once against a person, and the
+ * person it hit would be whichever the caller happened to pass.
+ */
+fun Transaction.asHouseholdSpend(): Transaction =
+    if (bucket == SpendBucket.HOUSEHOLD.name && memberId == null) this
+    else copy(bucket = SpendBucket.HOUSEHOLD.name, memberId = null)

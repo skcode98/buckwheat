@@ -52,6 +52,15 @@ data class ArchivedTransaction(
 
     @ColumnInfo(name = "version", defaultValue = "1")
     val version: Int = 1,
+
+    @ColumnInfo(name = "bucket", defaultValue = "MEMBER")
+    val bucket: String = SpendBucket.MEMBER.name,
+
+    @ColumnInfo(name = "assignment_id")
+    val assignmentId: String? = null,
+
+    @ColumnInfo(name = "assigned_by_member_id")
+    val assignedByMemberId: String? = null,
 )
 
 fun ArchivedTransaction.toTransaction(): Transaction =
@@ -68,4 +77,7 @@ fun ArchivedTransaction.toTransaction(): Transaction =
         updatedAt = this.updatedAt,
         deletedAt = this.deletedAt,
         version = this.version,
+        bucket = this.bucket,
+        assignmentId = this.assignmentId,
+        assignedByMemberId = this.assignedByMemberId,
     )

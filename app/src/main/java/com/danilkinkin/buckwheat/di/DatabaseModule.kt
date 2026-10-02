@@ -11,11 +11,17 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.SyncStampDao
+import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
+import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
+import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyState
 import com.danilkinkin.buckwheat.data.entities.Member
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
+import com.danilkinkin.buckwheat.data.entities.PeriodLimit
+import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -330,9 +336,99 @@ val Migration19to20: Migration = object : Migration(19, 20) {
     }
 }
 
+/**
+ * The family pool: one row per family for the active period, and one row per member per period.
+ *
+ * Introduced after `Migration19to20` dropped the earlier pair of these tables, which had been
+ * declared since 16 to 17 and never written to. These are new tables under the old names, so there
+ * is no data to migrate and no history to reconstruct: the previous tables were provably empty.
+ *
+ * Every column has a default so that a family whose pool has not been set yet still gets a readable
+ * row rather than an absent one, and so an enrolled device and a never-enrolled device behave the
+ * same way when asked for their budget.
+ */
+val Migration20to21: Migration = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `transactions` ADD COLUMN `bucket` TEXT NOT NULL DEFAULT 'MEMBER'")
+        db.execSQL("ALTER TABLE `transactions` ADD COLUMN `assignment_id` TEXT")
+        db.execSQL("ALTER TABLE `transactions` ADD COLUMN `assigned_by_member_id` TEXT")
+        db.execSQL("ALTER TABLE `archived_transactions` ADD COLUMN `bucket` TEXT NOT NULL DEFAULT 'MEMBER'")
+        db.execSQL("ALTER TABLE `archived_transactions` ADD COLUMN `assignment_id` TEXT")
+        db.execSQL("ALTER TABLE `archived_transactions` ADD COLUMN `assigned_by_member_id` TEXT")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `spend_assignments` (
+                `id` TEXT NOT NULL,
+                `period_id` TEXT NOT NULL,
+                `target_member_id` TEXT NOT NULL,
+                `created_by_member_id` TEXT NOT NULL,
+                `amount` TEXT NOT NULL,
+                `category` TEXT,
+                `comment` TEXT NOT NULL DEFAULT '',
+                `date` INTEGER NOT NULL,
+                `status` TEXT NOT NULL DEFAULT 'PENDING',
+                `resolved_at` INTEGER,
+                `family_id` TEXT,
+                `sync_seq` INTEGER NOT NULL DEFAULT 0,
+                `updated_at` INTEGER NOT NULL DEFAULT 0,
+                `deleted_at` INTEGER,
+                `version` INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_spend_assignments_family_id` ON `spend_assignments` (`family_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_spend_assignments_period_id` ON `spend_assignments` (`period_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_spend_assignments_target_member_id` ON `spend_assignments` (`target_member_id`)")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `family_state` (
+                `family_id` TEXT NOT NULL,
+                `budget` TEXT NOT NULL,
+                `household_tier` TEXT NOT NULL,
+                `start_date` INTEGER NOT NULL,
+                `finish_date` INTEGER NOT NULL,
+                `currency` TEXT NOT NULL,
+                `household_detail_visible_to_all` INTEGER NOT NULL DEFAULT 0,
+                `common_split_rule` TEXT NOT NULL DEFAULT 'EQUAL',
+                `tags_visible_to_self` INTEGER NOT NULL DEFAULT 1,
+                `family_ai_enabled` INTEGER NOT NULL DEFAULT 1,
+                `sync_seq` INTEGER NOT NULL DEFAULT 0,
+                `updated_at` INTEGER NOT NULL DEFAULT 0,
+                `deleted_at` INTEGER,
+                `version` INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(`family_id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `period_limits` (
+                `id` TEXT NOT NULL,
+                `period_id` TEXT NOT NULL,
+                `member_id` TEXT NOT NULL,
+                `limit_value` TEXT NOT NULL,
+                `family_id` TEXT,
+                `sync_seq` INTEGER NOT NULL DEFAULT 0,
+                `updated_at` INTEGER NOT NULL DEFAULT 0,
+                `deleted_at` INTEGER,
+                `version` INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_period_limits_family_id` ON `period_limits` (`family_id`)")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_period_limits_period_id_member_id` ON `period_limits` (`period_id`, `member_id`)"
+        )
+    }
+}
+
 @Database(
-    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, PendingMutation::class],
-    version = 20,
+    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, PendingMutation::class, FamilyState::class, PeriodLimit::class, SpendAssignment::class],
+    version = 21,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -358,9 +454,15 @@ abstract class DatabaseModule : RoomDatabase() {
 
 abstract fun pendingMutationDao(): PendingMutationDao
 
+    abstract fun familyStateDao(): FamilyStateDao
+
+    abstract fun periodLimitDao(): PeriodLimitDao
+
+    abstract fun spendAssignmentDao(): SpendAssignmentDao
+
     abstract fun syncStampDao(): SyncStampDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19, Migration19to20)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19, Migration19to20, Migration20to21)
     }
 }
