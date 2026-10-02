@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
+import com.danilkinkin.buckwheat.family.ActingAsViewModel
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.TUTORS
@@ -73,7 +75,13 @@ fun Keyboard(
     spendsViewModel: SpendsViewModel = hiltViewModel(),
     appViewModel: AppViewModel = hiltViewModel(),
     editorViewModel: EditorViewModel = hiltViewModel(),
+    actingAsViewModel: ActingAsViewModel = hiltViewModel(),
 ) {
+    val actingAs by actingAsViewModel.actingAs.collectAsStateWithLifecycle()
+    val hasChoices by actingAsViewModel.hasChoices.collectAsStateWithLifecycle()
+    val actingAsCandidates by actingAsViewModel.candidates.collectAsStateWithLifecycle()
+    var actingAsPickerOpen by remember { mutableStateOf(false) }
+
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -106,7 +114,7 @@ fun Keyboard(
             if (edited != null) {
                 val first = records.first()
                 spendsViewModel.removeSpent(edited, silent = true)
-                spendsViewModel.addSpent(
+                addSpentAs(spendsViewModel, actingAsViewModel, 
                     edited.copy(
                         value = first.amount,
                         date = first.date,
@@ -117,7 +125,7 @@ fun Keyboard(
             }
         } else {
             records.forEach { record ->
-                spendsViewModel.addSpent(
+                addSpentAs(spendsViewModel, actingAsViewModel, 
                     Transaction(
                         type = TransactionType.SPENT,
                         value = record.amount,
@@ -467,6 +475,58 @@ fun Keyboard(
                     .fillMaxSize()
                     .weight(3F)
             ) {
+                // Only rendered for a family with someone else in it, and only ever as a current
+                // choice rather than a saved setting. A spend silently attributed to the wrong person
+                // is worse than no spend at all, so the selection is deliberately prominent and the
+                // default stays "you".
+                if (hasChoices) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(onClick = { actingAsPickerOpen = true }) {
+                            Text(
+                                text = actingAs
+                                    ?.let { id ->
+                                        actingAsCandidates.firstOrNull { it.id == id }?.displayName
+                                    }
+                                    ?: stringResource(R.string.spending_for_you)
+                            )
+                        }
+                        if (actingAs != null) {
+                            TextButton(onClick = { actingAsViewModel.select(null) }) {
+                                Text(stringResource(R.string.spending_for_you))
+                            }
+                        }
+                    }
+                    if (actingAsPickerOpen) {
+                        AlertDialog(
+                            onDismissRequest = { actingAsPickerOpen = false },
+                            title = { Text(stringResource(R.string.acting_as_title)) },
+                            text = {
+                                Column {
+                                    actingAsCandidates.forEach { member ->
+                                        TextButton(
+                                            onClick = {
+                                                actingAsViewModel.select(member.id)
+                                                actingAsPickerOpen = false
+                                            }
+                                        ) {
+                                            Text(member.displayName)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { actingAsPickerOpen = false }) {
+                                    Text(stringResource(android.R.string.cancel))
+                                }
+                            },
+                        )
+                    }
+                }
+
                 Row(
                     Modifier
                         .fillMaxSize()
@@ -630,9 +690,9 @@ fun Keyboard(
                                                 edited,
                                                 silent = true
                                             )
-                                            spendsViewModel.addSpent(newVersionOfSpent)
+                                            addSpentAs(spendsViewModel, actingAsViewModel, newVersionOfSpent)
                                         } else {
-                                            spendsViewModel.addSpent(
+                                            addSpentAs(spendsViewModel, actingAsViewModel, 
                                                 Transaction(
                                                     type = TransactionType.SPENT,
                                                     value = editorViewModel.currentSpent,
@@ -770,6 +830,25 @@ fun Keyboard(
             },
         )
     }
+}
+
+/**
+ * Records a spend against whoever the acting-as selector is set to.
+ *
+ * A thin wrapper rather than four separate `addSpent(..., onBehalfOfMemberId = ...)` call sites,
+ * because the default has to be applied identically on every path. One of these is a voice-input
+ * path that appends several spends at once; getting it right on three paths and wrong on the fourth
+ * would attribute a whole spoken sentence to the wrong person.
+ */
+private fun addSpentAs(
+    spendsViewModel: SpendsViewModel,
+    actingAsViewModel: ActingAsViewModel,
+    transaction: Transaction,
+) {
+    spendsViewModel.addSpent(
+        transactionForAdd = transaction,
+        onBehalfOfMemberId = actingAsViewModel.memberIdOrNull(),
+    )
 }
 
 @Preview

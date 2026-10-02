@@ -45,6 +45,7 @@ class FamilyBudgetViewModel @Inject constructor(
     private val spendsRepository: SpendsRepository,
     private val sessionStore: FamilySessionStore,
     private val membersCache: FamilyMembersCache,
+    private val insightService: FamilyInsightService,
 ) : ViewModel() {
 
     val session = sessionStore.session()
@@ -214,6 +215,42 @@ class FamilyBudgetViewModel @Inject constructor(
     }
 
     fun displayName(memberId: String): String = members.value[memberId] ?: memberId
+
+    private val _summary = MutableStateFlow<FamilySummary?>(null)
+
+    /**
+     * The family summary, or null before the screen asks for one.
+     *
+     * Rendered from the offline text first and upgraded in place, so a family with no key, no network
+     * or AI switched off still sees real content instead of a spinner. `fromModel` is carried so the
+     * sheet can say which one it is showing: a person told their household is doing badly deserves to
+     * know whether a model wrote that.
+     */
+    val summary: StateFlow<FamilySummary?> = _summary
+
+    private val _summaryLoading = MutableStateFlow(false)
+    val summaryLoading: StateFlow<Boolean> = _summaryLoading
+
+    /** Asking twice in a row is cheap and harmless, and the offline half means it never blocks. */
+    fun loadSummary() {
+        val bounds = periodBounds.value ?: return
+        val current = budget.value ?: return
+        if (_summaryLoading.value) return
+
+        val snapshot = buildFamilySnapshot(
+            budget = current,
+            memberIdsInRosterOrder = members.value.keys.toList(),
+            tags = tags.value,
+        )
+        _summary.value = FamilySummary(offlineFamilySummary(snapshot), fromModel = false)
+        _summaryLoading.value = true
+        viewModelScope.launch {
+            val familyAiEnabled = familyStateDao.getByFamilyId(sessionStore.current()?.familyId.orEmpty())
+                ?.familyAiEnabled != false
+            _summary.value = insightService.summarise(snapshot, familyAiEnabled)
+            _summaryLoading.value = false
+        }
+    }
 
     private val _saveProblem = MutableStateFlow<AllocationProblem?>(null)
 

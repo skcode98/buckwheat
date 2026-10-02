@@ -713,6 +713,12 @@
   <string name="family_tag_near_limit">Spending ahead of pace</string>
   <string name="family_tag_over_plan">Over budget</string>
   <string name="family_tag_spending_up">Spending up</string>
+  <string name="family_budget_summary_title">How the household is doing</string>
+  <string name="family_budget_summary_loading">Working it out…</string>
+  <string name="family_budget_summary_from_model">Written by your AI provider. Members are referred to as Member A, Member B and so on; no names were sent.</string>
+  <string name="family_budget_summary_offline">Worked out on this device. No data was sent anywhere.</string>
+  <string name="acting_as_title">Whose budget is this spend for?</string>
+  <string name="spending_for_you">For you</string>
   <plurals name="family_sync_pending">
     <item quantity="one">%1$d change waiting to upload</item>
     <item quantity="other">%1$d changes waiting to upload</item>

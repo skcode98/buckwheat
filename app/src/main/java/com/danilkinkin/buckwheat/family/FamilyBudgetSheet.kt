@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,8 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Header(isHead) }
+
+        item { SummarySection(viewModel) }
 
         item {
             MoneyRow(stringResource(R.string.family_budget_pool), current.total)
@@ -165,6 +168,55 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
         }
 
         item { Footer(isHead, householdDetailVisible, viewModel) }
+    }
+}
+
+/**
+ * The household summary.
+ *
+ * The offline renderer runs first and the model's version replaces it, so this is never empty. Which
+ * of the two is on screen is stated, because a family being told they are overspending by a sentence
+ * they did not write deserves to know who wrote it.
+ */
+@Composable
+private fun SummarySection(viewModel: FamilyBudgetViewModel) {
+    val summary by viewModel.summary.collectAsStateWithLifecycle()
+    val loading by viewModel.summaryLoading.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.loadSummary() }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.family_budget_summary_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            val current = summary
+            if (current == null) {
+                Text(stringResource(R.string.family_budget_summary_loading))
+            } else {
+                Text(text = current.text, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = stringResource(
+                        if (current.fromModel) {
+                            R.string.family_budget_summary_from_model
+                        } else {
+                            R.string.family_budget_summary_offline
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (loading) {
+                Text(
+                    text = stringResource(R.string.family_budget_summary_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 

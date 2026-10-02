@@ -269,13 +269,26 @@ class SpendsViewModel @Inject constructor(
 
     // Spend handling
 
-    fun addSpent(transactionForAdd: Transaction) {
-        viewModelScope.launch {
-            spendsRepository.addSpent(
-                transactionForAdd.attributedTo(sessionStore.current()?.memberId)
-            )
-        }
+/**
+ * Attributes a spend to a member, defaulting to the signed-in one.
+ *
+ * [onBehalfOfMemberId] exists for a shared family tablet, where "who is at the keyboard" changes
+ * minute to minute. It is a parameter and not a stored setting for that reason: a device-level default
+ * would be wrong the moment someone else sat down, and a spend recorded against the wrong person is
+ * worse than no spend at all. Null means the signed-in member, which is the overwhelmingly common case
+ * and the one the family already agreed to attribute automatically.
+ *
+ * One function rather than an overload with a defaulted second parameter. Two signatures that differ
+ * only by a default would mean two entry points with identical behaviour, and the shorter one would
+ * silently stop being the one anybody could find.
+ */
+fun addSpent(transactionForAdd: Transaction, onBehalfOfMemberId: String? = null) {
+    viewModelScope.launch {
+        spendsRepository.addSpent(
+            transactionForAdd.attributedTo(onBehalfOfMemberId ?: sessionStore.current()?.memberId)
+        )
     }
+}
 
     fun removeSpent(transactionForRemove: Transaction, silent: Boolean = false) {
         viewModelScope.launch {
