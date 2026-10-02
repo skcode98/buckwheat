@@ -221,6 +221,15 @@ class SpendsRepository @Inject constructor(
             .fold(BigDecimal.ZERO) { acc, it -> acc + it.value }
 
     /**
+     * The individual household rows for a date window.
+     *
+     * Returns the rows rather than only a total because the head needs to see and correct individual
+     * entries, and because the decision to reveal them to the family is a policy the caller applies.
+     */
+    fun householdSpendsInPeriod(startDate: Long, endDate: Long): Flow<List<Transaction>> =
+        transactionDao.getHouseholdSpends(startDate, endDate)
+
+    /**
      * The same figure as a live flow, following the active period's own dates.
      *
      * Absorbs the period bounds the same way [spentByMemberCurrentPeriodFlow] does, including the

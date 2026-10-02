@@ -7,17 +7,22 @@ import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
 import com.danilkinkin.buckwheat.data.entities.CommonSplitRule
 import com.danilkinkin.buckwheat.data.entities.FamilyState
 import com.danilkinkin.buckwheat.data.entities.PeriodLimit
+import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.data.entities.asHouseholdSpend
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.sync.FamilyMembersCache
 import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.math.BigDecimal
+import java.util.Date
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -57,6 +62,21 @@ class FamilyBudgetViewModel @Inject constructor(
             if (finish == null) null else start.time to finish.time
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * The key allocations and requests are stored under, or null when there is no active period.
+     *
+     * Exposed because a request has to be filed against the same period as the split it draws on, and
+     * recomputing it in the sheet would mean two copies of the derivation that must agree.
+     */
+    val activePeriodKey: String?
+        get() = periodBounds.value?.let { poolPeriodId(it.first) }
+
+    /**
+     * A spending tag per member, for the current period.
+     *
+     * Derived on every emission rather than stored, so there is nothing to leak, nothing to sync and
+     * nothing to invalidate. Cheap because it is a handful of multiplications over rows already loaded.
+     */
     val budget: StateFlow<FamilyBudget?> =
         combine(periodBounds, session) { bounds, session -> bounds to session }
             .flatMapLatest { (bounds, session) ->
@@ -86,6 +106,29 @@ class FamilyBudgetViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * A spending tag per member, for the current period.
+     *
+     * Derived on every emission rather than stored, so there is nothing to leak, nothing to sync and
+     * nothing to invalidate. Cheap because it is a handful of multiplications over rows already loaded.
+     *
+     * Declared after [budget] because a property initializer cannot read a property declared later in
+     * the class, and there is no reason for it to come first.
+     */
+    val tags: StateFlow<Map<String, MemberTag>> =
+        combine(periodBounds, budget) { bounds, budget ->
+            if (bounds == null || budget == null) {
+                emptyMap()
+            } else {
+                val progress = periodProgress(bounds.first, bounds.second, System.currentTimeMillis())
+                memberTags(
+                    spendings = emptyList(),
+                    allocations = budget.allocations,
+                    progress = progress,
+                )
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** Only the owner may change the split; everyone else sees a read-only breakdown. */
     val isHead: StateFlow<Boolean> =
         combine(session, membersCache.members()) { session, roster ->
@@ -95,6 +138,80 @@ class FamilyBudgetViewModel @Inject constructor(
                 roster.firstOrNull { it.id == session.memberId }?.isOwner == true
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Whether an individual household expense may be seen by everyone rather than only by the head.
+     *
+     * Read from the stored pool rather than held locally, because it is a family-wide setting and two
+     * devices that disagreed about it would show one member's rent to another.
+     */
+    val householdDetailVisibleToAll: StateFlow<Boolean> =
+        combine(session, budget) { session, budget -> session != null && budget != null }
+            .flatMapLatest { hasBudget ->
+                if (!hasBudget) {
+                    flowOf(false)
+                } else {
+                    combine(session, membersCache.members()) { s, _ -> s?.familyId }
+                        .distinctUntilChanged()
+                        .flatMapLatest { familyId ->
+                            // Typed null rather than a bare null, or the if-expression widens to
+                            // Flow<Any?> and every later receiver becomes Any?.
+                            if (familyId == null) flowOf<FamilyState?>(null)
+                            else familyStateDao.observe(familyId)
+                        }
+                        .map { it?.householdDetailVisibleToAll == true }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * The individual household rows, for the sheet to decide whether to show them.
+     *
+     * Always emitted, and the decision to reveal is made at the sheet. The alternative — filtering in
+     * the query — means the permission check and the display rule live apart and can drift, and the
+     * head's own list would flicker empty on a slow frame.
+     */
+    val householdRows: StateFlow<List<Transaction>> =
+        periodBounds.flatMapLatest { bounds ->
+            if (bounds == null) {
+                flowOf(emptyList())
+            } else {
+                spendsRepository.householdSpendsInPeriod(bounds.first, bounds.second)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Records a common household expense such as rent or insurance.
+     *
+     * Gated on the owner because it spends from the shared tier, and re-bucketed through
+     * [asHouseholdSpend] rather than setting the two fields here, so the rule that a household row
+     * carries no member lives in exactly one place.
+     */
+    fun addHouseholdSpend(amount: BigDecimal, comment: String, category: String?, date: Date): Boolean {
+        if (!isHead.value) return false
+        if (amount.signum() <= 0) return false
+        viewModelScope.launch {
+            // `session` is a plain Flow, so it has no `.value`; the suspending read is correct here and
+            // is also the right thing to want: it sees an enrolment that completed a moment ago.
+            val familyId = sessionStore.current()?.familyId
+            spendsRepository.addSpent(
+                Transaction(
+                    type = TransactionType.SPENT,
+                    value = amount,
+                    date = date,
+                    comment = comment.trim(),
+                    category = category,
+                    familyId = familyId,
+                ).asHouseholdSpend()
+            )
+        }
+        return true
+    }
+
+    fun removeHouseholdSpend(transaction: Transaction) {
+        if (!isHead.value) return
+        viewModelScope.launch { spendsRepository.removeSpent(transaction) }
+    }
 
     fun displayName(memberId: String): String = members.value[memberId] ?: memberId
 
