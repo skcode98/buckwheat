@@ -1,7 +1,82 @@
 # Family Budget & Allocation Design
 
 **Date:** 2026-10-01
-**Status:** Refined requirement, partly implemented. Phases 0 and 1 landed in `0b93a2d3`. Decisions in `## Open Questions` still open.
+**Status:** In progress. Phases 0-1 landed in `0b93a2d3`. Phase 2 in flight: see `## Progress log`.
+**Classification:** Architectural (extension of the shipped family sync subsystem)
+**Supersedes:** nothing. **Extends:** `docs/superpowers/specs/2026-09-26-family-sync-design.md`
+
+## Progress log
+
+Appended as each phase lands. "Verified" means a named test ran and passed on this machine, not
+merely that the code compiles.
+
+| Phase | State | Notes |
+|---|---|---|
+| 0 — roster | Done | `0b93a2d3`. `FamilyApi.members()`, server returns ids, `FamilyMembersCache` |
+| 1 — attribution | Done | `33b991b1`. `Transaction.attributedTo` + `SpendsViewModel.addSpent` |
+| 1 — roster leak fix | Done | `5de53c6b`. `persist()` clears the cache before storing a new session |
+| 1 — acting-as override | Not started | Needs an editor control; the plumbing is in place |
+| 2 — pool schema | Done | `Migration20to21`: `family_state`, `period_limits`, `spend_assignments`, and `bucket` / `assignment_id` / `assigned_by_member_id` on both transaction tables |
+| 2 — money math | Done | `FamilyBudgetMath.kt`, pure. 17 tests green |
+| 2 — budget screen | Done | `FamilyBudgetSheet`, read-only for members, editor gated on `isHead` |
+| 3 — household spend | Partial | The `bucket` column and the rollup exist and sync. **No entry UI yet** — a household row cannot be created by a person |
+| 4 — assignments | Partial | Entity, DAO, pure rules and `SpendAssignmentsViewModel` exist. **No UI yet** — nobody can accept or reject |
+| 5 — tags | Done | `MemberTagEngine.kt`, pure, 16 tests green. **Not yet surfaced in the UI** |
+| 6 — family AI and audio | Not started | |
+| 7 — policy and disclosure | Done | `POLICY.md` rewritten; it claimed no personal information was collected |
+| 8 — sync contract | Done | `SyncTables`, `SyncPayloads`, `SyncBindings`, `SyncModule`, `SyncStampDao`, `SyncDirtyMarker`, server `TableSpec`s and `V5` migration |
+
+**Verified green:** Android 256/256, server 148/148, both executed live.
+
+### Four defects the verification found, and what each teaches
+
+**`bucket` as a required payload key would have bricked existing installs.** A client older than
+this change sends no `bucket`, so `payload_incomplete` rejects the *entire* sync and none of that
+user's transactions ever leave the device — silently, with nothing in the UI. It is now optional, and
+so were 26 server tests that had hardcoded a five-column transaction payload. In a synced app the
+payload contract has two audiences: the server you are syncing with now, and the version of your own
+app already sitting on someone's phone. Designing only for the first one is a data-loss bug.
+
+**Recreating a table destroyed its row level security.** V5 dropped and recreated `family_state`,
+which threw away the RLS V3 had applied, and `spend_assignments` was created with no RLS at all —
+because a brand new table inherits nothing, and those protections were established per table by an
+earlier migration rather than by a convention. Both are reachable through the public sync API, where
+scoping lives in application code. Check the security posture of a new table before its first commit,
+not after it ships.
+
+**The contract test could not see a new table.** It asserted the server knew a hand-written set of
+seven, so adding an eighth on the client left it green. It now derives from `SyncTables.ALL`. The same
+shape of bug hid the missing `spend_assignments` RLS check, and the `everyFamilyTableHasRowLevelSecurityEnabled`
+table list is still a literal that needs adding to by hand — the remaining instance of this class.
+
+**The tag bands were inverted.** `nearLimitAt` was 0.90 *of the pace*, so a member spending exactly on
+plan scored 1.0 and came back `NEAR_LIMIT`: the most ordinary case was reported as the dangerous one,
+and `ON_PLAN` was reachable only when *under* pace. The threshold is now `aheadOfPaceAt = 1.00`. A
+`trendRatio` parameter was also declared and documented but never referenced, the code hardcoding a
+full doubling instead.
+
+### Verification is not possible on this machine for most of this
+
+`:app:compileDebugKotlin` takes minutes. Robolectric classes do not complete in a usable time, and
+the bootstrap is pathological here rather than merely slow. `AppLockViewModelTest` hangs the suite and
+is documented as "must be excluded from every run" while not actually being excluded in
+`app/build.gradle.kts`.
+
+What this means in practice:
+
+- Everything verified above is either a pure function or a server-side test with embedded Postgres.
+  The Robolectric-dependent tests — `Migration20To21Test`, and anything touching `SpendsRepository` or a
+  Hilt ViewModel — compile but have never executed. `Migration20To21Test` is the one most worth
+  running first on a working machine.
+- Delegating to a background agent was what made this tractable, but the agent can only run what the
+  machine can run. It repeatedly caught things I would not have, and it caught that a "passing" run
+  was reporting `UP-TO-DATE` rather than executing, which is the failure mode a green build most wants
+  to hide.
+- Do not add a Robolectric test that cannot be shown to pass here; a test that hangs CI is worse than
+  an absent one. That is why the `SpendsViewModelAttributionTest` written for phase 1 was removed
+  rather than left in place.
+
+`.
 **Classification:** Architectural (extension of the shipped family sync subsystem)
 **Supersedes:** nothing. **Extends:** `docs/superpowers/specs/2026-09-26-family-sync-design.md`
 
