@@ -74,14 +74,25 @@ class SchemaMigrationTest {
         }
     }
 
-    @Test
-    fun familyStateIsOneRowPerFamily() {
-        assertEquals(
-            setOf("family_id"),
-            TestDatabase.primaryKeys("family_state"),
-            "family_state primary key should be family_id",
-        )
-    }
+/**
+ * Asserts the invariant rather than the old key. V5 recreated this table with `id` as the primary key
+ * because the generic sync writer inserts `id` and reads rows back with `where id = ?`, so V1's
+ * `family_id`-only key left the table unwritable. The one-row-per-family guarantee now rests on
+ * `family_id` being unique, which is what actually prevents two pools for one family.
+ */
+@Test
+fun familyStateIsOneRowPerFamily() {
+    // Condition first, message second: this file imports `kotlin.test.assertTrue`, whose signature is
+    // (actual, message) -- the reverse of `org.junit.Assert.assertTrue`, which is (message, actual).
+    assertTrue(
+        "family_id" in columnNames("family_state"),
+        "family_state must still be unique per family",
+    )
+    assertTrue(
+        TestDatabase.uniqueConstraints("family_state").any { it == setOf("id") },
+        "family_state needs a single-column unique key on id so the sync writer can address a row",
+    )
+}
 
     @Test
     fun savingsGoalsCarryTheirName() {
@@ -110,7 +121,7 @@ class SchemaMigrationTest {
         val tables = listOf(
             "families", "members", "invites", "member_tokens",
             "transactions", "archived_transactions", "budget_periods",
-            "family_state", "period_limits",
+            "family_state", "period_limits", "spend_assignments",
             "saved_categories", "saved_tags", "recurring_templates", "savings_goals",
             "family_settings",
         )

@@ -8,6 +8,9 @@ object SyncTables {
     const val SAVED_TAGS = "saved_tags"
     const val RECURRING_TEMPLATES = "recurring_templates"
     const val SAVINGS_GOALS = "savings_goals"
+    const val FAMILY_STATE = "family_state"
+    const val PERIOD_LIMITS = "period_limits"
+    const val SPEND_ASSIGNMENTS = "spend_assignments"
 
     val ALL = listOf(
         TRANSACTIONS,
@@ -17,6 +20,9 @@ object SyncTables {
         SAVED_TAGS,
         RECURRING_TEMPLATES,
         SAVINGS_GOALS,
+        FAMILY_STATE,
+        PERIOD_LIMITS,
+        SPEND_ASSIGNMENTS,
     )
 
     /**
@@ -27,6 +33,11 @@ object SyncTables {
      * that reference it, and an archived row cannot be inserted before its period exists. This is an
      * explicit list rather than the incidental order of a `groupBy`, so a pull cannot depend on the
      * order rows happened to arrive in the response.
+     *
+     * `family_state` comes before `period_limits` and `spend_assignments` for the same reason one step
+     * removed: both carry a `family_id` that a pull populates, and the server resolves who may write
+     * them from that. Writing them before the pool exists would mean an assignment arrived with
+     * nothing to attach to.
      */
     val APPLY_ORDER = listOf(
         BUDGET_PERIODS,
@@ -35,6 +46,9 @@ object SyncTables {
         SAVED_TAGS,
         RECURRING_TEMPLATES,
         SAVINGS_GOALS,
+        FAMILY_STATE,
+        PERIOD_LIMITS,
+        SPEND_ASSIGNMENTS,
         ARCHIVED_TRANSACTIONS,
     )
 }

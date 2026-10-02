@@ -1,11 +1,13 @@
 package com.danilkinkin.buckwheat.di
 
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.data.entities.SpendBucket
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.math.BigDecimal
 import java.util.Date
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 
 class FakeTransactionDao : TransactionDao {
@@ -60,6 +62,9 @@ class FakeTransactionDao : TransactionDao {
         updatedAt: Long,
         deletedAt: Long?,
         version: Int,
+        bucket: String,
+        assignmentId: String?,
+        assignedByMemberId: String?,
     ) {
         val tx = Transaction(
             id = id,
@@ -74,10 +79,26 @@ class FakeTransactionDao : TransactionDao {
             updatedAt = updatedAt,
             deletedAt = deletedAt,
             version = version,
+            bucket = bucket,
+            assignmentId = assignmentId,
+            assignedByMemberId = assignedByMemberId,
         )
         val index = spends.indexOfFirst { it.id == id }
         if (index >= 0) spends[index] = tx else spends.add(tx)
     }
+
+    override fun getHouseholdSpends(startDate: Long, endDate: Long): Flow<List<Transaction>> = flow {
+        emit(
+            spends.filter {
+                it.type == TransactionType.SPENT &&
+                    it.bucket == SpendBucket.HOUSEHOLD.name &&
+                    it.date.time in startDate..endDate
+            }
+        )
+    }
+
+    override suspend fun getHouseholdSpendsNow(startDate: Long, endDate: Long): List<Transaction> =
+        getHouseholdSpends(startDate, endDate).first()
 
     override suspend fun insert(vararg transaction: Transaction) {
         transaction.forEach {
@@ -94,6 +115,9 @@ class FakeTransactionDao : TransactionDao {
                 updatedAt = it.updatedAt,
                 deletedAt = it.deletedAt,
                 version = it.version,
+                bucket = it.bucket,
+                assignmentId = it.assignmentId,
+                assignedByMemberId = it.assignedByMemberId,
             )
         }
     }

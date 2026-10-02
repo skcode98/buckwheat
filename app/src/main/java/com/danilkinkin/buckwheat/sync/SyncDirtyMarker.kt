@@ -89,6 +89,9 @@ private suspend fun SyncStampDao.stamp(table: String, recordId: String, now: Lon
         SyncTables.SAVED_TAGS -> stampSavedTag(recordId, now)
         SyncTables.RECURRING_TEMPLATES -> stampRecurringTemplate(recordId, now)
         SyncTables.SAVINGS_GOALS -> stampSavingsGoal(recordId, now)
+        SyncTables.FAMILY_STATE -> stampFamilyState(recordId, now)
+        SyncTables.PERIOD_LIMITS -> stampPeriodLimit(recordId, now)
+        SyncTables.SPEND_ASSIGNMENTS -> stampSpendAssignment(recordId, now)
         else -> Unit
     }
 }
@@ -101,4 +104,7 @@ private suspend fun SyncStampDao.releaseFamily() {
     releaseSavedTags()
     releaseRecurringTemplates()
     releaseSavingsGoals()
+    releaseFamilyState()
+    releasePeriodLimits()
+    releaseSpendAssignments()
 }

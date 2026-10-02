@@ -156,14 +156,26 @@ class PushMergeTest {
             SyncTables.require("transactions"),
         )
 
-        assertEquals(listOf("SPENT", "12.50", "1700000000000", "coffee", null), values)
+        // Compared against the spec rather than a literal, because a transaction gained three optional
+        // columns and a hardcoded five quietly stopped testing what it claimed to test. Reading the
+        // expected order out of the spec keeps this a real ordering assertion: a column read in the
+        // wrong position still fails, and adding a column no longer needs this file edited.
+        assertEquals(
+            listOf("SPENT", "12.50", "1700000000000", "coffee", null, null, null, null),
+            values,
+        )
     }
 
+    /**
+     * The point of this one is the *trailing* null, so it asserts the count against the spec and checks
+     * the tail rather than a bare `assertNull(values.last())`, which passed whatever the column count
+     * happened to be.
+     */
     @Test
     fun aMissingNullableColumnBecomesNull() {
         val values = readPayload(TRANSACTION_PAYLOAD, SyncTables.require("transactions"))
 
-        assertEquals(5, values.size)
+        assertEquals(SyncTables.require("transactions").columns.size, values.size)
         assertNull(values.last())
     }
 

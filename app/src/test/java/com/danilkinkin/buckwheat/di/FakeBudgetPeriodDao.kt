@@ -74,6 +74,9 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
         updatedAt: Long,
         deletedAt: Long?,
         version: Int,
+        bucket: String,
+        assignmentId: String?,
+        assignedByMemberId: String?,
     ) {
         val row = ArchivedTransaction(
             id = id,
@@ -89,6 +92,9 @@ class FakeBudgetPeriodDao : BudgetPeriodDao {
             updatedAt = updatedAt,
             deletedAt = deletedAt,
             version = version,
+            bucket = bucket,
+            assignmentId = assignmentId,
+            assignedByMemberId = assignedByMemberId,
         )
         archivedTransactions.removeAll { it.id == id }
         archivedTransactions.add(row)

@@ -1,14 +1,20 @@
 package com.danilkinkin.buckwheat.sync
 
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
+import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
+import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyState
+import com.danilkinkin.buckwheat.data.entities.PeriodLimit
+import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -112,6 +118,9 @@ class SyncBindings(
         savedTagDao: SavedTagDao,
         recurringDao: RecurringDao,
         savingsGoalDao: SavingsGoalDao,
+        familyStateDao: FamilyStateDao,
+        periodLimitDao: PeriodLimitDao,
+        spendAssignmentDao: SpendAssignmentDao,
     ): List<SyncTableGateway> = listOf(
         binding(
             table = SyncTables.BUDGET_PERIODS,
@@ -186,6 +195,44 @@ class SyncBindings(
             payloadOf = { it.businessPayload().toString() },
             metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
             decoder = { record -> JSONObject(record.payload).readSavingsGoal(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.FAMILY_STATE,
+            dao = familyStateDao,
+            loader = { dao: FamilyStateDao -> dao.getAllNow() },
+            inserter = { dao: FamilyStateDao, record: FamilyState -> dao.upsert(record) },
+            remover = { dao: FamilyStateDao, id: String -> dao.deleteByFamilyId(id) },
+            idOf = { it.familyId },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.FAMILY_STATE, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readFamilyState(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.PERIOD_LIMITS,
+            dao = periodLimitDao,
+            loader = { dao: PeriodLimitDao -> dao.getAllNow() },
+            inserter = { dao: PeriodLimitDao, record: PeriodLimit -> dao.upsert(record) },
+            remover = { dao: PeriodLimitDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.PERIOD_LIMITS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record -> JSONObject(record.payload).readPeriodLimit(record.id).withSyncMeta(record) },
+        ),
+        binding(
+            table = SyncTables.SPEND_ASSIGNMENTS,
+            dao = spendAssignmentDao,
+            loader = { dao: SpendAssignmentDao -> dao.getAllNow() },
+            inserter = { dao: SpendAssignmentDao, record: SpendAssignment -> dao.upsert(record) },
+            remover = { dao: SpendAssignmentDao, id: String -> dao.deleteById(id) },
+            idOf = { it.id },
+            isDirty = { id -> pendingMutationDao.isQueued(SyncTables.SPEND_ASSIGNMENTS, id) != 0 },
+            payloadOf = { it.businessPayload().toString() },
+            metaOf = { SyncMeta(it.updatedAt, it.version, it.deletedAt, null, it.familyId, it.syncSeq) },
+            decoder = { record ->
+                JSONObject(record.payload).readSpendAssignment(record.id).withSyncMeta(record)
+            },
         ),
         binding(
             table = SyncTables.ARCHIVED_TRANSACTIONS,

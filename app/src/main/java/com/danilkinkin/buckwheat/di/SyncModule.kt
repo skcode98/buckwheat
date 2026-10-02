@@ -7,6 +7,9 @@ import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
+import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
+import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
+import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.sync.DataStoreFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.DataStoreFamilySessionStore
@@ -76,6 +79,9 @@ object SyncModule {
         savedTagDao: SavedTagDao,
         recurringDao: RecurringDao,
         savingsGoalDao: SavingsGoalDao,
+        familyStateDao: FamilyStateDao,
+        periodLimitDao: PeriodLimitDao,
+        spendAssignmentDao: SpendAssignmentDao,
         syncStateStore: SyncStateStore,
     ): SyncDatabase = RoomSyncDatabase(
         gateways = SyncBindings(pendingMutationDao).gateways(
@@ -85,6 +91,9 @@ object SyncModule {
             savedTagDao = savedTagDao,
             recurringDao = recurringDao,
             savingsGoalDao = savingsGoalDao,
+            familyStateDao = familyStateDao,
+            periodLimitDao = periodLimitDao,
+            spendAssignmentDao = spendAssignmentDao,
         ),
         pendingMutationDao = pendingMutationDao,
         syncStateStore = syncStateStore,

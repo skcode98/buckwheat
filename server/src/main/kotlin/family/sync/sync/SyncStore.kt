@@ -75,6 +75,14 @@ object SyncTables {
                 PayloadColumn("spentAt", "spent_at", SqlType.BIGINT, false),
                 PayloadColumn("comment", "comment", SqlType.TEXT, false),
                 PayloadColumn("category", "category", SqlType.TEXT, true),
+                // Nullable, and deliberately so: a client older than the household feature has no
+                // `bucket` key at all, and a non-nullable column here would make its entire sync fail
+                // `payload_incomplete` so its transactions would never leave the device. Absent means
+                // MEMBER, which is what those builds meant anyway. Widen to non-nullable only once no
+                // client in the field is old enough to omit it.
+                PayloadColumn("bucket", "bucket", SqlType.TEXT, true),
+                PayloadColumn("assignmentId", "assignment_id", SqlType.UUID, true),
+                PayloadColumn("assignedByMemberId", "assigned_by_member_id", SqlType.UUID, true),
             ),
         ),
         TableSpec(
@@ -87,6 +95,9 @@ object SyncTables {
                 PayloadColumn("comment", "comment", SqlType.TEXT, false),
                 PayloadColumn("category", "category", SqlType.TEXT, true),
                 PayloadColumn("periodId", "period_id", SqlType.UUID, false),
+                PayloadColumn("bucket", "bucket", SqlType.TEXT, true),
+                PayloadColumn("assignmentId", "assignment_id", SqlType.UUID, true),
+                PayloadColumn("assignedByMemberId", "assigned_by_member_id", SqlType.UUID, true),
             ),
         ),
         TableSpec(
@@ -137,6 +148,49 @@ object SyncTables {
                 PayloadColumn("deadline", "deadline", SqlType.BIGINT, true),
                 PayloadColumn("createdAt", "created_at", SqlType.BIGINT, false),
                 PayloadColumn("completed", "completed", SqlType.BOOLEAN, false),
+            ),
+        ),
+        TableSpec(
+            name = "family_state",
+            // The generic writer keys every table on `id` and reads rows back with `where id = ?`, so
+            // `id` is a real column here and the client uses it as the record id. V1 keyed this table
+            // on `family_id` alone, which is why it could never be a TableSpec: there was no `id` for
+            // the writer to address and no `seq` for the cursor. See V5.
+            hasMember = false,
+            columns = listOf(
+                PayloadColumn("budget", "budget", SqlType.NUMERIC, false),
+                PayloadColumn("householdTier", "household_tier", SqlType.NUMERIC, false),
+                PayloadColumn("startDate", "start_date", SqlType.BIGINT, false),
+                PayloadColumn("finishDate", "finish_date", SqlType.BIGINT, false),
+                PayloadColumn("currency", "currency", SqlType.TEXT, false),
+                PayloadColumn("householdDetailVisibleToAll", "household_detail_visible_to_all", SqlType.BOOLEAN, false),
+                PayloadColumn("commonSplitRule", "common_split_rule", SqlType.TEXT, false),
+                PayloadColumn("tagsVisibleToSelf", "tags_visible_to_self", SqlType.BOOLEAN, false),
+                PayloadColumn("familyAiEnabled", "family_ai_enabled", SqlType.BOOLEAN, false),
+            ),
+        ),
+        TableSpec(
+            name = "period_limits",
+            hasMember = false,
+            columns = listOf(
+                PayloadColumn("periodId", "period_id", SqlType.UUID, false),
+                PayloadColumn("memberId", "member_id", SqlType.UUID, false),
+                PayloadColumn("limitValue", "limit_value", SqlType.NUMERIC, false),
+            ),
+        ),
+        TableSpec(
+            name = "spend_assignments",
+            hasMember = false,
+            columns = listOf(
+                PayloadColumn("periodId", "period_id", SqlType.UUID, false),
+                PayloadColumn("targetMemberId", "target_member_id", SqlType.UUID, false),
+                PayloadColumn("createdByMemberId", "created_by_member_id", SqlType.UUID, false),
+                PayloadColumn("amount", "amount", SqlType.NUMERIC, false),
+                PayloadColumn("category", "category", SqlType.TEXT, true),
+                PayloadColumn("comment", "comment", SqlType.TEXT, false),
+                PayloadColumn("date", "date", SqlType.BIGINT, false),
+                PayloadColumn("status", "status", SqlType.TEXT, false),
+                PayloadColumn("resolvedAt", "resolved_at", SqlType.BIGINT, true),
             ),
         ),
     )

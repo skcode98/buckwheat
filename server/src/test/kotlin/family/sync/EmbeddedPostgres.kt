@@ -3,6 +3,7 @@ package family.sync
 import family.sync.db.setUuid
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres
 import java.sql.Connection
+import java.util.TreeMap
 import javax.sql.DataSource
 
 data class TestFamily(val familyId: String, val memberId: String)
@@ -120,6 +121,28 @@ object TestDatabase {
             }
         }
         return names
+    }
+
+    /**
+     * Every unique index on [table], each as the set of its columns.
+     *
+     * `getPrimaryKeys` only reports the declared primary key, so it cannot see a unique constraint
+     * that is doing the real work of enforcing a one-row invariant. `getIndexInfo` returns one row per
+     * (index, column) pair, so rows are grouped by `INDEX_NAME` and ordered by `ORDINAL_POSITION`;
+     * without that grouping every index on the table collapses into one meaningless set.
+     */
+    fun uniqueConstraints(table: String): List<Set<String>> {
+        val byIndex = linkedMapOf<String, TreeMap<Int, String>>()
+        dataSource.connection.use { connection ->
+            connection.metaData.getIndexInfo(null, "public", table, true, false).use { rs ->
+                while (rs.next()) {
+                    val column = rs.getString("COLUMN_NAME") ?: continue
+                    val name = rs.getString("INDEX_NAME") ?: continue
+                    byIndex.getOrPut(name) { TreeMap() }[rs.getInt("ORDINAL_POSITION")] = column
+                }
+            }
+        }
+        return byIndex.values.map { it.values.toSet() }
     }
 
     fun insertUuid(connection: Connection, sql: String, vararg args: Any?): String {

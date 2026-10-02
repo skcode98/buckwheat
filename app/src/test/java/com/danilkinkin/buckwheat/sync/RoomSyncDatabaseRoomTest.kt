@@ -61,6 +61,9 @@ class RoomSyncDatabaseRoomTest {
             savedTagDao = db.savedTagDao(),
             recurringDao = db.recurringDao(),
             savingsGoalDao = db.savingsGoalDao(),
+            familyStateDao = db.familyStateDao(),
+            periodLimitDao = db.periodLimitDao(),
+            spendAssignmentDao = db.spendAssignmentDao(),
         )
         database = RoomSyncDatabase(
             gateways = gateways,
