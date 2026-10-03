@@ -49,6 +49,7 @@ class FamilyBudgetViewModel @Inject constructor(
 private val sessionStore: FamilySessionStore,
     private val membersCache: FamilyMembersCache,
     private val insightService: FamilyInsightService,
+    private val familySyncRegistrar: com.danilkinkin.buckwheat.sync.FamilySyncRegistrar,
     private val dirtyMarker: SyncDirtyMarker,
 ) : ViewModel() {
 
@@ -308,6 +309,43 @@ spendsRepository.addSpent(
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CommonSplitRule.EQUAL)
 
 
+    /**
+     * Whether the roster is known at all.
+     *
+     * Separate from [isHead] because "we know you are not the head" and "we could not find out" are
+     * different situations that both make [isHead] false. Treating the second as the first left a head
+     * whose enrolment refetch had failed staring at "the head has not set a budget yet", with no editor
+     * and no way forward, on a screen that is supposed to be where they set it.
+     */
+    val rosterKnown: StateFlow<Boolean> = membersCache.members()
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** Re-asks the server who is who. The roster is a cache and the cache can be stale or empty. */
+    fun refreshRoster() {
+        viewModelScope.launch { familySyncRegistrar.members() }
+    }
+
+    /**
+     * Whether the family has a pool row at all, as distinct from [budget] being null.
+     *
+     * `budget` is null for two unrelated reasons: nobody has set a pool, or there is no active period
+     * to attach one to. Showing an editor for the second is an advert for an action that cannot work --
+     * saving would be refused for want of a period -- so the two are told apart.
+     */
+    /**
+     * Whether there is an active budget period to attach a pool to.
+     *
+     * Distinct from [hasPool] so the sheet can tell a family that has not set a pool from a family
+     * whose own budget period has not been finished, which are different problems with different fixes.
+     */
+    val periodKnown: StateFlow<Boolean> = periodBounds
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val hasPool: StateFlow<Boolean> = combine(session, storedPool) { s, pool -> s != null && pool != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     private val _saveProblem = MutableStateFlow<AllocationProblem?>(null)
 
     /** Null means the last save was accepted. Surfaced as a state rather than thrown. */
@@ -325,9 +363,10 @@ spendsRepository.addSpent(
         rule: CommonSplitRule,
     ) {
         viewModelScope.launch {
-            val problem = setPool(pool, household, allocations)
-            if (problem == null) setSplitRule(rule)
-            _saveProblem.value = problem
+            // One write of one row. The rule used to be a second call afterwards, which re-read the row
+            // the first call had just written and marked it dirty again: two writes racing on one row, and
+            // a duplicated dirty mark for it.
+            _saveProblem.value = setPool(pool, household, allocations, rule)
         }
     }
 
@@ -345,6 +384,7 @@ spendsRepository.addSpent(
         total: BigDecimal,
         householdTier: BigDecimal,
         allocations: Map<String, BigDecimal>,
+        rule: CommonSplitRule = CommonSplitRule.EQUAL,
     ): AllocationProblem? {
         // The server refuses a non-owner anyway, but a rule that lives only in the UI is not a rule.
         if (!isHead.value) return AllocationProblem.NO_ALLOCATION
@@ -358,6 +398,11 @@ spendsRepository.addSpent(
         val candidate = allocations.map { (memberId, value) ->
             PeriodLimit(periodId = periodId, memberId = memberId, limitValue = value)
         }
+        // A pool of zero is storable -- the arithmetic validates 0 against 0 -- and would then be
+        // written and synced to every other device, replacing "not set up yet" with a real-looking
+        // budget of nothing. Refused rather than saved.
+        if (total.signum() <= 0) return AllocationProblem.POOL_NOT_POSITIVE
+
         val problem = validateAllocations(candidate, total.subtract(householdTier), allocations.size)
         if (problem != null) return problem
 
@@ -371,7 +416,7 @@ spendsRepository.addSpent(
                 finishDate = bounds.second,
                 currency = existing?.currency.orEmpty(),
                 householdDetailVisibleToAll = existing?.householdDetailVisibleToAll ?: false,
-                commonSplitRule = existing?.commonSplitRule ?: CommonSplitRule.EQUAL.name,
+                commonSplitRule = rule.name,
                 tagsVisibleToSelf = existing?.tagsVisibleToSelf ?: true,
                 familyAiEnabled = existing?.familyAiEnabled ?: true,
             ),
@@ -396,33 +441,9 @@ spendsRepository.addSpent(
             periodLimitDao.upsert(limit)
             dirtyMarker.markUpsert(SyncTables.PERIOD_LIMITS, limit.id)
         }
-        dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, session.familyId)
+        // The pool row was already marked dirty when it was written, earlier in this same function.
+        // Marking it again for the allocations re-queued the identical record.
         return null
-    }
-
-    fun setHouseholdTier(tier: BigDecimal) {
-        if (!isHead.value) return
-        viewModelScope.launch {
-            val session = sessionStore.current() ?: return@launch
-            val current = familyStateDao.getByFamilyId(session.familyId) ?: return@launch
-familyStateDao.upsert(
-                    current.copy(
-                        householdTier = tier,
-                        budget = tier.add(current.memberTier),
-                    )
-                )
-                dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, current.familyId)
-            }
-    }
-
-    fun setSplitRule(rule: CommonSplitRule) {
-        if (!isHead.value) return
-        viewModelScope.launch {
-            val session = sessionStore.current() ?: return@launch
-            val current = familyStateDao.getByFamilyId(session.familyId) ?: return@launch
-            familyStateDao.upsert(current.copy(commonSplitRule = rule.name))
-            dirtyMarker.markUpsert(SyncTables.FAMILY_STATE, current.familyId)
-        }
     }
 
     fun setHouseholdDetailVisibleToAll(visible: Boolean) {

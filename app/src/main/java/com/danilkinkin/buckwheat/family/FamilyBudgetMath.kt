@@ -181,6 +181,8 @@ enum class AllocationProblem {
     UNDER_ALLOCATED,
     NEGATIVE_ALLOCATION,
     NO_ALLOCATION,
+    /** A pool of nothing is storable but meaningless, and would sync to every device. */
+    POOL_NOT_POSITIVE,
 }
 
 fun validateAllocations(

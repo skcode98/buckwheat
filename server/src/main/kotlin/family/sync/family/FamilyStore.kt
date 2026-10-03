@@ -143,6 +143,12 @@ class FamilyStore(
                 //
                 // The earliest-joined remaining member is promoted, so the choice is deterministic and
                 // does not depend on who happened to press leave.
+                //
+                // Gated on the departing member actually being the owner. Ungated, an ordinary member
+                // leaving promoted somebody on top of a head who was still there -- and since nothing
+                // ever demotes, two `is_owner = true` rows accumulated and either could mint invites,
+                // change the pool, or raise requests. Nothing in the schema prevents that state, so it
+                // has to be impossible to enter rather than merely unlikely.
                 connection.prepareStatement(
                     """
                     update members set is_owner = true
@@ -152,10 +158,16 @@ class FamilyStore(
                         order by joined_at asc, id asc
                         limit 1
                     )
+                    and exists (
+                        select 1 from members
+                        where id = ? and family_id = ? and is_owner
+                    )
                     """.trimIndent()
                 ).use { statement ->
                     statement.setUuid(1, principal.familyId)
                     statement.setUuid(2, principal.memberId)
+                    statement.setUuid(3, principal.memberId)
+                    statement.setUuid(4, principal.familyId)
                     statement.executeUpdate()
                 }
 

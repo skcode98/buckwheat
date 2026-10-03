@@ -640,7 +640,7 @@
   <string name="family_sync_created">Family started</string>
   <string name="family_sync_joined">You joined the family</string>
   <string name="family_sync_signed_out">You left the family</string>
-  <string name="family_sync_error_url">Enter a server address starting with https://</string>
+  <string name="family_sync_error_url">Enter a server address starting with https:// (or http:// for a local one)</string>
   <string name="family_sync_error_name">Enter your name</string>
   <string name="family_sync_error_code">Enter an invite code</string>
   <string name="family_sync_error_no_session">You are not in a family right now</string>
@@ -678,6 +678,14 @@
   <string name="family_budget_pool_exceeds_total">The household share is more than the whole pool.</string>
   <string name="family_budget_under_allocated">The member allocations are less than the pool leaves for members.</string>
   <string name="family_budget_negative_allocation">An allocation cannot be negative.</string>
+  <string name="family_budget_wait_for_head">The head of the family has not set a budget yet.</string>
+  <string name="family_budget_role_unknown">Could not check whether you are the head of this family.</string>
+  <string name="family_budget_retry">Try again</string>
+  <string name="family_budget_set_own_period">Set your own budget period first</string>
+  <string name="family_budget_pool_not_positive">Enter a pool above zero.</string>
+  <string name="family_budget_remove">Remove</string>
+  <string name="family_budget_open_sync">Open family sync</string>
+  <string name="family_budget_set_pool">Set the family budget</string>
   <string name="family_budget_no_allocation">There is nobody to allocate to yet.</string>
   <string name="family_budget_no_pool">No shared budget has been set yet. The head of the family sets it once.</string>
   <string name="family_budget_you_are_head">You are the head of this family, so you can change the split.</string>
@@ -724,6 +732,7 @@
   </plurals>
   <string name="family_sync_members_title">Family members</string>
   <string name="family_sync_members_loading">Loading members</string>
+  <string name="family_sync_members_only_you">It is just you so far. Create an invite to add someone.</string>
   <string name="family_sync_members_failed">Could not load members</string>
   <string name="family_sync_members_refresh">Refresh members</string>
   <string name="family_sync_member_owner">Owner</string>

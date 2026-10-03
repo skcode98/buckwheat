@@ -46,14 +46,25 @@ fun FamilyMembersSection(
 ) {
     LaunchedEffect(Unit) { onRefresh() }
 
-    // Nothing known, nothing broken, nothing in flight: an empty section with a heading is just noise.
-    if (members.isEmpty() && !loading && !failed) return
+    // A solo family used to render nothing here at all, on the reasoning that an empty section is
+    // noise. But "nobody else is here yet" is the single most useful thing to tell somebody who has just
+    // created a family and cannot work out what to do next, and hiding it left the section with a
+    // heading and no content. It now says so, and points at the invite button.
+    val empty = members.isEmpty() && !loading && !failed
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = stringResource(R.string.family_sync_members_title),
             style = MaterialTheme.typography.titleMedium,
         )
+
+        if (empty) {
+            Text(
+                text = stringResource(R.string.family_sync_members_only_you),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+        }
 
         if (loading) {
             Text(

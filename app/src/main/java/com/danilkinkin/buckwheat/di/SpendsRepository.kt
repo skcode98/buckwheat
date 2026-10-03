@@ -88,18 +88,6 @@ data class MemberSpend(
     val transactionCount: Int = 0,
 )
 
-/** The members' total for a rollup, so a UI can render "320 of 1000" from the list it already has.
- *
- * NOT the window total. Household rows are excluded from the rollup, so folding this list gives the
- * members' spending only; the period's real total is that plus `householdSpent`. Every row that is a
- * member's is present, including the null-memberId bucket, so nothing is silently dropped.
- *
- * Unused today. If it is ever wired up, add household back in deliberately rather than reading this
- * as complete.
- */
-val List<MemberSpend>.grandTotal: BigDecimal
-    get() = fold(BigDecimal.ZERO) { acc, spend -> acc + spend.total }
-
 class SpendsRepository @Inject constructor(
     @ApplicationContext val context: Context,
     private val transactionDao: TransactionDao,

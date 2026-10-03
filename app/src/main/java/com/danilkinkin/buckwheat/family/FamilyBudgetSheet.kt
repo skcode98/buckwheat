@@ -1,5 +1,7 @@
 package com.danilkinkin.buckwheat.family
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +22,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.PathState
+import com.danilkinkin.buckwheat.settings.FAMILY_SYNC_SHEET
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.entities.CommonSplitRule
 import com.danilkinkin.buckwheat.data.entities.SpendAssignment
@@ -43,7 +47,10 @@ import java.util.Date
 const val FAMILY_BUDGET_SHEET = "familyBudget"
 
 @Composable
-fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
+fun FamilyBudgetSheet(
+    viewModel: FamilyBudgetViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel(),
+) {
     val budget by viewModel.budget.collectAsStateWithLifecycle()
     val isHead by viewModel.isHead.collectAsStateWithLifecycle()
     val members by viewModel.members.collectAsStateWithLifecycle()
@@ -55,15 +62,66 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
     val assignmentsViewModel: SpendAssignmentsViewModel = hiltViewModel()
     val assignments by assignmentsViewModel.assignments.collectAsStateWithLifecycle()
     val myPending by assignmentsViewModel.me.collectAsStateWithLifecycle()
+    val rosterKnown by viewModel.rosterKnown.collectAsStateWithLifecycle()
+    val hasPool by viewModel.hasPool.collectAsStateWithLifecycle()
+    val periodBounds by viewModel.periodKnown.collectAsStateWithLifecycle()
 
     if (session == null) {
-        Message(stringResource(R.string.family_budget_not_enrolled))
+        Message(
+            text = stringResource(R.string.family_budget_not_enrolled),
+            actionLabel = stringResource(R.string.family_budget_open_sync),
+            onAction = { appViewModel.openSheet(PathState(FAMILY_SYNC_SHEET)) },
+        )
         return
     }
 
-    val current = budget
+val current = budget
     if (current == null) {
-        Message(stringResource(R.string.family_budget_no_pool))
+        // Three unrelated situations, one null, and guessing between them is what produced a head
+        // staring at "the head has not set a budget yet" because their enrolment refetch had failed:
+        // the app could not find out who was head, found nobody, and concluded they were not it.
+        when {
+            !rosterKnown -> Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Header(isHead = false)
+                Text(stringResource(R.string.family_budget_role_unknown), style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = { viewModel.refreshRoster() }) {
+                    Text(stringResource(R.string.family_budget_retry))
+                }
+            }
+
+            // A pool needs a period to attach to. Offering an editor without one advertises an action
+            // that cannot work, because saving would be refused for want of a period.
+            !periodBounds -> Message(
+                text = stringResource(R.string.family_budget_no_period),
+                actionLabel = stringResource(R.string.family_budget_set_own_period),
+                onAction = { appViewModel.closeSheet(FAMILY_BUDGET_SHEET) },
+            )
+
+            isHead -> LazyColumn(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item { Header(isHead = true) }
+                item { Text(stringResource(R.string.family_budget_no_pool), style = MaterialTheme.typography.bodyMedium) }
+                item {
+                    // No pool yet, so nothing to seed from: every field starts blank and the head
+                    // fills it in for the first time.
+                    AllocationEditor(
+                        viewModel = viewModel,
+                        isHead = true,
+                        memberIds = members.keys.toList(),
+                        total = BigDecimal.ZERO,
+                        householdTier = BigDecimal.ZERO,
+                        current = EMPTY_BUDGET,
+                    )
+                }
+            }
+
+            else -> Message(stringResource(R.string.family_budget_wait_for_head))
+        }
         return
     }
 
@@ -121,9 +179,18 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
             )
         }
 
-        val waitingOnMe = assignments.filter { it.targetMemberId == myPending && !it.assignmentStatus.isResolved }
+        // Scoped to the active period and capped. Unfiltered, this list grows for ever -- a request from
+        // six months ago stayed on screen and stayed actionable, offering to accept a spend that
+        // belonged to a period nobody is looking at any more.
+        val activePeriod = viewModel.activePeriodKey
+        val forThisPeriod = if (activePeriod == null) {
+            assignments
+        } else {
+            assignments.filter { it.periodId == activePeriod }
+        }
+        val waitingOnMe = forThisPeriod.filter { it.targetMemberId == myPending && !it.assignmentStatus.isResolved }
         if (waitingOnMe.isNotEmpty()) {
-            items(waitingOnMe, key = { "mine-${it.id}" }) { assignment ->
+            items(waitingOnMe.take(RECENT_LIMIT), key = { "mine-${it.id}" }) { assignment ->
                 AssignmentRow(
                     assignment = assignment,
                     title = stringResource(
@@ -140,7 +207,7 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
             item { Text(stringResource(R.string.family_budget_no_requests)) }
         }
 
-        val mine = assignments.filter { it.createdByMemberId == myPending }
+        val mine = forThisPeriod.filter { it.createdByMemberId == myPending }.take(RECENT_LIMIT)
         if (mine.isNotEmpty()) {
             items(mine, key = { "sent-${it.id}" }) { assignment ->
                 AssignmentRow(
@@ -166,13 +233,14 @@ fun FamilyBudgetSheet(viewModel: FamilyBudgetViewModel = hiltViewModel()) {
             )
         }
 
-        item {
+item {
             AllocationEditor(
                 viewModel = viewModel,
                 isHead = isHead,
                 memberIds = members.keys.toList(),
                 total = current.total,
                 householdTier = current.householdTier,
+                current = current,
             )
         }
 
@@ -240,10 +308,20 @@ private fun SummarySection(viewModel: FamilyBudgetViewModel) {
     }
 }
 
+/**
+ * A state the sheet cannot show anything useful in, with the one action that moves it forward.
+ *
+ * Both of these used to be a line of grey text and nothing else, so somebody who opened the family
+ * budget before enrolling, or whose family has no pool yet, was told what was wrong and given no way
+ * to do anything about it. A dead end that explains itself is still a dead end.
+ */
 @Composable
-private fun Message(text: String) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+private fun Message(text: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium)
+        if (actionLabel != null && onAction != null) {
+            Button(onClick = onAction) { Text(actionLabel) }
+        }
     }
 }
 
@@ -410,10 +488,20 @@ private fun HouseholdSection(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            text = row.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = row.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            // Recorded by the head, so removable by the head. Without this a mistyped
+                            // household expense is permanent: nothing else in the app edits a HOUSEHOLD
+                            // row, and the server refuses the correction from anyone who is not the head.
+                            if (isHead) {
+                                TextButton(onClick = { viewModel.removeHouseholdSpend(row) }) {
+                                    Text(stringResource(R.string.family_budget_remove))
+                                }
+                            }
+                        }
                         Text(
                             text = numberFormat(LocalContext.current, row.value, currency, trimDecimalPlaces = true),
                             style = MaterialTheme.typography.bodyMedium,
@@ -514,7 +602,7 @@ private fun AssignmentComposer(
 ) {
     if (!isHead) return
 
-    var target by remember { mutableStateOf(memberIds.firstOrNull().orEmpty()) }
+    var target by remember(memberIds) { mutableStateOf(memberIds.firstOrNull().orEmpty()) }
     var amountText by remember { mutableStateOf("") }
     var comment by remember { mutableStateOf("") }
     var note by remember { mutableStateOf<String?>(null) }
@@ -538,7 +626,12 @@ private fun AssignmentComposer(
             if (memberIds.size < 2) {
                 Text(stringResource(R.string.family_budget_need_two_members))
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Scrollable because a large family simply does not fit, and a clipped row of member
+                // chips reads as "that is everyone" rather than "there are more below".
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     memberIds.forEach { id ->
                         AssistChip(
                             onClick = { target = id },
@@ -620,6 +713,7 @@ private fun AllocationEditor(
     memberIds: List<String>,
     total: BigDecimal,
     householdTier: BigDecimal,
+    current: FamilyBudget,
 ) {
     if (!isHead) return
 
@@ -632,10 +726,16 @@ private fun AllocationEditor(
     var householdText by remember(householdTier) { mutableStateOf(householdTier.plainString()) }
     // The stored split rule, not EQUAL: opening the editor used to silently reset a family that had
     // chosen proportional, and saving then wrote EQUAL over their choice.
-    var household by remember(viewModel.splitRule) { mutableStateOf(viewModel.splitRule.value) }
+    var household by remember(viewModel.splitRule.value) { mutableStateOf(viewModel.splitRule.value) }
     // Keyed on `memberIds`, like the fields above: a bare `remember` never re-seeds, so a member who
     // joins while the sheet is open gets no row at all and the save is then refused for being short.
-    var allocations by remember(memberIds) { mutableStateOf(memberIds.associateWith { "" }) }
+        // Seeded from the stored split: the editor's whole purpose is adjusting it. A blank map forced the
+    // head to retype every figure to save a one-rupee change, which is how a feature gets used once.
+    var allocations by remember(memberIds, current) {
+        mutableStateOf(
+            current.allocations.associate { it.memberId to it.allocation.plainString() }
+        )
+    }
 
     val typedPool = parseAmount(poolText)
     val typedHousehold = parseAmount(householdText)
@@ -693,6 +793,10 @@ private fun AllocationEditor(
         }
 
         Button(
+            // Enabled only on something worth saving. The arithmetic accepts a pool of zero -- 0 sums to
+            // 0 -- and the row would then be written and synced to every device, replacing "not set up
+            // yet" with a real-looking budget of nothing.
+            enabled = (typedPool?.signum() ?: 0) > 0,
             onClick = {
                 val pool = typedPool ?: BigDecimal.ZERO
                 val householdAmount = typedHousehold ?: BigDecimal.ZERO
@@ -706,6 +810,7 @@ private fun AllocationEditor(
 }
 
 private fun problemMessage(problem: AllocationProblem): Int = when (problem) {
+    AllocationProblem.POOL_NOT_POSITIVE -> R.string.family_budget_pool_not_positive
     AllocationProblem.POOL_EXCEEDS_TOTAL -> R.string.family_budget_pool_exceeds_total
     AllocationProblem.OVER_ALLOCATED -> R.string.family_budget_over_allocated
     AllocationProblem.UNDER_ALLOCATED -> R.string.family_budget_under_allocated
@@ -735,3 +840,25 @@ private fun parseAmount(text: String): BigDecimal? =
     }
 
 private fun BigDecimal.plainString(): String = setScale(2, RoundingMode.HALF_EVEN).toPlainString()
+
+/**
+ * Enough rows to be useful, few enough that a LazyColumn is not measuring a year of history.
+ *
+ * `take`, not `takeLast`: the query orders newest-first, so taking from the end would keep the oldest
+ * twenty and hide the ones most likely to need an answer.
+ */
+private const val RECENT_LIMIT = 20
+
+/**
+ * A pool of nothing, for the editor before one exists.
+ *
+ * Only read for its (empty) allocations, so nothing here is ever shown as a real figure.
+ */
+private val EMPTY_BUDGET = FamilyBudget(
+    total = BigDecimal.ZERO,
+    householdTier = BigDecimal.ZERO,
+    memberTier = BigDecimal.ZERO,
+    householdSpent = BigDecimal.ZERO,
+    householdRemaining = BigDecimal.ZERO,
+    allocations = emptyList(),
+)
