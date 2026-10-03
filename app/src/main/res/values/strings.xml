@@ -654,6 +654,7 @@
   <string name="family_sync_invite_expired">This code has expired</string>
   <string name="family_sync_invite_share_text">Join my Buckwheat family budget with the invite code %1$s</string>
   <string name="family_sync_status_synced">Synced</string>
+  <string name="family_sync_status_syncing">Syncing…</string>
   <string name="family_sync_status_never">Not synced yet</string>
   <string name="family_sync_status_stale">Out of date</string>
   <string name="family_sync_status_failed">Sync failed</string>

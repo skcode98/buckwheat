@@ -69,7 +69,10 @@ fun Settings(
 
     val syncStatusViewModel: SyncStatusViewModel = hiltViewModel()
     val enrolled by syncStatusViewModel.enrolled.collectAsStateWithLifecycle()
-    val syncStatus = syncStatusViewModel.status()
+    val lastSyncedAt by syncStatusViewModel.lastSyncedAt.collectAsStateWithLifecycle()
+    val lastError by syncStatusViewModel.lastError.collectAsStateWithLifecycle()
+    val pendingCount by syncStatusViewModel.pendingCount.collectAsStateWithLifecycle()
+    val syncStatus = syncStatus(lastSyncedAt, lastError, System.currentTimeMillis(), SYNC_STALE_AFTER_MS)
 
     val navigationBarHeight = androidx.compose.ui.unit.max(
         LocalWindowInsets.current.calculateBottomPadding(),

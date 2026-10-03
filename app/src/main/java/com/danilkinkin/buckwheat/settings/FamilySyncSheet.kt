@@ -42,7 +42,6 @@ import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.errorForReport
-import com.danilkinkin.buckwheat.sync.SyncScheduler
 import java.time.Instant
 import java.util.Date
 
@@ -75,24 +74,30 @@ fun FamilySyncSheet(
     val membersLoading by viewModel.membersLoading.collectAsStateWithLifecycle()
     val membersFailed by viewModel.membersFailed.collectAsStateWithLifecycle()
 
-    val syncStatus = syncStatusViewModel.status()
-    val lastSyncedLabel = remember(syncStatus.lastSyncedAt) {
-        if (syncStatus.lastSyncedAt == 0L) {
+    // Collected, not snapshotted. `status()` reads the three values once at composition, so the chip,
+    // the last-synced line and the error line could never change while the sheet was open -- tapping
+    // Sync looked like it had done nothing even when it had succeeded. The ViewModel exposes these as
+    // flows for exactly this reason; the worker writes them when it finishes.
+    val lastSyncedAt by syncStatusViewModel.lastSyncedAt.collectAsStateWithLifecycle()
+    val lastError by syncStatusViewModel.lastError.collectAsStateWithLifecycle()
+    val pendingCount by syncStatusViewModel.pendingCount.collectAsStateWithLifecycle()
+    val syncing by syncStatusViewModel.syncing.collectAsStateWithLifecycle()
+
+    val lastSyncedLabel = remember(lastSyncedAt) {
+        if (lastSyncedAt == 0L) {
             null
         } else {
             DateUtils.getRelativeTimeSpanString(
-                syncStatus.lastSyncedAt,
+                lastSyncedAt,
                 System.currentTimeMillis(),
                 DateUtils.MINUTE_IN_MILLIS,
             ).toString()
         }
     }
     val onSyncNow = {
-        SyncScheduler.syncNow(context)
-        appViewModel.showSnackbar(context.getString(R.string.family_sync_sync_now))
+        syncStatusViewModel.syncNow()
         syncStatusViewModel.refreshPendingCount()
     }
-    val pendingCount by syncStatusViewModel.pendingCount.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { syncStatusViewModel.refreshPendingCount() }
 
     LaunchedEffect(Unit) {
@@ -244,8 +249,12 @@ fun FamilySyncSheet(
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SyncStatusChip(syncStatus)
+                        SyncStatusChip(
+                            syncStatus(lastSyncedAt, lastError, System.currentTimeMillis(), SYNC_STALE_AFTER_MS),
+                            syncing = syncing,
+                        )
                     }
+
 
                     Text(
                         text = lastSyncedLabel?.let {
@@ -255,7 +264,7 @@ fun FamilySyncSheet(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
 
-                    syncStatus.lastError?.let { error ->
+                    lastError?.let { error ->
                         Text(
                             text = error,
                             style = MaterialTheme.typography.bodySmall,

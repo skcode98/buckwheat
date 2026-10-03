@@ -316,7 +316,7 @@ private fun SummarySection(viewModel: FamilyBudgetViewModel) {
  * to do anything about it. A dead end that explains itself is still a dead end.
  */
 @Composable
-private fun Message(text: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+internal fun Message(text: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium)
         if (actionLabel != null && onAction != null) {
@@ -326,7 +326,7 @@ private fun Message(text: String, actionLabel: String? = null, onAction: (() -> 
 }
 
 @Composable
-private fun Header(isHead: Boolean) {
+internal fun Header(isHead: Boolean) {
     Column {
         Text(
             text = stringResource(R.string.family_budget_title),
@@ -371,7 +371,7 @@ private fun Footer(isHead: Boolean, detailVisibleToAll: Boolean, viewModel: Fami
 }
 
 @Composable
-private fun MoneyRow(
+internal fun MoneyRow(
     label: String,
     amount: BigDecimal,
     currency: ExtendCurrency,
@@ -400,7 +400,7 @@ private fun MoneyRow(
 }
 
 @Composable
-private fun MemberAllocationRow(
+internal fun MemberAllocationRow(
     name: String,
     tag: MemberTag?,
     allocation: MemberAllocation,
@@ -453,7 +453,7 @@ private fun MemberAllocationRow(
  * everyone only when the family has opted in.
  */
 @Composable
-private fun HouseholdSection(
+internal fun HouseholdSection(
     viewModel: FamilyBudgetViewModel,
     isHead: Boolean,
     rows: List<com.danilkinkin.buckwheat.data.entities.Transaction>,
@@ -481,34 +481,12 @@ private fun HouseholdSection(
                 if (rows.isEmpty()) {
                     Text(stringResource(R.string.family_budget_household_empty))
                 }
-                // Capped: an unbounded list inside a Column measures every row on every recomposition, and a
-                // year of groceries is more rows than a sheet should build to show five.
-                rows.takeLast(6).forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = row.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            // Recorded by the head, so removable by the head. Without this a mistyped
-                            // household expense is permanent: nothing else in the app edits a HOUSEHOLD
-                            // row, and the server refuses the correction from anyone who is not the head.
-                            if (isHead) {
-                                TextButton(onClick = { viewModel.removeHouseholdSpend(row) }) {
-                                    Text(stringResource(R.string.family_budget_remove))
-                                }
-                            }
-                        }
-                        Text(
-                            text = numberFormat(LocalContext.current, row.value, currency, trimDecimalPlaces = true),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (row.value.signum() < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                HouseholdRows(
+                    rows = rows,
+                    isHead = isHead,
+                    currency = currency,
+                    onRemove = { row -> viewModel.removeHouseholdSpend(row) },
+                )
             } else {
                 Text(stringResource(R.string.family_budget_household_hidden))
             }
@@ -544,6 +522,54 @@ private fun HouseholdSection(
     }
 }
 
+ /**
+ * The household entries, with no ViewModel in sight.
+ *
+ * Split out so the rows can be composed in a test. Everything that shows money belongs to the family
+ * pool, so a rendering fault here is not cosmetic: a row that silently stopped showing its amount, or
+ * a Remove that appeared to members, would not fail any other test in the project.
+ */
+@Composable
+internal fun HouseholdRows(
+    rows: List<com.danilkinkin.buckwheat.data.entities.Transaction>,
+    isHead: Boolean,
+    currency: ExtendCurrency,
+    onRemove: (com.danilkinkin.buckwheat.data.entities.Transaction) -> Unit,
+) {
+    // Capped: an unbounded list inside a Column measures every row on every recomposition, and a year of
+    // groceries is more rows than a sheet should build to show six.
+    rows.takeLast(6).forEach { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = row.comment.ifBlank { stringResource(R.string.family_budget_no_comment) },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                // Recorded by the head, so removable by the head. Without this a mistyped household
+                // expense is permanent: nothing else in the app edits a HOUSEHOLD row, and the server
+                // refuses the correction from anyone who is not the head.
+                if (isHead) {
+                    TextButton(onClick = { onRemove(row) }) {
+                        Text(stringResource(R.string.family_budget_remove))
+                    }
+                }
+            }
+            Text(
+                text = numberFormat(LocalContext.current, row.value, currency, trimDecimalPlaces = true),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (row.value.signum() < 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
+    }
+}
+
 /**
  * One request, and the only place a person can answer one.
  *
@@ -552,7 +578,7 @@ private fun HouseholdSection(
  * simply been lost.
  */
 @Composable
-private fun AssignmentRow(
+internal fun AssignmentRow(
     assignment: SpendAssignment,
     title: String,
     currency: ExtendCurrency,
@@ -574,10 +600,17 @@ private fun AssignmentRow(
                 ),
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text(
-                text = stringResource(R.string.family_budget_request_status, assignmentStatusLabel(assignment.assignmentStatus)),
-                style = MaterialTheme.typography.bodySmall,
-            )
+Text(
+                    // Resolved, not passed as the format argument. It used to hand `assignmentStatusLabel`
+                    // straight to `stringResource`, which takes it as an Object and formats the integer --
+                    // so the status line showed a raw resource id instead of "accepted". Only a test that
+                    // composes this row could have caught it, because nothing else reads that string.
+                    text = stringResource(
+                        R.string.family_budget_request_status,
+                        stringResource(assignmentStatusLabel(assignment.assignmentStatus)),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             if (accept != null && reject != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = accept, enabled = canAnswer) {

@@ -63,12 +63,19 @@ fun syncStatus(lastSyncedAt: Long, lastError: String?, now: Long, staleAfterMs: 
  * row, so the height is required rather than merely preferred: a chip that grew would be clipped.
  */
 @Composable
-fun SyncStatusChip(status: SyncStatus, modifier: Modifier = Modifier) {
-    val label = when (status.kind) {
-        SyncStatusKind.FAILED -> stringResource(R.string.family_sync_status_failed)
-        SyncStatusKind.STALE -> stringResource(R.string.family_sync_status_stale)
-        SyncStatusKind.SYNCED -> stringResource(R.string.family_sync_status_synced)
-        SyncStatusKind.NEVER -> stringResource(R.string.family_sync_status_never)
+fun SyncStatusChip(
+    status: SyncStatus,
+    syncing: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+val label = when {
+        syncing -> stringResource(R.string.family_sync_status_syncing)
+        else -> when (status.kind) {
+            SyncStatusKind.FAILED -> stringResource(R.string.family_sync_status_failed)
+            SyncStatusKind.STALE -> stringResource(R.string.family_sync_status_stale)
+            SyncStatusKind.SYNCED -> stringResource(R.string.family_sync_status_synced)
+            SyncStatusKind.NEVER -> stringResource(R.string.family_sync_status_never)
+        }
     }
     val container = when (status.kind) {
         SyncStatusKind.FAILED -> colorBad
