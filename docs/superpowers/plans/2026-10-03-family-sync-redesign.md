@@ -21,6 +21,7 @@
 - Server test command is `.\gradlew.bat -p server test` **from the repo root** (there is no wrapper inside `server/` and no `gradle` on `PATH`). Client test command is `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.<pkg>.<Class>"`.
 - Never run two Gradle builds at once. Gradle must be launched detached and polled (see Task 0 helper), never in a blocking foreground call.
 - Pre-existing red tests, out of scope, must not be treated as signal: `AppLockViewModelTest`, `PatternEngineTest`, `CategoryCapsTest`, `RecurringDueDedupTest`, `RecurringPaymentsSheetTest`, `RecurringChargeConfirmSheetTest`.
+- **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`.
 - UI strings come from `app/src/main/res/values/strings.xml` via `stringResource(R.string.*)`. No hardcoded user-visible text in composables. Icons must reference an existing `ic_*` drawable — reuse `ic_share`, `ic_arrow_right`, `ic_balance_wallet`, `ic_close`; verify with a drawable lookup before adding a new one.
 - ViewModel convention in this repo is a mix; `FamilySyncViewModel` and `SyncStatusViewModel` already use `StateFlow`, so new family ViewModels use `StateFlow` too. Never `runBlocking`, never `!!`, always `as? T` + Elvis.
 - Adding a method to `SyncStateStore` means implementing it in `internal object NoopSyncStateStore` (`sync/SyncEngine.kt`) **and** in `private object NoOpTestSyncStateStore` (`sync/SyncUpsertWritesEveryColumnTest.kt`).
@@ -60,8 +61,8 @@
 - `app/src/test/java/com/danilkinkin/buckwheat/family/FamilyViewModelTest.kt`
 - `app/src/test/java/com/danilkinkin/buckwheat/family/MemberDetailSheetTest.kt`
 
-**Client — deleted**
-`app/src/main/java/com/danilkinkin/buckwheat/family/{FamilyBudgetMath,FamilyBudgetSheet,FamilyBudgetViewModel,FamilyInsightService,FamilySnapshot,MemberTagEngine,SpendAssignmentLogic,SpendAssignmentsViewModel}.kt`, `app/src/main/java/com/danilkinkin/buckwheat/settings/{FamilyMembersSection,FamilySyncSheet}.kt`, `data/entities/{FamilyState,PeriodLimit,SpendAssignment}.kt`, `data/dao/{FamilyStateDao,PeriodLimitDao,SpendAssignmentDao}.kt`, and matching tests `family/{FamilyBudgetMathTest,FamilyBudgetSheetRenderTest,FamilySnapshotPrivacyTest,MemberTagEngineTest}.kt`.
+**Client — deleted** (Task 3 removes the first group, Task 4 the second)
+`app/src/main/java/com/danilkinkin/buckwheat/family/{FamilyBudgetMath,FamilyBudgetSheet,FamilyBudgetViewModel,FamilyInsightService,FamilySnapshot,MemberTagEngine,SpendAssignmentLogic,SpendAssignmentsViewModel}.kt`, `settings/{FamilyMembersSection,FamilySyncSheet}.kt`, and tests `family/{FamilyBudgetMathTest,FamilyBudgetSheetRenderTest,FamilySnapshotPrivacyTest,MemberTagEngineTest}.kt`; then `data/entities/{FamilyState,PeriodLimit,SpendAssignment}.kt` and `data/dao/{FamilyStateDao,PeriodLimitDao,SpendAssignmentDao}.kt`.
 
 **Client — modified**
 `di/DatabaseModule.kt`, `di/AppModule.kt`, `di/SyncModule.kt`, `sync/{SyncTables,SyncModels,SyncPayloads,SyncBindings,RoomSyncDatabase,SyncStateStore,SyncEngine,HttpSyncClient,HttpFamilyApi,FamilyMembersCache,FamilySessionStore,FamilySyncRegistrar,FamilySyncCoordinator,SyncDirtyMarker}.kt`, `settings/{Settings,FamilySyncViewModel}.kt`, `home/BottomSheets.kt`, `history/History.kt`, `res/values/strings.xml`.
@@ -397,19 +398,20 @@ fun creatingAFamilyReturnsAJoinCodeThatAnotherDeviceCanRedeem() {
 fun leavingKeepsTheMemberRowAndMarksItDeparted() {
     runServer {
         val credentials = postJson("/v1/family/create", """{"displayName":"Owner"}""").json()
-        val familyId = credentials.text("familyId")!!
         val token = credentials.text("token")!!
         val joinCode = credentials.text("joinCode")!!
-        val guestId = TestDatabase.addMember(familyId, "Guest")
-        val guestToken = postJson("/v1/family/join", """{"code":"$joinCode","displayName":"Guest"}""").json().text("token")!!
+        val guest = postJson("/v1/family/join", """{"code":"$joinCode","displayName":"Guest"}""").json()
+        val guestId = guest.text("memberId")!!
+        val guestToken = guest.text("token")!!
 
         assertEquals(HttpStatusCode.OK, postJson("/v1/family/leave", "{}", guestToken).status)
 
         assertFalse(TestDatabase.columnIsNull("members", guestId, "departed_at"))
         assertEquals(0, TestDatabase.countTokens(guestId))
+        assertEquals(2, TestDatabase.countRows("members"))
         val members = postJson("/v1/family/members", "{}", token).json()
-        val guest = members.jsonArrayField("id").let { ids -> ids.indexOf(guestId) }
-        assertTrue(guest >= 0)
+        val ids = members["members"]!!.jsonArray.map { it.jsonObject["id"]!!.jsonPrimitive.content }
+        assertTrue(ids.contains(guestId))
     }
 }
 
@@ -611,7 +613,55 @@ git commit -m "feat(server): departed members, join code on create, drop invite 
 
 ---
 
-## Task 3: Client — Room 22 with `family_transactions`
+## Task 3: Client — delete the family UI layer before the schema changes
+
+Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and those types are consumed by the family ViewModels. Deleting the family UI layer first keeps every commit buildable, so every later task can run its test cycle.
+
+**Files:**
+- Delete: `app/src/main/java/com/danilkinkin/buckwheat/family/{FamilyBudgetMath,FamilyBudgetSheet,FamilyBudgetViewModel,FamilyInsightService,FamilySnapshot,MemberTagEngine,SpendAssignmentLogic,SpendAssignmentsViewModel}.kt`
+- Delete: `app/src/main/java/com/danilkinkin/buckwheat/settings/{FamilySyncSheet,FamilyMembersSection}.kt`
+- Delete: `app/src/test/java/com/danilkinkin/buckwheat/family/{FamilyBudgetMathTest,FamilyBudgetSheetRenderTest,FamilySnapshotPrivacyTest,MemberTagEngineTest}.kt`
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/home/BottomSheets.kt` — remove the `FAMILY_BUDGET_SHEET` and `FAMILY_SYNC_SHEET` `BottomSheetWrapper` blocks, their imports, and any now-unused `hiltViewModel<FamilyBudgetViewModel>()` wiring
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/settings/Settings.kt` — remove both family rows (lines 215–245), the `com.danilkinkin.buckwheat.family.FAMILY_BUDGET_SHEET` import, and `FamilySyncSheet`/`SyncStatusChip`-adjacent imports that become unused
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: no family sheet is reachable from Settings until Task 7. `FamilySyncViewModel`, `SyncStatusChip`, `SyncConflictsSheet`, `family/` package (now empty), and the `transactions`/`archived_transactions` entities all stay untouched.
+
+- [ ] **Step 1: Record the compile-clean baseline**
+
+Run (detached): `.\gradlew.bat compileDebugKotlin`
+Expected: BUILD SUCCESSFUL. If it fails, stop — the baseline was already broken and this task is not the cause.
+
+- [ ] **Step 2: Delete the files and their registrations**
+
+Delete the ten production files and four test files listed above. Then in `BottomSheets.kt` remove the two sheet blocks and their imports. In `Settings.kt` remove both family rows and the `FAMILY_BUDGET_SHEET` import.
+
+- [ ] **Step 3: Confirm nothing still references them**
+
+Run: `git --no-pager grep -n "FamilyBudget\|FamilyInsightService\|FamilySnapshot\|MemberTagEngine\|SpendAssignment\|FamilySyncSheet\|FamilyMembersSection\|FAMILY_BUDGET_SHEET\|FAMILY_SYNC_SHEET" -- app/src`
+Expected: no hits. Any hit is a reference this task missed; delete or rewrite it before continuing.
+
+- [ ] **Step 4: Prove the tree still compiles**
+
+Run (detached): `.\gradlew.bat compileDebugKotlin`
+Expected: BUILD SUCCESSFUL.
+
+- [ ] **Step 5: Run the client suite to prove nothing else broke**
+
+Run (detached): `.\gradlew.bat testDebugUnitTest`
+Expected: the only failures are the six known-red tests named in Global Constraints. Confirm from `app/build/test-results/testDebugUnitTest/*.xml`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A app/src
+git commit -m "refactor(family): drop the budget and assignment UI layers"
+```
+
+---
+
+## Task 4: Client — Room 22 with `family_transactions`
 
 **Files:**
 - Create: `app/src/main/java/com/danilkinkin/buckwheat/data/entities/FamilyTransaction.kt`
@@ -862,10 +912,10 @@ fun provideFamilyTransactionDao(db: DatabaseModule): FamilyTransactionDao = db.f
 
 Delete `FamilyState.kt`, `PeriodLimit.kt`, `SpendAssignment.kt`, `FamilyStateDao.kt`, `PeriodLimitDao.kt`, `SpendAssignmentDao.kt`.
 
-- [ ] **Step 7: Run the test and the full client compile**
+- [ ] **Step 7: Run the test and prove the whole tree compiles**
 
 Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
-Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run `.\gradlew.bat compileDebugKotlin` and expect compile errors only in files that reference the deleted DAOs (`FamilyBudgetViewModel`, `SpendAssignmentsViewModel`, `SyncBindings`, `SyncModule`, `SyncDirtyMarker`, `SyncStampDao`), which Tasks 4 and 6 remove.
+Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run (detached) `.\gradlew.bat compileDebugKotlin` and expect BUILD SUCCESSFUL: `FamilyBudgetViewModel` and `SpendAssignmentsViewModel` were the deleted entities' only remaining consumers, and Task 3 removed both files.
 
 - [ ] **Step 8: Commit the schema and schema JSON**
 
@@ -874,11 +924,9 @@ git add app/schemas/com.danilkinkin.buckwheat.di.DatabaseModule/22.json app/src/
 git commit -m "feat(db): room 22 with family_transactions, drop governance tables"
 ```
 
-The tree does not compile at this commit by design; Task 4 restores it.
-
 ---
 
-## Task 4: Client — sync core collapsed onto `family_transactions`
+## Task 5: Client — sync core collapsed onto `family_transactions`
 
 **Files:**
 - Modify: `app/src/main/java/com/danilkinkin/buckwheat/sync/SyncTables.kt`, `SyncModels.kt`, `SyncPayloads.kt`, `SyncBindings.kt`, `RoomSyncDatabase.kt`, `SyncStateStore.kt`, `SyncEngine.kt`, `HttpSyncClient.kt`
@@ -886,7 +934,7 @@ The tree does not compile at this commit by design; Task 4 restores it.
 - Test: `app/src/test/java/com/danilkinkin/buckwheat/sync/{SyncEngineTest,RoomSyncDatabaseRoomTest,SyncUpsertWritesEveryColumnTest,SyncStateStoreTest,HttpSyncClientTest,SyncPayloadsTest,SyncPayloadContractTest}.kt`
 
 **Interfaces:**
-- Consumes: Task 3's `FamilyTransactionDao` (`getAllNow`, `getById`, `insert`, `deleteById`, `deleteAll`, `updateMemberId`, `deleteRowsWhereMemberDiffersFrom`, `attributeNullMembersTo`) and `Migration21to22`.
+- Consumes: Task 4's `FamilyTransactionDao` (`getAllNow`, `getById`, `insert`, `deleteById`, `deleteAll`, `updateMemberId`, `deleteRowsWhereMemberDiffersFrom`, `attributeNullMembersTo`) and `Migration21to22`.
 - Produces:
   - `SyncTables.TRANSACTIONS` only; `SyncTables.ALL = listOf(TRANSACTIONS)`; `SyncTables.APPLY_ORDER = listOf(TRANSACTIONS)`.
   - `SyncRequest(cursor: Long, changes: List<LocalRecord>, since: Long? = null)`.
@@ -1192,7 +1240,7 @@ git commit -m "feat(sync): mirror remote transactions into family_transactions"
 
 ---
 
-## Task 5: Client — family API surface without invites
+## Task 6: Client — family API surface without invites
 
 **Files:**
 - Modify: `app/src/main/java/com/danilkinkin/buckwheat/sync/HttpFamilyApi.kt`, `FamilyMembersCache.kt`, `FamilySessionStore.kt`, `FamilySyncRegistrar.kt`, `FamilySyncCoordinator.kt`
@@ -1315,7 +1363,7 @@ git commit -m "feat(sync): join code on enrol, departed members, drop invite API
 
 ---
 
-## Task 6: UI — the Family sheet
+## Task 7: UI — the Family sheet
 
 **Files:**
 - Create: `app/src/main/java/com/danilkinkin/buckwheat/family/FamilySheet.kt`
@@ -1326,7 +1374,7 @@ git commit -m "feat(sync): join code on enrol, departed members, drop invite API
 - Test: `app/src/test/java/com/danilkinkin/buckwheat/family/{FamilyViewModelTest,MemberDetailSheetTest}.kt`
 
 **Interfaces:**
-- Consumes: Tasks 3–5 — `FamilyTransactionDao`, `FamilySessionStore`, `FamilySyncCoordinator.syncNow()`, `FamilySyncViewModel`, `DayCard`, `numberFormat`, `SpendsRepository.getStartPeriodDate()/getFinishPeriodDate()`, `PathState`.
+- Consumes: Tasks 4–6 — `FamilyTransactionDao`, `FamilySessionStore`, `FamilySyncCoordinator.syncNow()`, `FamilySyncViewModel`, `DayCard`, `numberFormat`, `SpendsRepository.getStartPeriodDate()/getFinishPeriodDate()`, `PathState`.
 - Produces:
   - `const val FAMILY_SHEET = "family"` and `const val MEMBER_DETAIL_SHEET = "familyMemberDetail"` in `family/FamilySheet.kt`.
   - `FamilyViewModel` with `session: StateFlow<FamilySession?>`, `members: StateFlow<List<FamilyMember>>`, `rosterLoading: StateFlow<Boolean>`, `rosterFailed: StateFlow<Boolean>`, `familyTotal: StateFlow<BigDecimal>`, `ownSpend: StateFlow<BigDecimal>`, `spendByMember: StateFlow<Map<String, BigDecimal>>`, `periodRange: StateFlow<String>`, `dailyAverage: StateFlow<BigDecimal>`, `transactionCount: StateFlow<Int>`, plus `refresh()`, `leave()`, `disconnect()`.
@@ -1622,14 +1670,14 @@ git commit -m "feat(ui): family sheet with member detail and current-period tota
 
 ---
 
-## Task 7: Final verification and contract regeneration
+## Task 8: Final verification and contract regeneration
 
 **Files:**
 - Modify: `app/src/test/java/com/danilkinkin/buckwheat/sync/SyncPayloadContractTest.kt` if the server-source scrape path moved
 - Verify: no file changes expected beyond generated schema JSON
 
 **Interfaces:**
-- Consumes: everything from Tasks 1-6.
+- Consumes: everything from Tasks 1–7.
 - Produces: a green build plus a regenerated `docs/sync-contract.json`-style artifact if the repo tracks one.
 
 - [ ] **Step 1: Regenerate the sync contract and confirm schema version 3**
