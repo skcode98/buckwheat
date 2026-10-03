@@ -82,7 +82,15 @@ android {
             // the stubs inert; about twenty classes in main log on paths that only run when something
             // has already gone wrong.
             isReturnDefaultValues = true
-            all { it.jvmArgs("-ea") }
+            all {
+                it.jvmArgs("-ea")
+                // 86 test classes, most on Robolectric: one fork runs them sequentially.
+                // 4 forks x 1 GB fits the 8 GB box next to the 3 GB daemon; forkEvery
+                // recycles the fork before Robolectric sandbox leaks bloat it.
+                it.maxParallelForks = 4
+                it.forkEvery = 150
+                it.maxHeapSize = "1g"
+            }
         }
     }
 

@@ -3,12 +3,16 @@ subprojects {
 
     configure<com.diffplug.gradle.spotless.SpotlessExtension> {
         kotlin {
-            // by default the target is every '.kt' and '.kts` file in the java sourcesets
+            // The default target is `src/{main,test}/kotlin`, which does not exist in this project --
+            // its Kotlin lives in `src/{main,test,androidTest}/java`. With an empty target the tasks
+            // are permanently UP-TO-DATE and succeed vacuously, which is worse than having no gate: it
+            // reported success over a file the Kotlin compiler rejected, and a reviewer took that green
+            // as evidence the code was formatted.
+            target("src/main/java/**/*.kt", "src/test/java/**/*.kt", "src/androidTest/java/**/*.kt")
             ktfmt()    // has its own section below
             ktlint()   // has its own section below
             diktat()   // has its own section below
             prettier() // has its own section below
-            licenseHeaderFile(rootProject.file("spotless/copyright.kt")) // or licenseHeaderFile
         }
         kotlinGradle {
             target("*.gradle.kts") // default target for kotlinGradle
