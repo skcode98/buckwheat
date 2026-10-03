@@ -7,44 +7,49 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.danilkinkin.buckwheat.LocalWindowInsets
-import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.DescriptionButton
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.data.ExtendCurrency
+import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.errorForReport
+import com.danilkinkin.buckwheat.family.FAMILY_BUDGET_SHEET
+import com.danilkinkin.buckwheat.family.FamilyBudgetViewModel
+import com.danilkinkin.buckwheat.LocalWindowInsets
+import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.util.numberFormat
 import java.time.Instant
 import java.util.Date
-
 const val FAMILY_SYNC_SHEET = "familySync"
 
 @Composable
@@ -52,6 +57,7 @@ fun FamilySyncSheet(
     appViewModel: AppViewModel = hiltViewModel(),
     viewModel: FamilySyncViewModel = hiltViewModel(),
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
+    budgetViewModel: FamilyBudgetViewModel = hiltViewModel(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
     val navigationBarHeight = androidx.compose.ui.unit.max(
@@ -73,6 +79,7 @@ fun FamilySyncSheet(
     val members by viewModel.members.collectAsStateWithLifecycle()
     val membersLoading by viewModel.membersLoading.collectAsStateWithLifecycle()
     val membersFailed by viewModel.membersFailed.collectAsStateWithLifecycle()
+    val currency by budgetViewModel.currency.collectAsStateWithLifecycle()
 
     // Collected, not snapshotted. `status()` reads the three values once at composition, so the chip,
     // the last-synced line and the error line could never change while the sheet was open -- tapping
@@ -224,7 +231,7 @@ fun FamilySyncSheet(
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = stringResource(R.string.family_sync_family, current.familyId),
                             style = MaterialTheme.typography.bodySmall,
@@ -241,6 +248,19 @@ fun FamilySyncSheet(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         )
                     }
+
+                    // The budget used to be reachable only by going back to Settings and looking for a
+                    // row there, which is a dead end from the screen where a family is set up. The whole
+                    // point of enrolling is to spend against a shared pool, so the route to it belongs
+                    // here, immediately under the identity that grants access.
+                    OutlinedButton(
+                        onClick = { appViewModel.openSheet(PathState(FAMILY_BUDGET_SHEET)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.family_budget_open_from_sync))
+                    }
+
+                    FamilyOverview(budgetViewModel, currency)
 
                     Text(
                         text = stringResource(R.string.family_sync_transparency_notice),
@@ -387,3 +407,86 @@ private fun inviteExpiryLabel(context: Context, expiresAt: String): String? = ru
         context.getString(R.string.family_sync_invite_expired)
     }
 }.getOrNull()
+
+/**
+ * The household's standing, in the place where somebody checks it is working.
+ *
+ * A summary rather than the whole budget sheet: this is the screen somebody opens to see whether sync
+ * is working, and "is the pool live yet, and is anyone over" answers that in a few lines. The full sheet
+ * is one tap away and carries the per-member detail, the split editor and the requests.
+ *
+ * Hidden entirely when no pool exists yet, rather than showing a zeroed pool, which would read as
+ * "nobody has spent anything" instead of "this is not set up".
+ */
+@Composable
+private fun FamilyOverview(
+    budgetViewModel: FamilyBudgetViewModel,
+    currency: ExtendCurrency,
+) {
+    val budget by budgetViewModel.budget.collectAsStateWithLifecycle()
+    val isHead by budgetViewModel.isHead.collectAsStateWithLifecycle()
+    val current = budget ?: return
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = stringResource(R.string.family_sync_pool_left),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            Text(
+                text = numberFormat(LocalContext.current, current.remaining, currency, trimDecimalPlaces = true),
+                style = MaterialTheme.typography.bodyMedium,
+                // The same rule as everywhere else money appears: a negative is the difference between
+                // "a number" and "you are over".
+                color = if (current.remaining.signum() < 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.family_sync_pool_shared),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+
+        current.allocations.forEach { allocation ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = budgetViewModel.displayName(allocation.memberId),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.family_sync_member_spent_of,
+                        numberFormat(LocalContext.current, allocation.spent, currency, trimDecimalPlaces = true),
+                        numberFormat(LocalContext.current, allocation.allocation, currency, trimDecimalPlaces = true),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (allocation.remaining.signum() < 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    },
+                )
+            }
+        }
+
+        if (isHead) {
+            Text(
+                text = stringResource(R.string.family_sync_head_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+        }
+    }
+}

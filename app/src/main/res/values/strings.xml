@@ -654,7 +654,7 @@
   <string name="family_sync_invite_expired">This code has expired</string>
   <string name="family_sync_invite_share_text">Join my Buckwheat family budget with the invite code %1$s</string>
   <string name="family_sync_status_synced">Synced</string>
-  <string name="family_sync_status_syncing">Syncing…</string>
+  <string name="family_sync_status_syncing">Syncing</string>
   <string name="family_sync_status_never">Not synced yet</string>
   <string name="family_sync_status_stale">Out of date</string>
   <string name="family_sync_status_failed">Sync failed</string>
@@ -743,4 +743,10 @@
   <string name="family_sync_conflict_show_detail">Show what changed</string>
   <string name="family_sync_conflict_yours">Your version</string>
   <string name="family_sync_conflict_unknown_member">Another member</string>
+  <string name="family_budget_open_from_sync">Open family budget</string>
+  <string name="family_sync_pool_left">Left in the family pool</string>
+  <string name="family_sync_pool_shared">Each member has of their own:</string>
+  <string name="family_sync_member_spent_of">%1$s of %2$s</string>
+  <string name="family_sync_head_hint">As head, you can change the split and record household costs from the family budget.</string>
 </resources>
+

@@ -99,17 +99,28 @@ class AppLockViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Counts the lockout down, and stops.
+     *
+     * This was `while (true)`, which is two problems rather than one. It never ended: a ViewModel that is
+     * locked keeps a coroutine waking every second until `onCleared`, for a countdown that finishes in
+     * seconds. And it made the class untestable -- a test scheduler skips `delay` instantly, so the loop
+     * spun in virtual time and hung the whole suite rather than failing one test.
+     *
+     * Bounded by the deadline it is counting to, so it terminates on its own and the test scheduler has
+     * nothing to spin on.
+     */
     private fun startLockoutTicker() {
         lockoutTickerJob?.cancel()
         lockoutTickerJob = viewModelScope.launch {
-            while (true) {
-                if (!isLocked) return@launch
+            while (isLocked && lockoutUntilMillis > System.currentTimeMillis()) {
                 val remaining = ((lockoutUntilMillis - System.currentTimeMillis()) / 1000L)
                     .toInt()
                     .coerceAtLeast(0)
                 lockoutSecondsLeft = remaining
                 delay(1000)
             }
+            lockoutSecondsLeft = 0
         }
     }
 
@@ -148,6 +159,11 @@ class AppLockViewModel @Inject constructor(
                     repository.setLockoutUntil(lockoutUntilMillis)
                     lockoutSecondsLeft = (appLockLockoutMillis(attempts) / 1000L).toInt()
                     unlockError = "Too many attempts. Locked for 5 minutes."
+                    // Start the countdown here. It used to be left to whichever ticker happened to be
+                    // running, and bounding that ticker to its own deadline meant nothing restarted it --
+                    // so the three-wrong-taps path froze the counter at 300 with the keypad disabled for
+                    // five minutes, which reads as a hung app rather than a lockout.
+                    startLockoutTicker()
                 } else {
                     val remaining = 3 - attempts
                     unlockError = "Invalid PIN. $remaining attempt${if (remaining > 1) "s" else ""} left."
