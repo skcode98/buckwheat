@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -550,45 +551,50 @@ class SyncRouteTest {
     }
 
 /**
- * A family whose head leaves keeps a head.
-     *
-     * `isOwner` is the only thing gating the pool, the split and household spending, so with no owner a
-     * survivor is permanently unable to change the family budget and there is no route to appoint anyone.
-     * Failing closed is right for a security rule and wrong as an outcome: the family is stranded rather
-     * than protected. The earliest-joined remaining member is promoted, so the choice does not depend on
-     * who happened to press leave.
+ * Nobody is promoted when the head leaves.
+ *
+     * The old rule promoted the earliest survivor, because `is_owner` was the only thing gating the pool,
+     * the split and household spending. That gating is gone with the governance tables, so the promotion
+     * had nothing left to protect and only made the departure lossy: whoever was promoted acquired a role
+     * they never asked for, and the roster stopped being a record of who joined. Pinned because the
+     * promotion was real behaviour and nothing else in the suite would notice its removal.
      */
     @Test
-    fun theEarliestRemainingMemberIsPromotedWhenTheHeadLeaves() = runServer {
+    fun noOneIsPromotedWhenTheHeadLeaves() = runServer {
         val family = newFamily()
-        // `newFamily` already has a second member -- the guest it invited. The successor is that
-        // member, not "Second": asserting on the later joiner would pass even if the rule picked
-        // whoever happened to be last.
         val later = joinMember("Later", family.familyId)
 
         postJson("/v1/family/leave", "{}", family.ownerToken)
 
-        val members = postJson("/v1/family/members", "{}", family.guestToken)
-            .json()["members"]!!.jsonArray.map { it.jsonObject }
-
-        val promoted = members.first { it["id"]!!.jsonPrimitive.content == family.guestMemberId }
-        assertTrue("the earliest survivor was not promoted", promoted["isOwner"]!!.jsonPrimitive.content == "true")
-
-        val other = members.first { it["id"]!!.jsonPrimitive.content == later.memberId }
-        assertTrue("a second head appeared", other["isOwner"]!!.jsonPrimitive.content != "true")
+        assertFalse(
+            "the earliest survivor was promoted, which is the retired behaviour",
+            TestDatabase.isOwner(family.guestMemberId),
+        )
+        assertFalse(
+            "a later joiner was promoted, which is the retired behaviour",
+            TestDatabase.isOwner(later.memberId),
+        )
+        assertTrue(
+            "the departed head should keep the owner flag it was created with",
+            TestDatabase.isOwner(family.ownerMemberId),
+        )
     }
 
     @Test
-    fun anOrdinaryMemberLeavingDoesNotChangeWhoTheHeadIs() = runServer {
+    fun anOrdinaryMemberLeavingPromotesNobody() = runServer {
         val family = newFamily()
         val second = joinMember("Second", family.familyId)
 
         postJson("/v1/family/leave", "{}", second.token)
 
-        val members = postJson("/v1/family/members", "{}", family.ownerToken)
-            .json()["members"]!!.jsonArray.map { it.jsonObject }
-        val head = members.first { it["id"]!!.jsonPrimitive.content == family.ownerMemberId }
-        assertTrue("the head was demoted when an ordinary member left", head["isOwner"]!!.jsonPrimitive.content == "true")
+        assertTrue(
+            "the head was demoted when an ordinary member left",
+            TestDatabase.isOwner(family.ownerMemberId),
+        )
+        assertFalse(
+            "the member who left was promoted on the way out",
+            TestDatabase.isOwner(second.memberId),
+        )
     }
 
 /**
@@ -774,36 +780,40 @@ class SyncRouteTest {
     }
 
     /**
-     * A spend whose author has left is nobody's to take over, and nobody may erase it either.
+     * A spend whose author has left keeps its author, and is nobody's to take over or erase.
      *
-     * `member_id` is `on delete set null`, so the row outlives its author with no owner recorded. A
-     * null author is not permission: treating "the author is gone" as "the row is free" hands the
-     * whole family the departed member's ledger to rewrite, which is the one thing the stored-author
-     * rule exists to prevent. Refusing both ways matters -- an overwrite is the obvious theft, and a
-     * tombstone erases the row just as thoroughly while looking like housekeeping.
+     * This used to assert the opposite mechanism: leave deleted the row's author, `on delete set null`
+     * blanked `member_id`, and the refusal followed from there being no author to reconcile against. That
+     * arrangement threw the attribution away to get the guarantee. Leaving now stamps `departed_at` and
+     * keeps the row, so the author survives and the guarantee has to hold on its own: the row is still
+     * the departed member's, and treating "the author has left" as "the row is free" would hand the whole
+     * family that member's ledger to rewrite. Refusing both ways matters -- an overwrite is the obvious
+     * theft, and a tombstone erases the row just as thoroughly while looking like housekeeping.
      */
     @Test
     fun aDepartedMembersSpendsAreNotClaimable() = runServer {
         val family = newFamily()
         val id = UUID.randomUUID().toString()
 
-        // The author has to be the one who leaves, or the row still has an owner and the ordinary
-        // cross-member rule refuses it for that reason instead -- the test would pass even if the
-        // ownerless case were wide open.
+        // The author has to be the one who leaves, or the row belongs to somebody still present and the
+        // ordinary cross-member rule refuses it for that reason instead -- the test would pass even if a
+        // departed author were treated differently.
         postJson(
             "/v1/sync",
             syncBody(0, change("transactions", id, 1, 1000L, spentPayload("20.00", "theirs"))),
             family.ownerToken,
         )
 
-        // The author leaves, and `member_id` goes null with them.
         val left = postJson("/v1/family/leave", "{}", family.ownerToken)
         assertEquals("the author must actually be able to leave", 200, left.status.value)
-        val ownerAfterLeave = storedMemberId(id)
-        assertNull(
-            "the author must have left the row ownerless, but it is owned by $ownerAfterLeave " +
-                "(author was ${family.ownerMemberId}, family ${family.familyId})",
-            ownerAfterLeave,
+        assertEquals(
+            "leaving must not strip the author from the row they wrote (family ${family.familyId})",
+            family.ownerMemberId,
+            storedMemberId(id),
+        )
+        assertTrue(
+            "the author must be marked departed, or this is not the departure case",
+            TestDatabase.isDeparted(family.ownerMemberId),
         )
 
         val overwrite = postJson(
@@ -822,8 +832,13 @@ class SyncRouteTest {
         assertDenied(erase)
         assertEquals("cross_member_write", erase.json().conflicts()[0].text("reason"))
 
-        // Nobody won it, so there is no member to reconcile against -- and the amount is untouched.
-        assertNull(overwrite.json().conflicts()[0].text("wonByMemberId"))
+        // The conflict still names who wrote the row. That used to be null because leaving had erased the
+        // author; now it resolves to the member who left, which is what lets the family show "Jane (left)"
+        // instead of an unattributable amount.
+        assertEquals(
+            family.ownerMemberId,
+            overwrite.json().conflicts()[0].text("wonByMemberId"),
+        )
         val record = postJson("/v1/sync", syncBody(0), family.guestToken).json().recordAt(0)
         assertEquals("20.00", record["payload"]!!.jsonObject.text("value"))
         assertNull(record.text("deletedAt"))

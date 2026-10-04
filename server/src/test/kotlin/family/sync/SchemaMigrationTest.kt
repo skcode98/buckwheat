@@ -13,6 +13,11 @@ import kotlin.test.assertTrue
 
 class SchemaMigrationTest {
 
+    private companion object {
+        val CREATE_TABLE =
+            Regex("""create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)""", RegexOption.IGNORE_CASE)
+    }
+
     /**
      * The schema inventory, which is deliberately wider than the sync contract.
      *
@@ -25,16 +30,20 @@ class SchemaMigrationTest {
     @Test
     fun migrationCreatesEveryTableTheSchemaShips() {
         val tables = tableNames()
-        // Fifteen tables, which is every one the migrations create and none they drop. `V1` creates
-        // fourteen; `V5` adds `spend_assignments` and rebuilds `family_state` as `family_state_v5`
-        // before dropping the original and renaming, so the swap leaves the count unchanged.
+        // Twelve tables, which is every one the migrations create and none they drop. `V1` creates
+        // fourteen; `V5` added `spend_assignments` and rebuilt `family_state` as `family_state_v5`
+        // before dropping the original and renaming, so that swap left the count at fifteen; `V8`
+        // then dropped `family_state`, `period_limits` and `spend_assignments` together, because the
+        // pool, the split and the spend requests are no longer part of the contract.
         listOf(
             "families", "members", "invites", "member_tokens",
             "transactions", "archived_transactions", "budget_periods",
-            "family_state", "period_limits", "spend_assignments",
             "saved_categories", "saved_tags", "recurring_templates", "savings_goals",
             "family_settings",
         ).forEach { assertTrue(it in tables, "missing table $it") }
+        listOf("family_state", "period_limits", "spend_assignments").forEach {
+            assertTrue(it !in tables, "V8 should have dropped $it")
+        }
     }
 
     @Test
@@ -86,27 +95,7 @@ class SchemaMigrationTest {
         }
     }
 
-/**
- * Asserts the invariant rather than the old key. V5 recreated this table with `id` as the primary key
- * because the generic sync writer inserts `id` and reads rows back with `where id = ?`, so V1's
- * `family_id`-only key left the table unwritable. The one-row-per-family guarantee now rests on
- * `family_id` being unique, which is what actually prevents two pools for one family.
- */
 @Test
-fun familyStateIsOneRowPerFamily() {
-    // Condition first, message second: this file imports `kotlin.test.assertTrue`, whose signature is
-    // (actual, message) -- the reverse of `org.junit.Assert.assertTrue`, which is (message, actual).
-    assertTrue(
-        "family_id" in columnNames("family_state"),
-        "family_state must still be unique per family",
-    )
-    assertTrue(
-        TestDatabase.uniqueConstraints("family_state").any { it == setOf("id") },
-        "family_state needs a single-column unique key on id so the sync writer can address a row",
-    )
-}
-
-    @Test
     fun savingsGoalsCarryTheirName() {
         assertTrue(
             "name" in columnNames("savings_goals"),
@@ -133,7 +122,6 @@ fun familyStateIsOneRowPerFamily() {
         val tables = listOf(
             "families", "members", "invites", "member_tokens",
             "transactions", "archived_transactions", "budget_periods",
-            "family_state", "period_limits", "spend_assignments",
             "saved_categories", "saved_tags", "recurring_templates", "savings_goals",
             "family_settings",
         )
@@ -207,6 +195,36 @@ fun familyStateIsOneRowPerFamily() {
         }
     }
 
+    /**
+     * The adoption guard, pinned.
+     *
+     * [FAMILY_TABLES] decides which schemas are safe to baseline at [BASELINE_VERSION], so it has to
+     * be exactly the tables created up to and including that version and nothing newer. `V5` adds
+     * `spend_assignments`; adding it here breaks adoption for every real V1-V3 database, because those
+     * schemas legitimately lack it and `aPreExistingSchemaIsAdoptedRatherThanRecreated` then fails
+     * with `Found non-empty schema(s) "public" but no schema history table`. Deriving the expected set
+     * from the migration SQL rather than restating it means the next table added to the schema cannot
+     * be added here by accident: this fails the day someone does, instead of the adoption path.
+     */
+    @Test
+    fun adoptionBaselineTablesAreExactlyTheTablesUpToTheBaselineVersion() {
+        val createdUpToBaseline = (1..BASELINE_VERSION.toInt())
+            .flatMap { version ->
+                CREATE_TABLE.findAll(migrationSql("V$version")).map { it.groupValues[1].lowercase() }.toList()
+            }
+            .toSet()
+
+        assertEquals(
+            createdUpToBaseline,
+            FAMILY_TABLES.toSet(),
+            "FAMILY_TABLES must match the tables created by V1..V$BASELINE_VERSION, nothing more",
+        )
+        assertTrue(
+            "spend_assignments" !in FAMILY_TABLES,
+            "spend_assignments arrives in V5, after the baseline, so an adopted V1-V3 schema lacks it",
+        )
+    }
+
     @Test
     fun aSchemaMissingFamilyTablesIsNotAdopted() {
         val instance = startEmbeddedPostgres()
@@ -233,6 +251,13 @@ fun familyStateIsOneRowPerFamily() {
         } finally {
             instance.close()
         }
+    }
+
+    private fun migrationSql(version: String): String {
+        val file = migrationFile(version)
+        return requireNotNull(javaClass.classLoader.getResourceAsStream("db/migration/$file")) {
+            "db/migration/$file is not on the test classpath"
+        }.bufferedReader().use { it.readText() }
     }
 
     private fun applyMigration(instance: EmbeddedPostgresInstance, version: String) {

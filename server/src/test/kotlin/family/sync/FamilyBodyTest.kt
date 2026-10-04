@@ -3,6 +3,7 @@ package family.sync
 import family.sync.family.SecuritySettings
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
+import kotlinx.serialization.json.JsonObject
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -90,8 +91,8 @@ class FamilyBodyTest {
 
     @Test
     fun aRejectedBodyNeverConsumesTheInvite() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
+        val owner = createFamilyWithCode("parent")
+        val code = owner.field("joinCode")
 
         val rejected = postJson("/v1/family/join", """{"code":""")
         assertEquals(HttpStatusCode.BadRequest, rejected.status)
@@ -132,8 +133,8 @@ class FamilyBodyTest {
     fun anOversizedJoinBodyIsRefusedBeforeItCanClaimAnInvite() = runServerWith(
         SecuritySettings(maxRequestBytes = 64),
     ) {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
+        val owner = createFamilyWithCode("parent")
+        val code = owner.field("joinCode")
 
         val response = postJson(
             "/v1/family/join",
@@ -176,11 +177,7 @@ class FamilyBodyTest {
 
     private suspend fun HttpResponse.error(): String? = json()["error"]?.jsonPrimitiveText()
 
-    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.createFamily(
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.createFamilyWithCode(
         displayName: String,
-    ): HttpResponse = postJson("/v1/family/create", """{"displayName":"$displayName"}""")
-
-    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.mintInvite(
-        token: String,
-    ): String = postJson("/v1/family/invite", "{}", token).field("code")
+    ): JsonObject = postJson("/v1/family/create", """{"displayName":"$displayName"}""").json()
 }

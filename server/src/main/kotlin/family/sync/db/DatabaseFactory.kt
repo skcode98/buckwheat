@@ -33,11 +33,20 @@ const val POOL_INIT_BACKOFF_MS = 2_000L
 const val BASELINE_VERSION = "3"
 
 /**
- * Every table V1 creates. Adoption is only safe when all of them are present: a schema carrying a
- * subset is not a family-sync database that lost its history table, and marking it at
- * [BASELINE_VERSION] would leave it permanently half-migrated with no error at all.
+ * Every table the migrations create *up to and including* [BASELINE_VERSION] -- that is, V1 to V3.
+ *
+ * This list is not "every table the schema ships". A table first created after the baseline version is
+ * supposed to be absent on an adopted database, because its migration is one of the ones that will
+ * still run. `spend_assignments` is the worked example: V5 creates it, `BASELINE_VERSION` is 3, and
+ * adding it here makes every adoption throw `Found non-empty schema(s) "public" but no schema history
+ * table`, because a real V1-V3 database legitimately does not have it. `SchemaMigrationTest` pins the
+ * two lists together so the next table added to the schema cannot be added here by mistake.
+ *
+ * Adoption is only safe when all of these are present: a schema carrying a subset is not a
+ * family-sync database that lost its history table, and marking it at [BASELINE_VERSION] would leave it
+ * permanently half-migrated with no error at all.
  */
-private val FAMILY_TABLES = listOf(
+internal val FAMILY_TABLES = listOf(
     "families",
     "members",
     "invites",
@@ -123,12 +132,13 @@ fun migrate(dataSource: DataSource) {
 }
 
 /**
- * True only for a schema that already carries every table the migrations create.
+ * True only for a schema that already carries every table in [FAMILY_TABLES] -- that is, every table
+ * the migrations create up to [BASELINE_VERSION].
  *
  * Flyway's own `baselineOnMigrate` baselines any non-empty schema, so a database holding one unrelated
- * table would be adopted, marked at [BASELINE_VERSION], and left permanently missing the other thirteen
- * with nothing in the logs to say so. A schema with no tables at all is a fresh database, where
- * baselining is irrelevant because every migration runs anyway.
+ * table would be adopted, marked at [BASELINE_VERSION], and left permanently missing the rest with
+ * nothing in the logs to say so. A schema with no tables at all is a fresh database, where baselining
+ * is irrelevant because every migration runs anyway.
  */
 private fun adoptable(dataSource: DataSource): Boolean = dataSource.connection.use { connection ->
     val present = mutableSetOf<String>()

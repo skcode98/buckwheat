@@ -15,10 +15,8 @@ data class SecuritySettings(
     val tokenLifetime: Duration = tokenLifetimeFromEnv(),
     val maxRequestBytes: Long = DEFAULT_MAX_REQUEST_BYTES,
     val maxDisplayNameLength: Int = 100,
-    val maxOutstandingInvites: Int = DEFAULT_MAX_OUTSTANDING_INVITES,
     val createRate: RateLimitSetting = RateLimitSetting(20, Duration.ofHours(1)),
     val joinRate: RateLimitSetting = RateLimitSetting(30, Duration.ofMinutes(10)),
-    val inviteRate: RateLimitSetting = RateLimitSetting(60, Duration.ofMinutes(10)),
     val clock: () -> Long = System::currentTimeMillis,
 ) {
     companion object {
@@ -26,18 +24,11 @@ data class SecuritySettings(
             tokenLifetime = tokenLifetimeFromEnv(env),
             maxRequestBytes = env.positiveLong("MAX_REQUEST_BYTES", DEFAULT_MAX_REQUEST_BYTES),
             maxDisplayNameLength = env.positiveInt("MAX_DISPLAY_NAME_LENGTH", 100),
-            maxOutstandingInvites = env.positiveInt(
-                "FAMILY_MAX_OUTSTANDING_INVITES",
-                DEFAULT_MAX_OUTSTANDING_INVITES,
-            ),
             createRate = env.rateLimit(
                 "FAMILY_CREATE_RATE_LIMIT", 20, "FAMILY_CREATE_RATE_WINDOW_SECONDS", 3_600,
             ),
             joinRate = env.rateLimit(
                 "FAMILY_JOIN_RATE_LIMIT", 30, "FAMILY_JOIN_RATE_WINDOW_SECONDS", 600,
-            ),
-            inviteRate = env.rateLimit(
-                "FAMILY_INVITE_RATE_LIMIT", 60, "FAMILY_INVITE_RATE_WINDOW_SECONDS", 600,
             ),
         )
     }

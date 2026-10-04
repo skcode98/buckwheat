@@ -5,28 +5,18 @@ import family.sync.auth.TokenService
 import family.sync.db.setUuid
 import java.security.SecureRandom
 import java.sql.Connection
-import java.sql.Timestamp
-import java.time.Duration
 import java.time.Instant
 import javax.sql.DataSource
 
 private const val CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 private const val CODE_LENGTH = 8
-private const val REDEEMED_INVITE_RETENTION_DAYS = 1
-private const val EXPIRED_INVITE_RETENTION_DAYS = 7
-private val INVITE_LIFETIME = Duration.ofMinutes(15)
-
-const val DEFAULT_MAX_OUTSTANDING_INVITES: Int = 20
+private val JOIN_CODE_LIFETIME_DAYS = 30
 
 data class FamilyCredentials(
     val familyId: String,
     val memberId: String,
     val token: String,
-)
-
-data class MintedInvite(
-    val code: String,
-    val expiresAt: String,
+    val joinCode: String,
 )
 
 /**
@@ -40,14 +30,13 @@ data class MintedInvite(
 data class FamilyMember(
     val id: String,
     val displayName: String,
-    val isOwner: Boolean,
+    val departed: Boolean,
     val joinedAt: String,
 )
 
 class FamilyStore(
     private val dataSource: DataSource,
     private val tokenService: TokenService = TokenService(dataSource),
-    private val maxOutstandingInvites: Int = DEFAULT_MAX_OUTSTANDING_INVITES,
 ) {
 
     private val random = SecureRandom()
@@ -65,43 +54,28 @@ class FamilyStore(
                     familyId,
                     name,
                 )
-                val token = tokenService.mint(connection, memberId, familyId)
-                connection.commit()
-                return FamilyCredentials(familyId, memberId, token)
-            } catch (failure: Exception) {
-                connection.rollback()
-                throw failure
-            }
-        }
-    }
-
-    fun mintInvite(principal: Principal): MintedInvite {
-        if (!isOwner(principal.memberId)) throw ForbiddenException("owner_only")
-        val code = generateCode()
-        val expiresAt = Instant.now().plus(INVITE_LIFETIME)
-        dataSource.connection.use { connection ->
-            connection.autoCommit = false
-            try {
-                pruneInvites(connection)
-                if (countOutstandingInvites(connection, principal.familyId) >= maxOutstandingInvites) {
-                    throw ConflictException("too_many_invites")
-                }
+                // The join code is minted by create rather than on request, so enrolment is one round
+                // trip and the code a member shares is the same one its own devices redeem. `invites.code`
+                // is text, not uuid, so the code is bound as a string.
+                val code = generateCode()
                 connection.prepareStatement(
-                    "insert into invites (code, family_id, created_by, expires_at) values (?, ?, ?, ?)"
+                    "insert into invites (code, family_id, created_by, expires_at) " +
+                        "values (?, ?, ?, now() + make_interval(days => ?))"
                 ).use { statement ->
                     statement.setString(1, code)
-                    statement.setUuid(2, principal.familyId)
-                    statement.setUuid(3, principal.memberId)
-                    statement.setTimestamp(4, Timestamp.from(expiresAt))
+                    statement.setUuid(2, familyId)
+                    statement.setUuid(3, memberId)
+                    statement.setInt(4, JOIN_CODE_LIFETIME_DAYS)
                     statement.executeUpdate()
                 }
+                val token = tokenService.mint(connection, memberId, familyId)
                 connection.commit()
+                return FamilyCredentials(familyId, memberId, token, code)
             } catch (failure: Exception) {
                 connection.rollback()
                 throw failure
             }
         }
-        return MintedInvite(code, expiresAt.toString())
     }
 
     fun redeemInvite(code: String, displayName: String): FamilyCredentials {
@@ -120,7 +94,7 @@ class FamilyStore(
                 )
                 val token = tokenService.mint(connection, memberId, familyId)
                 connection.commit()
-                return FamilyCredentials(familyId, memberId, token)
+                return FamilyCredentials(familyId, memberId, token, normalized)
             } catch (failure: Exception) {
                 connection.rollback()
                 throw failure
@@ -128,58 +102,31 @@ class FamilyStore(
         }
     }
 
+    /**
+     * Closes the membership without erasing the member.
+     *
+     * The row is kept because every transaction the member logged points at it, and `member_id` is
+     * `on delete set null`: deleting the row would silently strip the author from that history, and
+     * `authorize` reads a null author as a refusal, freezing the rows with nobody left to reconcile
+     * against. Stamping `departed_at` closes the membership -- every token that authenticates as the
+     * member is deleted, so the departed device is out -- while leaving the attribution intact.
+     *
+     * The stamp and the token deletion share one transaction. Revoking separately means a crash in
+     * between leaves a live token for a member that is already departed, which is exactly the state
+     * this exists to prevent.
+     */
     fun leave(principal: Principal) {
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                // Promote a successor before deleting the row, while the departing member can still be
-                // identified as the owner.
-                //
-                // Without this a family whose head leaves has no owner at all: `isOwner` is the only
-                // thing that gates the pool, the split and household spending, so the survivor would be
-                // permanently unable to change the family budget and there is no route to appoint
-                // anyone. Failing closed is right for a security rule and wrong as an outcome -- the
-                // family is stranded rather than protected.
-                //
-                // The earliest-joined remaining member is promoted, so the choice is deterministic and
-                // does not depend on who happened to press leave.
-                //
-                // Gated on the departing member actually being the owner. Ungated, an ordinary member
-                // leaving promoted somebody on top of a head who was still there -- and since nothing
-                // ever demotes, two `is_owner = true` rows accumulated and either could mint invites,
-                // change the pool, or raise requests. Nothing in the schema prevents that state, so it
-                // has to be impossible to enter rather than merely unlikely.
                 connection.prepareStatement(
-                    """
-                    update members set is_owner = true
-                    where id = (
-                        select id from members
-                        where family_id = ? and id <> ?
-                        order by joined_at asc, id asc
-                        limit 1
-                    )
-                    and exists (
-                        select 1 from members
-                        where id = ? and family_id = ? and is_owner
-                    )
-                    """.trimIndent()
+                    "update members set departed_at = now() where id = ? and family_id = ?"
                 ).use { statement ->
-                    statement.setUuid(1, principal.familyId)
-                    statement.setUuid(2, principal.memberId)
-                    statement.setUuid(3, principal.memberId)
-                    statement.setUuid(4, principal.familyId)
-                    statement.executeUpdate()
-                }
-
-                // The member row and every token that authenticates as it go in one transaction.
-                // Revoking the caller's token separately means a crash in between leaves a live
-                // token for a member that no longer exists, which is exactly the state leave exists
-                // to remove.
-                connection.prepareStatement("delete from member_tokens where member_id = ?").use { statement ->
                     statement.setUuid(1, principal.memberId)
+                    statement.setUuid(2, principal.familyId)
                     statement.executeUpdate()
                 }
-                connection.prepareStatement("delete from members where id = ?").use { statement ->
+                connection.prepareStatement("delete from member_tokens where member_id = ?").use { statement ->
                     statement.setUuid(1, principal.memberId)
                     statement.executeUpdate()
                 }
@@ -188,13 +135,6 @@ class FamilyStore(
                 connection.rollback()
                 throw failure
             }
-        }
-    }
-
-    fun isOwner(memberId: String): Boolean = dataSource.connection.use { connection ->
-        connection.prepareStatement("select is_owner from members where id = ?").use { statement ->
-            statement.setUuid(1, memberId)
-            statement.executeQuery().use { rows -> rows.next() && rows.getBoolean("is_owner") }
         }
     }
 
@@ -209,7 +149,8 @@ class FamilyStore(
 
     fun familyMembers(familyId: String): List<FamilyMember> = dataSource.connection.use { connection ->
         connection.prepareStatement(
-            "select id, display_name, is_owner, joined_at from members where family_id = ? order by joined_at, id"
+            "select id::text, display_name, departed_at is not null, joined_at " +
+                "from members where family_id = ? order by joined_at, id"
         ).use { statement ->
             statement.setUuid(1, familyId)
             statement.executeQuery().use { rows ->
@@ -217,10 +158,10 @@ class FamilyStore(
                 while (rows.next()) {
                     members.add(
                         FamilyMember(
-                            id = rows.getString("id"),
-                            displayName = rows.getString("display_name"),
-                            isOwner = rows.getBoolean("is_owner"),
-                            joinedAt = rows.getTimestamp("joined_at").toInstant().toString(),
+                            id = rows.getString(1),
+                            displayName = rows.getString(2),
+                            departed = rows.getBoolean(3),
+                            joinedAt = rows.getTimestamp(4).toInstant().toString(),
                         )
                     )
                 }
@@ -232,7 +173,7 @@ class FamilyStore(
     private fun claimInvite(connection: Connection, code: String): String {
         val claimed = connection.prepareStatement(
             "update invites set redeemed_at = now() where code = ? and redeemed_at is null " +
-                "and expires_at > now() returning family_id"
+                "and expires_at > now() returning family_id::text"
         ).use { statement ->
             statement.setString(1, code)
             statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
@@ -250,28 +191,6 @@ class FamilyStore(
             ConflictException("invite_already_used")
         }
     }
-
-    private fun pruneInvites(connection: Connection) {
-        connection.prepareStatement(
-            "delete from invites where " +
-                "(redeemed_at is not null and redeemed_at < now() - make_interval(days => ?)) or " +
-                "(expires_at < now() - make_interval(days => ?))"
-        ).use { statement ->
-            statement.setInt(1, REDEEMED_INVITE_RETENTION_DAYS)
-            statement.setInt(2, EXPIRED_INVITE_RETENTION_DAYS)
-            statement.executeUpdate()
-        }
-    }
-
-    private fun countOutstandingInvites(connection: Connection, familyId: String): Int =
-        connection.prepareStatement(
-            "select count(*) from invites where family_id = ? and redeemed_at is null and expires_at > now()"
-        ).use { statement ->
-            statement.setUuid(1, familyId)
-            statement.executeQuery().use { rows ->
-                if (rows.next()) rows.getInt(1) else 0
-            }
-        }
 
     private fun readInvite(connection: Connection, code: String): Invite? =
         connection.prepareStatement(

@@ -41,7 +41,7 @@ object TestDatabase {
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute(
-                    "truncate invites, member_tokens, period_limits, family_state, " +
+                    "truncate invites, member_tokens, " +
                         "archived_transactions, transactions, budget_periods, saved_categories, " +
                         "saved_tags, recurring_templates, savings_goals, family_settings, " +
                         "members, families restart identity cascade"
@@ -54,6 +54,13 @@ object TestDatabase {
         connection.prepareStatement("select is_owner from members where id = ?").use { statement ->
             statement.setUuid(1, memberId)
             statement.executeQuery().use { rows -> rows.next() && rows.getBoolean("is_owner") }
+        }
+    }
+
+    fun isDeparted(memberId: String): Boolean = dataSource.connection.use { connection ->
+        connection.prepareStatement("select departed_at is not null from members where id = ?").use { statement ->
+            statement.setUuid(1, memberId)
+            statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
         }
     }
 
@@ -113,6 +120,14 @@ object TestDatabase {
             }
         }
     }
+
+    fun countTokens(memberId: String): Int =
+        dataSource.connection.use { connection ->
+            connection.prepareStatement("select count(*) from member_tokens where member_id = ?::uuid").use { statement ->
+                statement.setUuid(1, memberId)
+                statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else 0 }
+            }
+        }
 
     fun countRows(table: String): Int = dataSource.connection.use { connection ->
         connection.createStatement().use { statement ->

@@ -28,10 +28,9 @@ fun Application.familyRoutes(
     settings: SecuritySettings = SecuritySettings.fromEnv(),
 ) {
     val tokenService = TokenService(dataSource, settings.tokenLifetime)
-    val store = FamilyStore(dataSource, tokenService, settings.maxOutstandingInvites)
+    val store = FamilyStore(dataSource, tokenService)
     val createLimiter = RateLimiter(settings.createRate, settings.clock)
     val joinLimiter = RateLimiter(settings.joinRate, settings.clock)
-    val inviteLimiter = RateLimiter(settings.inviteRate, settings.clock)
 
     routing {
         route("/v1/family") {
@@ -42,15 +41,6 @@ fun Application.familyRoutes(
                     body.requiredText("displayName", settings.maxDisplayNameLength),
                 )
                 call.respond(HttpStatusCode.OK, credentials.response())
-            }
-
-            post("/invite") {
-                call.limit(inviteLimiter, "invite")
-                val token = call.bearerToken() ?: throw UnauthorizedException("unauthenticated")
-                val principal = tokenService.requirePrincipal(token)
-                call.respond(HttpStatusCode.OK, store.mintInvite(principal).let {
-                    mapOf("code" to it.code, "expiresAt" to it.expiresAt)
-                })
             }
 
             post("/join") {
@@ -65,8 +55,9 @@ fun Application.familyRoutes(
 
             post("/leave") {
                 val token = call.bearerToken() ?: throw UnauthorizedException("unauthenticated")
+                // Every token for the member is deleted by the store in the same transaction that
+                // stamps the departure, so there is nothing left for a separate revoke to undo.
                 val principal = tokenService.requirePrincipal(token)
-                tokenService.revoke(token)
                 store.leave(principal)
                 call.respond(HttpStatusCode.OK, mapOf("left" to true))
             }
@@ -94,6 +85,7 @@ private fun FamilyCredentials.response(): Map<String, String> = mapOf(
     "familyId" to familyId,
     "memberId" to memberId,
     "token" to token,
+    "joinCode" to joinCode,
 )
 
 private suspend fun ApplicationCall.respondWithMembers(
@@ -112,7 +104,7 @@ private suspend fun ApplicationCall.respondWithMembers(
                     buildJsonObject {
                         put("id", member.id)
                         put("displayName", member.displayName)
-                        put("isOwner", member.isOwner)
+                        put("departed", member.departed)
                         put("joinedAt", member.joinedAt)
                     }
                 )

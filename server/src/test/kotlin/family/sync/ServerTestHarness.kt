@@ -59,3 +59,9 @@ fun kotlinx.serialization.json.JsonElement?.jsonArrayField(name: String): List<S
 }
 
 fun tamper(token: String): String = token.dropLast(1) + if (token.last() == 'A') 'B' else 'A'
+
+/** Same read as [HttpResponse.field], for a body already parsed by a previous call. */
+fun JsonObject.field(name: String): String {
+    val value = this[name]?.jsonPrimitive?.content
+    return requireNotNull(value) { "body has no field $name: $this" }
+}

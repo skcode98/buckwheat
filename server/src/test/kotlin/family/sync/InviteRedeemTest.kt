@@ -7,9 +7,15 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import java.time.Duration
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 fun runServerWith(
@@ -39,23 +45,22 @@ class InviteRedeemTest {
     }
 
     @Test
-    fun theOwnerMintsAnInviteAndAnotherDeviceRedeemsIt() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
+    fun creatingAFamilyReturnsAJoinCodeThatAnotherDeviceCanRedeem() = runServer {
+        val credentials = postJson("/v1/family/create", """{"displayName":"Owner"}""").json()
+        val code = credentials.field("joinCode")
 
-        val joined = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+        val guest = postJson("/v1/family/join", """{"code":"$code","displayName":"Guest"}""").json()
 
-        assertEquals(HttpStatusCode.OK, joined.status)
-        assertEquals(owner.field("familyId"), joined.field("familyId"))
-        assertTrue(joined.field("memberId") != owner.field("memberId"))
-        assertTrue(joined.field("token").isNotBlank())
+        assertNotNull(guest["token"])
     }
 
     @Test
     fun aRedeemedMemberGetsItsOwnWorkingToken() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        val joined = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+        val owner = createFamilyWithCode()
+        val joined = postJson(
+            "/v1/family/join",
+            """{"code":"${owner.field("joinCode")}","displayName":"child"}""",
+        )
 
         val whoAmI = postJson("/v1/family/whoami", "{}", joined.field("token"))
 
@@ -63,33 +68,6 @@ class InviteRedeemTest {
         assertEquals(joined.field("memberId"), whoAmI.field("memberId"))
         assertEquals(owner.field("familyId"), whoAmI.field("familyId"))
         assertEquals("child", whoAmI.field("displayName"))
-    }
-
-    @Test
-    fun anInviteCodeIsSingleUse() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        assertEquals(
-            HttpStatusCode.OK,
-            postJson("/v1/family/join", """{"code":"$code","displayName":"first"}""").status,
-        )
-
-        val second = postJson("/v1/family/join", """{"code":"$code","displayName":"second"}""")
-
-        assertEquals(HttpStatusCode.Conflict, second.status)
-        assertEquals("invite_already_used", second.json()["error"]?.jsonPrimitiveText())
-    }
-
-    @Test
-    fun anExpiredInviteCodeIsRefusedDistinctlyFromAUsedOne() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        TestDatabase.expireInvite(code)
-
-        val response = postJson("/v1/family/join", """{"code":"$code","displayName":"late"}""")
-
-        assertEquals(HttpStatusCode.Gone, response.status)
-        assertEquals("invite_expired", response.json()["error"]?.jsonPrimitiveText())
     }
 
     @Test
@@ -101,38 +79,9 @@ class InviteRedeemTest {
     }
 
     @Test
-    fun anUnauthenticatedDeviceCannotMintAnInvite() = runServer {
-        val response = postJson("/v1/family/invite", "{}", null)
-
-        assertEquals(HttpStatusCode.Unauthorized, response.status)
-    }
-
-    @Test
-    fun aTamperedTokenCannotMintAnInvite() = runServer {
-        val owner = createFamily("parent")
-
-        val response = postJson("/v1/family/invite", "{}", tamper(owner.field("token")))
-
-        assertEquals(HttpStatusCode.Unauthorized, response.status)
-    }
-
-    @Test
-    fun aNonOwnerCannotMintAnInvite() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
-
-        val response = postJson("/v1/family/invite", "{}", child.field("token"))
-
-        assertEquals(HttpStatusCode.Forbidden, response.status)
-        assertEquals("owner_only", response.json()["error"]?.jsonPrimitiveText())
-    }
-
-    @Test
     fun aMemberCanSeeTheFamilyMemberList() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+        val owner = createFamilyWithCode()
+        postJson("/v1/family/join", """{"code":"${owner.field("joinCode")}","displayName":"child"}""")
 
         val members = postJson("/v1/family/members", "{}", owner.field("token"))
 
@@ -144,13 +93,16 @@ class InviteRedeemTest {
     /**
      * The id is what makes attribution possible at all: a client holding a synced transaction knows
      * only the `member_id` that wrote it, and a conflict names only `wonByMemberId`. A roster of bare
-     * names cannot answer either question, so the id has to be on the wire.
+     * names cannot answer either question, so the id has to be on the wire. `departed` starts false for
+     * everyone, including the creator -- a member that has never left is not a departed member.
      */
     @Test
-    fun theMemberListCarriesTheIdAndOwnerFlag() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+    fun theMemberListCarriesTheIdAndDepartedFlag() = runServer {
+        val owner = createFamilyWithCode()
+        val child = postJson(
+            "/v1/family/join",
+            """{"code":"${owner.field("joinCode")}","displayName":"child"}""",
+        )
 
         val members = postJson("/v1/family/members", "{}", owner.field("token")).json()["members"]
 
@@ -158,7 +110,7 @@ class InviteRedeemTest {
         assertEquals(2, ids?.size)
         assertEquals(owner.field("memberId"), ids?.first())
         assertEquals(child.field("memberId"), ids?.last())
-        assertEquals(listOf("true", "false"), members?.jsonArrayField("isOwner"))
+        assertEquals(listOf("false", "false"), members?.jsonArrayField("departed"))
     }
 
     @Test
@@ -168,27 +120,60 @@ class InviteRedeemTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
+    /**
+     * One leave, every consequence of it.
+     *
+     * These were two tests that both stood up a family, joined a second device and left, then each
+     * asserted a different half of the same outcome: the row surviving with a stamp, and the token
+     * being dead. Split that way a regression that dropped the row and kept the token still left one
+     * green. Kept as one test, and it checks the roster too, because "the row survives" has to mean
+     * the family can still see it.
+     */
     @Test
-    fun leavingRevokesTheTokenAndRemovesTheMembership() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+    fun leavingKeepsTheMemberRowStampsItDepartedAndRevokesTheToken() = runServer {
+        val owner = createFamilyWithCode()
+        val child = postJson(
+            "/v1/family/join",
+            """{"code":"${owner.field("joinCode")}","displayName":"child"}""",
+        )
 
         val left = postJson("/v1/family/leave", "{}", child.field("token"))
 
         assertEquals(HttpStatusCode.OK, left.status)
         assertEquals("true", left.json()["left"]?.jsonPrimitiveText())
-        val afterwards = postJson("/v1/family/whoami", "{}", child.field("token"))
-        assertEquals(HttpStatusCode.Unauthorized, afterwards.status)
-        assertEquals(1, TestDatabase.countRows("members"))
-        assertEquals(1, TestDatabase.readTokenHashes().size)
+
+        // The row is still there, which is the whole point: `transactions.member_id` points at it and
+        // `on delete set null` would have stripped the author off every row the member ever wrote.
+        assertEquals(2, TestDatabase.countRows("members"))
+        assertTrue(
+            TestDatabase.isDeparted(child.field("memberId")),
+            "the departed member was not stamped",
+        )
+        assertFalse(
+            TestDatabase.isDeparted(owner.field("memberId")),
+            "the member that stayed was stamped as departed",
+        )
+        val roster = postJson("/v1/family/members", "{}", owner.field("token")).json()
+        assertEquals(
+            listOf("false", "true"),
+            roster["members"]?.jsonArrayField("departed"),
+        )
+
+        // And the departed device is actually out.
+        assertEquals(0, TestDatabase.countTokens(child.field("memberId")))
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            postJson("/v1/family/whoami", "{}", child.field("token")).status,
+        )
     }
 
     @Test
     fun theOwnerKeepsItsTokenAfterSomebodyElseLeaves() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        val child = postJson("/v1/family/join", """{"code":"$code","displayName":"child"}""")
+        val owner = createFamilyWithCode()
+        val child = postJson(
+            "/v1/family/join",
+            """{"code":"${owner.field("joinCode")}","displayName":"child"}""",
+        )
         postJson("/v1/family/leave", "{}", child.field("token"))
 
         val whoAmI = postJson("/v1/family/whoami", "{}", owner.field("token"))
@@ -206,7 +191,7 @@ class InviteRedeemTest {
 
     @Test
     fun anExpiredTokenCannotEvenLeave() = runServerWith(SecuritySettings(tokenLifetime = Duration.ZERO)) {
-        val owner = createFamily("parent")
+        val owner = createFamilyWithCode()
 
         val response = postJson("/v1/family/leave", "{}", owner.field("token"))
 
@@ -245,7 +230,7 @@ class InviteRedeemTest {
         )
 
         runServerWith(settings) {
-            createFamily("parent")
+            createFamilyWithCode()
             val first = postJson("/v1/family/join", """{"code":"AAAAAA1","displayName":"a"}""")
             assertEquals(HttpStatusCode.NotFound, first.status)
 
@@ -261,89 +246,19 @@ class InviteRedeemTest {
     }
 
     @Test
-    fun mintingInvitesIsRateLimitedPerCaller() {
-        val clock = FakeClock()
-        val settings = SecuritySettings(
-            inviteRate = RateLimitSetting(1, Duration.ofMinutes(5)),
-            clock = clock::now,
-        )
+    fun thereIsNoInviteRoute() = runServer {
+        val token = createFamilyWithCode().field("token")
 
-        runServerWith(settings) {
-            val owner = createFamily("parent")
-            assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
-
-            val blocked = postJson("/v1/family/invite", "{}", owner.field("token"))
-            assertEquals(HttpStatusCode.TooManyRequests, blocked.status)
-            assertEquals("rate_limited", blocked.json()["error"]?.jsonPrimitiveText())
-
-            clock.advance(Duration.ofMinutes(5))
-
-            assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
-        }
+        assertEquals(HttpStatusCode.NotFound, postJson("/v1/family/invite", "{}", token).status)
     }
 
-    @Test
-    fun oneOwnerCannotFloodTheInviteTable() = runServerWith(
-        SecuritySettings(maxOutstandingInvites = 2),
-    ) {
-        val owner = createFamily("parent")
-        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
-        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
-
-        val blocked = postJson("/v1/family/invite", "{}", owner.field("token"))
-
-        assertEquals(HttpStatusCode.Conflict, blocked.status)
-        assertEquals("too_many_invites", blocked.json()["error"]?.jsonPrimitiveText())
-        assertEquals(2, TestDatabase.countRows("invites"))
-    }
-
-    @Test
-    fun mintingAnInvitePrunesInvitesNobodyCanRedeemAnymore() = runServer {
-        val owner = createFamily("parent")
-        mintInvite(owner.field("token"))
-        TestDatabase.dataSource.connection.use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeUpdate("update invites set redeemed_at = now() - interval '30 days'")
-            }
-        }
-
-        assertEquals(HttpStatusCode.OK, postJson("/v1/family/invite", "{}", owner.field("token")).status)
-
-        assertEquals(1, TestDatabase.countRows("invites"))
-    }
-
-    @Test
-    fun aUsedInviteNeverCreatesASecondMember() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        postJson("/v1/family/join", """{"code":"$code","displayName":"first"}""")
-
-        repeat(3) {
-            postJson("/v1/family/join", """{"code":"$code","displayName":"again"}""")
-        }
-
-        assertEquals(2, TestDatabase.countRows("members"))
-    }
-
-    @Test
-    fun anExpiredInviteCreatesNoMember() = runServer {
-        val owner = createFamily("parent")
-        val code = mintInvite(owner.field("token"))
-        TestDatabase.expireInvite(code)
-
-        val response = postJson("/v1/family/join", """{"code":"$code","displayName":"late"}""")
-
-        assertEquals(HttpStatusCode.Gone, response.status)
-        assertEquals(1, TestDatabase.countRows("members"))
-    }
+    private suspend fun ApplicationTestBuilder.createFamilyWithCode(
+        displayName: String = "parent",
+    ): JsonObject = createFamily(displayName).json()
 
     private suspend fun ApplicationTestBuilder.createFamily(
         displayName: String,
     ): HttpResponse = postJson("/v1/family/create", """{"displayName":"$displayName"}""")
-
-    private suspend fun ApplicationTestBuilder.mintInvite(
-        token: String,
-    ): String = postJson("/v1/family/invite", "{}", token).field("code")
 }
 
 private class FakeClock(private var millis: Long = 0L) {
