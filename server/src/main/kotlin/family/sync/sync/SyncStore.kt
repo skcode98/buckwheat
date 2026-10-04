@@ -317,9 +317,10 @@ class SyncStore(private val dataSource: DataSource) {
      * Whether the server holds this id in this family, and whose row it is when it does.
      *
      * [Owned] with a null [Owned.memberId] is the state a row is left in when its author leaves:
-     * `member_id` is `on delete set null` on every table that has one, so the ledger survives the
-     * member. That is deliberately a different answer from [Absent], because it needs a different
-     * decision.
+     * that needs a table whose author column survives the departure as a null. `transactions.member_id`
+     * is `on delete set null` (`V1:52`), whereas `member_tokens.member_id` is `not null` and
+     * `on delete cascade` (`V1:28`), so those rows are deleted rather than left ownerless. That is
+     * deliberately a different answer from [Absent], because it needs a different decision.
      */
     private sealed interface Ownership {
         data object Absent : Ownership
