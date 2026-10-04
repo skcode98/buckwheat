@@ -76,24 +76,23 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `tools\gradle-detached.cmd <gradle-args…>` — launches `gradlew.bat <args>` in a detached console and writes `%TEMP%\opencode\gradle-<random>.log`. Every later task invokes builds through it.
+- Produces: `tools\gradle-detached.cmd <gradle-args…>` — launches `gradlew.bat <args>` in a minimized detached console rooted at the repo root, and prints two lines: `LOG=<absolute path to C:\Users\suraj\AppData\Local\Temp\opencode\gradle-<guid>.log>` and `PID=<process id of this build>`. The log ends with a final `EXIT=<gradle exit code>` line once the build finishes; no `EXIT=` line yet means it is still running. A `<log>.pid` sidecar carries the same PID. Every later task invokes builds through it. Do not pass arguments containing `&`, `|`, `<`, `>`, or `!` — the launch path cannot forward them.
 
-- [ ] **Step 1: Create the script**
+- [x] **Step 1: Create the script**
 
-```bat
-@echo off
-setlocal
-if not exist "%TEMP%\opencode" mkdir "%TEMP%\opencode"
-set LOG=%TEMP%\opencode\gradle-%RANDOM%.log
-start "gradle" /min cmd /c "gradlew.bat %* > "%LOG%" 2>&1"
-echo LOG=%LOG%
-endlocal
-```
+Implemented in `tools/gradle-detached.cmd`. Requirements it satisfies, in place of a literal script body:
+
+- Log path is `C:\Users\suraj\AppData\Local\Temp\opencode\gradle-<guid>.log`, the GUID generated per launch so two concurrent builds cannot collide and truncate each other's log. Falls back to `%TEMP%\opencode` only if that mandated parent path does not exist on the machine.
+- Launches via `System.Diagnostics.Process::Start` with `UseShellExecute` and a minimized window, working directory `%~dp0..` so a bare `gradlew.bat` resolves regardless of the caller's CWD.
+- Prints `LOG=<path>` and `PID=<n>`, and writes the same PID to `<log>.pid`.
+- The launched shell is `cmd /v:on /c`, so the trailing `echo EXIT=!errorlevel!` captures the Gradle command's own exit code, not PowerShell's or the wrapper's, and writes it to the log on both success and failure paths.
+- An uncreatable log directory, or a child that fails to start, prints `ERROR:` to stderr and exits non-zero rather than reporting a `LOG=` that will never exist.
+- Exits 0 immediately; the log may not exist yet when `LOG=` prints.
 
 - [ ] **Step 2: Verify the wrapper resolves**
 
 Run (detached): `tools\gradle-detached.cmd --version`
-Expected: log shows `Gradle 8.14.3`.
+Expected: log shows `Gradle 8.14.3` followed by a final `EXIT=0` line.
 
 ---
 
