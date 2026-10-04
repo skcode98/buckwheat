@@ -317,8 +317,9 @@ class SyncStore(private val dataSource: DataSource) {
      * Whether the server holds this id in this family, and whose row it is when it does.
      *
      * [Owned] with a null [Owned.memberId] is the state a row is left in when its author leaves:
-     * `transactions.member_id` is `on delete set null`, so the ledger survives the member. That is
-     * deliberately a different answer from [Absent], because it needs a different decision.
+     * `member_id` is `on delete set null` on every table that has one, so the ledger survives the
+     * member. That is deliberately a different answer from [Absent], because it needs a different
+     * decision.
      */
     private sealed interface Ownership {
         data object Absent : Ownership
@@ -326,9 +327,19 @@ class SyncStore(private val dataSource: DataSource) {
         data class Owned(val memberId: String?) : Ownership
     }
 
-    private fun storedOwnership(connection: Connection, familyId: String, id: String): Ownership =
-        connection.prepareStatement(
-            "select member_id::text from transactions where id = ?::uuid and family_id = ?::uuid"
+    /**
+     * Probes [spec]'s table, so the ownership rule follows the table rather than a name typed here.
+     *
+     * The table name is interpolated because a hardcoded one would be silently wrong the moment a
+     * second membered table appeared: the probe would find no row, answer [Ownership.Absent], and allow
+     * the write. A table with no `member_id` has no ownership to enforce, so it answers
+     * [Ownership.Absent] without querying -- there is no author to compare and no author to protect.
+     */
+    private fun storedOwnership(connection: Connection, spec: TableSpec, familyId: String, id: String): Ownership {
+        if (!spec.hasMember) return Ownership.Absent
+
+        return connection.prepareStatement(
+            "select member_id::text from ${spec.name} where id = ?::uuid and family_id = ?::uuid"
         ).use { statement ->
             statement.setUuid(1, id)
             statement.setUuid(2, familyId)
@@ -336,9 +347,10 @@ class SyncStore(private val dataSource: DataSource) {
                 if (rows.next()) Ownership.Owned(rows.getString(1)) else Ownership.Absent
             }
         }
+    }
 
     /**
-     * A transaction belongs to the member who wrote it, and to nobody else.
+     * A row in a membered table belongs to the member who wrote it, and to nobody else.
      *
      * Two halves, and both matter. The payload cannot choose the author, because `member_id` is not a
      * wire field at all -- [write] stamps it from the verified token, and the conflict arm no longer
@@ -351,28 +363,30 @@ class SyncStore(private val dataSource: DataSource) {
      * deciding deletes from the payload would let a member step around the rule by deleting the row
      * instead of writing it.
      *
-     * A null author is a refusal, not a permission. [Ownership.Owned] with a null member is what a
-     * spend looks like after its author leaves, and reading that as "nobody owns it, so it is free"
-     * hands the departed member's ledger to whoever is left: any surviving member could restate the
-     * amount or tombstone the row away. There is no successor to inherit a spend and no one to
-     * reconcile against, so the row stays frozen and the client is told the reason instead. Only
-     * [Ownership.Absent] is unowned in the sense of being writable, because then the insert is the
-     * writer's own new row -- and a tombstone for it is the accepted no-op [write] already handles.
+     * A null author is a refusal, not a permission. [Ownership.Owned] with a null member is what a row
+     * looks like after its author leaves, and reading that as "nobody owns it, so it is free" hands the
+     * departed member's ledger to whoever is left: any surviving member could restate the amount or
+     * tombstone the row away. There is no successor to inherit a spend and no one to reconcile
+     * against, so the row stays frozen and the client is told the reason instead. Only
+     * [Ownership.Absent] is writable -- an insert the writer owns from the start, or a tombstone for a
+     * row the writer's own family never had, which is the accepted no-op [write] already handles -- and
+     * a table with no member column is allowed for the same reason, having nothing to attribute.
      */
     private fun authorize(
         connection: Connection,
         familyId: String,
         entry: PreparedChange,
         memberId: String,
-    ): Authorization = when (val ownership = storedOwnership(connection, familyId, entry.change.id)) {
-        Ownership.Absent -> Authorization.Allowed
-        is Ownership.Owned ->
-            if (ownership.memberId == memberId) {
-                Authorization.Allowed
-            } else {
-                Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE, ownership.memberId)
-            }
-    }
+    ): Authorization =
+        when (val ownership = storedOwnership(connection, entry.spec, familyId, entry.change.id)) {
+            Ownership.Absent -> Authorization.Allowed
+            is Ownership.Owned ->
+                if (ownership.memberId == memberId) {
+                    Authorization.Allowed
+                } else {
+                    Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE, ownership.memberId)
+                }
+        }
 
     private fun write(
         connection: Connection,

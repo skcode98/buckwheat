@@ -25,10 +25,13 @@ class SchemaMigrationTest {
     @Test
     fun migrationCreatesEveryTableTheSchemaShips() {
         val tables = tableNames()
+        // Fifteen tables, which is every one the migrations create and none they drop. `V1` creates
+        // fourteen; `V5` adds `spend_assignments` and rebuilds `family_state` as `family_state_v5`
+        // before dropping the original and renaming, so the swap leaves the count unchanged.
         listOf(
             "families", "members", "invites", "member_tokens",
             "transactions", "archived_transactions", "budget_periods",
-            "family_state", "period_limits",
+            "family_state", "period_limits", "spend_assignments",
             "saved_categories", "saved_tags", "recurring_templates", "savings_goals",
             "family_settings",
         ).forEach { assertTrue(it in tables, "missing table $it") }
