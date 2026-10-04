@@ -6,7 +6,7 @@
 
 **Architecture:** Server keeps its `transactions` table as the only synced table and stamps `family_id`/`member_id` from the bearer token instead of trusting the payload; the client syncs into a *separate* local table `family_transactions` so a pull can never overwrite the viewer's own `transactions`. The client roster comes from one `GET /v1/family/members` refresh performed by `SyncEngine` after a successful sync. All UI reads `family_transactions` filtered by the viewer's current period bounds.
 
-**Tech Stack:** Kotlin 2.2.0, Room 2.7.2 (DB v21 → 22, manual migration), Hilt 2.57, Jetpack Compose, DataStore Preferences, Coroutines/Flow; server Kotlin JVM + Ktor 3.6.0 + PostgreSQL (Flyway migrations V6/V7), JUnit 4 + `ktor-server-test-host` + `io.zonky.test:embedded-postgres`.
+**Tech Stack:** Kotlin 2.2.0, Room 2.7.2 (DB v21 → 22, manual migration), Hilt 2.57, Jetpack Compose, DataStore Preferences, Coroutines/Flow; server Kotlin JVM + Ktor 3.6.0 + PostgreSQL (Flyway migrations V6 in Task 1, V7/V8 in Task 2), JUnit 4 + `ktor-server-test-host` + `io.zonky.test:embedded-postgres`.
 
 **Spec:** `docs/superpowers/specs/2026-10-03-family-sync-redesign-design.md`
 
@@ -17,11 +17,12 @@
 - Every DAO write path uses a hand-written `INSERT … ON CONFLICT(id) DO UPDATE SET` listing **every** non-key column. Never `@Insert(REPLACE)`, never `@Upsert`.
 - Sync wire table names live in two places that must stay in sync: `app/…/sync/SyncTables.kt` and `server/src/main/kotlin/family/sync/SyncStore.kt` (`object SyncTables.ALL`). `SyncPayloadContractTest` cross-checks them by scraping the server source, so never change one without the other.
 - `SyncContractExport.responseFields` scrapes `SyncRoutes.kt` by splitting on the literal markers `putJsonArray("accepted")`, `putJsonArray("records")`, `putJsonArray("conflicts")`. Keep those three literal strings intact.
-- Server migration numbering is sequential and Flyway-verified. `V6__*.sql` is **additive only** (`members.departed_at` + its index). All destructive drops go in `V7__drop_family_governance.sql` so older app builds keep working.
+- Server migration numbering is sequential and Flyway-verified. Task 1 lands `V6__relax_comment_nullability.sql` (drop `not null` on `transactions.comment`) because the single-table `TableSpec` treats `comment` as nullable and a commentless payload must not bind NULL into a `not null` column. Task 2 then lands `V7__family_departed_at.sql`, which is **additive only** (`members.departed_at` + its index), and puts all destructive drops in `V8__drop_family_governance.sql` so older app builds keep working.
+- `transactions.comment` is optional on the wire. Absence binds NULL; do not coalesce to `''` on write and do not reject the payload with a 400 — both hide a real transformation from the client.
 - Server test command is `.\gradlew.bat -p server test` **from the repo root** (there is no wrapper inside `server/` and no `gradle` on `PATH`). Client test command is `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.<pkg>.<Class>"`.
 - Never run two Gradle builds at once. Gradle must be launched detached and polled (see Task 0 helper), never in a blocking foreground call.
 - Pre-existing red tests, out of scope, must not be treated as signal: `AppLockViewModelTest`, `PatternEngineTest`, `CategoryCapsTest`, `RecurringDueDedupTest`, `RecurringPaymentsSheetTest`, `RecurringChargeConfirmSheetTest`.
-- **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`.
+- **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`. One drift is expected and allowed: from Task 1 until Task 4, the app module's `SyncPayloadContractTest` is red because it asserts the server spec size equals the client's `SyncTables.ALL`, and the server collapses to one table while the client still declares seven. That is the contract test truthfully reporting that the client has not caught up; Tasks 1–3 must not touch the app module to silence it, and Task 4 closes it.
 - UI strings come from `app/src/main/res/values/strings.xml` via `stringResource(R.string.*)`. No hardcoded user-visible text in composables. Icons must reference an existing `ic_*` drawable — reuse `ic_share`, `ic_arrow_right`, `ic_balance_wallet`, `ic_close`; verify with a drawable lookup before adding a new one.
 - ViewModel convention in this repo is a mix; `FamilySyncViewModel` and `SyncStatusViewModel` already use `StateFlow`, so new family ViewModels use `StateFlow` too. Never `runBlocking`, never `!!`, always `as? T` + Elvis.
 - Adding a method to `SyncStateStore` means implementing it in `internal object NoopSyncStateStore` (`sync/SyncEngine.kt`) **and** in `private object NoOpTestSyncStateStore` (`sync/SyncUpsertWritesEveryColumnTest.kt`).
@@ -34,8 +35,9 @@
 ## File Structure
 
 **Server — created**
-- `server/src/main/resources/db/migration/V6__family_departed_at.sql` — adds `members.departed_at timestamptz` + `create index index_members_departed_at on members (departed_at)`.
-- `server/src/main/resources/db/migration/V7__drop_family_governance.sql` — drops `family_state`, `period_limits`, `spend_assignments`.
+- `server/src/main/resources/db/migration/V6__relax_comment_nullability.sql` — `alter table transactions alter column comment drop not null;` so a payload that omits `comment` binds NULL instead of failing. Task 1 owns this; `V1__initial_schema.sql` declares `comment text not null`.
+- `server/src/main/resources/db/migration/V7__family_departed_at.sql` — adds `members.departed_at timestamptz` + `create index index_members_departed_at on members (departed_at)`.
+- `server/src/main/resources/db/migration/V8__drop_family_governance.sql` — drops `family_state`, `period_limits`, `spend_assignments`.
 
 **Server — modified**
 - `server/src/main/kotlin/family/sync/SyncStore.kt` — 9 `TableSpec`s → 1; delete `FAMILY_GOVERNED_TABLES`; `authorize()` → two rules; `storedFacts()` collapse; `write()` stamps `family_id`/`member_id` from the token and never rebinds an existing row's member; `pull()`/`readWindow()` accept `since`.
@@ -99,6 +101,7 @@ Expected: log shows `Gradle 8.14.3` followed by a final `EXIT=0` line.
 ## Task 1: Server — one synced table, token-stamped writes, `since` on the pull
 
 **Files:**
+- Create: `server/src/main/resources/db/migration/V6__relax_comment_nullability.sql` — `alter table transactions alter column comment drop not null;`. `V1__initial_schema.sql` declares `comment text not null`, but the single `TableSpec` treats `comment` as an optional wire field, so a commentless payload would bind NULL and 500 without this.
 - Modify: `server/src/main/kotlin/family/sync/SyncStore.kt`
 - Modify: `server/src/main/kotlin/family/sync/PayloadValidation.kt`
 - Modify: `server/src/main/kotlin/family/sync/PushMerge.kt`
@@ -129,7 +132,7 @@ fun aTokenStampsFamilyAndMemberEvenWhenThePayloadForgesThem() = runServer {
     assertEquals(setOf("transactions:$id"), response.json().acceptedKeys().toSet())
     TestDatabase.dataSource.connection.use { connection ->
         connection.prepareStatement("select family_id::text, member_id::text from transactions where id = ?::uuid").use { statement ->
-            db.setUuid(1, UUID.fromString(id))
+            statement.setUuid(1, UUID.fromString(id))
             statement.executeQuery().use { rows ->
                 assertTrue(rows.next())
                 assertEquals(family.familyId, rows.getString(1))
@@ -362,8 +365,8 @@ git commit -m "feat(server): sync only transactions, stamp member from token, ad
 ## Task 2: Server — departed members, join code on create, no invite route
 
 **Files:**
-- Create: `server/src/main/resources/db/migration/V6__family_departed_at.sql`
-- Create: `server/src/main/resources/db/migration/V7__drop_family_governance.sql`
+- Create: `server/src/main/resources/db/migration/V7__family_departed_at.sql`
+- Create: `server/src/main/resources/db/migration/V8__drop_family_governance.sql`
 - Modify: `server/src/main/kotlin/family/family/FamilyStore.kt`
 - Modify: `server/src/main/kotlin/family/family/FamilyRoutes.kt`
 - Test: `server/src/test/kotlin/family/sync/InviteRedeemTest.kt`, `FamilyBodyTest.kt`
@@ -439,7 +442,7 @@ Add the two `EmbeddedPostgres.kt` helpers:
 fun columnIsNull(table: String, id: String, column: String): Boolean =
     dataSource.connection.use { connection ->
         connection.prepareStatement("select $column from $table where id = ?::uuid").use { statement ->
-            db.setUuid(1, UUID.fromString(id))
+            statement.setUuid(1, UUID.fromString(id))
             statement.executeQuery().use { rows -> rows.next() && rows.getObject(1) == null }
         }
     }
@@ -447,7 +450,7 @@ fun columnIsNull(table: String, id: String, column: String): Boolean =
 fun countTokens(memberId: String): Int =
     dataSource.connection.use { connection ->
         connection.prepareStatement("select count(*) from member_tokens where member_id = ?::uuid").use { statement ->
-            db.setUuid(1, UUID.fromString(memberId))
+            statement.setUuid(1, UUID.fromString(memberId))
             statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else 0 }
         }
     }
@@ -460,14 +463,14 @@ Expected: FAIL — `create` has no `joinCode`, `leave` removes the member row, `
 
 - [ ] **Step 3: Write the migrations**
 
-`server/src/main/resources/db/migration/V6__family_departed_at.sql`:
+`server/src/main/resources/db/migration/V7__family_departed_at.sql`:
 
 ```sql
 alter table members add column if not exists departed_at timestamptz;
 create index if not exists index_members_departed_at on members (departed_at);
 ```
 
-`server/src/main/resources/db/migration/V7__drop_family_governance.sql`:
+`server/src/main/resources/db/migration/V8__drop_family_governance.sql`:
 
 ```sql
 drop table if exists spend_assignments;
