@@ -307,19 +307,34 @@ class SyncStore(private val dataSource: DataSource) {
 
         /**
          * [wonByMemberId] is whose row it actually is, so the client is told who to reconcile against
-         * instead of being told only that it lost. Null when nobody owns it.
+         * instead of being told only that it lost. Null when the row's author has left the family,
+         * which means there is nobody to reconcile against.
          */
         data class Denied(val reason: RejectReason, val wonByMemberId: String?) : Authorization
     }
 
-    /** Whose row this id is, or null when the server holds no such row in this family. */
-    private fun storedMemberId(connection: Connection, familyId: String, id: String): String? =
+    /**
+     * Whether the server holds this id in this family, and whose row it is when it does.
+     *
+     * [Owned] with a null [Owned.memberId] is the state a row is left in when its author leaves:
+     * `transactions.member_id` is `on delete set null`, so the ledger survives the member. That is
+     * deliberately a different answer from [Absent], because it needs a different decision.
+     */
+    private sealed interface Ownership {
+        data object Absent : Ownership
+
+        data class Owned(val memberId: String?) : Ownership
+    }
+
+    private fun storedOwnership(connection: Connection, familyId: String, id: String): Ownership =
         connection.prepareStatement(
             "select member_id::text from transactions where id = ?::uuid and family_id = ?::uuid"
         ).use { statement ->
             statement.setUuid(1, id)
             statement.setUuid(2, familyId)
-            statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+            statement.executeQuery().use { rows ->
+                if (rows.next()) Ownership.Owned(rows.getString(1)) else Ownership.Absent
+            }
         }
 
     /**
@@ -335,25 +350,28 @@ class SyncStore(private val dataSource: DataSource) {
      * Judged from the stored row rather than the incoming payload, which for a tombstone is empty --
      * deciding deletes from the payload would let a member step around the rule by deleting the row
      * instead of writing it.
+     *
+     * A null author is a refusal, not a permission. [Ownership.Owned] with a null member is what a
+     * spend looks like after its author leaves, and reading that as "nobody owns it, so it is free"
+     * hands the departed member's ledger to whoever is left: any surviving member could restate the
+     * amount or tombstone the row away. There is no successor to inherit a spend and no one to
+     * reconcile against, so the row stays frozen and the client is told the reason instead. Only
+     * [Ownership.Absent] is unowned in the sense of being writable, because then the insert is the
+     * writer's own new row -- and a tombstone for it is the accepted no-op [write] already handles.
      */
     private fun authorize(
         connection: Connection,
         familyId: String,
         entry: PreparedChange,
         memberId: String,
-    ): Authorization {
-        val change = entry.change
-        val existing = storedMemberId(connection, familyId, change.id)
-
-        // A tombstone for a row the server has never seen is a no-op that `write` already handles, and
-        // the existing contract accepts it. There is nobody to have taken it from.
-        if (change.deletedAt != null && existing == null) return Authorization.Allowed
-
-        return if (existing != null && existing != memberId) {
-            Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE, existing)
-        } else {
-            Authorization.Allowed
-        }
+    ): Authorization = when (val ownership = storedOwnership(connection, familyId, entry.change.id)) {
+        Ownership.Absent -> Authorization.Allowed
+        is Ownership.Owned ->
+            if (ownership.memberId == memberId) {
+                Authorization.Allowed
+            } else {
+                Authorization.Denied(RejectReason.CROSS_MEMBER_WRITE, ownership.memberId)
+            }
     }
 
     private fun write(
@@ -465,8 +483,16 @@ class SyncStore(private val dataSource: DataSource) {
      * [since] bounds the pull by wall clock as well as by cursor. A client that already holds a full
      * ledger can hand back the timestamp it last saw and receive only what moved after it, which is
      * the cheap way to check for another member's activity without paging the whole family history.
-     * The two bounds are independent: the cursor says which records this client has not seen, and
-     * `since` says which ones it cares about.
+     *
+     * The two bounds are not independent, and the interaction is destructive. `since` filters the rows
+     * the cursor would otherwise have returned, and the cursor the client stores next is the highest
+     * `seq` of *this page* -- so any record excluded by `since` is skipped permanently once the client
+     * advances past its `seq`. That is the intended reading for the caller who uses `since`, which is
+     * the client asking "what moved after T" and treating T as its new floor: everything before T is
+     * already held, and everything after T arrives in order. It is a trap for a caller that expects
+     * `since` to be a narrowing of the same stream: a record written at T-1 but touched after T
+     * arrives, one untouched since before T does not, and neither can be recovered by paging from the
+     * returned cursor. Do not hand `since` to a client that still wants to catch up on what it missed.
      */
     private fun readWindow(
         connection: Connection,

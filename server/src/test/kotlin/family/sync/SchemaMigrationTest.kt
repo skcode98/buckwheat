@@ -13,8 +13,17 @@ import kotlin.test.assertTrue
 
 class SchemaMigrationTest {
 
+    /**
+     * The schema inventory, which is deliberately wider than the sync contract.
+     *
+     * `transactions` is the only table offered to a client now, but the tables the retired contract
+     * used are still migrated: dropping them is a separate change, and narrowing the contract is not a
+     * reason to lose stored data. So this asserts what the migrations create, not what is synced --
+     * confusing the two would invite somebody to delete a table from the schema on the strength of a
+     * client-facing decision.
+     */
     @Test
-    fun migrationCreatesEverySyncedTable() {
+    fun migrationCreatesEveryTableTheSchemaShips() {
         val tables = tableNames()
         listOf(
             "families", "members", "invites", "member_tokens",

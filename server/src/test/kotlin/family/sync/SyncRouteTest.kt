@@ -774,11 +774,106 @@ class SyncRouteTest {
     }
 
     /**
-     * `since` bounds the pull without touching the cursor.
+     * A spend whose author has left is nobody's to take over, and nobody may erase it either.
+     *
+     * `member_id` is `on delete set null`, so the row outlives its author with no owner recorded. A
+     * null author is not permission: treating "the author is gone" as "the row is free" hands the
+     * whole family the departed member's ledger to rewrite, which is the one thing the stored-author
+     * rule exists to prevent. Refusing both ways matters -- an overwrite is the obvious theft, and a
+     * tombstone erases the row just as thoroughly while looking like housekeeping.
+     */
+    @Test
+    fun aDepartedMembersSpendsAreNotClaimable() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+
+        // The author has to be the one who leaves, or the row still has an owner and the ordinary
+        // cross-member rule refuses it for that reason instead -- the test would pass even if the
+        // ownerless case were wide open.
+        postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 1, 1000L, spentPayload("20.00", "theirs"))),
+            family.ownerToken,
+        )
+
+        // The author leaves, and `member_id` goes null with them.
+        val left = postJson("/v1/family/leave", "{}", family.ownerToken)
+        assertEquals("the author must actually be able to leave", 200, left.status.value)
+        val ownerAfterLeave = storedMemberId(id)
+        assertNull(
+            "the author must have left the row ownerless, but it is owned by $ownerAfterLeave " +
+                "(author was ${family.ownerMemberId}, family ${family.familyId})",
+            ownerAfterLeave,
+        )
+
+        val overwrite = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 2, 2000L, spentPayload("9000.00", "mine now"))),
+            family.guestToken,
+        )
+        assertDenied(overwrite)
+        assertEquals("cross_member_write", overwrite.json().conflicts()[0].text("reason"))
+
+        val erase = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 3, 3000L, tombstonePayload(), deletedAt = 3000L)),
+            family.guestToken,
+        )
+        assertDenied(erase)
+        assertEquals("cross_member_write", erase.json().conflicts()[0].text("reason"))
+
+        // Nobody won it, so there is no member to reconcile against -- and the amount is untouched.
+        assertNull(overwrite.json().conflicts()[0].text("wonByMemberId"))
+        val record = postJson("/v1/sync", syncBody(0), family.guestToken).json().recordAt(0)
+        assertEquals("20.00", record["payload"]!!.jsonObject.text("value"))
+        assertNull(record.text("deletedAt"))
+    }
+
+    /**
+     * An update that leaves the comment key out clears the stored comment.
+     *
+     * Pinned deliberately, because it is a real consequence of making `comment` wire-optional and the
+     * opposite of what the old required column did: `V1` refused an absent key with
+     * `payload_incomplete`, so an edit that said nothing about the comment failed loudly. It now binds
+     * null and overwrites. A client that omits the key is therefore asserting "no comment", which is
+     * the same reading the insert path takes -- see `aCommentlessTransactionStoresNull` -- and the
+     * alternative (absent means unchanged) would need a second payload key to express.
+     */
+    @Test
+    fun anUpdateThatOmitsTheCommentKeyClearsIt() = runServer {
+        val family = newFamily()
+        val id = UUID.randomUUID().toString()
+        postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 1, 1000L, spentPayload("20.00", "written down"))),
+            family.ownerToken,
+        )
+
+        val update = postJson(
+            "/v1/sync",
+            syncBody(0, change("transactions", id, 2, 2000L, spentPayloadWithoutComment())),
+            family.ownerToken,
+        )
+
+        assertEquals(listOf("transactions:$id"), update.json().acceptedKeys())
+        TestDatabase.dataSource.connection.use { connection ->
+            connection.prepareStatement("select comment from transactions where id = ?::uuid").use { statement ->
+                statement.setUuid(1, id)
+                statement.executeQuery().use { rows ->
+                    assertTrue("the row was not written", rows.next())
+                    assertNull("an omitted comment key must clear the stored comment", rows.getString(1))
+                }
+            }
+        }
+    }
+
+    /**
+     * `since` bounds the pull; the cursor still applies, and the two are not independent.
      *
      * A full refresh reads the whole ledger back from zero. `since` is the cheaper half of that: a
-     * client that already holds everything up to a timestamp asks only for what moved after it, and
-     * the cursor it passes still governs which records it has not seen.
+     * client that already holds everything up to a timestamp asks only for what moved after it. The
+     * cursor still governs which records it has not seen, so a record filtered out by `since` is
+     * skipped for good once the returned cursor advances past its `seq`.
      */
     @Test
     fun sinceBoundsThePull() = runServer {
@@ -887,6 +982,15 @@ private fun seedTransaction(id: String, familyId: String, comment: String, updat
         }
     }
 }
+
+/** Whose row this id is now, or null when it is ownerless or gone -- so it proves departure. */
+private fun storedMemberId(id: String): String? =
+    TestDatabase.dataSource.connection.use { connection ->
+        connection.prepareStatement("select member_id::text from transactions where id = ?::uuid").use { statement ->
+            statement.setUuid(1, id)
+            statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+        }
+    }
 
 /** A delete: an empty payload and a deletedAt, which is how a tombstone reaches the server. */
 private fun tombstonePayload(): String = "{}"
