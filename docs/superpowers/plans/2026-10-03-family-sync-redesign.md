@@ -92,7 +92,7 @@ endlocal
 
 - [ ] **Step 2: Verify the wrapper resolves**
 
-Run (detached): `.\gradlew.bat --version`
+Run (detached): `tools\gradle-detached.cmd --version`
 Expected: log shows `Gradle 8.14.3`.
 
 ---
@@ -216,7 +216,7 @@ fun issueToken(familyId: String, memberId: String): String =
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run (detached, from repo root): `.\gradlew.bat -p server test --tests "family.sync.SyncRouteTest"`
+Run (detached, from repo root): `tools\gradle-detached.cmd -p server test --tests "family.sync.SyncRouteTest"`
 Expected: FAIL — `cross_member_write` conflicts absent, `since` ignored, `savings_goals` still accepted, `issueToken` unresolved.
 
 - [ ] **Step 3: Collapse `SyncTables.ALL` to one spec**
@@ -348,7 +348,7 @@ Remove every test whose body references `archivedPayload`, `periodPayload`, `goa
 
 - [ ] **Step 12: Run the server suite**
 
-Run (detached): `.\gradlew.bat -p server test`
+Run (detached): `tools\gradle-detached.cmd -p server test`
 Expected: BUILD SUCCESSFUL, all `family.sync.*` tests green. `SchemaMigrationTest` passes untouched.
 
 - [ ] **Step 13: Commit**
@@ -456,7 +456,7 @@ fun countTokens(memberId: String): Int =
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run (detached): `.\gradlew.bat -p server test --tests "family.sync.InviteRedeemTest"`
+Run (detached): `tools\gradle-detached.cmd -p server test --tests "family.sync.InviteRedeemTest"`
 Expected: FAIL — `create` has no `joinCode`, `leave` removes the member row, `/invite` still exists.
 
 - [ ] **Step 3: Write the migrations**
@@ -601,7 +601,7 @@ In `InviteRedeemTest.kt` delete `mintingInvitesIsRateLimitedPerCaller`, `oneOwne
 
 - [ ] **Step 7: Run the full server suite**
 
-Run (detached): `.\gradlew.bat -p server test`
+Run (detached): `tools\gradle-detached.cmd -p server test`
 Expected: BUILD SUCCESSFUL. `SchemaMigrationTest` still green (V6/V7 do not break its hardcoded table-name sets until V7 is applied by Flyway — if `everyFamilyTableHasRowLevelSecurityEnabled` or `tableNames()` fails after V7 lands, widen that assertion to the post-V7 set: `archived_transactions, budget_periods, families, family_settings, invites, member_tokens, members, recurring_templates, saved_categories, saved_tags, savings_goals, transactions`).
 
 - [ ] **Step 8: Commit**
@@ -630,7 +630,7 @@ Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity l
 
 - [ ] **Step 1: Record the compile-clean baseline**
 
-Run (detached): `.\gradlew.bat compileDebugKotlin`
+Run (detached): `tools\gradle-detached.cmd compileDebugKotlin`
 Expected: BUILD SUCCESSFUL. If it fails, stop — the baseline was already broken and this task is not the cause.
 
 - [ ] **Step 2: Delete the files and their registrations**
@@ -644,12 +644,12 @@ Expected: no hits. Any hit is a reference this task missed; delete or rewrite it
 
 - [ ] **Step 4: Prove the tree still compiles**
 
-Run (detached): `.\gradlew.bat compileDebugKotlin`
+Run (detached): `tools\gradle-detached.cmd compileDebugKotlin`
 Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 5: Run the client suite to prove nothing else broke**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest`
 Expected: the only failures are the six known-red tests named in Global Constraints. Confirm from `app/build/test-results/testDebugUnitTest/*.xml`.
 
 - [ ] **Step 6: Commit**
@@ -737,7 +737,7 @@ class Migration21To22Test {
 
 - [ ] **Step 2: Run the test and watch it fail**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
 Expected: FAIL — `Migration21to22` unresolved.
 
 - [ ] **Step 3: Create the entity**
@@ -914,8 +914,8 @@ Delete `FamilyState.kt`, `PeriodLimit.kt`, `SpendAssignment.kt`, `FamilyStateDao
 
 - [ ] **Step 7: Run the test and prove the whole tree compiles**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
-Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run (detached) `.\gradlew.bat compileDebugKotlin` and expect BUILD SUCCESSFUL: `FamilyBudgetViewModel` and `SpendAssignmentsViewModel` were the deleted entities' only remaining consumers, and Task 3 removed both files.
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
+Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run (detached) `tools\gradle-detached.cmd compileDebugKotlin` and expect BUILD SUCCESSFUL: `FamilyBudgetViewModel` and `SpendAssignmentsViewModel` were the deleted entities' only remaining consumers, and Task 3 removed both files.
 
 - [ ] **Step 8: Commit the schema and schema JSON**
 
@@ -979,7 +979,7 @@ fun thePullSendsTheCurrentPeriodStartAsSince() = runTest {
 
 - [ ] **Step 2: Run it and watch it fail**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.SyncEngineTest"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.SyncEngineTest"`
 Expected: FAIL — `since` field, `membersCache`/`api`/`periodStart` constructor params, and `RecordingMembersCache` do not exist.
 
 - [ ] **Step 3: Collapse `SyncTables`**
@@ -1228,7 +1228,7 @@ Extend `provideSyncEngine` to accept `membersCache: FamilyMembersCache` and `fam
 
 - [ ] **Step 12: Run the client sync suite**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.*"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.*"`
 Expected: all green except the known-red set. Confirm `app/build/test-results/testDebugUnitTest/*.xml` shows zero failures for `SyncEngineTest`, `RoomSyncDatabaseRoomTest`, `SyncUpsertWritesEveryColumnTest`, `SyncPayloadsTest`, `SyncPayloadContractTest`, `HttpSyncClientTest`, `SyncStateStoreTest`.
 
 - [ ] **Step 13: Commit**
@@ -1294,7 +1294,7 @@ fun enrollingStoresTheJoinCode() = runTest {
 
 - [ ] **Step 2: Run and watch them fail**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.HttpFamilyApiTest" --tests "com.danilkinkin.buckwheat.settings.FamilySyncViewModelTest"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.HttpFamilyApiTest" --tests "com.danilkinkin.buckwheat.settings.FamilySyncViewModelTest"`
 Expected: FAIL — `joinCode`/`departed` do not exist.
 
 - [ ] **Step 3: Update `HttpFamilyApi`**
@@ -1351,7 +1351,7 @@ Delete `settings/FamilySyncSheet.kt` and `settings/FamilyMembersSection.kt`. In 
 
 - [ ] **Step 9: Run the affected suites**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.*" --tests "com.danilkinkin.buckwheat.settings.*"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.sync.*" --tests "com.danilkinkin.buckwheat.settings.*"`
 Expected: green apart from the known-red set.
 
 - [ ] **Step 10: Commit**
@@ -1430,7 +1430,7 @@ The fakes implement `FamilyTransactionDao`, `FamilySessionStore`, and the two `S
 
 - [ ] **Step 2: Run it and watch it fail**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.family.FamilyViewModelTest"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.family.FamilyViewModelTest"`
 Expected: FAIL — `FamilyViewModel` does not exist.
 
 - [ ] **Step 3: Write `FamilyViewModel`**
@@ -1658,7 +1658,7 @@ Use `createComposeRule()` and a `FamilyViewModel` built with a fake DAO containi
 
 - [ ] **Step 11: Run the family and settings suites**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.family.*" --tests "com.danilkinkin.buckwheat.settings.*"`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.family.*" --tests "com.danilkinkin.buckwheat.settings.*"`
 Expected: green apart from the known-red set.
 
 - [ ] **Step 12: Commit**
@@ -1682,22 +1682,22 @@ git commit -m "feat(ui): family sheet with member detail and current-period tota
 
 - [ ] **Step 1: Regenerate the sync contract and confirm schema version 3**
 
-Run (detached, from repo root): `.\gradlew.bat -p server generateSyncContract`
+Run (detached, from repo root): `tools\gradle-detached.cmd -p server generateSyncContract`
 Expected: the generated JSON has `"schemaVersion": 3` and exactly one entry in `tables`.
 
 - [ ] **Step 2: Run the whole server suite**
 
-Run (detached): `.\gradlew.bat -p server test`
+Run (detached): `tools\gradle-detached.cmd -p server test`
 Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 3: Run the whole client suite**
 
-Run (detached): `.\gradlew.bat testDebugUnitTest`
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest`
 Expected: the only failures are the six known-red tests named in Global Constraints. Confirm by listing failures from `app/build/test-results/testDebugUnitTest/*.xml`.
 
 - [ ] **Step 4: Build the debug APK**
 
-Run (detached): `.\gradlew.bat assembleDebug`
+Run (detached): `tools\gradle-detached.cmd assembleDebug`
 Expected: BUILD SUCCESSFUL — this is the first commit-to-commit green build of the whole change.
 
 - [ ] **Step 5: Confirm no dead references remain**
