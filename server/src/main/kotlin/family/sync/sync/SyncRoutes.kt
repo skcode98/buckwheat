@@ -47,6 +47,7 @@ fun Application.syncRoutes(
                 memberId = principal.memberId,
                 cursor = body.requiredLong("cursor"),
                 changes = changes,
+                since = body.optionalLong("since"),
             )
             call.respond(HttpStatusCode.OK, outcome.toResponse())
         }

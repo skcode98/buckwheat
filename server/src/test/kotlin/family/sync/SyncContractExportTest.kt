@@ -6,6 +6,8 @@ import family.sync.sync.RejectReason
 import family.sync.sync.SyncTables
 import java.io.File
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -72,26 +74,25 @@ class SyncContractExportTest {
     }
 
     /**
-     * The columns the household feature depends on must reach the contract, since a consumer builds
-     * its own table definitions from this and a missing column is a silent push failure there rather
-     * than an error here.
+     * The contract is a table list, so a consumer building its own definitions from this has to be
+     * told exactly what is left. Anything named here that the server no longer syncs would be built and
+     * then refused, and anything missing would fail as a silent push error rather than as an error
+     * here.
      */
     @Test
-    fun theContractCarriesTheHouseholdColumns() {
-        val contract = Json.parseToJsonElement(SyncContractExport.render(serverDir())).jsonObject
-        val tables = contract["tables"]!!.jsonArray.associate { table ->
-            val obj = table.jsonObject
-            obj["name"]!!.jsonPrimitive.content to
-                obj["columns"]!!.jsonArray.map { it.jsonObject["key"]!!.jsonPrimitive.content }
-        }
+    fun theContractCarriesExactlyOneTable() {
+        val tables = contract().jsonObject["tables"]!!.jsonArray
+        assertEquals(1, tables.size)
+        val columns = tables.single().jsonObject["columns"]!!.jsonArray
+            .map { it.jsonObject["key"]!!.jsonPrimitive.content }
 
-        listOf("transactions", "archived_transactions").forEach { table ->
-            listOf("bucket", "assignmentId", "assignedByMemberId").forEach { key ->
-                assertTrue("$table is missing $key", key in tables.getValue(table))
-            }
-        }
-        assertTrue("family_state.householdTier is missing", "householdTier" in tables.getValue("family_state"))
-        assertTrue("spend_assignments.targetMemberId is missing", "targetMemberId" in tables.getValue("spend_assignments"))
+        assertEquals(listOf("type", "value", "spentAt", "comment", "category"), columns)
+    }
+
+    /** A consumer that has not regenerated its copy keeps building the old nine-table model. */
+    @Test
+    fun theContractIsAtSchemaVersionThree() {
+        assertEquals(3, contract().jsonObject["schemaVersion"]!!.jsonPrimitive.int)
     }
 
     @Test
@@ -136,6 +137,10 @@ class SyncContractExportTest {
             )
         }
     }
+
+    /** The rendered contract, parsed once per assertion that needs it. */
+    private fun contract(): JsonObject =
+        Json.parseToJsonElement(SyncContractExport.render(serverDir())).jsonObject
 
     /** Mirrors `SyncPayloadContractTest.serverSpec()` exactly, regexes included. */
     private fun scrapeSyncStore(file: File): Map<String, List<String>> {

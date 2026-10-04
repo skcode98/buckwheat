@@ -81,6 +81,16 @@ object TestDatabase {
             )
         }
 
+    /**
+     * A usable token for a member that was written straight into the database.
+     *
+     * The sync suite sets up its families without the invite round-trip, so it needs a way to reach a
+     * verified session for a member the API never saw created. This mints one rather than storing a
+     * raw token hash, which is the whole point of the scheme.
+     */
+    fun issueToken(familyId: String, memberId: String): String =
+        family.sync.auth.TokenService(dataSource).mint(memberId, familyId)
+
     fun readTokenHashes(): List<String> {
         val hashes = mutableListOf<String>()
         dataSource.connection.use { connection ->

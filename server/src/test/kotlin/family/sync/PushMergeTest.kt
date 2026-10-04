@@ -156,12 +156,12 @@ class PushMergeTest {
             SyncTables.require("transactions"),
         )
 
-        // Compared against the spec rather than a literal, because a transaction gained three optional
+        // Compared against the spec rather than a literal, because a transaction once gained three optional
         // columns and a hardcoded five quietly stopped testing what it claimed to test. Reading the
         // expected order out of the spec keeps this a real ordering assertion: a column read in the
         // wrong position still fails, and adding a column no longer needs this file edited.
         assertEquals(
-            listOf("SPENT", "12.50", "1700000000000", "coffee", null, null, null, null),
+            listOf("SPENT", "12.50", "1700000000000", "coffee", null),
             values,
         )
     }
@@ -201,15 +201,14 @@ class PushMergeTest {
 
     @Test
     fun anUnknownTransactionTypeIsInvalid() {
-        listOf("transactions", "archived_transactions").forEach { table ->
-            val code = codeThrownBy {
-                readPayload(
-                    TRANSACTION_PAYLOAD.replace("\"type\":\"SPENT\"", "\"type\":\"TRANSFER\""),
-                    SyncTables.require(table),
-                )
-            }
-            assertEquals("payload_invalid", code)
+        val code = codeThrownBy {
+            readPayload(
+                TRANSACTION_PAYLOAD.replace("\"type\":\"SPENT\"", "\"type\":\"TRANSFER\""),
+                SyncTables.require("transactions"),
+            )
         }
+
+        assertEquals("payload_invalid", code)
     }
 
     @Test

@@ -1,6 +1,5 @@
 package family.sync
 
-import family.sync.family.DEFAULT_MAX_OUTSTANDING_INVITES
 import family.sync.family.DEFAULT_MAX_REQUEST_BYTES
 import family.sync.sync.MAX_CHANGES
 import family.sync.sync.MAX_NUMERIC_INTEGER_DIGITS
@@ -33,7 +32,7 @@ import kotlinx.serialization.json.put
 object SyncContractExport {
 
     /** Bumped whenever the emitted shape changes, so a consumer can detect a stale copy. */
-    const val SCHEMA_VERSION = 2
+    const val SCHEMA_VERSION = 3
 
     const val DEFAULT_OUTPUT = "../.kilo/sync-contract.json"
 
@@ -129,7 +128,6 @@ object SyncContractExport {
         put("maxNumericScale", MAX_NUMERIC_SCALE)
         put("maxNumericLength", MAX_NUMERIC_LENGTH)
         put("maxRequestBytes", DEFAULT_MAX_REQUEST_BYTES)
-        put("maxOutstandingInvites", DEFAULT_MAX_OUTSTANDING_INVITES)
         put("maxPoolSize", MAX_POOL_SIZE)
     }
 

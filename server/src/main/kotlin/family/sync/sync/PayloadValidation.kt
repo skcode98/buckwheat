@@ -12,24 +12,6 @@ import java.util.UUID
 // recognise, so a row carrying an unknown type is corruption rather than a new business value.
 val TRANSACTION_TYPES = setOf("SET_DAILY_BUDGET", "INCOME", "SPENT")
 
-/**
- * The buckets a spend may belong to.
- *
- * A closed set rather than free text, because `authorize` compares against the literal "HOUSEHOLD" to
- * decide who may write a shared-tier expense. An arbitrary string written through would read as
- * neither, which is exactly how a rule gets stepped around by sending something unexpected.
- */
-val BUCKETS = setOf("MEMBER", "HOUSEHOLD")
-
-/**
- * The states a request may be in.
- *
- * Closed rather than free text because uthorize decides "already answered" by comparing against
- * PENDING. A status outside this set could be raised as ACCEPTED by the head and would then lock the
- * target out of answering it forever.
-n */
-val ASSIGNMENT_STATUSES = setOf("PENDING", "ACCEPTED", "REJECTED")
-
 // TEXT columns are free-form (a transaction comment can be a whole paragraph) but they are synced to
 // every member of the family, so unbounded input turns one client into a fan-out of stored garbage.
 // Measured in characters, not bytes.
