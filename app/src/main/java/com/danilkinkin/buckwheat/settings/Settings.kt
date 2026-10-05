@@ -34,8 +34,6 @@ import com.danilkinkin.buckwheat.patterns.PATTERN_INSIGHTS_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.rememberImportCSV
 
-import com.danilkinkin.buckwheat.family.FAMILY_BUDGET_SHEET
-
 const val SETTINGS_SHEET = "settings"
 
 @Composable
@@ -212,37 +210,6 @@ fun Settings(
 
                 SettingsSection(stringResource(R.string.settings_section_data))
 
-                // Above the sync settings, and only when enrolled, because the budget is the reason
-                // to set a family up in the first place. Hidden rather than disabled when not
-                // enrolled: a row that opens a sheet explaining you need a family is noise.
-                if (enrolled) {
-                    TextRow(
-                        icon = painterResource(R.drawable.ic_balance_wallet),
-                        text = stringResource(R.string.family_budget_title),
-                        endIcon = painterResource(R.drawable.ic_arrow_right),
-                        modifier = Modifier.clickable {
-                            appViewModel.openSheet(
-                                com.danilkinkin.buckwheat.data.PathState(FAMILY_BUDGET_SHEET)
-                            )
-                        },
-                    )
-                }
-
-                TextRow(
-                    icon = painterResource(R.drawable.ic_share),
-                    text = stringResource(R.string.family_sync_title),
-                    endContent = if (enrolled) {
-                        { SyncStatusChip(syncStatus) }
-                    } else {
-                        null
-                    },
-                    endIcon = painterResource(R.drawable.ic_arrow_right),
-                    modifier = Modifier.clickable {
-                        appViewModel.openSheet(
-                            com.danilkinkin.buckwheat.data.PathState(FAMILY_SYNC_SHEET)
-                        )
-                    },
-                )
                 TextRow(
                     icon = painterResource(R.drawable.ic_search),
                     text = stringResource(R.string.search_history_title),
