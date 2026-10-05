@@ -61,9 +61,7 @@ class SyncPayloadContractTest {
             SyncTables.SAVED_TAGS -> tag.businessPayload()
             SyncTables.RECURRING_TEMPLATES -> recurring.businessPayload()
             SyncTables.SAVINGS_GOALS -> goal.businessPayload()
-            SyncTables.FAMILY_STATE -> familyState.businessPayload()
-            SyncTables.PERIOD_LIMITS -> periodLimit.businessPayload()
-            SyncTables.SPEND_ASSIGNMENTS -> assignment.businessPayload()
+
             else -> throw AssertionError("no payload producer is registered for $table")
         }
         return payload.keys().asSequence().toSet()

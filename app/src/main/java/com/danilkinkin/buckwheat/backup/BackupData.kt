@@ -89,8 +89,6 @@ data class BackupData(
     val savedCategories: List<SavedCategory>,
     val recurringTemplates: List<RecurringTemplate>,
     val savingsGoals: List<SavingsGoal>,
-    val periodLimits: List<PeriodLimit> = emptyList(),
-    val spendAssignments: List<SpendAssignment> = emptyList(),
     val budgetPreferences: Map<String, BackupValue>,
     val settingsPreferences: Map<String, BackupValue>,
 )
@@ -109,8 +107,6 @@ fun BackupData.toJsonString(): String {
         .put("savedCategories", JSONArray(savedCategories.map { it.toJson() }))
         .put("recurringTemplates", JSONArray(recurringTemplates.map { it.toJson() }))
         .put("savingsGoals", JSONArray(savingsGoals.map { it.toJson() }))
-        .put("periodLimits", JSONArray(periodLimits.map { it.toJson() }))
-        .put("spendAssignments", JSONArray(spendAssignments.map { it.toJson() }))
         .put("budgetPreferences", preferencesToJson(budgetPreferences))
         .put("settingsPreferences", preferencesToJson(settingsPreferences))
     return root.toString()
@@ -138,9 +134,6 @@ fun parseBackupData(json: String): BackupData? {
             recurringTemplates = root.optJSONArray("recurringTemplates")
                 ?.toRecurringTemplateList() ?: emptyList(),
             savingsGoals = root.optJSONArray("savingsGoals")?.toSavingsGoalList() ?: emptyList(),
-            periodLimits = root.optJSONArray("periodLimits")?.toPeriodLimitList() ?: emptyList(),
-            spendAssignments = root.optJSONArray("spendAssignments")
-                ?.toSpendAssignmentList() ?: emptyList(),
             budgetPreferences = preferencesFromJson(
                 root.optJSONObject("budgetPreferences") ?: JSONObject()
             ),

@@ -75,8 +75,6 @@ class BackupRepository @Inject constructor(
             savedCategories = savedCategoryDao.getAllNow(),
             recurringTemplates = recurringDao.getAllNow(),
             savingsGoals = savingsGoalDao.getAllNow(),
-        periodLimits = database.periodLimitDao().getAllNow(),
-        spendAssignments = database.spendAssignmentDao().getAllNow(),
             budgetPreferences = context.budgetDataStore.data.first().asBackupMap(),
             settingsPreferences = context.settingsDataStore.data.first().asBackupMap(),
         )
@@ -98,8 +96,6 @@ class BackupRepository @Inject constructor(
                 recurringDao.deleteAll()
                 savingsGoalDao.deleteAll()
                 budgetPeriodDao.deleteAll()
-                database.periodLimitDao().deleteAll()
-                database.spendAssignmentDao().deleteAll()
 
                 // The backup codec never writes family_id / sync_seq / version / updated_at, so
                 // every restored row comes back as pre-enrolment local data and the next
@@ -116,8 +112,6 @@ class BackupRepository @Inject constructor(
                 savedCategoryDao.insertAll(backup.savedCategories)
                 recurringDao.insertAll(backup.recurringTemplates)
                 savingsGoalDao.insertAll(backup.savingsGoals)
-                database.periodLimitDao().insertAll(backup.periodLimits)
-                database.spendAssignmentDao().insertAll(backup.spendAssignments)
             }
         } catch (e: Exception) {
             Log.e("BackupRepository", "Database restore failed, keeping previous data", e)
