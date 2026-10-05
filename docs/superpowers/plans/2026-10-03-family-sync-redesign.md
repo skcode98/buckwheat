@@ -21,7 +21,7 @@
 - `transactions.comment` is optional on the wire. Absence binds NULL; do not coalesce to `''` on write and do not reject the payload with a 400 — both hide a real transformation from the client.
 - Server test command is `.\gradlew.bat -p server test` **from the repo root** (there is no wrapper inside `server/` and no `gradle` on `PATH`). Client test command is `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.<pkg>.<Class>"`.
 - Never run two Gradle builds at once. Gradle must be launched detached and polled (see Task 0 helper), never in a blocking foreground call.
-- Pre-existing red tests, out of scope, must not be treated as signal: `AppLockViewModelTest`, `PatternEngineTest`, `CategoryCapsTest`, `RecurringDueDedupTest`, `RecurringPaymentsSheetTest`, `RecurringChargeConfirmSheetTest`.
+- Pre-existing red tests, out of scope, must not be treated as signal. Exactly four classes are red on this branch, verified from `app/build/test-results/testDebugUnitTest/*.xml` at `03b75f5c`: `AppLockViewModelTest` (6 of 16), `CategoryCapsTest` (4 of 10), `PatternEngineTest` (2 of 74), `RecurringDueDedupTest` (1 of 5). `RecurringPaymentsSheetTest` and `RecurringChargeConfirmSheetTest` were long assumed red and are in fact **green** — do not chase them.
 - **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`. One drift is expected and allowed: from Task 1 until Task 4, the app module's `SyncPayloadContractTest` is red because it asserts the server spec size equals the client's `SyncTables.ALL`, and the server collapses to one table while the client still declares seven. That is the contract test truthfully reporting that the client has not caught up; Tasks 1–3 must not touch the app module to silence it, and Task 4 closes it.
 - UI strings come from `app/src/main/res/values/strings.xml` via `stringResource(R.string.*)`. No hardcoded user-visible text in composables. Icons must reference an existing `ic_*` drawable — reuse `ic_share`, `ic_arrow_right`, `ic_balance_wallet`, `ic_close`; verify with a drawable lookup before adding a new one.
 - ViewModel convention in this repo is a mix; `FamilySyncViewModel` and `SyncStatusViewModel` already use `StateFlow`, so new family ViewModels use `StateFlow` too. Never `runBlocking`, never `!!`, always `as? T` + Elvis.
@@ -641,8 +641,16 @@ Delete the ten production files and four test files listed above. Then in `Botto
 
 - [ ] **Step 3: Confirm nothing still references them**
 
-Run: `git --no-pager grep -n "FamilyBudget\|FamilyInsightService\|FamilySnapshot\|MemberTagEngine\|SpendAssignment\|FamilySyncSheet\|FamilyMembersSection\|FAMILY_BUDGET_SHEET\|FAMILY_SYNC_SHEET" -- app/src`
-Expected: no hits. Any hit is a reference this task missed; delete or rewrite it before continuing.
+Run two greps. The first is deliberately over-broad and is expected to hit:
+
+`git --no-pager grep -n "FamilyBudget\|FamilyInsightService\|FamilySnapshot\|MemberTagEngine\|SpendAssignment\|FamilySyncSheet\|FamilyMembersSection\|FAMILY_BUDGET_SHEET\|FAMILY_SYNC_SHEET" -- app/src`
+
+`SpendAssignment` matches `data/entities/SpendAssignment.kt` and `data/dao/SpendAssignmentDao.kt`, which **Task 4 owns and this task must not touch**, and `FamilySnapshot` matches the deleted `PseudonymousFamilySnapshot` only through substring. So the first grep is a locator, not a pass/fail gate. The gate is the second:
+
+`git --no-pager grep -nE "\b(FamilyBudgetMath|FamilyBudgetSheet|FamilyBudgetViewModel|FamilyInsightService|FamilySnapshot|PseudonymousFamilySnapshot|buildFamilySnapshot|materialise|MemberTagEngine|SpendAssignmentLogic|SpendAssignmentsViewModel|FamilySyncSheet|FamilyMembersSection|FAMILY_BUDGET_SHEET|FAMILY_SYNC_SHEET)\b" -- app/src`
+`git --no-pager grep -n "com\.danilkinkin\.buckwheat\.family\." -- app/src`
+
+Expected: **no hits from either.** Any hit is a reference this task missed; delete or rewrite it before continuing. `materialise` and `PseudonymousFamilySnapshot` are in the list because the first pattern's alternation misses them.
 
 - [ ] **Step 4: Prove the tree still compiles**
 
