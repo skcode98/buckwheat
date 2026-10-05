@@ -22,7 +22,7 @@
 - Server test command is `.\gradlew.bat -p server test` **from the repo root** (there is no wrapper inside `server/` and no `gradle` on `PATH`). Client test command is `.\gradlew.bat testDebugUnitTest --tests "com.danilkinkin.buckwheat.<pkg>.<Class>"`.
 - Never run two Gradle builds at once. Gradle must be launched detached and polled (see Task 0 helper), never in a blocking foreground call.
 - Pre-existing red tests, out of scope, must not be treated as signal. Exactly four classes are red on this branch, verified from `app/build/test-results/testDebugUnitTest/*.xml` at `03b75f5c`: `AppLockViewModelTest` (6 of 16), `CategoryCapsTest` (4 of 10), `PatternEngineTest` (2 of 74), `RecurringDueDedupTest` (1 of 5). `RecurringPaymentsSheetTest` and `RecurringChargeConfirmSheetTest` were long assumed red and are in fact **green** — do not chase them.
-- **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`. One drift is expected and allowed: from Task 1 until Task 4, the app module's `SyncPayloadContractTest` is red because it asserts the server spec size equals the client's `SyncTables.ALL`, and the server collapses to one table while the client still declares seven. That is the contract test truthfully reporting that the client has not caught up; Tasks 1–3 must not touch the app module to silence it, and Task 4 closes it.
+- **Every task leaves the tree compiling and green.** Room 22 forces `FamilyState`/`PeriodLimit`/`SpendAssignment` out of the entity list, and their last two consumers are the family ViewModels — so Task 3 deletes the whole family UI layer *before* Task 4 touches the schema. Do not reorder these two tasks, and do not accept a commit that fails `compileDebugKotlin`. One drift is expected and allowed: from Task 1 until Task 5, the app module's `SyncPayloadContractTest` is red because it asserts the server spec size equals the client's `SyncTables.ALL`, and the server collapses to one table while the client still declares ten. That is the contract test truthfully reporting that the client has not caught up; Tasks 1–4 must not touch the app module to silence it, and Task 5 closes it (see Task 5's file list, which owns both `SyncTables.ALL` and the test itself).
 - UI strings come from `app/src/main/res/values/strings.xml` via `stringResource(R.string.*)`. No hardcoded user-visible text in composables. Icons must reference an existing `ic_*` drawable — reuse `ic_share`, `ic_arrow_right`, `ic_balance_wallet`, `ic_close`; verify with a drawable lookup before adding a new one.
 - ViewModel convention in this repo is a mix; `FamilySyncViewModel` and `SyncStatusViewModel` already use `StateFlow`, so new family ViewModels use `StateFlow` too. Never `runBlocking`, never `!!`, always `as? T` + Elvis.
 - Adding a method to `SyncStateStore` means implementing it in `internal object NoopSyncStateStore` (`sync/SyncEngine.kt`) **and** in `private object NoOpTestSyncStateStore` (`sync/SyncUpsertWritesEveryColumnTest.kt`).
@@ -671,7 +671,42 @@ git commit -m "refactor(family): drop the budget and assignment UI layers"
 
 ---
 
+## Task 3.5: Client — strip the governance tables from the sync and backup surfaces
+
+Inserted on 2026-10-05 after Task 4's first implementer halted at Step 7 and correctly refused to decide. Task 3 deleted the *UI* for the three governance tables, but their *data plumbing* survived in the sync and backup layers, so dropping the entities in Room 22 broke the build. This task removes the plumbing; Task 4 then becomes a pure schema change whose only diff is schema, so a migration-test failure has exactly one suspect. Insertion is not optional: `task-brief` cannot extract `## Task 3.5` by number, so generate it manually to `.superpowers/sdd/2026-10-03-family-sync-redesign/task-3.5-brief.md`.
+
+**Files:**
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/sync/{SyncTables,SyncBindings,SyncPayloads,SyncDirtyMarker}.kt`
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/data/dao/SyncStampDao.kt`, `app/src/main/java/com/danilkinkin/buckwheat/di/SyncModule.kt`, `app/src/main/java/com/danilkinkin/buckwheat/di/BackupRepository.kt`, `app/src/main/java/com/danilkinkin/buckwheat/backup/BackupData.kt`
+- Inspect and, if it only names a dropped table in a dead query, modify: `app/src/main/java/com/danilkinkin/buckwheat/data/SpendsViewModel.kt`
+- Modify: `app/src/test/java/com/danilkinkin/buckwheat/{sync/{RoomSyncDatabaseRoomTest,SyncUpsertWritesEveryColumnTest,SyncPayloadContractTest},backup/BackupDataTest}.kt`
+
+**Do NOT touch:** `di/DatabaseModule.kt` and `data/entities/*` and `data/dao/{FamilyStateDao,PeriodLimitDao,SpendAssignmentDao}.kt` — the entities still exist until Task 4 drops them. Nor `test/.../data/Migration16To17Test.kt` or `Migration20To21Test.kt`; those pin *historical* schema states and their mentions of the dropped tables are correct. Nor `Migration21To22Test.kt` (Task 4's).
+
+- [ ] **Step 1: Baseline.** Detached `compileDebugKotlin` must be green before you touch anything, proving you inherited a compiling tree.
+
+- [ ] **Step 2: Narrow `SyncTables`.** Delete the `FAMILY_STATE`, `PERIOD_LIMITS` and `SPEND_ASSIGNMENTS` constants and their entries in `ALL` and `APPLY_ORDER`. `ALL` drops from ten to seven. Rewrite the `APPLY_ORDER` KDoc: the paragraph explaining why `family_state` precedes `period_limits` and `spend_assignments` is now false and must go, and the surviving parent-before-child rule for `archived_transactions` → `budget_periods` must still be stated.
+
+- [ ] **Step 3: Strip the bindings.** Remove the three table→DAO bindings in `SyncBindings.kt` and their providers in `SyncModule.kt`, plus the three table names in `SyncStampDao.kt` and the three branches in `SyncDirtyMarker.kt`.
+
+- [ ] **Step 4: Strip the backup.** `BackupData.kt` serializes two arrays for the dropped tables. Remove the properties, their serializers and the compose/restore wiring in `BackupRepository.kt`, so the backup JSON no longer carries them. **This is a user-visible format change and is the reason this task exists separately** — old backups restore with those fields ignored, which is the intended outcome. Record the old→new field names in the report.
+
+- [ ] **Step 5: Repoint the tests.** Delete the governance cases from `SyncUpsertWritesEveryColumnTest.kt`, `RoomSyncDatabaseRoomTest.kt` and `BackupDataTest.kt`. In `SyncPayloadContractTest.kt` remove the three governance tables from the client's expected set **and leave the test failing** — it compares the client spec to the server's one table, so it stays red until Task 5 collapses `SyncTables.ALL` to a single entry. Do not weaken its assertions to make it pass; Task 5 owns that.
+
+- [ ] **Step 6: Verify.** Detached `compileDebugKotlin` green; detached full `testDebugUnitTest` showing exactly the four known-red classes plus `SyncPayloadContractTest`, with **no new failures** and none of the removed-table tests failing on a missing symbol.
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add -A app/src
+git commit -m "refactor(family): strip governance tables from sync and backup surfaces"
+```
+
+---
+
 ## Task 4: Client — Room 22 with `family_transactions`
+
+**Prerequisite:** Task 3.5 must have landed. It removes the sync/backup references to `FamilyState`/`PeriodLimit`/`SpendAssignment` so that dropping those three entities here is a pure schema change. If you are reading this and Task 3.5 has not landed, stop and report — this task's diff assumes those symbols already have no callers.
 
 **Files:**
 - Create: `app/src/main/java/com/danilkinkin/buckwheat/data/entities/FamilyTransaction.kt`
