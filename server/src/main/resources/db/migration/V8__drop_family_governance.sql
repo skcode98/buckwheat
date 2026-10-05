@@ -11,3 +11,11 @@
 drop table if exists spend_assignments;
 drop table if exists period_limits;
 drop table if exists family_state;
+
+-- `invites.redeemed_at`, gone too.
+--
+-- The join code is a durable family credential, not a ticket: the owner persists it and re-shows it to
+-- every new member, so it has to admit every join rather than the first one. Nothing writes the column
+-- any more, and a `redeemed_at` that is never set is exactly the leftover that lets a later reader
+-- assume joining consumes the code and re-caps the family at two.
+alter table invites drop column if exists redeemed_at;

@@ -71,6 +71,49 @@ class InviteRedeemTest {
     }
 
     @Test
+    fun oneJoinCodeAdmitsEveryMemberOfTheFamily() = runServer {
+        val owner = createFamilyWithCode()
+        val code = owner.field("joinCode")
+
+        val joins = listOf("first", "second", "third").map { name ->
+            postJson("/v1/family/join", """{"code":"$code","displayName":"$name"}""")
+        }
+
+        assertEquals(List(3) { HttpStatusCode.OK }, joins.map { it.status })
+        val credentials = joins.map { it.json() }
+        val memberIds = credentials.map { it.field("memberId") }
+        val tokens = credentials.map { it.field("token") }
+        assertEquals(3, memberIds.toSet().size, "the three joins shared a member id")
+        assertEquals(3, tokens.toSet().size, "the three joins shared a token")
+        assertFalse(owner.field("memberId") in memberIds, "a join reused the owner's member id")
+        credentials.forEach { credential ->
+            val whoAmI = postJson("/v1/family/whoami", "{}", credential.field("token"))
+            assertEquals(HttpStatusCode.OK, whoAmI.status)
+            assertEquals(credential.field("memberId"), whoAmI.field("memberId"))
+        }
+
+        val roster = postJson("/v1/family/members", "{}", owner.field("token")).json()["members"]
+        val ids = roster?.jsonArrayField("id").orEmpty()
+        assertEquals(4, ids.size)
+        assertTrue(owner.field("memberId") in ids)
+        assertTrue(ids.containsAll(memberIds))
+        assertEquals(List(4) { "false" }, roster?.jsonArrayField("departed"))
+    }
+
+    @Test
+    fun anExpiredJoinCodeIsRefused() = runServer {
+        val owner = createFamilyWithCode()
+        val code = owner.field("joinCode")
+        TestDatabase.expireInvite(code)
+
+        val response = postJson("/v1/family/join", """{"code":"$code","displayName":"late"}""")
+
+        assertEquals(HttpStatusCode.Gone, response.status)
+        assertEquals("invite_expired", response.json()["error"]?.jsonPrimitiveText())
+        assertEquals(1, TestDatabase.countRows("members"))
+    }
+
+    @Test
     fun anUnknownInviteCodeIsRefused() = runServer {
         val response = postJson("/v1/family/join", """{"code":"NOPE1234","displayName":"stranger"}""")
 

@@ -5,7 +5,6 @@ import family.sync.auth.TokenService
 import family.sync.db.setUuid
 import java.security.SecureRandom
 import java.sql.Connection
-import java.time.Instant
 import javax.sql.DataSource
 
 private const val CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -85,7 +84,7 @@ class FamilyStore(
         dataSource.connection.use { connection ->
             connection.autoCommit = false
             try {
-                val familyId = claimInvite(connection, normalized)
+                val familyId = joinableFamilyId(connection, normalized)
                 val memberId = insertReturningUuid(
                     connection,
                     "insert into members (family_id, display_name, is_owner) values (?, ?, false) returning id",
@@ -170,41 +169,18 @@ class FamilyStore(
         }
     }
 
-    private fun claimInvite(connection: Connection, code: String): String {
-        val claimed = connection.prepareStatement(
-            "update invites set redeemed_at = now() where code = ? and redeemed_at is null " +
-                "and expires_at > now() returning family_id::text"
-        ).use { statement ->
-            statement.setString(1, code)
-            statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
-        }
-        return claimed ?: throw unusableInvite(connection, code)
-    }
-
-    private fun unusableInvite(connection: Connection, code: String): ApiException {
-        val invite = readInvite(connection, code) ?: throw NotFoundException("invite_not_found")
-        return if (invite.redeemedAt != null) {
-            ConflictException("invite_already_used")
-        } else if (!invite.expiresAt.isAfter(Instant.now())) {
-            GoneException("invite_expired")
-        } else {
-            ConflictException("invite_already_used")
-        }
-    }
-
-    private fun readInvite(connection: Connection, code: String): Invite? =
-        connection.prepareStatement(
-            "select expires_at, redeemed_at from invites where code = ?"
+    private fun joinableFamilyId(connection: Connection, code: String): String {
+        val found = connection.prepareStatement(
+            "select family_id::text, expires_at > now() from invites where code = ?"
         ).use { statement ->
             statement.setString(1, code)
             statement.executeQuery().use { rows ->
-                if (!rows.next()) return null
-                Invite(
-                    expiresAt = rows.getTimestamp("expires_at").toInstant(),
-                    redeemedAt = rows.getTimestamp("redeemed_at")?.toInstant(),
-                )
+                if (rows.next()) rows.getString(1) to rows.getBoolean(2) else null
             }
-        }
+        } ?: throw NotFoundException("invite_not_found")
+        if (!found.second) throw GoneException("invite_expired")
+        return found.first
+    }
 
     private fun insertReturningUuid(
         connection: Connection,
@@ -222,9 +198,4 @@ class FamilyStore(
     private fun generateCode(): String = buildString(CODE_LENGTH) {
         repeat(CODE_LENGTH) { append(CODE_ALPHABET[random.nextInt(CODE_ALPHABET.length)]) }
     }
-
-    private data class Invite(
-        val expiresAt: Instant,
-        val redeemedAt: Instant?,
-    )
 }
