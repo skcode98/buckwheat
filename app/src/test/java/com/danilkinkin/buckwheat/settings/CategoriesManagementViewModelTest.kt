@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.di.FakeSavedCategoryDao
-import com.danilkinkin.buckwheat.sync.SyncTables
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -18,8 +17,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// Every saved_categories write has to enqueue a pending mutation, otherwise the edit never
-// reaches the server and an incoming pull silently reverts it.
+// saved_categories edits no longer enqueue pending mutations; the writes must still land without
+// touching sync columns.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -66,11 +65,11 @@ class CategoriesManagementViewModelTest {
     ).also { savedCategoryDao.insert(it) }
 
     @Test
-    fun `adding a category marks the inserted row`() = runTest(dispatcher) {
+    fun `adding a category inserts it without marking`() = runTest(dispatcher) {
         viewModel().addCategory("  Pets  ", "🐶")
 
         val stored = savedCategoryDao.getAllNow().single()
-        assertEquals(listOf(stored.id), marker.upserted(SyncTables.SAVED_CATEGORIES))
+        assertTrue(marker.upserts.isEmpty())
         assertEquals("Pets", stored.name)
         assertEquals("🐶", stored.emoji)
     }
@@ -81,14 +80,14 @@ class CategoriesManagementViewModelTest {
 
         viewModel().addCategory("Pets")
 
-        assertTrue(marker.upserted(SyncTables.SAVED_CATEGORIES).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
     fun `adding a built-in category name marks nothing`() = runTest(dispatcher) {
         viewModel().addCategory("FOOD")
 
-        assertTrue(marker.upserted(SyncTables.SAVED_CATEGORIES).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
         assertTrue(savedCategoryDao.getAllNow().isEmpty())
     }
 
@@ -96,12 +95,12 @@ class CategoriesManagementViewModelTest {
     // family_id / sync_seq / version back to their defaults — the rename then pushed as a brand
     // new record and the server rejected it forever.
     @Test
-    fun `renaming a category marks the row and preserves its sync columns`() = runTest(dispatcher) {
+    fun `renaming a category preserves its sync columns without marking`() = runTest(dispatcher) {
         seed("cat-1", "Pets", emoji = "🐶", familyId = "family-1", syncSeq = 3L, version = 9)
 
         viewModel().updateCategory("cat-1", "Animals", "🐾")
 
-        assertEquals(listOf("cat-1"), marker.upserted(SyncTables.SAVED_CATEGORIES))
+        assertTrue(marker.upserts.isEmpty())
         val stored = savedCategoryDao.getAllNow().single()
         assertEquals("Animals", stored.name)
         assertEquals("🐾", stored.emoji)
@@ -117,20 +116,17 @@ class CategoriesManagementViewModelTest {
 
         viewModel().updateCategory("cat-1", "Animals")
 
-        assertTrue(marker.upserted(SyncTables.SAVED_CATEGORIES).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
         assertEquals("Pets", savedCategoryDao.getAllNow().first { it.id == "cat-1" }.name)
     }
 
     @Test
-    fun `deleting a synced category queues a tombstone with its family metadata`() = runTest(dispatcher) {
+    fun `deleting a synced category drops the row without a tombstone`() = runTest(dispatcher) {
         seed("cat-1", "Pets", familyId = "family-1", syncSeq = 11L)
 
         viewModel().deleteCategory("cat-1")
 
-        val tombstone = marker.deleted(SyncTables.SAVED_CATEGORIES).single()
-        assertEquals("cat-1", tombstone.recordId)
-        assertEquals("family-1", tombstone.familyId)
-        assertEquals(11L, tombstone.syncSeq)
+        assertTrue(marker.deletes.isEmpty())
         assertTrue(savedCategoryDao.getAllNow().isEmpty())
     }
 
@@ -140,7 +136,7 @@ class CategoriesManagementViewModelTest {
 
         viewModel().deleteCategory("cat-1")
 
-        assertTrue(marker.deleted(SyncTables.SAVED_CATEGORIES).isEmpty())
+        assertTrue(marker.deletes.isEmpty())
     }
 
     @Test

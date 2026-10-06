@@ -83,12 +83,6 @@ class RoomSyncDirtyMarker @Inject constructor(
 private suspend fun SyncStampDao.stamp(table: String, recordId: String, now: Long) {
     when (table) {
         SyncTables.TRANSACTIONS -> stampTransaction(recordId, now)
-        SyncTables.ARCHIVED_TRANSACTIONS -> stampArchivedTransaction(recordId, now)
-        SyncTables.BUDGET_PERIODS -> stampBudgetPeriod(recordId, now)
-        SyncTables.SAVED_CATEGORIES -> stampSavedCategory(recordId, now)
-        SyncTables.SAVED_TAGS -> stampSavedTag(recordId, now)
-        SyncTables.RECURRING_TEMPLATES -> stampRecurringTemplate(recordId, now)
-        SyncTables.SAVINGS_GOALS -> stampSavingsGoal(recordId, now)
         else -> Unit
     }
 }

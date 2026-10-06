@@ -475,7 +475,6 @@ class SpendsRepository @Inject constructor(
             totalSpent = totalSpent,
         )
         budgetPeriodDao.insert(period)
-        markUpsert(SyncTables.BUDGET_PERIODS, period.id)
         val periodId = period.id
 
         /**
@@ -506,7 +505,6 @@ class SpendsRepository @Inject constructor(
             )
         }
         budgetPeriodDao.insertArchivedTransactions(archived)
-        markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, archived.map { it.id })
 
         Log.d(
             "SpendsRepository",
@@ -812,7 +810,6 @@ class SpendsRepository @Inject constructor(
                     isImported = true,
                 )
                 budgetPeriodDao.insert(period)
-                markUpsert(SyncTables.BUDGET_PERIODS, period.id)
                 period.id
             }
 
@@ -827,7 +824,6 @@ class SpendsRepository @Inject constructor(
             if (spentDelta > BigDecimal.ZERO) {
                 budgetPeriodDao.updateTotalSpent(periodId, (currentTotal + spentDelta).setScale(2))
             }
-            markUpsert(SyncTables.BUDGET_PERIODS, periodId)
             // Carried across whole, for the same reason as archiveCurrentPeriod: an imported
             // household expense must stay a household expense once it is closed.
             val archived = rows.map { tx ->
@@ -846,7 +842,6 @@ class SpendsRepository @Inject constructor(
                 )
             }
             budgetPeriodDao.insertArchivedTransactions(archived)
-            markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, archived.map { it.id })
         }
     }
 

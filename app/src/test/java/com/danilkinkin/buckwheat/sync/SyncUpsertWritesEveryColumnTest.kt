@@ -11,6 +11,7 @@ import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -272,6 +273,24 @@ class SyncUpsertWritesEveryColumnTest {
         assertEquals(1, goals.getAllNow().size)
     }
 
+    @Test
+    fun familyTransactionUpsertRewritesEveryColumn() = runTest {
+        val families = db.familyTransactionDao()
+        families.insert(familySpend("f-1"))
+        families.insert(
+            familySpend("f-1", comment = "second write", updatedAt = 10_000L, version = 42)
+                .copy(memberId = "member-9", syncSeq = 77L)
+        )
+
+        val stored = families.getById("f-1")!!
+        assertEquals("member-9", stored.memberId)
+        assertEquals(77L, stored.syncSeq)
+        assertEquals(10_000L, stored.updatedAt)
+        assertEquals(42, stored.version)
+        assertEquals("second write", stored.comment)
+        assertEquals(1, families.getAllNow().size)
+    }
+
     /**
      * The whole point of the DAO method in production terms: `SyncTableBinding.upsert` only ever
      * inserts, so if the insert does not overwrite, `RoomSyncDatabase.apply` cannot update any row it
@@ -280,23 +299,17 @@ class SyncUpsertWritesEveryColumnTest {
     @Test
     fun aSyncGatewayUpsertOverwritesAPreviouslyPulledRow() = runTest {
         val gateway = SyncBindings(db.pendingMutationDao()).gateways(
-            transactionDao = transactions,
-            budgetPeriodDao = periods,
-            savedCategoryDao = categories,
-            savedTagDao = tags,
-            recurringDao = recurring,
-            savingsGoalDao = goals,
+            familyTransactionDao = db.familyTransactionDao(),
         ).single { it.table == SyncTables.TRANSACTIONS }
 
         gateway.upsert(pulledTransaction("t-9", memberId = "member-1", familyId = "family-1", version = 2))
         gateway.upsert(pulledTransaction("t-9", memberId = "member-7", familyId = "family-7", version = 3))
 
-        val stored = transactions.getById("t-9")!!
+        val stored = db.familyTransactionDao().getById("t-9")!!
         assertEquals("member-7", stored.memberId)
-        assertEquals("family-7", stored.familyId)
         assertEquals(3, stored.version)
         assertEquals(2_000L, stored.updatedAt)
-        assertEquals(listOf("t-9"), transactions.getAllNow().map { it.id })
+        assertEquals(listOf("t-9"), db.familyTransactionDao().getAllNow().map { it.id })
     }
 
     /**
@@ -305,30 +318,24 @@ class SyncUpsertWritesEveryColumnTest {
      */
     @Test
     fun enrolmentStampsAnAlreadyStoredRow() = runTest {
-        tags.insert(SavedTag(id = "tag-1", name = "work"))
-        transactions.insert(spend("t-1"))
+        transactions.insert(spend("t-1").copy(familyId = "family-0", memberId = "member-9"))
 
         val database = RoomSyncDatabase(
             gateways = SyncBindings(db.pendingMutationDao()).gateways(
-                transactionDao = transactions,
-                budgetPeriodDao = periods,
-                savedCategoryDao = categories,
-                savedTagDao = tags,
-                recurringDao = recurring,
-                savingsGoalDao = goals,
+                familyTransactionDao = db.familyTransactionDao(),
             ),
             pendingMutationDao = db.pendingMutationDao(),
             syncStateStore = NoOpTestSyncStateStore,
+            transactionDao = transactions,
+            familyTransactionDao = db.familyTransactionDao(),
             runInTransaction = { block -> block() },
         )
 
         database.enrolAll(memberId = "member-5", familyId = "family-5", enrolledAt = 12_345L)
 
-        val stamped = transactions.getById("t-1")!!
+        val stamped = db.familyTransactionDao().getById("t-1")!!
         assertEquals("member-5", stamped.memberId)
-        assertEquals("family-5", stamped.familyId)
         assertEquals(12_345L, stamped.updatedAt)
-        assertEquals("family-5", tags.getById("tag-1")!!.familyId)
     }
 }
 
@@ -349,6 +356,8 @@ private object NoOpTestSyncStateStore : SyncStateStore {
     override suspend fun markSynced(at: Long) = Unit
     override suspend fun markFailed(reason: String?) = Unit
     override suspend fun clear() = Unit
+    override suspend fun isFamilyReHome22Done(): Boolean = false
+    override suspend fun markFamilyReHome22Done() = Unit
 }
 
 private fun spend(id: String) = Transaction(
@@ -384,6 +393,21 @@ private fun archived(id: String, periodId: String) = ArchivedTransaction(
     date = Date(0),
     comment = "",
     category = null,
+)
+
+private fun familySpend(
+    id: String,
+    comment: String = "",
+    updatedAt: Long = 100L,
+    version: Int = 1,
+) = FamilyTransaction(
+    id = id,
+    type = TransactionType.SPENT,
+    value = BigDecimal.TEN,
+    date = Date(0),
+    comment = comment,
+    updatedAt = updatedAt,
+    version = version,
 )
 
 private fun pulledTransaction(

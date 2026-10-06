@@ -1,6 +1,9 @@
 package com.danilkinkin.buckwheat.sync
 
+import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
+import com.danilkinkin.buckwheat.data.dao.TransactionDao
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
 
 interface SyncDatabase {
@@ -22,7 +25,9 @@ class RoomSyncDatabase(
     private val gateways: List<SyncTableGateway>,
     private val pendingMutationDao: PendingMutationDao,
     private val syncStateStore: SyncStateStore,
-    private val runInTransaction: suspend (block: suspend () -> Unit) -> Unit = { block -> block() },
+    private val transactionDao: TransactionDao,
+    private val familyTransactionDao: FamilyTransactionDao,
+    private val runInTransaction: suspend (block: suspend () -> Unit) -> Unit = { it() },
 ) : SyncDatabase {
 
     private fun gateway(table: String): SyncTableGateway? = gateways.firstOrNull { it.table == table }
@@ -90,9 +95,6 @@ class RoomSyncDatabase(
         val clean = apply.records.filter { !it.dirty }
         val grouped = clean.groupBy { it.table }
         runInTransaction {
-            // SyncTables.APPLY_ORDER, not the order the records happened to arrive in: budget_periods has
-            // to be written before archived_transactions, which has an ON DELETE CASCADE foreign key to
-            // it. A period written first is updated in place by the upsert, so its archived rows survive.
             SyncTables.APPLY_ORDER.forEach { table ->
                 val records = grouped[table] ?: return@forEach
                 val binding = gateway(table) ?: return@forEach
@@ -135,6 +137,10 @@ class RoomSyncDatabase(
     }
 
     override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) {
+        if (!syncStateStore.isFamilyReHome22Done()) {
+            reHomeOwnedRows(memberId)
+            syncStateStore.markFamilyReHome22Done()
+        }
         runInTransaction {
             gateways.forEach { binding ->
                 val enrolled = enrolRecords(binding.loadAll(), memberId, familyId, enrolledAt)
@@ -152,8 +158,39 @@ class RoomSyncDatabase(
         }
     }
 
+    private suspend fun reHomeOwnedRows(memberId: String) {
+        val local = transactionDao.getAllNow()
+        val orphans = local.filter { it.familyId != null && it.memberId != memberId }
+        val attributed = local.filter { it.familyId != null && it.memberId == null }
+        if (orphans.isNotEmpty()) {
+            familyTransactionDao.insert(
+                *orphans.map { row ->
+                    FamilyTransaction(
+                        id = row.id,
+                        type = row.type,
+                        value = row.value,
+                        date = row.date,
+                        comment = row.comment,
+                        category = row.category,
+                        memberId = row.memberId,
+                        syncSeq = row.syncSeq,
+                        updatedAt = row.updatedAt,
+                        deletedAt = row.deletedAt,
+                        version = row.version,
+                    )
+                }.toTypedArray(),
+            )
+            orphans.forEach { transactionDao.deleteById(it.id) }
+        }
+        attributed.forEach { familyTransactionDao.updateMemberId(it.id, memberId) }
+        familyTransactionDao.attributeNullMembersTo(memberId)
+    }
+
     override suspend fun reset() {
-        runInTransaction { pendingMutationDao.deleteAll() }
+        runInTransaction {
+            pendingMutationDao.deleteAll()
+            familyTransactionDao.deleteAll()
+        }
         syncStateStore.clear()
     }
 }

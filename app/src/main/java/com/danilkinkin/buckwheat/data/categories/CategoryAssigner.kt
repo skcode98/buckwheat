@@ -70,7 +70,6 @@ class CategoryAssigner @Inject constructor(
         offlineAssigned.forEach { (id, category) ->
             budgetPeriodDao.updateCategory(id, category)
         }
-        syncDirtyMarker.markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, offlineAssigned.map { it.first })
 
         val aiCandidates = uncategorized.filter {
             offlineCategoryOrNull(it.comment) == null
@@ -81,6 +80,5 @@ class CategoryAssigner @Inject constructor(
         assigned.forEach { (id, category) ->
             budgetPeriodDao.updateCategory(id, category.name)
         }
-        syncDirtyMarker.markUpserts(SyncTables.ARCHIVED_TRANSACTIONS, assigned.keys)
     }
 }

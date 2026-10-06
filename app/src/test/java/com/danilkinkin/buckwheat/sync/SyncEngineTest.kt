@@ -1,5 +1,7 @@
 package com.danilkinkin.buckwheat.sync
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -17,10 +19,18 @@ class SyncEngineTest {
         memberId = "member-1",
         baseUrl = "https://sync.example",
     )
-    private fun engine() = SyncEngine(
-        client = client,
+    private fun engine(
+        database: FakeSyncDatabase = this.database,
+        membersCache: FamilyMembersCache? = null,
+        familyApiFactory: FamilyApiFactory? = null,
+        periodStart: suspend () -> Long = { 0L },
+    ) = SyncEngine(
+        client = database.client,
         database = database,
         sessionProvider = { session },
+        membersCache = membersCache,
+        familyApiFactory = familyApiFactory,
+        periodStart = periodStart,
     )
     @Test
     fun everyRecordIsHandedToTheDatabaseWithTheServerCursor() = runTest {
@@ -50,7 +60,7 @@ class SyncEngineTest {
         val outcome = engine().sync() as SyncOutcome.Synced
         assertEquals(listOf("remote"), database.records.map { comment(it.payload) })
         assertEquals(emptyList<ConflictNotice>(), outcome.conflicts)
-        assertEquals(listOf(RecordKey(SyncTables.TRANSACTIONS, "rec-a")), database.applied?.settled?.map { it.key })
+        assertEquals(listOf(RecordKey(SyncTables.TRANSACTIONS, "rec-a")), database.applied.last().settled.map { it.key })
     }
 
     @Test
@@ -59,7 +69,7 @@ class SyncEngineTest {
         // onto the tag and destroy it.
         database.records = mutableListOf(
             local(id = "shared"),
-            local(table = SyncTables.SAVED_TAGS, id = "shared", payload = "tag"),
+            local(table = "saved_tags", id = "shared", payload = "tag"),
         )
         database.pending = mutableListOf(pending(id = "shared"))
         client.response = SyncResponse(
@@ -69,10 +79,10 @@ class SyncEngineTest {
             conflicts = emptyList(),
         )
         engine().sync()
-        val tag = database.records.single { it.table == SyncTables.SAVED_TAGS }
+        val tag = database.records.single { it.table == "saved_tags" }
         assertEquals("tag", tag.payload)
-        assertEquals(1, database.applied?.settled?.count { it.key.table == SyncTables.TRANSACTIONS })
-        assertEquals(0, database.applied?.settled?.count { it.key.table == SyncTables.SAVED_TAGS })
+        assertEquals(1, database.applied.last().settled.count { it.key.table == SyncTables.TRANSACTIONS })
+        assertEquals(0, database.applied.last().settled.count { it.key.table == "saved_tags" })
     }
 
     @Test
@@ -170,7 +180,7 @@ class SyncEngineTest {
         database.pending = mutableListOf(pending())
         engine().sync()
         assertEquals(listOf("rec-a"), client.requests.single().changes.map { it.id })
-        assertEquals(listOf(RecordKey(SyncTables.TRANSACTIONS, "rec-a")), database.applied?.settled?.map { it.key })
+        assertEquals(listOf(RecordKey(SyncTables.TRANSACTIONS, "rec-a")), database.applied.last().settled.map { it.key })
     }
 
     @Test
@@ -212,12 +222,12 @@ class SyncEngineTest {
     }
 
     @Test
-    fun aConflictFromAMemberlessTableReachesTheOutcome() = runTest {
+    fun aConflictWithNoWinnerReachesTheOutcome() = runTest {
         client.response = SyncResponse(
             cursor = 3,
             accepted = emptyList(),
             records = emptyList(),
-            conflicts = listOf(ConflictNotice(SyncTables.SAVED_TAGS, "tag-1", wonByMemberId = null)),
+            conflicts = listOf(ConflictNotice(SyncTables.TRANSACTIONS, "rec-a", wonByMemberId = null)),
         )
         val outcome = engine().sync() as SyncOutcome.Synced
         assertEquals(1, outcome.conflicts.size)
@@ -333,13 +343,39 @@ class SyncEngineTest {
         assertEquals(listOf("edited"), database.records.map { comment(it.payload) })
         assertTrue(database.records.single().dirty)
         assertEquals(listOf("rec-a"), database.remainingQueue().map { it.id })
-        assertEquals(emptyList<SettledChange>(), database.applied?.settled)
+        assertEquals(emptyList<SettledChange>(), database.applied.last().settled)
     }
 
     @Test
     fun noSessionMeansNothingToSync() = runTest {
         val engine = SyncEngine(client = client, database = database, sessionProvider = { null })
         assertEquals(SyncOutcome.NotEnrolled, engine.sync())
+    }
+
+    @Test
+    fun aPullWritesIntoFamilyTransactionsAndNeverIntoTransactions() = runTest {
+        val database = FakeSyncDatabase()
+        val cache = RecordingMembersCache()
+        val engine = engine(database = database, membersCache = cache, familyApiFactory = RecordingFamilyApiFactory())
+        val remote = remote(table = SyncTables.TRANSACTIONS, id = "remote-1", seq = 1L, payload = spendPayload("42.00"))
+        database.responses = listOf(SyncResponse(cursor = 1L, accepted = emptyList(), records = listOf(remote), conflicts = emptyList()))
+
+        assertEquals(SyncOutcome.Synced(1L, emptyList()), engine.sync())
+
+        val tables = database.applied.flatMap { it.records }.map { it.table }.toSet()
+        assertEquals(setOf(SyncTables.TRANSACTIONS), tables)
+        assertTrue(database.upsertedTables.contains("family_transactions"))
+        assertFalse(database.upsertedTables.contains("transactions"))
+        assertEquals(listOf("remote-1"), cache.written.single().records.map { it.id })
+    }
+
+    @Test
+    fun thePullSendsTheCurrentPeriodStartAsSince() = runTest {
+        val database = FakeSyncDatabase()
+        val engine = engine(database = database, periodStart = { 1_700_000_000_000L })
+        database.responses = listOf(SyncResponse(cursor = 0L, accepted = emptyList(), records = emptyList(), conflicts = emptyList()))
+        engine.sync()
+        assertEquals(1_700_000_000_000L, database.requests.single().since)
     }
 
     private fun local(
@@ -364,6 +400,7 @@ class SyncEngineTest {
     private fun pending(id: String = "rec-a") = local(id = id, version = 4, updatedAt = 80).copy(dirty = true)
 
     private fun remote(
+        table: String = SyncTables.TRANSACTIONS,
         id: String = "rec-a",
         version: Int = 4,
         seq: Long = 9,
@@ -371,7 +408,7 @@ class SyncEngineTest {
         memberId: String? = "member-2",
         payload: String = spendPayload("remote"),
     ) = WireRecord(
-        table = SyncTables.TRANSACTIONS,
+        table = table,
         id = id,
         seq = seq,
         updatedAt = updatedAt,
@@ -398,6 +435,7 @@ class SyncEngineTest {
     private class FakeSyncClient : SyncClient {
         var response = SyncResponse(0, emptyList(), emptyList(), emptyList())
         var pages: MutableList<SyncResponse> = mutableListOf()
+        var responses: List<SyncResponse> = emptyList()
         var failure: IOException? = null
         val requests = mutableListOf<SyncRequest>()
 
@@ -416,6 +454,11 @@ class SyncEngineTest {
                     "engine pushed ${request.changes.map { it.key }}, which was not queued at read time: $allowed"
                 }
             }
+            if (responses.isNotEmpty()) {
+                val next = responses.first()
+                responses = responses.drop(1)
+                return next
+            }
             return if (pages.isNotEmpty()) pages.removeAt(0) else response
         }
     }
@@ -424,12 +467,17 @@ class SyncEngineTest {
      * Decodes every applied payload exactly like [RoomSyncDatabase] does, so a payload the engine cannot
      * understand fails the same way here as it would against the real database.
      */
-    private class FakeSyncDatabase(private val client: FakeSyncClient) : SyncDatabase {
+    private class FakeSyncDatabase(val client: FakeSyncClient = FakeSyncClient()) : SyncDatabase {
         var cursor = 0L
         var records = mutableListOf<LocalRecord>()
         var pending = mutableListOf<LocalRecord>()
-        var applied: SyncApply? = null
+        val applied = mutableListOf<SyncApply>()
+        val upsertedTables = mutableListOf<String>()
         var conflicts = emptyList<ConflictNotice>()
+        val requests: MutableList<SyncRequest> get() = client.requests
+        var responses: List<SyncResponse>
+            get() = client.responses
+            set(value) { client.responses = value }
         fun remainingQueue(): List<LocalRecord> = pending
         override suspend fun readCursor(): Long = cursor
         override suspend fun dirtyRecords(): List<LocalRecord> {
@@ -440,10 +488,13 @@ class SyncEngineTest {
         override suspend fun apply(apply: SyncApply) {
             apply.records.forEach { record ->
                 if (record.table == SyncTables.TRANSACTIONS) {
-                    JSONObject(record.payload).readTransaction(record.id)
+                    JSONObject(record.payload).readFamilyTransaction(record.id)
+                    upsertedTables.add("family_transactions")
+                } else {
+                    upsertedTables.add(record.table)
                 }
             }
-            applied = apply
+            applied.add(apply)
             records = apply.records.toMutableList()
             conflicts = apply.conflicts
             cursor = apply.cursor
@@ -453,5 +504,50 @@ class SyncEngineTest {
         }
         override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) = Unit
         override suspend fun reset() = Unit
+    }
+
+    private class RecordingMembersCache : FamilyMembersCache {
+        class Write(val records: List<FamilyMember>)
+        val written = mutableListOf<Write>()
+        private var members: List<FamilyMember> = emptyList()
+
+        override fun members(): Flow<List<FamilyMember>> = flowOf(members)
+
+        override suspend fun readMembers(): List<FamilyMember> = members
+
+        override suspend fun replaceMembers(members: List<FamilyMember>) {
+            this.members = members
+            written.add(Write(members))
+        }
+
+        override suspend fun clear() {
+            members = emptyList()
+        }
+    }
+
+    private class RecordingFamilyApi : FamilyApi {
+        val member = FamilyMember(
+            id = "remote-1",
+            displayName = "Remote",
+            isOwner = false,
+            joinedAt = "2026-01-01T00:00:00Z",
+        )
+
+        override suspend fun createFamily(displayName: String): FamilyCredentials =
+            error("not under test")
+
+        override suspend fun joinFamily(code: String, displayName: String): FamilyCredentials =
+            error("not under test")
+
+        override suspend fun whoami(token: String): WhoAmI = error("not under test")
+
+        override suspend fun mintInvite(token: String): MintedInvite = error("not under test")
+
+        override suspend fun members(token: String): List<FamilyMember> = listOf(member)
+    }
+
+    private class RecordingFamilyApiFactory : FamilyApiFactory {
+        val api = RecordingFamilyApi()
+        override fun create(baseUrl: String): FamilyApi = api
     }
 }

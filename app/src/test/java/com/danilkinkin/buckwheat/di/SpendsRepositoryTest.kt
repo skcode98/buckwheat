@@ -493,14 +493,12 @@ class SpendsRepositoryTest {
         rewindTime(1)
         setBudget(budget = 2000, days = 9)
 
-        assertTrue(pendingMutationDao.forTable(SyncTables.BUDGET_PERIODS).isNotEmpty())
-        assertTrue(pendingMutationDao.forTable(SyncTables.ARCHIVED_TRANSACTIONS).isNotEmpty())
         assertTrue(pendingMutationDao.forTable(SyncTables.TRANSACTIONS).isNotEmpty())
         assertTrue(pendingMutationDao.tombstones().isEmpty())
     }
 
     @Test
-    fun csvImportQueuesInPeriodSpendsAndArchivedOutOfPeriodRows() = runTest {
+    fun csvImportQueuesInPeriodSpendsAndArchivesOutOfPeriodRows() = runTest {
         setBudget()
         pendingMutationDao.deleteAll()
 
@@ -520,7 +518,6 @@ class SpendsRepositoryTest {
         spendsRepository.importTransactions(listOf(inPeriod, outOfPeriod))
 
         assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
-        assertTrue(pendingMutationDao.forTable(SyncTables.ARCHIVED_TRANSACTIONS).isNotEmpty())
         assertTrue(pendingMutationDao.idsFor(SyncTables.TRANSACTIONS).contains("in-1"))
     }
 

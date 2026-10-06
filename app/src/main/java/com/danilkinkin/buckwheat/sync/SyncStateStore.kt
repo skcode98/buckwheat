@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.sync
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -22,6 +23,8 @@ val syncCursorStoreKey = longPreferencesKey("syncCursor")
 val syncConflictsStoreKey = stringPreferencesKey("syncConflicts")
 val syncLastSyncedAtStoreKey = longPreferencesKey("syncLastSyncedAt")
 val syncLastErrorStoreKey = stringPreferencesKey("syncLastError")
+
+val familyReHome22StoreKey = booleanPreferencesKey("familyReHome22Done")
 
 interface SyncStateStore {
     fun cursor(): Flow<Long>
@@ -45,6 +48,10 @@ interface SyncStateStore {
     suspend fun markSynced(at: Long)
     suspend fun markFailed(reason: String?)
     suspend fun clear()
+
+    suspend fun isFamilyReHome22Done(): Boolean
+
+    suspend fun markFamilyReHome22Done()
 }
 
 class DataStoreSyncStateStore @Inject constructor(
@@ -101,6 +108,13 @@ class DataStoreSyncStateStore @Inject constructor(
             it.remove(syncLastErrorStoreKey)
         }
     }
+
+    override suspend fun isFamilyReHome22Done(): Boolean =
+        store.data.first()[familyReHome22StoreKey] ?: false
+
+    override suspend fun markFamilyReHome22Done() {
+        store.edit { it[familyReHome22StoreKey] = true }
+    }
 }
 
 internal fun encodeConflicts(conflicts: List<ConflictNotice>): String {
@@ -130,9 +144,8 @@ internal fun decodeConflicts(raw: String?): List<ConflictNotice> {
             val table = obj.optNullableString("table").orEmpty()
             val id = obj.optNullableString("id").orEmpty()
             // Only an unusable key discards an entry. A missing or null winner is the CORRECT reading
-            // for the memberless tables, whose rows are shared by the family rather than owned by a
-            // member, and dropping those notices is what used to hide every conflict on five of the
-            // seven tables.
+            // for tables whose rows are shared by the family rather than owned by a member, and
+            // dropping those notices is what used to hide conflicts entirely.
             if (table.isBlank() || id.isBlank()) continue
             add(
                 ConflictNotice(

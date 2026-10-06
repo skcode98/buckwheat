@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.sync
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -59,13 +60,12 @@ internal fun JSONObject.requireBoolean(key: String): Boolean {
  */
 internal fun JSONObject.optNullableString(key: String): String? = if (isNull(key)) null else getString(key)
 
+internal fun JSONObject.optNullableLong(key: String): Long? = if (isNull(key)) null else optLong(key)
+
 /**
- * `bucket` is part of the business payload rather than sync metadata, so it has to travel. Without it
- * a household rent pulled from another device lands as `MEMBER`, which moves the money out of the
- * household tier and into a member's remaining budget, and does so silently.
- *
- * Read with a fallback rather than `optNullableString`, because the column is never null and an older
- * payload that lacks the key has to keep loading as the member spend it always was.
+ * The five keys the server accepts for a transaction, and nothing else. The local-only columns
+ * (`bucket` and the assignment pair) never travel: they are this device's categorisation detail,
+ * not shared state, and the wire contract is pinned to exactly this key set.
  */
 internal fun Transaction.businessPayload(): JSONObject = JSONObject()
     .put("type", type.name)
@@ -73,9 +73,6 @@ internal fun Transaction.businessPayload(): JSONObject = JSONObject()
     .put("spentAt", date.time)
     .put("comment", comment)
     .put("category", category ?: JSONObject.NULL)
-    .put("bucket", bucket)
-    .put("assignmentId", assignmentId ?: JSONObject.NULL)
-    .put("assignedByMemberId", assignedByMemberId ?: JSONObject.NULL)
 
 internal fun JSONObject.readTransaction(id: String): Transaction = Transaction(
     id = id,
@@ -84,9 +81,35 @@ internal fun JSONObject.readTransaction(id: String): Transaction = Transaction(
     date = Date(requireLong("spentAt")),
     comment = optString("comment", ""),
     category = optNullableString("category"),
-    bucket = optString("bucket", SpendBucket.MEMBER.name),
-    assignmentId = optNullableString("assignmentId"),
-    assignedByMemberId = optNullableString("assignedByMemberId"),
+)
+
+internal fun FamilyTransaction.businessPayload(): JSONObject = JSONObject()
+    .put("type", type.name)
+    .put("value", value.toPlainString())
+    .put("spentAt", date.time)
+    .put("comment", comment)
+    .put("category", category ?: JSONObject.NULL)
+
+internal fun JSONObject.readFamilyTransaction(id: String): FamilyTransaction = FamilyTransaction(
+    id = id,
+    type = requireString("type").readType(),
+    value = requireString("value").toBigDecimalPayload(),
+    date = Date(requireLong("spentAt")),
+    comment = optString("comment", ""),
+    category = optNullableString("category"),
+    memberId = optNullableString("memberId"),
+    syncSeq = optLong("syncSeq", 0L),
+    updatedAt = optLong("updatedAt", 0L),
+    deletedAt = optNullableLong("deletedAt"),
+    version = optInt("version", 1),
+)
+
+internal fun FamilyTransaction.withSyncMeta(record: LocalRecord): FamilyTransaction = copy(
+    memberId = record.memberId,
+    syncSeq = record.syncSeq,
+    updatedAt = record.updatedAt,
+    deletedAt = record.deletedAt,
+    version = record.version,
 )
 
 internal fun ArchivedTransaction.businessPayload(): JSONObject = JSONObject()

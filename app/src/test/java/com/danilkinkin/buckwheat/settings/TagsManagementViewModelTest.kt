@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.di.FakeSavedTagDao
-import com.danilkinkin.buckwheat.sync.SyncTables
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -18,8 +17,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-// Every saved_tags write has to enqueue a pending mutation, otherwise the edit never reaches the
-// server and an incoming pull silently reverts it.
+// saved_tags edits no longer enqueue pending mutations; the writes must still land without
+// touching sync columns.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -64,13 +63,14 @@ class TagsManagementViewModelTest {
     ).also { savedTagDao.insert(it) }
 
     @Test
-    fun `adding a tag marks the inserted row`() = runTest(dispatcher) {
+    fun `adding a tag inserts it without marking`() = runTest(dispatcher) {
         viewModel().addTag("  groceries  ")
 
         assertEquals(
-            savedTagDao.getAllNow().single().id,
-            marker.upserted(SyncTables.SAVED_TAGS).single(),
+            savedTagDao.getAllNow().single().name,
+            "groceries",
         )
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
@@ -79,20 +79,20 @@ class TagsManagementViewModelTest {
 
         viewModel().addTag("groceries")
 
-        assertTrue(marker.upserted(SyncTables.SAVED_TAGS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     // A rebuilt SavedTag(id = …) used to be @Update-d straight onto the row, which reset
     // family_id / sync_seq / version back to their defaults — the rename then pushed as a brand
     // new record and the server rejected it forever.
     @Test
-    fun `renaming a tag marks the row and preserves its sync columns`() = runTest(dispatcher) {
+    fun `renaming a tag preserves its sync columns without marking`() = runTest(dispatcher) {
         seed("tag-1", "groceries", familyId = "family-1", syncSeq = 4L, version = 7)
         val viewModel = viewModel()
 
         viewModel.updateTag("tag-1", "food")
 
-        assertEquals(listOf("tag-1"), marker.upserted(SyncTables.SAVED_TAGS))
+        assertTrue(marker.upserts.isEmpty())
         val stored = savedTagDao.getAllNow().single()
         assertEquals("food", stored.name)
         assertEquals("family-1", stored.familyId)
@@ -107,20 +107,17 @@ class TagsManagementViewModelTest {
 
         viewModel().updateTag("tag-1", "food")
 
-        assertTrue(marker.upserted(SyncTables.SAVED_TAGS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
         assertEquals("groceries", savedTagDao.getAllNow().first { it.id == "tag-1" }.name)
     }
 
     @Test
-    fun `deleting a synced tag queues a tombstone with its family metadata`() = runTest(dispatcher) {
+    fun `deleting a synced tag drops the row without a tombstone`() = runTest(dispatcher) {
         seed("tag-1", "groceries", familyId = "family-1", syncSeq = 9L)
 
         viewModel().deleteTag("tag-1")
 
-        val tombstone = marker.deleted(SyncTables.SAVED_TAGS).single()
-        assertEquals("tag-1", tombstone.recordId)
-        assertEquals("family-1", tombstone.familyId)
-        assertEquals(9L, tombstone.syncSeq)
+        assertTrue(marker.deletes.isEmpty())
         assertTrue(savedTagDao.getAllNow().isEmpty())
     }
 
@@ -130,7 +127,7 @@ class TagsManagementViewModelTest {
 
         viewModel().deleteTag("tag-1")
 
-        assertTrue(marker.deleted(SyncTables.SAVED_TAGS).isEmpty())
+        assertTrue(marker.deletes.isEmpty())
     }
 
     @Test

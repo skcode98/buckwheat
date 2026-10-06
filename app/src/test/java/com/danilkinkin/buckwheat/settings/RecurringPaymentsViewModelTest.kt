@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.di.FakeRecurringDao
-import com.danilkinkin.buckwheat.sync.SyncTables
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -20,8 +19,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.math.BigDecimal
 
-// Every recurring_templates write has to enqueue a pending mutation, otherwise the change never
-// reaches the server and an incoming pull silently reverts it.
+// recurring_templates edits no longer enqueue pending mutations; the writes must still land
+// without touching sync columns.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -74,12 +73,12 @@ class RecurringPaymentsViewModelTest {
     }
 
     @Test
-    fun `adding a template marks the inserted row`() = runTest(dispatcher) {
+    fun `adding a template inserts it without marking`() = runTest(dispatcher) {
         viewModel().addTemplate(BigDecimal("25"), "  rent  ", 5)
 
         val stored = recurringDao.getAllNow().single()
         assertEquals("rent", stored.comment)
-        assertEquals(listOf(stored.id), marker.upserted(SyncTables.RECURRING_TEMPLATES))
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
@@ -91,26 +90,26 @@ class RecurringPaymentsViewModelTest {
         viewModel.addTemplate(BigDecimal("10"), "rent", 32)
 
         assertTrue(recurringDao.getAllNow().isEmpty())
-        assertTrue(marker.upserted(SyncTables.RECURRING_TEMPLATES).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
-    fun `toggling a template marks the row and flips enabled`() = runTest(dispatcher) {
+    fun `toggling a template flips enabled without marking`() = runTest(dispatcher) {
         seed(template("rec-1"))
 
         viewModel().toggleEnabled(template("rec-1"))
 
-        assertEquals(listOf("rec-1"), marker.upserted(SyncTables.RECURRING_TEMPLATES))
+        assertTrue(marker.upserts.isEmpty())
         assertFalse(recurringDao.getAllNow().single().enabled)
     }
 
     @Test
-    fun `updating a template marks the row and keeps its family metadata`() = runTest(dispatcher) {
+    fun `updating a template keeps its family metadata without marking`() = runTest(dispatcher) {
         seed(template("rec-1", familyId = "family-1", syncSeq = 6L))
 
         viewModel().updateTemplate(template("rec-1"), BigDecimal("30"), "  utilities ", 12)
 
-        assertEquals(listOf("rec-1"), marker.upserted(SyncTables.RECURRING_TEMPLATES))
+        assertTrue(marker.upserts.isEmpty())
         val stored = recurringDao.getAllNow().single()
         assertEquals(BigDecimal("30"), stored.amount)
         assertEquals("utilities", stored.comment)
@@ -120,15 +119,12 @@ class RecurringPaymentsViewModelTest {
     }
 
     @Test
-    fun `deleting a synced template queues a tombstone with its family metadata`() = runTest(dispatcher) {
+    fun `deleting a synced template drops the row without a tombstone`() = runTest(dispatcher) {
         seed(template("rec-1", familyId = "family-1", syncSeq = 8L))
 
         viewModel().deleteTemplate("rec-1")
 
-        val tombstone = marker.deleted(SyncTables.RECURRING_TEMPLATES).single()
-        assertEquals("rec-1", tombstone.recordId)
-        assertEquals("family-1", tombstone.familyId)
-        assertEquals(8L, tombstone.syncSeq)
+        assertTrue(marker.deletes.isEmpty())
         assertTrue(recurringDao.getAllNow().isEmpty())
     }
 
@@ -138,7 +134,7 @@ class RecurringPaymentsViewModelTest {
 
         viewModel().deleteTemplate("rec-1")
 
-        assertTrue(marker.deleted(SyncTables.RECURRING_TEMPLATES).isEmpty())
+        assertTrue(marker.deletes.isEmpty())
     }
 
     @Test

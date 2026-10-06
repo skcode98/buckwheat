@@ -18,7 +18,6 @@ import com.danilkinkin.buckwheat.di.SettingsRepository
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.notifications.GoalProgressNotifier
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
-import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -55,7 +54,6 @@ class GoalsViewModel @Inject constructor(
                 deadline = deadline,
             )
             savingsGoalDao.insert(goal)
-            syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
         }
     }
 
@@ -65,9 +63,8 @@ class GoalsViewModel @Inject constructor(
     // for a goal allocation now happen inside a single lock.
     private val allocationMutex = Mutex()
 
-    // Returns the allocation's Job so a caller can await the whole effect (goal update, dirty mark,
-    // spend, milestone nudge) instead of assuming it finished. The dirty mark below is what makes
-    // the changed goal pushable, so "allocation finished" has to mean "marked and queued".
+    // Returns the allocation's Job so a caller can await the whole effect (goal update,
+    // spend, milestone nudge) instead of assuming it finished.
     fun allocateToGoal(goalId: String, amount: BigDecimal): Job {
         if (amount <= BigDecimal.ZERO) return Job().apply { complete() }
         return viewModelScope.launch {
@@ -82,7 +79,6 @@ class GoalsViewModel @Inject constructor(
                 val completed = newAmount >= goal.targetAmount
                 val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
                 savingsGoalDao.update(updatedGoal)
-                syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
                 if (completed && !goal.completed) {
                     _goalCompletedEvents.tryEmit(updatedGoal)
                 }
@@ -120,12 +116,6 @@ class GoalsViewModel @Inject constructor(
         viewModelScope.launch {
             val existing = savingsGoalDao.getById(id) ?: return@launch
             savingsGoalDao.deleteById(existing.id)
-            syncDirtyMarker.markDelete(
-                SyncTables.SAVINGS_GOALS,
-                existing.id,
-                existing.familyId,
-                existing.syncSeq,
-            )
             val notified = settingsRepository.getGoalNotifiedMilestones()
             if (notified.containsKey(id)) {
                 settingsRepository.setGoalNotifiedMilestones(notified - id)
@@ -146,7 +136,6 @@ class GoalsViewModel @Inject constructor(
                     completed = completed,
                 )
             )
-            syncDirtyMarker.markUpsert(SyncTables.SAVINGS_GOALS, goal.id)
         }
     }
 }

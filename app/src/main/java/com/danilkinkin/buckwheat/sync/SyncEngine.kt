@@ -27,6 +27,8 @@ internal object NoopSyncStateStore : SyncStateStore {
     override suspend fun markSynced(at: Long) = Unit
     override suspend fun markFailed(reason: String?) = Unit
     override suspend fun clear() = Unit
+    override suspend fun isFamilyReHome22Done(): Boolean = false
+    override suspend fun markFamilyReHome22Done() = Unit
 }
 
 /**
@@ -41,6 +43,9 @@ class SyncEngine(
     private val sessionProvider: suspend () -> FamilySession?,
     private val syncStateStore: SyncStateStore = NoopSyncStateStore,
     private val clock: SyncClock = SyncClock { System.currentTimeMillis() },
+    private val membersCache: FamilyMembersCache? = null,
+    private val familyApiFactory: FamilyApiFactory? = null,
+    private val periodStart: suspend () -> Long = { 0L },
 ) {
     private val mutex = Mutex()
 
@@ -73,10 +78,12 @@ class SyncEngine(
         var conflicts = emptyList<ConflictNotice>()
         var page = 0
 
+        val since = periodStart()
+
         while (page < MAX_SYNC_PAGES) {
             page++
             val response = try {
-                client.sync(session.token, SyncRequest(cursor = cursor, changes = changes))
+                client.sync(session.token, SyncRequest(cursor = cursor, changes = changes, since = since))
             } catch (e: IOException) {
                 return failed(e.message ?: "push failed")
             }
@@ -129,6 +136,8 @@ class SyncEngine(
             // were never applied.
             runCatching { syncStateStore.markSynced(clock.now()) }
 
+            refreshRoster(session)
+
             SyncOutcome.Synced(cursor = merged.cursor, conflicts = notices)
         } catch (e: CancellationException) {
             throw e
@@ -141,6 +150,12 @@ class SyncEngine(
         } catch (e: Exception) {
             failed(e.message ?: "apply failed")
         }
+    }
+
+    private suspend fun refreshRoster(session: FamilySession) {
+        val cache = membersCache ?: return
+        val factory = familyApiFactory ?: return
+        runCatching { cache.replaceMembers(factory.create(session.baseUrl).members(session.token)) }
     }
 
     private data class Settled(

@@ -89,6 +89,7 @@ data class MergeResult(
 data class SyncRequest(
     val cursor: Long,
     val changes: List<LocalRecord>,
+    val since: Long? = null,
 )
 
 data class SyncResponse(

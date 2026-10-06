@@ -77,7 +77,7 @@ class CategoryAssignerSyncMarkingTest {
     }
 
     @Test
-    fun `offline assignment marks every categorized archived spend`() = runTest {
+    fun `offline assignment categorizes archived spends without marking them`() = runTest {
         budgetPeriodDao.insertArchivedTransactions(
             listOf(
                 archived("ar-1", "monthly rent payment"),
@@ -87,7 +87,7 @@ class CategoryAssignerSyncMarkingTest {
 
         assigner().assignToUncategorized()
 
-        assertEquals(listOf("ar-1", "ar-2"), marker.upserted(SyncTables.ARCHIVED_TRANSACTIONS))
+        assertTrue(marker.upserts.isEmpty())
         assertEquals("BILLS", budgetPeriodDao.getAllArchivedNow().first { it.id == "ar-1" }.category)
         assertEquals(
             "SHOPPING",
@@ -103,7 +103,7 @@ class CategoryAssignerSyncMarkingTest {
         assigner().assignToUncategorized()
 
         assertEquals(listOf("tx-1"), marker.upserted(SyncTables.TRANSACTIONS))
-        assertEquals(listOf("ar-1"), marker.upserted(SyncTables.ARCHIVED_TRANSACTIONS))
+        assertTrue(marker.upserts.none { it.recordId == "ar-1" })
     }
 
     @Test

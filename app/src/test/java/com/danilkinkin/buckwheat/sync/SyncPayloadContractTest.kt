@@ -1,11 +1,5 @@
 package com.danilkinkin.buckwheat.sync
 
-import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
-import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
-import com.danilkinkin.buckwheat.data.entities.SavedCategory
-import com.danilkinkin.buckwheat.data.entities.SavedTag
-import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.io.File
@@ -20,13 +14,20 @@ class SyncPayloadContractTest {
     fun everyTableTheServerKnowsHasAPayloadWithTheSameKeys() {
         val spec = serverSpec()
 
-        assertEquals(SyncTables.ALL.size, spec.size)
+        assertEquals(1, spec.size)
+        assertEquals(
+            "the transactions payload must be exactly the five keys the server binds, nothing more or " +
+                "less (compared sorted: JVM org.json iterates keys in hash order, so insertion order " +
+                "cannot be asserted here)",
+            listOf("category", "comment", "spentAt", "type", "value"),
+            androidKeys(SyncTables.TRANSACTIONS).sorted(),
+        )
 
         spec.forEach { (table, serverKeys) ->
             assertEquals(
                 "payload keys for $table do not match the server column spec",
                 serverKeys,
-                androidKeys(table),
+                androidKeys(table).toSet(),
             )
         }
     }
@@ -41,7 +42,7 @@ class SyncPayloadContractTest {
      * client would push it, the server would reject the whole sync, and every member's local changes
      * would stop uploading.
      */
-@Test
+    @Test
     fun theServerKnowsEveryTableTheAppCanPush() {
         assertEquals(
             SyncTables.ALL.toSet(),
@@ -49,18 +50,12 @@ class SyncPayloadContractTest {
         )
     }
 
-    private fun androidKeys(table: String): Set<String> {
+    private fun androidKeys(table: String): List<String> {
         val payload = when (table) {
             SyncTables.TRANSACTIONS -> transaction.businessPayload()
-            SyncTables.ARCHIVED_TRANSACTIONS -> archived.businessPayload()
-            SyncTables.BUDGET_PERIODS -> period.businessPayload()
-            SyncTables.SAVED_CATEGORIES -> category.businessPayload()
-            SyncTables.SAVED_TAGS -> tag.businessPayload()
-            SyncTables.RECURRING_TEMPLATES -> recurring.businessPayload()
-            SyncTables.SAVINGS_GOALS -> goal.businessPayload()
             else -> throw AssertionError("no payload producer is registered for $table")
         }
-        return payload.keys().asSequence().toSet()
+        return payload.keys().asSequence().toList()
     }
 
     private fun serverSpec(): Map<String, Set<String>> {
@@ -107,49 +102,6 @@ class SyncPayloadContractTest {
         date = Date(1_700_000_000_000L),
         comment = "coffee",
         category = "food",
-    )
-
-    private val archived = ArchivedTransaction(
-        id = "a-1",
-        type = TransactionType.INCOME,
-        value = BigDecimal("500.00"),
-        date = Date(1_700_000_000_000L),
-        comment = "salary",
-        category = null,
-        periodId = "p-1",
-    )
-
-    private val period = BudgetPeriod(
-        id = "p-1",
-        budget = BigDecimal("1000.00"),
-        startDate = Date(1_699_000_000_000L),
-        finishDate = Date(1_702_000_000_000L),
-        actualFinishDate = null,
-        currencyCode = "USD",
-        totalSpent = BigDecimal("250.75"),
-        isImported = false,
-    )
-
-    private val category = SavedCategory(id = "c-1", name = "Food", emoji = "🍔")
-
-    private val tag = SavedTag(id = "tag-1", name = "work")
-
-    private val recurring = RecurringTemplate(
-        id = "r-1",
-        amount = BigDecimal("30.00"),
-        comment = "rent",
-        dayOfMonth = 1,
-        enabled = true,
-    )
-
-    private val goal = SavingsGoal(
-        id = "g-1",
-        name = "Laptop",
-        targetAmount = BigDecimal("2000.00"),
-        currentAmount = BigDecimal("150.00"),
-        deadline = Date(1_800_000_000_000L),
-        createdAt = Date(1_700_000_000_000L),
-        completed = false,
     )
 
     private companion object {

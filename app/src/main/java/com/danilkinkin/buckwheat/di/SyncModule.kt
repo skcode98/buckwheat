@@ -1,12 +1,8 @@
 package com.danilkinkin.buckwheat.di
 
 import androidx.room.withTransaction
-import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
-import com.danilkinkin.buckwheat.data.dao.RecurringDao
-import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
-import com.danilkinkin.buckwheat.data.dao.SavedTagDao
-import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.sync.DataStoreFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.DataStoreFamilySessionStore
@@ -71,23 +67,14 @@ object SyncModule {
         database: DatabaseModule,
         pendingMutationDao: PendingMutationDao,
         transactionDao: TransactionDao,
-        budgetPeriodDao: BudgetPeriodDao,
-        savedCategoryDao: SavedCategoryDao,
-        savedTagDao: SavedTagDao,
-        recurringDao: RecurringDao,
-        savingsGoalDao: SavingsGoalDao,
+        familyTransactionDao: FamilyTransactionDao,
         syncStateStore: SyncStateStore,
     ): SyncDatabase = RoomSyncDatabase(
-        gateways = SyncBindings(pendingMutationDao).gateways(
-            transactionDao = transactionDao,
-            budgetPeriodDao = budgetPeriodDao,
-            savedCategoryDao = savedCategoryDao,
-            savedTagDao = savedTagDao,
-            recurringDao = recurringDao,
-            savingsGoalDao = savingsGoalDao,
-        ),
+        gateways = SyncBindings(pendingMutationDao).gateways(familyTransactionDao),
         pendingMutationDao = pendingMutationDao,
         syncStateStore = syncStateStore,
+        transactionDao = transactionDao,
+        familyTransactionDao = familyTransactionDao,
         runInTransaction = { block -> database.withTransaction { block() } },
     )
 
@@ -103,12 +90,16 @@ object SyncModule {
         store: FamilySessionStore,
         syncStateStore: SyncStateStore,
         clock: SyncClock,
+        membersCache: FamilyMembersCache,
+        familyApiFactory: FamilyApiFactory,
     ) = SyncEngine(
         client = client,
         database = database,
         sessionProvider = { store.current() },
         syncStateStore = syncStateStore,
         clock = clock,
+        membersCache = membersCache,
+        familyApiFactory = familyApiFactory,
     )
 }
 

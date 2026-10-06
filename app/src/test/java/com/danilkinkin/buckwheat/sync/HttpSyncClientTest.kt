@@ -84,6 +84,13 @@ class HttpSyncClientTest {
     }
 
     @Test
+    fun theRequestCarriesSinceWhenPresent() {
+        val body = encodeSyncRequest(SyncRequest(cursor = 0L, changes = emptyList(), since = 1_700_000_000_000L))
+
+        assertTrue(body.toString().contains("\"since\":1700000000000"))
+    }
+
+    @Test
     fun theResponseDecodesEveryField() {
         val response = decodeSyncResponse(
             """

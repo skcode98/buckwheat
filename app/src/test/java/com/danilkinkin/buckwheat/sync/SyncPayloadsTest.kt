@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.sync
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -73,63 +74,22 @@ class SyncPayloadsTest {
     }
 
     @Test
-    fun anArchivedTransactionSurvivesARoundTrip() {
-        val original = archived.copy(memberId = "member-1", familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.ARCHIVED_TRANSACTIONS, original.id, original.businessPayload().toString(), "member-1")
+    fun familyTransactionRoundTripsThroughItsPayload() {
+        val original = family.copy(memberId = "member-1", syncSeq = 9L, updatedAt = 5L, version = 2)
+        val record = recordFor(SyncTables.TRANSACTIONS, original.id, original.businessPayload().toString(), "member-1")
 
-        val decoded = JSONObject(record.payload).readArchivedTransaction(original.id).withSyncMeta(record)
-
-        assertEquals(original, decoded)
-    }
-
-    @Test
-    fun aBudgetPeriodSurvivesARoundTrip() {
-        val original = period.copy(familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.BUDGET_PERIODS, original.id, original.businessPayload().toString())
-
-        val decoded = JSONObject(record.payload).readBudgetPeriod(original.id).withSyncMeta(record)
+        val decoded = JSONObject(record.payload).readFamilyTransaction(original.id).withSyncMeta(record)
 
         assertEquals(original, decoded)
     }
 
     @Test
-    fun aSavedCategorySurvivesARoundTrip() {
-        val original = category.copy(familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.SAVED_CATEGORIES, original.id, original.businessPayload().toString())
+    fun theTransactionPayloadHasNoBucketOrAssignmentKeys() {
+        val json = transaction.businessPayload()
 
-        val decoded = JSONObject(record.payload).readSavedCategory(original.id).withSyncMeta(record)
-
-        assertEquals(original, decoded)
-    }
-
-    @Test
-    fun aSavedTagSurvivesARoundTrip() {
-        val original = tag.copy(familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.SAVED_TAGS, original.id, original.businessPayload().toString())
-
-        val decoded = JSONObject(record.payload).readSavedTag(original.id).withSyncMeta(record)
-
-        assertEquals(original, decoded)
-    }
-
-    @Test
-    fun aRecurringTemplateSurvivesARoundTrip() {
-        val original = recurring.copy(familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.RECURRING_TEMPLATES, original.id, original.businessPayload().toString())
-
-        val decoded = JSONObject(record.payload).readRecurringTemplate(original.id).withSyncMeta(record)
-
-        assertEquals(original, decoded)
-    }
-
-    @Test
-    fun aSavingsGoalSurvivesARoundTrip() {
-        val original = goal.copy(familyId = "family-1", syncSeq = 9L, updatedAt = 5L, version = 2)
-        val record = recordFor(SyncTables.SAVINGS_GOALS, original.id, original.businessPayload().toString())
-
-        val decoded = JSONObject(record.payload).readSavingsGoal(original.id).withSyncMeta(record)
-
-        assertEquals(original, decoded)
+        assertNull(json.opt("bucket"))
+        assertNull(json.opt("assignmentId"))
+        assertNull(json.opt("assignedByMemberId"))
     }
 
     @Test
@@ -148,10 +108,9 @@ class SyncPayloadsTest {
 
     @Test
     fun withSyncMetaKeepsTheTombstoneTimestamp() {
-        val payload = JSONObject().put("name", "groceries").toString()
-        val record = local(SyncTables.SAVED_TAGS, "tag-1", payload, deletedAt = 999L)
+        val record = local(SyncTables.TRANSACTIONS, "t-1", transaction.businessPayload().toString(), deletedAt = 999L)
 
-        val decoded = JSONObject(record.payload).readSavedTag(record.id).withSyncMeta(record)
+        val decoded = JSONObject(record.payload).readFamilyTransaction(record.id).withSyncMeta(record)
 
         assertEquals(999L, decoded.deletedAt)
     }
@@ -239,6 +198,15 @@ class SyncPayloadsTest {
 
     private val transaction = Transaction(
         id = "t-1",
+        type = TransactionType.SPENT,
+        value = BigDecimal("10.25"),
+        date = Date(1_700_000_000_000L),
+        comment = "coffee",
+        category = "food",
+    )
+
+    private val family = FamilyTransaction(
+        id = "f-1",
         type = TransactionType.SPENT,
         value = BigDecimal("10.25"),
         date = Date(1_700_000_000_000L),

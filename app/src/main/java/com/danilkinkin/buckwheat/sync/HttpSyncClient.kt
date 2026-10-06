@@ -73,9 +73,11 @@ internal fun encodeSyncRequest(request: SyncRequest): JSONObject {
                 .put("payload", JSONObject(change.payload))
         )
     }
-    return JSONObject()
+    val body = JSONObject()
         .put("cursor", request.cursor)
         .put("changes", changes)
+    request.since?.let { body.put("since", it) }
+    return body
 }
 
 internal fun decodeSyncResponse(body: String): SyncResponse {

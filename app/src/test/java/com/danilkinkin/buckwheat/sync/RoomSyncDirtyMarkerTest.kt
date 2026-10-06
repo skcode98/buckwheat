@@ -5,7 +5,6 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
-import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.DatabaseModule
@@ -57,68 +56,68 @@ class RoomSyncDirtyMarkerTest {
 
     @Test
     fun anUpsertQueuesTheRowAndAdvancesItsVersion() = runTest {
-        db.savedTagDao().insert(tag("tag-1"))
+        db.transactionDao().insert(spend("tag-1"))
 
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
-        assertEquals(1, pending.isQueued(SyncTables.SAVED_TAGS, "tag-1"))
-        assertEquals(2, db.savedTagDao().getAllNow().single().version)
+        assertEquals(1, pending.isQueued(SyncTables.TRANSACTIONS, "tag-1"))
+        assertEquals(2, db.transactionDao().getAllNow().single().version)
     }
 
     @Test
     fun markingTheSameRowTwiceKeepsOneQueueEntry() = runTest {
-        db.savedTagDao().insert(tag("tag-1"))
+        db.transactionDao().insert(spend("tag-1"))
 
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
         now += 50
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
         assertEquals(1, pending.count())
-        assertEquals(3, db.savedTagDao().getAllNow().single().version)
+        assertEquals(3, db.transactionDao().getAllNow().single().version)
     }
 
     @Test
     fun theQueueEntryMovesToTheLatestEditRatherThanAccumulating() = runTest {
         // This is the in-flight edit from the other side: the queue row is overwritten in place, so the
         // push that is already in flight is the only record that the earlier edit existed.
-        db.savedTagDao().insert(tag("tag-1"))
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        db.transactionDao().insert(spend("tag-1"))
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
         now += 50
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
         val queued = pending.getAllNow().single()
         assertEquals(1_050L, queued.queuedAt)
-        assertEquals(3, db.savedTagDao().getAllNow().single().version)
+        assertEquals(3, db.transactionDao().getAllNow().single().version)
     }
 
     @Test
     fun aDeleteOfARowThatNeverReachedAFamilyIsNotQueued() = runTest {
-        db.savedTagDao().insert(tag("tag-1"))
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        db.transactionDao().insert(spend("tag-1"))
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
-        marker.markDelete(SyncTables.SAVED_TAGS, "tag-1", familyId = null, syncSeq = 0L)
+        marker.markDelete(SyncTables.TRANSACTIONS, "tag-1", familyId = null, syncSeq = 0L)
 
-        assertEquals(0, pending.isQueued(SyncTables.SAVED_TAGS, "tag-1"))
+        assertEquals(0, pending.isQueued(SyncTables.TRANSACTIONS, "tag-1"))
     }
 
     @Test
     fun aDeleteOfARowThatReachedAFamilyIsQueuedAsATombstone() = runTest {
-        marker.markDelete(SyncTables.SAVED_TAGS, "tag-1", familyId = "family-1", syncSeq = 5L)
+        marker.markDelete(SyncTables.TRANSACTIONS, "tag-1", familyId = "family-1", syncSeq = 5L)
 
         val queued = pending.getAllNow().single()
-        assertEquals(SyncTables.SAVED_TAGS, queued.table)
+        assertEquals(SyncTables.TRANSACTIONS, queued.table)
         assertEquals("tag-1", queued.recordId)
         assertTrue(queued.isDelete)
     }
 
     @Test
     fun aDeleteAfterAnUpsertFlipsTheExistingEntryRatherThanAddingOne() = runTest {
-        db.savedTagDao().insert(tag("tag-1"))
-        marker.markUpsert(SyncTables.SAVED_TAGS, "tag-1")
+        db.transactionDao().insert(spend("tag-1"))
+        marker.markUpsert(SyncTables.TRANSACTIONS, "tag-1")
 
         now += 50
-        marker.markDelete(SyncTables.SAVED_TAGS, "tag-1", familyId = "family-1", syncSeq = 5L)
+        marker.markDelete(SyncTables.TRANSACTIONS, "tag-1", familyId = "family-1", syncSeq = 5L)
 
         assertEquals(1, pending.count())
         assertTrue(pending.getAllNow().single().isDelete)
@@ -139,15 +138,13 @@ class RoomSyncDirtyMarkerTest {
 
     @Test
     fun markUpsertsMarksEveryListedRow() = runTest {
-        db.savedTagDao().insert(tag("tag-1"))
-        db.savedTagDao().insert(tag("tag-2"))
+        db.transactionDao().insert(spend("tag-1"))
+        db.transactionDao().insert(spend("tag-2"))
 
-        marker.markUpserts(SyncTables.SAVED_TAGS, listOf("tag-1", "tag-2"))
+        marker.markUpserts(SyncTables.TRANSACTIONS, listOf("tag-1", "tag-2"))
 
         assertEquals(2, pending.count())
     }
-
-    private fun tag(id: String, name: String = "work") = SavedTag(id = id, name = name)
 
     private fun spend(
         id: String,

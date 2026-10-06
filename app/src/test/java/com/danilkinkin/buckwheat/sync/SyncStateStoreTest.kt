@@ -5,7 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +20,7 @@ class SyncStateStoreTest {
     fun aConflictSurvivesTheRoundTrip() {
         val conflicts = listOf(
             ConflictNotice(SyncTables.TRANSACTIONS, "t-1", "member-1"),
-            ConflictNotice(SyncTables.SAVED_TAGS, "tag-1", "member-2"),
+            ConflictNotice(SyncTables.TRANSACTIONS, "t-2", "member-2"),
         )
 
         assertEquals(conflicts, decodeConflicts(encodeConflicts(conflicts)))
@@ -54,16 +56,16 @@ class SyncStateStoreTest {
               {"table":"transactions","id":"t-1","wonByMemberId":"member-1"},
               {"table":"","id":"t-2","wonByMemberId":"member-2"},
               {"table":"transactions","id":"","wonByMemberId":"member-3"},
-              {"table":"budget_periods","id":"p-1","wonByMemberId":""},
-              {"table":"saved_tags","id":"tag-1"}
+              {"table":"transactions","id":"t-4","wonByMemberId":""},
+              {"table":"transactions","id":"t-5"}
             ]
         """.trimIndent()
 
         assertEquals(
             listOf(
                 ConflictNotice(SyncTables.TRANSACTIONS, "t-1", "member-1"),
-                ConflictNotice(SyncTables.BUDGET_PERIODS, "p-1", null),
-                ConflictNotice(SyncTables.SAVED_TAGS, "tag-1", null),
+                ConflictNotice(SyncTables.TRANSACTIONS, "t-4", null),
+                ConflictNotice(SyncTables.TRANSACTIONS, "t-5", null),
             ),
             decodeConflicts(json),
         )
@@ -202,5 +204,16 @@ class DataStoreSyncStateStoreTest {
         assertEquals(0L, store.lastSyncedAt().first())
         assertNull(store.lastError().first())
         assertEquals(0L, store.readCursor())
+    }
+
+    @Test
+    fun theReHomeFlagIsWrittenOnceSurvivesRereadAndClear() = runBlocking {
+        assertFalse(store.isFamilyReHome22Done())
+
+        store.markFamilyReHome22Done()
+        assertTrue(store.isFamilyReHome22Done())
+
+        store.clear()
+        assertTrue(store.isFamilyReHome22Done())
     }
 }

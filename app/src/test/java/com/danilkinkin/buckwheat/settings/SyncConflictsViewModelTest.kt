@@ -74,6 +74,10 @@ class SyncConflictsViewModelTest {
         override suspend fun clear() {
             clearCount++
         }
+
+        override suspend fun isFamilyReHome22Done(): Boolean = false
+
+        override suspend fun markFamilyReHome22Done() = Unit
     }
 
     private suspend fun TestScope.activeConflicts(

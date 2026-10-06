@@ -7,7 +7,6 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
-import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -49,7 +48,6 @@ class CategoriesManagementViewModel @Inject constructor(
             if (!savedCategoryDao.existsByName(trimmed)) {
                 val category = SavedCategory(name = trimmed, emoji = emoji)
                 savedCategoryDao.insert(category)
-                syncDirtyMarker.markUpsert(SyncTables.SAVED_CATEGORIES, category.id)
             }
         }
     }
@@ -64,7 +62,6 @@ class CategoriesManagementViewModel @Inject constructor(
             // Don't rename onto an existing category's name
             if (other == null || other.id == id) {
                 savedCategoryDao.update(existing.copy(name = trimmed, emoji = emoji))
-                syncDirtyMarker.markUpsert(SyncTables.SAVED_CATEGORIES, existing.id)
             }
         }
     }
@@ -73,12 +70,6 @@ class CategoriesManagementViewModel @Inject constructor(
         viewModelScope.launch {
             val existing = savedCategoryDao.getById(id) ?: return@launch
             savedCategoryDao.deleteById(existing.id)
-            syncDirtyMarker.markDelete(
-                SyncTables.SAVED_CATEGORIES,
-                existing.id,
-                existing.familyId,
-                existing.syncSeq,
-            )
         }
     }
 

@@ -386,27 +386,19 @@ class SyncMergeTest {
     }
 
     @Test
-    fun everyMemberlessTableStillReportsItsConflict() {
-        // These five tables carry no member id at all, so their conflicts resolve to "nobody in
-        // particular". Losing the notice here is what hid every conflict on those tables.
-        val tables = listOf(
-            SyncTables.BUDGET_PERIODS,
-            SyncTables.SAVED_CATEGORIES,
-            SyncTables.SAVED_TAGS,
-            SyncTables.RECURRING_TEMPLATES,
-            SyncTables.SAVINGS_GOALS,
+    fun aConflictWithNoMemberStillReportsNobodyInParticular() {
+        // A row with no member id resolves its conflict to "nobody in particular". Losing the
+        // notice here is what used to hide conflicts entirely.
+        val table = SyncTables.TRANSACTIONS
+
+        val result = mergePull(
+            local = listOf(local(updatedAt = 100, version = 1, memberId = null).copy(table = table)),
+            remote = listOf(remote(updatedAt = 200, version = 2, memberId = null).copy(table = table)),
+            cursor = 0,
         )
 
-        tables.forEach { table ->
-            val result = mergePull(
-                local = listOf(local(updatedAt = 100, version = 1, memberId = null).copy(table = table)),
-                remote = listOf(remote(updatedAt = 200, version = 2, memberId = null).copy(table = table)),
-                cursor = 0,
-            )
-
-            assertEquals("no conflict reported for $table", 1, result.conflicts.size)
-            assertNull("winner for $table", result.conflicts.single().wonByMemberId)
-        }
+        assertEquals(1, result.conflicts.size)
+        assertNull(result.conflicts.single().wonByMemberId)
     }
 
     @Test

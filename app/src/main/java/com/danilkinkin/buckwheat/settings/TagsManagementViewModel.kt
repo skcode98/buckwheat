@@ -6,7 +6,6 @@ import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
-import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +40,6 @@ class TagsManagementViewModel @Inject constructor(
             if (!savedTagDao.existsByName(trimmed)) {
                 val tag = SavedTag(name = trimmed)
                 savedTagDao.insert(tag)
-                syncDirtyMarker.markUpsert(SyncTables.SAVED_TAGS, tag.id)
             }
         }
     }
@@ -56,7 +54,6 @@ class TagsManagementViewModel @Inject constructor(
             // Don't rename onto an existing tag's name
             if (other == null || other.id == id) {
                 savedTagDao.update(existing.copy(name = trimmed))
-                syncDirtyMarker.markUpsert(SyncTables.SAVED_TAGS, existing.id)
             }
         }
     }
@@ -65,12 +62,6 @@ class TagsManagementViewModel @Inject constructor(
         viewModelScope.launch {
             val existing = savedTagDao.getById(id) ?: return@launch
             savedTagDao.deleteById(existing.id)
-            syncDirtyMarker.markDelete(
-                SyncTables.SAVED_TAGS,
-                existing.id,
-                existing.familyId,
-                existing.syncSeq,
-            )
         }
     }
 

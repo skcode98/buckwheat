@@ -23,9 +23,8 @@ import org.robolectric.annotation.Config
 import java.math.BigDecimal
 import java.util.Date
 
-// Every savings_goals write has to enqueue a pending mutation, otherwise the change never reaches
-// the server and an incoming pull silently reverts it. An allocation touches two tables — the
-// goal and the spend it records — so both have to be queued.
+// savings_goals edits no longer enqueue pending mutations. An allocation touches two tables —
+// the goal and the spend it records — and only the spend still gets marked.
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -87,12 +86,12 @@ class GoalsViewModelTest {
     }
 
     @Test
-    fun `adding a goal marks the inserted row`() = runTest(dispatcher) {
+    fun `adding a goal inserts it without marking`() = runTest(dispatcher) {
         viewModel().addGoal("  Trip  ", BigDecimal("500"), Date(0))
 
         val stored = savingsGoalDao.getAllNow().single()
         assertEquals("Trip", stored.name)
-        assertEquals(listOf(stored.id), marker.upserted(SyncTables.SAVINGS_GOALS))
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
@@ -103,16 +102,16 @@ class GoalsViewModelTest {
         viewModel.addGoal("Trip", BigDecimal.ZERO)
 
         assertTrue(savingsGoalDao.getAllNow().isEmpty())
-        assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
-    fun `updating a goal marks the row and keeps its family metadata`() = runTest(dispatcher) {
+    fun `updating a goal keeps its family metadata without marking`() = runTest(dispatcher) {
         seed("goal-1", familyId = "family-1", syncSeq = 5L)
 
         viewModel().updateGoal("goal-1", "  Road trip  ", BigDecimal("2000"), Date(0))
 
-        assertEquals(listOf("goal-1"), marker.upserted(SyncTables.SAVINGS_GOALS))
+        assertTrue(marker.upserts.isEmpty())
         val stored = savingsGoalDao.getAllNow().single()
         assertEquals("Road trip", stored.name)
         assertEquals(BigDecimal("2000"), stored.targetAmount)
@@ -124,11 +123,11 @@ class GoalsViewModelTest {
     fun `updating an unknown goal marks nothing`() = runTest(dispatcher) {
         viewModel().updateGoal("missing", "Trip", BigDecimal("100"), null)
 
-        assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
-    fun `allocating marks the goal and the resulting spend`() = runTest(dispatcher) {
+    fun `allocating marks only the resulting spend`() = runTest(dispatcher) {
         setBudgetRest("1000")
         seed("goal-1", targetAmount = "1000", currentAmount = "10")
         marker.upserts.clear()
@@ -138,8 +137,8 @@ class GoalsViewModelTest {
         // scheduler cannot advance, so without it the assertions below race the dirty mark.
         viewModel.allocateToGoal("goal-1", BigDecimal("20")).join()
 
-        assertEquals(listOf("goal-1"), marker.upserted(SyncTables.SAVINGS_GOALS))
         assertEquals(1, marker.upserted(SyncTables.TRANSACTIONS).size)
+        assertTrue(marker.upserts.all { it.table == SyncTables.TRANSACTIONS })
         assertEquals(BigDecimal("30"), savingsGoalDao.getAllNow().single().currentAmount)
     }
 
@@ -151,8 +150,7 @@ class GoalsViewModelTest {
         // No budget is written, so howMuchBudgetRest() is zero and 5000 is over the rest.
         viewModel().allocateToGoal("goal-1", BigDecimal("5000")).join()
 
-        assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
-        assertTrue(marker.upserted(SyncTables.TRANSACTIONS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
         assertEquals(BigDecimal.ZERO, savingsGoalDao.getAllNow().single().currentAmount)
     }
 
@@ -163,20 +161,16 @@ class GoalsViewModelTest {
         // An unknown goal short-circuits before the budget is ever read.
         viewModel().allocateToGoal("missing", BigDecimal("20")).join()
 
-        assertTrue(marker.upserted(SyncTables.SAVINGS_GOALS).isEmpty())
-        assertTrue(marker.upserted(SyncTables.TRANSACTIONS).isEmpty())
+        assertTrue(marker.upserts.isEmpty())
     }
 
     @Test
-    fun `deleting a synced goal queues a tombstone with its family metadata`() = runTest(dispatcher) {
+    fun `deleting a synced goal drops the row without a tombstone`() = runTest(dispatcher) {
         seed("goal-1", familyId = "family-1", syncSeq = 12L)
 
         viewModel().deleteGoal("goal-1")
 
-        val tombstone = marker.deleted(SyncTables.SAVINGS_GOALS).single()
-        assertEquals("goal-1", tombstone.recordId)
-        assertEquals("family-1", tombstone.familyId)
-        assertEquals(12L, tombstone.syncSeq)
+        assertTrue(marker.deletes.isEmpty())
         assertTrue(savingsGoalDao.getAllNow().isEmpty())
     }
 
@@ -186,7 +180,7 @@ class GoalsViewModelTest {
 
         viewModel().deleteGoal("goal-1")
 
-        assertTrue(marker.deleted(SyncTables.SAVINGS_GOALS).isEmpty())
+        assertTrue(marker.deletes.isEmpty())
     }
 
     @Test
