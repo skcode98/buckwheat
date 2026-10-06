@@ -52,4 +52,8 @@ object AppModule {
     @Singleton
     @Provides
     fun providePendingMutationDao(db: DatabaseModule) = db.pendingMutationDao()
+
+    @Singleton
+    @Provides
+    fun provideFamilyTransactionDao(db: DatabaseModule) = db.familyTransactionDao()
 }

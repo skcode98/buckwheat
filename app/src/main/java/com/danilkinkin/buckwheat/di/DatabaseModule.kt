@@ -11,17 +11,13 @@ import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
 import com.danilkinkin.buckwheat.data.dao.SyncStampDao
-import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
-import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
-import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
+import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.FamilyState
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.Member
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -426,9 +422,38 @@ val Migration20to21: Migration = object : Migration(20, 21) {
     }
 }
 
+val Migration21to22: Migration = object : Migration(21, 22) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `family_transactions` (
+                `id` TEXT NOT NULL,
+                `type` TEXT NOT NULL,
+                `value` TEXT NOT NULL,
+                `date` INTEGER NOT NULL,
+                `comment` TEXT NOT NULL DEFAULT '',
+                `category` TEXT,
+                `member_id` TEXT,
+                `sync_seq` INTEGER NOT NULL DEFAULT 0,
+                `updated_at` INTEGER NOT NULL DEFAULT 0,
+                `deleted_at` INTEGER,
+                `version` INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_family_transactions_member_id` ON `family_transactions` (`member_id`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_family_transactions_date` ON `family_transactions` (`date`)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS `index_family_transactions_type` ON `family_transactions` (`type`)")
+        database.execSQL("DROP TABLE IF EXISTS `spend_assignments`")
+        database.execSQL("DROP TABLE IF EXISTS `period_limits`")
+        database.execSQL("DROP TABLE IF EXISTS `family_state`")
+    }
+}
+
 @Database(
-    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, PendingMutation::class, FamilyState::class, PeriodLimit::class, SpendAssignment::class],
-    version = 21,
+    entities = [Transaction::class, SavedTag::class, SavedCategory::class, BudgetPeriod::class, ArchivedTransaction::class, RecurringTemplate::class, SavingsGoal::class, Member::class, PendingMutation::class, FamilyTransaction::class],
+    version = 22,
     autoMigrations = [
         AutoMigration(from = 1, to = 2, spec = AutoMigration1to2::class),
         AutoMigration(from = 2, to = 3, spec = AutoMigration2to3::class),
@@ -454,15 +479,11 @@ abstract class DatabaseModule : RoomDatabase() {
 
 abstract fun pendingMutationDao(): PendingMutationDao
 
-    abstract fun familyStateDao(): FamilyStateDao
-
-    abstract fun periodLimitDao(): PeriodLimitDao
-
-    abstract fun spendAssignmentDao(): SpendAssignmentDao
+    abstract fun familyTransactionDao(): FamilyTransactionDao
 
     abstract fun syncStampDao(): SyncStampDao
 
     companion object {
-        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19, Migration19to20, Migration20to21)
+        val MANUAL_MIGRATIONS = arrayOf<Migration>(AutoMigration4to5, AutoMigration5to6, AutoMigration6to7, AutoMigration8to9, AutoMigration9to10, AutoMigration10to11, AutoMigration11to12, AutoMigration12to13, AutoMigration13to14, AutoMigration14to15, AutoMigration15to16, Migration16to17, Migration17to18, Migration18to19, Migration19to20, Migration20to21, Migration21to22)
     }
 }

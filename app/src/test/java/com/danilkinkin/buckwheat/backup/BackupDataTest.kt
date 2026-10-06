@@ -2,12 +2,10 @@ package com.danilkinkin.buckwheat.backup
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import org.json.JSONObject
@@ -95,28 +93,6 @@ class BackupDataTest {
             savedCategories = listOf(category),
             recurringTemplates = listOf(recurring),
             savingsGoals = listOf(goal),
-            // Populated on purpose rather than left empty: the assertion above compares the whole
-            // lists, and two empty lists would have passed whether or not the codec carried them at all.
-            periodLimits = listOf(
-                PeriodLimit(
-                    id = "pl-1",
-                    periodId = "pool_0",
-                    memberId = "member-1",
-                    limitValue = BigDecimal("13000.00"),
-                ),
-            ),
-            spendAssignments = listOf(
-                SpendAssignment(
-                    id = "sa-1",
-                    periodId = "pool_0",
-                    targetMemberId = "member-2",
-                    createdByMemberId = "member-1",
-                    amount = BigDecimal("250.00"),
-                    comment = "school fees",
-                    date = now,
-                    familyId = null,
-                ),
-            ),
             budgetPreferences = mapOf(
                 "budget" to BackupValue.Str("1000.00"),
                 "lastChangeDailyBudgetDate" to BackupValue.LongValue(now.time),
@@ -152,8 +128,6 @@ class BackupDataTest {
         assertEquals(original.savedCategories, parsed.savedCategories)
         assertEquals(original.recurringTemplates, parsed.recurringTemplates)
         assertEquals(original.savingsGoals, parsed.savingsGoals)
-        assertEquals(original.periodLimits, parsed.periodLimits)
-        assertEquals(original.spendAssignments, parsed.spendAssignments)
         assertEquals(original.budgetPreferences, parsed.budgetPreferences)
         assertEquals(original.settingsPreferences, parsed.settingsPreferences)
     }

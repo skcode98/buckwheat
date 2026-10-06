@@ -2,10 +2,7 @@ package com.danilkinkin.buckwheat.backup
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
-import com.danilkinkin.buckwheat.data.entities.SpendAssignmentStatus
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
@@ -18,7 +15,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.util.Date
 
-const val BACKUP_VERSION = 1
+const val BACKUP_VERSION = 2
 
 const val BACKUP_APP_TAG = "buckwheat"
 const val BACKUP_APP_TAG_KEY = "app"
@@ -89,8 +86,6 @@ data class BackupData(
     val savedCategories: List<SavedCategory>,
     val recurringTemplates: List<RecurringTemplate>,
     val savingsGoals: List<SavingsGoal>,
-    val periodLimits: List<PeriodLimit> = emptyList(),
-    val spendAssignments: List<SpendAssignment> = emptyList(),
     val budgetPreferences: Map<String, BackupValue>,
     val settingsPreferences: Map<String, BackupValue>,
 )
@@ -109,8 +104,6 @@ fun BackupData.toJsonString(): String {
         .put("savedCategories", JSONArray(savedCategories.map { it.toJson() }))
         .put("recurringTemplates", JSONArray(recurringTemplates.map { it.toJson() }))
         .put("savingsGoals", JSONArray(savingsGoals.map { it.toJson() }))
-        .put("periodLimits", JSONArray(periodLimits.map { it.toJson() }))
-        .put("spendAssignments", JSONArray(spendAssignments.map { it.toJson() }))
         .put("budgetPreferences", preferencesToJson(budgetPreferences))
         .put("settingsPreferences", preferencesToJson(settingsPreferences))
     return root.toString()
@@ -138,9 +131,6 @@ fun parseBackupData(json: String): BackupData? {
             recurringTemplates = root.optJSONArray("recurringTemplates")
                 ?.toRecurringTemplateList() ?: emptyList(),
             savingsGoals = root.optJSONArray("savingsGoals")?.toSavingsGoalList() ?: emptyList(),
-            periodLimits = root.optJSONArray("periodLimits")?.toPeriodLimitList() ?: emptyList(),
-            spendAssignments = root.optJSONArray("spendAssignments")
-                ?.toSpendAssignmentList() ?: emptyList(),
             budgetPreferences = preferencesFromJson(
                 root.optJSONObject("budgetPreferences") ?: JSONObject()
             ),
@@ -161,9 +151,6 @@ fun parseBackupData(json: String): BackupData? {
  * metadata, it changes what the money *is*. Restoring a household rent as a member spend would move
  * it out of the household tier and into an anonymous bucket, which is a different ledger rather than
  * a lossy one.
- *
- * The assignment provenance is not written, because it points at a `spend_assignments` row that is
- * itself not backed up. A dangling link would be worse than none.
  */
 private fun Transaction.toJson(): JSONObject = JSONObject()
     .put("id", id)
@@ -224,49 +211,6 @@ private fun JSONObject.toArchivedTransaction(): ArchivedTransaction = ArchivedTr
     comment = optString("comment"),
     category = if (isNull("category")) null else optString("category", null),
     bucket = optString("bucket", SpendBucket.MEMBER.name),
-)
-
-/**
- * No `family_id` on any of these, on purpose. A restored allocation is a number the person typed, not
- * a claim about a family they may no longer be in, and re-attaching it to one silently would put
- * somebody else's budget back on their screen.
- */
-private fun PeriodLimit.toJson(): JSONObject = JSONObject()
-    .put("id", id)
-    .put("periodId", periodId)
-    .put("memberId", memberId)
-    .put("limitValue", limitValue.toPlainString())
-
-private fun JSONObject.toPeriodLimit(): PeriodLimit = PeriodLimit(
-    id = optString("id").ifBlank { newSyncId() },
-    periodId = optString("periodId"),
-    memberId = optString("memberId"),
-    limitValue = BigDecimal(optString("limitValue", "0")),
-)
-
-private fun SpendAssignment.toJson(): JSONObject = JSONObject()
-    .put("id", id)
-    .put("periodId", periodId)
-    .put("targetMemberId", targetMemberId)
-    .put("createdByMemberId", createdByMemberId)
-    .put("amount", amount.toPlainString())
-    .put("category", category ?: JSONObject.NULL)
-    .put("comment", comment)
-    .put("date", date.time)
-    .put("status", status)
-    .put("resolvedAt", resolvedAt?.time ?: JSONObject.NULL)
-
-private fun JSONObject.toSpendAssignment(): SpendAssignment = SpendAssignment(
-    id = optString("id").ifBlank { newSyncId() },
-    periodId = optString("periodId"),
-    targetMemberId = optString("targetMemberId"),
-    createdByMemberId = optString("createdByMemberId"),
-    amount = BigDecimal(optString("amount", "0")),
-    category = if (isNull("category")) null else optString("category", null),
-    comment = optString("comment"),
-    date = Date(optLong("date")),
-    status = optString("status", SpendAssignmentStatus.PENDING.name),
-    resolvedAt = if (isNull("resolvedAt")) null else Date(optLong("resolvedAt")),
 )
 
 private fun SavedTag.toJson(): JSONObject = JSONObject()
@@ -382,17 +326,5 @@ private fun JSONArray.toRecurringTemplateList(): List<RecurringTemplate> = build
 private fun JSONArray.toSavingsGoalList(): List<SavingsGoal> = buildList {
     for (i in 0 until length()) {
         optJSONObject(i)?.let { add(it.toSavingsGoal()) }
-    }
-}
-
-private fun JSONArray.toPeriodLimitList(): List<PeriodLimit> = buildList {
-    for (i in 0 until length()) {
-        optJSONObject(i)?.let { add(it.toPeriodLimit()) }
-    }
-}
-
-private fun JSONArray.toSpendAssignmentList(): List<SpendAssignment> = buildList {
-    for (i in 0 until length()) {
-        optJSONObject(i)?.let { add(it.toSpendAssignment()) }
     }
 }
