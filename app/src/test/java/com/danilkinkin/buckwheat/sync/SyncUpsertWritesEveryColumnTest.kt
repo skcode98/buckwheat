@@ -8,9 +8,7 @@ import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
-import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
-import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
-import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
+
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
@@ -58,9 +56,7 @@ class SyncUpsertWritesEveryColumnTest {
     private lateinit var tags: SavedTagDao
     private lateinit var recurring: RecurringDao
     private lateinit var goals: SavingsGoalDao
-    private lateinit var familyState: FamilyStateDao
-    private lateinit var limits: PeriodLimitDao
-    private lateinit var assignments: SpendAssignmentDao
+
 
     @Before
     fun setUp() {
@@ -74,9 +70,7 @@ class SyncUpsertWritesEveryColumnTest {
         tags = db.savedTagDao()
         recurring = db.recurringDao()
         goals = db.savingsGoalDao()
-        familyState = db.familyStateDao()
-        limits = db.periodLimitDao()
-        assignments = db.spendAssignmentDao()
+
     }
 
     @After
@@ -295,9 +289,6 @@ class SyncUpsertWritesEveryColumnTest {
             savedTagDao = tags,
             recurringDao = recurring,
             savingsGoalDao = goals,
-            familyStateDao = familyState,
-            periodLimitDao = limits,
-            spendAssignmentDao = assignments,
         ).single { it.table == SyncTables.TRANSACTIONS }
 
         gateway.upsert(pulledTransaction("t-9", memberId = "member-1", familyId = "family-1", version = 2))

@@ -3,14 +3,10 @@ package com.danilkinkin.buckwheat.sync
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
 import com.danilkinkin.buckwheat.data.entities.CommonSplitRule
-import com.danilkinkin.buckwheat.data.entities.FamilyState
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
-import com.danilkinkin.buckwheat.data.entities.SpendAssignmentStatus
 import com.danilkinkin.buckwheat.data.entities.SpendBucket
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
@@ -118,94 +114,7 @@ internal fun JSONObject.readArchivedTransaction(id: String): ArchivedTransaction
     assignedByMemberId = optNullableString("assignedByMemberId"),
 )
 
-/**
- * The pool and the four household policies travel as one payload because they are edited as one thing.
- * `familyId` is not in it: it is the record's id, since it is the table's primary key, and sending it
- * twice would give the two a chance to disagree.
- */
-internal fun FamilyState.businessPayload(): JSONObject = JSONObject()
-    .put("budget", budget.toPlainString())
-    .put("householdTier", householdTier.toPlainString())
-    .put("startDate", startDate)
-    .put("finishDate", finishDate)
-    .put("currency", currency)
-    .put("householdDetailVisibleToAll", householdDetailVisibleToAll)
-    .put("commonSplitRule", commonSplitRule)
-    .put("tagsVisibleToSelf", tagsVisibleToSelf)
-    .put("familyAiEnabled", familyAiEnabled)
 
-internal fun JSONObject.readFamilyState(familyId: String): FamilyState = FamilyState(
-    familyId = familyId,
-    budget = requireString("budget").toBigDecimalPayload(),
-    householdTier = requireString("householdTier").toBigDecimalPayload(),
-    startDate = requireLong("startDate"),
-    finishDate = requireLong("finishDate"),
-    currency = optString("currency", ""),
-    householdDetailVisibleToAll = optBoolean("householdDetailVisibleToAll", false),
-    commonSplitRule = optString("commonSplitRule", CommonSplitRule.EQUAL.name),
-    tagsVisibleToSelf = optBoolean("tagsVisibleToSelf", true),
-    familyAiEnabled = optBoolean("familyAiEnabled", true),
-)
-
-internal fun PeriodLimit.businessPayload(): JSONObject = JSONObject()
-    .put("periodId", periodId)
-    .put("memberId", memberId)
-    .put("limitValue", limitValue.toPlainString())
-
-internal fun JSONObject.readPeriodLimit(id: String): PeriodLimit = PeriodLimit(
-    id = id,
-    periodId = requireString("periodId"),
-    memberId = requireString("memberId"),
-    limitValue = requireString("limitValue").toBigDecimalPayload(),
-)
-
-internal fun SpendAssignment.businessPayload(): JSONObject = JSONObject()
-    .put("periodId", periodId)
-    .put("targetMemberId", targetMemberId)
-    .put("createdByMemberId", createdByMemberId)
-    .put("amount", amount.toPlainString())
-    .put("category", category ?: JSONObject.NULL)
-    .put("comment", comment)
-    .put("date", date.time)
-    .put("status", status)
-    .put("resolvedAt", resolvedAt?.time ?: JSONObject.NULL)
-
-internal fun JSONObject.readSpendAssignment(id: String): SpendAssignment = SpendAssignment(
-    id = id,
-    periodId = requireString("periodId"),
-    targetMemberId = requireString("targetMemberId"),
-    createdByMemberId = requireString("createdByMemberId"),
-    amount = requireString("amount").toBigDecimalPayload(),
-    category = optNullableString("category"),
-    comment = optString("comment", ""),
-    date = Date(requireLong("date")),
-    status = optString("status", SpendAssignmentStatus.PENDING.name),
-    resolvedAt = if (isNull("resolvedAt")) null else Date(requireLong("resolvedAt")),
-)
-
-internal fun FamilyState.withSyncMeta(record: LocalRecord): FamilyState = copy(
-    familyId = record.familyId ?: familyId,
-    syncSeq = record.syncSeq,
-    updatedAt = record.updatedAt,
-    deletedAt = record.deletedAt,
-    version = record.version,
-)
-
-internal fun PeriodLimit.withSyncMeta(record: LocalRecord): PeriodLimit = copy(
-    familyId = record.familyId,
-    syncSeq = record.syncSeq,
-    updatedAt = record.updatedAt,
-    deletedAt = record.deletedAt,
-    version = record.version,
-)
-
-internal fun SpendAssignment.withSyncMeta(record: LocalRecord): SpendAssignment = copy(
-    familyId = record.familyId,
-    syncSeq = record.syncSeq,
-    updatedAt = record.updatedAt,
-    deletedAt = record.deletedAt,
-    version = record.version,
-)
 
 internal fun BudgetPeriod.businessPayload(): JSONObject = JSONObject()
     .put("budget", budget.toPlainString())

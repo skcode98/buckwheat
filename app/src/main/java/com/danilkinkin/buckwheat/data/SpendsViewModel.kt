@@ -275,8 +275,8 @@ class SpendsViewModel @Inject constructor(
  * There is deliberately no way to record a spend against somebody else from here. The server stamps
  * `member_id` from the authenticated member on every push, so an override set on the client is
  * silently rewritten to whoever is signed in -- a control that appeared to work and did not. Recording
- * a spend for another member is the `spend_assignments` flow instead, where the member is asked and
- * their answer is what makes it count.
+ * a spend for another member is not handled from here; the flow for recording a spend on behalf of
+ * another member is managed separately.
  */
 fun addSpent(transactionForAdd: Transaction) {
     viewModelScope.launch {
