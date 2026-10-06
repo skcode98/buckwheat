@@ -1299,6 +1299,74 @@ git commit -m "feat(sync): mirror remote transactions into family_transactions"
 
 ---
 
+## Task 5.5: Client — mirror own transactions into family_transactions
+
+A gap amendment (per §2.2 of the design and the user's Option A decision): the viewer's own
+`transactions` rows never reach `family_transactions`, so they never push and `FamilyViewModel.ownSpend`
+(plan Task 7) would be 0 forever. `SpendsRepository`'s write paths get a write-through mirror whose
+rows carry the SAME record id as the `transactions` row, so the unchanged `markUpsert(TRANSACTIONS)`
+on `addSpent` resolves in the one Task-5 binding's dirty loader (`familyTransactionDao.getAllNow()`)
+and the own spend pushes. The personal `transactions` table is untouched.
+
+**Files:**
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/di/SpendsRepository.kt`
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/di/SyncModule.kt` (only if the ctor needs a binding change)
+- Test: `app/src/test/java/com/danilkinkin/buckwheat/di/SpendsRepositoryMirrorTest.kt` (new)
+
+**Interfaces:**
+- Consumes: Task 4's `FamilyTransactionDao`, `FamilySession` (`sync/FamilySessionStore.kt`),
+  `FamilyTransaction` entity.
+- Produces: a mirrored write on every `SpendsRepository` transaction write path when a family session is active.
+
+- [ ] **Step 1: Inspect `SpendsRepository` write paths**
+
+Map every transaction-write method (at minimum `addSpent`, `removeSpent`, `importTransactions`, and
+any edit/update path) to the private dirty helpers (`markUpsert`, `markUpserts`, `markDeleted`).
+Confirm which methods already enqueue a TRANSACTIONS pending mutation; the mirror must follow exactly
+those, so a write is either fully mirrored (pushable) or not mirrored at all (no dirty state dangles).
+
+- [ ] **Step 2: Inject the mirror dependencies**
+
+Inject `FamilySessionStore` and `FamilyTransactionDao` into `SpendsRepository`. Gate =
+`sessionStore.current() != null`; own member id = `session.memberId`. Keep the injection optional-safe:
+a `SpendsRepository` constructed without a session (unit tests) must behave exactly as today.
+
+- [ ] **Step 3: Mirror on `addSpent`**
+
+When a session is active, insert a `FamilyTransaction` row formed from the same fields as the
+`Transaction` with the SAME id and the session's `memberId`. Do not set a separate id. The existing
+`markUpsert(TRANSACTIONS, ...)` must stay untouched — the shared id is what makes the one binding
+resolve it.
+
+- [ ] **Step 4: Mirror on the remaining write paths**
+
+Apply the same write-through to the edit/update and `removeSpent` (mirror delete / tombstone mirrors
+the personal-table delete) and `importTransactions` paths only where the personal write itself
+touches transactions. No mirror row may ever be created or removed without the matching personal-row
+write, and vice versa.
+
+- [ ] **Step 5: Write `SpendsRepositoryMirrorTest.kt`**
+
+Mirror the existing `SpendsRepositoryTest` fake-sync setup. Cover at minimum: (a) no session → no
+mirror row and no regression to `addSpent`'s behavior; (b) session → `addSpent` writes the mirror row
+with the session's `memberId`; (c) session → `removeSpent` deletes the mirror row; (d) the mirror row
+shares the exact `family_transactions` id with the `transactions` row.
+
+- [ ] **Step 6: Run the targeted tests**
+
+Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.di.SpendsRepositoryMirrorTest"` plus the pre-existing `SpendsRepositoryTest`.
+Expected: new test green, `SpendsRepositoryTest` stays green. Parse
+`app/build/test-results/testDebugUnitTest/*.xml`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/src/main/java/com/danilkinkin/buckwheat/di/SpendsRepository.kt app/src/main/java/com/danilkinkin/buckwheat/di/SyncModule.kt app/src/test/java/com/danilkinkin/buckwheat/di/SpendsRepositoryMirrorTest.kt
+git commit -m "feat(sync): mirror own transactions into family_transactions"
+```
+
+---
+
 ## Task 6: Client — family API surface without invites
 
 **Files:**

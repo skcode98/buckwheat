@@ -164,6 +164,11 @@ Kept: `POST /v1/family/create`, `/join`, `/members`, `/whoami`, `DELETE /v1/fami
   one-time §1.3 re-homing of remote rows.
 - `SyncDirtyMarker` callers stop marking dropped tables. `SpendsRepository`'s
   `markUpsert(TRANSACTIONS)` on `addSpent` is unchanged and still required.
+- While a family session is active, `SpendsRepository`'s transaction write paths also write a
+  parallel `family_transactions` row carrying the viewer's own `memberId` and the SAME record id as
+  the personal `transactions` row (edit/delete mirror too). The shared id is what lets the unchanged
+  TRANSACTIONS pending mutation resolve in the one binding's dirty loader, so the viewer's own spends
+  push and show in the family sheet. The personal `transactions` table is never rewritten by sync.
 
 ### 2.3 Roster
 
