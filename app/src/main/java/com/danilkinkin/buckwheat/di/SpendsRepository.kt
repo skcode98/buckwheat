@@ -15,17 +15,20 @@ import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.categories.offlineCategoryOrNull
 import com.danilkinkin.buckwheat.errorForReport
 import com.danilkinkin.buckwheat.notifications.OverspendingNotifier
 import com.danilkinkin.buckwheat.settingsDataStore
+import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.countDays
@@ -99,6 +102,8 @@ class SpendsRepository @Inject constructor(
     private val categoryCapTracker: CategoryCapTracker,
     private val budgetCalculator: BudgetCalculator,
     private val syncDirtyMarker: SyncDirtyMarker,
+    private val familySessionStore: FamilySessionStore? = null,
+    private val familyTransactionDao: FamilyTransactionDao? = null,
 ) {
     // Thin delegations kept so the call sites below stay unchanged: SyncDirtyMarker advances
     // version/updated_at AND queues the pending_mutations row in one place.
@@ -110,6 +115,36 @@ class SpendsRepository @Inject constructor(
 
     private suspend fun markDeleted(table: String, recordId: String, familyId: String?, syncSeq: Long) =
         syncDirtyMarker.markDelete(table, recordId, familyId, syncSeq)
+
+    // Mirrors the viewer's own `transactions` write into `family_transactions` under the same
+    // record id, but only while an active family session exists. The row is read back after
+    // markUpsert so the stamped version/updated_at travel with it, and the member is always the
+    // session's — a personal row may carry someone else's attribution and must never leak here.
+    private suspend fun mirrorWrite(recordId: String) {
+        val session = familySessionStore?.current() ?: return
+        val dao = familyTransactionDao ?: return
+        val row = transactionDao.getById(recordId) ?: return
+        dao.insert(
+            FamilyTransaction(
+                id = row.id,
+                type = row.type,
+                value = row.value,
+                date = row.date,
+                comment = row.comment,
+                category = row.category,
+                memberId = session.memberId,
+                syncSeq = row.syncSeq,
+                updatedAt = row.updatedAt,
+                deletedAt = row.deletedAt,
+                version = row.version,
+            ),
+        )
+    }
+
+    private suspend fun mirrorRemove(recordId: String) {
+        if (familySessionStore?.current() == null) return
+        familyTransactionDao?.deleteById(recordId)
+    }
 
     fun getAllTransactions(): Flow<List<Transaction>> = transactionDao.getAll()
     fun getAllArchivedTransactions(): Flow<List<ArchivedTransaction>> = budgetPeriodDao.getAllArchived()
@@ -413,6 +448,7 @@ class SpendsRepository @Inject constructor(
             .forEach {
                 markDeleted(SyncTables.TRANSACTIONS, it.id, it.familyId, it.syncSeq)
                 transactionDao.deleteById(it.id)
+                mirrorRemove(it.id)
             }
         val incomeMarker = Transaction(
             type = TransactionType.INCOME,
@@ -421,6 +457,7 @@ class SpendsRepository @Inject constructor(
         )
         transactionDao.insert(incomeMarker)
         markUpsert(SyncTables.TRANSACTIONS, incomeMarker.id)
+        mirrorWrite(incomeMarker.id)
 
         setDailyBudget(whatBudgetForDay())
 
@@ -541,6 +578,7 @@ class SpendsRepository @Inject constructor(
         incomeTransactions.forEach { incomeTransaction ->
             transactionDao.update(incomeTransaction.copy(value = newBudget))
             markUpsert(SyncTables.TRANSACTIONS, incomeTransaction.id)
+            mirrorWrite(incomeTransaction.id)
         }
 
         updateDailyBudget(whatBudgetForDay())
@@ -585,6 +623,7 @@ class SpendsRepository @Inject constructor(
             ?.let { setDailyBudgetTransaction ->
                 transactionDao.update(setDailyBudgetTransaction.copy(value = newDailyBudget))
                 markUpsert(SyncTables.TRANSACTIONS, setDailyBudgetTransaction.id)
+                mirrorWrite(setDailyBudgetTransaction.id)
             }
     }
 
@@ -616,6 +655,7 @@ class SpendsRepository @Inject constructor(
         )
         transactionDao.insert(dailyBudgetMarker)
         markUpsert(SyncTables.TRANSACTIONS, dailyBudgetMarker.id)
+        mirrorWrite(dailyBudgetMarker.id)
     }
 
     suspend fun whatBudgetForDay(
@@ -639,6 +679,7 @@ class SpendsRepository @Inject constructor(
     suspend fun addSpent(newTransaction: Transaction) {
         this.transactionDao.insert(newTransaction)
         markUpsert(SyncTables.TRANSACTIONS, newTransaction.id)
+        mirrorWrite(newTransaction.id)
 
         var notifyOverspend = false
         context.budgetDataStore.edit {
@@ -864,6 +905,7 @@ class SpendsRepository @Inject constructor(
             transactionForRemove.familyId,
             transactionForRemove.syncSeq,
         )
+        mirrorRemove(transactionForRemove.id)
         context.budgetDataStore.edit {
             val startPeriodDate = it[startPeriodDateStoreKey]
                 ?.let { value -> Date(value) } ?: return@edit
