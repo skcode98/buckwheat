@@ -1,20 +1,14 @@
 package com.danilkinkin.buckwheat.sync
 
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
-import com.danilkinkin.buckwheat.data.dao.FamilyStateDao
 import com.danilkinkin.buckwheat.data.dao.PendingMutationDao
-import com.danilkinkin.buckwheat.data.dao.PeriodLimitDao
 import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
-import com.danilkinkin.buckwheat.data.dao.SpendAssignmentDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.FamilyState
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
@@ -118,9 +112,6 @@ class SyncBindings(
         savedTagDao: SavedTagDao,
         recurringDao: RecurringDao,
         savingsGoalDao: SavingsGoalDao,
-        familyStateDao: FamilyStateDao,
-        periodLimitDao: PeriodLimitDao,
-        spendAssignmentDao: SpendAssignmentDao,
     ): List<SyncTableGateway> = listOf(
         binding(
             table = SyncTables.BUDGET_PERIODS,

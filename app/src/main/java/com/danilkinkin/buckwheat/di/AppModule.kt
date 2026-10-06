@@ -52,16 +52,4 @@ object AppModule {
     @Singleton
     @Provides
     fun providePendingMutationDao(db: DatabaseModule) = db.pendingMutationDao()
-
-    @Singleton
-    @Provides
-    fun provideFamilyStateDao(db: DatabaseModule) = db.familyStateDao()
-
-    @Singleton
-    @Provides
-    fun providePeriodLimitDao(db: DatabaseModule) = db.periodLimitDao()
-
-    @Singleton
-    @Provides
-    fun provideSpendAssignmentDao(db: DatabaseModule) = db.spendAssignmentDao()
 }

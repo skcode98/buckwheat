@@ -2,13 +2,10 @@ package com.danilkinkin.buckwheat.sync
 
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
-import com.danilkinkin.buckwheat.data.entities.FamilyState
-import com.danilkinkin.buckwheat.data.entities.PeriodLimit
 import com.danilkinkin.buckwheat.data.entities.RecurringTemplate
 import com.danilkinkin.buckwheat.data.entities.SavedCategory
 import com.danilkinkin.buckwheat.data.entities.SavedTag
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
-import com.danilkinkin.buckwheat.data.entities.SpendAssignment
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import java.io.File
@@ -137,31 +134,6 @@ class SyncPayloadContractTest {
     private val category = SavedCategory(id = "c-1", name = "Food", emoji = "🍔")
 
     private val tag = SavedTag(id = "tag-1", name = "work")
-
-private val familyState = FamilyState(
-    familyId = "family-1",
-    budget = BigDecimal("30000.00"),
-    householdTier = BigDecimal("10000.00"),
-    startDate = 0L,
-    finishDate = 30_000L,
-    currency = "INR",
-)
-
-private val periodLimit = PeriodLimit(
-    id = "pl-1",
-    periodId = "pool_0",
-    memberId = "member-1",
-    limitValue = BigDecimal("13000.00"),
-)
-
-private val assignment = SpendAssignment(
-    id = "sa-1",
-    periodId = "pool_0",
-    targetMemberId = "member-2",
-    createdByMemberId = "member-1",
-    amount = BigDecimal("250.00"),
-    date = Date(1_699_000_000_000L),
-)
 
     private val recurring = RecurringTemplate(
         id = "r-1",
