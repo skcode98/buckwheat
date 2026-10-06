@@ -2,7 +2,9 @@ package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.data.entities.PendingMutation
 import com.danilkinkin.buckwheat.di.FakePendingMutationDao
+import com.danilkinkin.buckwheat.di.FakeTransactionDao
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
+import com.danilkinkin.buckwheat.sync.SyncTables
 
 // A row marked for push, as `table:id`.
 data class SyncMark(val table: String, val recordId: String)
@@ -22,6 +24,7 @@ data class SyncDelete(
 // working. `queued_at` is pinned so tests never depend on wall-clock time.
 class FakeSyncDirtyMarker(
     val pendingMutationDao: FakePendingMutationDao = FakePendingMutationDao(),
+    private val transactionDao: FakeTransactionDao? = null,
 ) : SyncDirtyMarker {
 
     val upserts = mutableListOf<SyncMark>()
@@ -31,6 +34,7 @@ class FakeSyncDirtyMarker(
 
     override suspend fun markUpsert(table: String, recordId: String) {
         upserts += SyncMark(table, recordId)
+        stamp(table, recordId)
         queue(table, recordId, isDelete = false)
     }
 
@@ -60,6 +64,21 @@ class FakeSyncDirtyMarker(
         upserts.filter { it.table == table }.map { it.recordId }
 
     fun deleted(table: String): List<SyncDelete> = deletes.filter { it.table == table }
+
+    // Production RoomSyncDirtyMarker advances version/updated_at via SyncStampDao before queuing;
+    // reproduces that against the transactions DAO so mirror read-backs carry the stamped values.
+    private var stampStep = 0L
+
+    private fun stamp(table: String, recordId: String) {
+        val dao = transactionDao ?: return
+        if (table != SyncTables.TRANSACTIONS) return
+        val index = dao.spends.indexOfFirst { it.id == recordId }
+        if (index >= 0) {
+            stampStep += 1
+            val row = dao.spends[index]
+            dao.spends[index] = row.copy(version = row.version + 1, updatedAt = QUEUED_AT + stampStep)
+        }
+    }
 
     private suspend fun queue(table: String, recordId: String, isDelete: Boolean) {
         if (pendingMutationDao.mark(table, recordId, QUEUED_AT, isDelete) == 0) {

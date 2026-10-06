@@ -68,8 +68,14 @@ interface FamilyTransactionDao {
     @Query("DELETE FROM `family_transactions` WHERE id = :id")
     suspend fun deleteById(id: String): Int
 
-    @Query("UPDATE `family_transactions` SET `category` = :category WHERE id = :id")
-    suspend fun updateCategory(id: String, category: String?)
+    @Query(
+        """
+        UPDATE `family_transactions`
+        SET `category` = :category, `version` = :version, `updated_at` = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun updateCategory(id: String, category: String?, version: Int, updatedAt: Long)
 
     @Query("DELETE FROM `family_transactions`")
     suspend fun deleteAll()

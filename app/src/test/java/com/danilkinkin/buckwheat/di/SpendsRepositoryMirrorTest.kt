@@ -31,18 +31,21 @@ import java.util.Date
 class SpendsRepositoryMirrorTest {
 
     lateinit var spendsRepository: SpendsRepository
+    lateinit var transactionDao: FakeTransactionDao
+    lateinit var syncDirtyMarker: FakeSyncDirtyMarker
 
+    val pendingMutationDao: FakePendingMutationDao
+        get() = syncDirtyMarker.pendingMutationDao
     val currentDateUseCase: FakeGetCurrentDateUseCase = FakeGetCurrentDateUseCase()
     val budgetPeriodDao: FakeBudgetPeriodDao = FakeBudgetPeriodDao()
-    val syncDirtyMarker = FakeSyncDirtyMarker()
-    val pendingMutationDao: FakePendingMutationDao = syncDirtyMarker.pendingMutationDao
     val familySessionStore = FakeSessionStore()
     val familyTransactionDao = FakeFamilyTransactionDao()
 
     @Before
     fun init() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val transactionDao = FakeTransactionDao()
+        transactionDao = FakeTransactionDao()
+        syncDirtyMarker = FakeSyncDirtyMarker(transactionDao = transactionDao)
         spendsRepository = SpendsRepository(
             context = context,
             transactionDao,
@@ -115,10 +118,40 @@ class SpendsRepositoryMirrorTest {
         assertEquals(10.toBigDecimal(), mirror.value)
         assertEquals("groceries", mirror.comment)
         assertEquals("FOOD", mirror.category)
-        assertEquals(spend.syncSeq, mirror.syncSeq)
-        assertEquals(spend.updatedAt, mirror.updatedAt)
-        assertEquals(spend.deletedAt, mirror.deletedAt)
-        assertEquals(spend.version, mirror.version)
+        // The mirror is read back AFTER markUpsert, so it carries the stamped values: the stamp
+        // advanced the personal row and those are exactly what travel in the push payload.
+        val stamped = transactionDao.getById("spend-1")
+        requireNotNull(stamped)
+        assertEquals(spend.version + 1, stamped.version)
+        assertEquals(stamped.syncSeq, mirror.syncSeq)
+        assertEquals(stamped.updatedAt, mirror.updatedAt)
+        assertEquals(stamped.deletedAt, mirror.deletedAt)
+        assertEquals(stamped.version, mirror.version)
+    }
+
+    @Test
+    fun stampExposedMirrorCarriesTheStampedValues() = runTest {
+        activateSession()
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+
+        spendsRepository.addSpent(spend)
+
+        val personal = transactionDao.getById("spend-1")
+        val mirror = familyTransactionDao.getById("spend-1")
+        requireNotNull(personal)
+        requireNotNull(mirror)
+        // mirrorWrite copies the freshly stamped version/updated_at onto the mirror, so a push
+        // carries an accepted stamp instead of a frozen one (which the server would reject).
+        assertEquals(spend.version + 1, personal.version)
+        assertEquals(personal.version, mirror.version)
+        assertEquals(personal.updatedAt, mirror.updatedAt)
+        assertTrue(personal.updatedAt > 0L)
     }
 
     @Test
@@ -331,9 +364,9 @@ class FakeFamilyTransactionDao : FamilyTransactionDao {
         if (index >= 0) rows[index] = rows[index].copy(memberId = memberId)
     }
 
-    override suspend fun updateCategory(id: String, category: String?) {
+    override suspend fun updateCategory(id: String, category: String?, version: Int, updatedAt: Long) {
         val index = rows.indexOfFirst { it.id == id }
-        if (index >= 0) rows[index] = rows[index].copy(category = category)
+        if (index >= 0) rows[index] = rows[index].copy(category = category, version = version, updatedAt = updatedAt)
     }
 
     override suspend fun deleteRowsWhereMemberDiffersFrom(memberId: String): Int {

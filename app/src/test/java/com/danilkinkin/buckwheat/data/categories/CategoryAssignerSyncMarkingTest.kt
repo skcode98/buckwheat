@@ -40,7 +40,7 @@ class CategoryAssignerSyncMarkingTest {
     fun setUp() {
         transactionDao = FakeTransactionDao()
         budgetPeriodDao = FakeBudgetPeriodDao()
-        marker = FakeSyncDirtyMarker()
+        marker = FakeSyncDirtyMarker(transactionDao = transactionDao)
         familySessionStore = FakeSessionStore()
         familyTransactionDao = FakeFamilyTransactionDao()
     }
@@ -208,5 +208,26 @@ class CategoryAssignerSyncMarkingTest {
         assigner().assignToUncategorized()
 
         assertNull(requireNotNull(familyTransactionDao.getById("tx-1")).category)
+    }
+
+    @Test
+    fun `category only change advances the accepted mirror so decidePush keeps accepting`() = runTest {
+        familySessionStore.save("https://server", "token", "family-1", "member-1")
+        transactionDao.insert(spend("tx-1", "lunch at the cafe"))
+        // The mirror as addSpent left it after a first accepted push: version 1 travelled, the
+        // server acknowledged it (sync_seq > 0) and now stores version 2.
+        familyTransactionDao.rows += mirror("tx-1", "lunch at the cafe")
+        val before = requireNotNull(familyTransactionDao.getById("tx-1"))
+
+        assigner().assignToUncategorized()
+
+        val updated = requireNotNull(familyTransactionDao.getById("tx-1"))
+        assertEquals("FOOD", updated.category)
+        // decidePush accepts when incoming.version >= stored.version (2), falling back to a newer
+        // updated_at on equality: the category-only edit advanced both, so the change actually
+        // pushes instead of being rejected and silently reverted by the next pull.
+        assertTrue(updated.version > before.version)
+        assertTrue(updated.updatedAt > before.updatedAt)
+        assertTrue(updated.version >= 2)
     }
 }

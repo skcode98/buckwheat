@@ -66,7 +66,10 @@ class CategoryAssigner @Inject constructor(
         if (familySessionStore?.current() == null) return
         val dao = familyTransactionDao ?: return
         assignments.forEach { (id, category) ->
-            dao.updateCategory(id, category)
+            // The personal row was stamped by markUpserts just above; the mirror must carry the
+            // same version/updated_at or the server keeps rejecting the category-only push.
+            val personal = transactionDao.getById(id) ?: return@forEach
+            dao.updateCategory(id, category, personal.version, personal.updatedAt)
         }
     }
 
