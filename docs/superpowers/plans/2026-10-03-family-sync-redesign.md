@@ -706,7 +706,7 @@ git commit -m "refactor(family): strip governance tables from sync and backup su
 
 ## Task 4: Client — Room 22 with `family_transactions`
 
-**Prerequisite:** Task 3.5 must have landed. It removes the sync/backup references to `FamilyState`/`PeriodLimit`/`SpendAssignment` so that dropping those three entities here is a pure schema change. If you are reading this and Task 3.5 has not landed, stop and report — this task's diff assumes those symbols already have no callers.
+**Prerequisite:** Task 3.5 must have landed. It removed the sync-layer references to `FamilyState`/`PeriodLimit`/`SpendAssignment`; the only remaining consumers are this task's own file set (`DatabaseModule.kt`, `data/entities/*`, the three governance DAOs) and the backup format. This task also collapses the backup format to v2, so it is schema plus a backup-format change, not purely schema. If Task 3.5 has not landed, stop and report — this task's diff assumes those symbols already have no callers outside this file set.
 
 **Files:**
 - Create: `app/src/main/java/com/danilkinkin/buckwheat/data/entities/FamilyTransaction.kt`
@@ -714,6 +714,9 @@ git commit -m "refactor(family): strip governance tables from sync and backup su
 - Create: `app/src/test/java/com/danilkinkin/buckwheat/data/Migration21To22Test.kt`
 - Modify: `app/src/main/java/com/danilkinkin/buckwheat/di/DatabaseModule.kt`
 - Modify: `app/src/main/java/com/danilkinkin/buckwheat/di/AppModule.kt`
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/backup/BackupData.kt`
+- Modify: `app/src/main/java/com/danilkinkin/buckwheat/di/BackupRepository.kt`
+- Modify: `app/src/test/java/com/danilkinkin/buckwheat/backup/BackupDataTest.kt`
 - Delete: `data/entities/{FamilyState,PeriodLimit,SpendAssignment}.kt`, `data/dao/{FamilyStateDao,PeriodLimitDao,SpendAssignmentDao}.kt`
 
 **Interfaces:**
@@ -723,6 +726,7 @@ git commit -m "refactor(family): strip governance tables from sync and backup su
   - `FamilyTransactionDao` with `getAllInPeriod(startDate: Date, endDate: Date): List<FamilyTransaction>`, `getAllNow(): List<FamilyTransaction>`, `getById(id: String): FamilyTransaction?`, `upsertOne(...)`, `insert(vararg)`, `deleteById(id: String): Int`, `deleteAll()`, `updateMemberId(id: String, memberId: String)`, `deleteRowsWhereMemberDiffersFrom(memberId: String): Int`, `attributeNullMembersTo(memberId: String): Int`.
   - `val Migration21to22: Migration` and `DatabaseModule.familyTransactionDao(): FamilyTransactionDao`.
   - `AppModule.provideFamilyTransactionDao(db: DatabaseModule)`.
+  - Backup format v2: `BACKUP_VERSION = 2`; `BackupData` without `periodLimits`/`spendAssignments`; `BackupRepository` without the two governance DAO call sites; `BackupDataTest` without the two fixtures.
 
 - [ ] **Step 1: Write the failing migration test**
 
@@ -948,7 +952,7 @@ Match the exact column types Room generated for `transactions` in schema `21.jso
 
 In `DatabaseModule.kt`: add `FamilyTransaction::class` to `entities`, change `version = 21` to `version = 22`, add `abstract fun familyTransactionDao(): FamilyTransactionDao`, delete `familyStateDao()`, `periodLimitDao()`, `spendAssignmentDao()`, and append `Migration21to22` to `MANUAL_MIGRATIONS`.
 
-In `AppModule.kt`: delete the three `@Provides` funcs for the removed DAOs and add
+In `AppModule.kt`: the three governance `@Provides` funcs were already removed by Task 3.5, so just add
 
 ```kotlin
 @Provides
@@ -957,16 +961,26 @@ fun provideFamilyTransactionDao(db: DatabaseModule): FamilyTransactionDao = db.f
 
 Delete `FamilyState.kt`, `PeriodLimit.kt`, `SpendAssignment.kt`, `FamilyStateDao.kt`, `PeriodLimitDao.kt`, `SpendAssignmentDao.kt`.
 
-- [ ] **Step 7: Run the test and prove the whole tree compiles**
+- [ ] **Step 7: Collapse the backup format to v2**
+
+The backup format changes atomically with the schema drop; a backup that omits a table which still exists would lie about the user's data. This is the asymmetry fix deferred out of Task 3.5: the two tables' `deleteAll()` calls go away with the tables themselves.
+
+In `backup/BackupData.kt`: bump `const val BACKUP_VERSION = 1` to `2` (`:21`); delete the `periodLimits` (`:92`) and `spendAssignments` (`:93`) constructor fields, their `toJsonString()` writes (`:112-113`), their `parseBackupData` reads (`:141-143`), and the now-dead private codecs `PeriodLimit.toJson`/`toPeriodLimit` (`:234-245`), `SpendAssignment.toJson`/`toSpendAssignment` (`:247-270`), `toPeriodLimitList` (`:388-392`), `toSpendAssignmentList` (`:394-398`); drop imports `PeriodLimit` (`:5`), `SpendAssignment` (`:7`), `SpendAssignmentStatus` (`:8`); delete the now-false KDoc at `:165-166` about `spend_assignments` provenance. The `bucket` exception KDoc at `:158-164` stays. `parseBackupData` already rejects `version != BACKUP_VERSION` (`:126`), so v1 backups now return `null` — that is deliberate and user-visible.
+
+In `di/BackupRepository.kt`: remove the `periodLimitDao()` / `spendAssignmentDao()` calls in `exportBackup` (`:78-79`), in the ingest wipe block (`:101-102`), and in the insert block (`:119-120`). The DAOs no longer exist after Step 6, so these are compile-required removals.
+
+In `test/.../backup/BackupDataTest.kt`: delete imports `PeriodLimit` (`:5`) and `SpendAssignment` (`:10`), the "Populated on purpose" comment (`:98-99`), the `periodLimits`/`spendAssignments` fixtures (`:100-119`), and their round-trip assertions (`:155-156`). `emptyData()` uses `version = BACKUP_VERSION` and `unsupportedVersionReturnsNull` uses `BACKUP_VERSION + 1`, so both stay valid for v2.
+
+- [ ] **Step 8: Run the test and prove the whole tree compiles**
 
 Run (detached): `tools\gradle-detached.cmd testDebugUnitTest --tests "com.danilkinkin.buckwheat.data.Migration21To22Test"`
-Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run (detached) `tools\gradle-detached.cmd compileDebugKotlin` and expect BUILD SUCCESSFUL: `FamilyBudgetViewModel` and `SpendAssignmentsViewModel` were the deleted entities' only remaining consumers, and Task 3 removed both files.
+Expected: FAIL on `runMigrationsAndValidate` schema mismatch only if column affinities differ — fix the SQL to match `21.json`, then PASS. Then run (detached) `tools\gradle-detached.cmd compileDebugKotlin` and expect BUILD SUCCESSFUL — Task 3.5 already removed every non-test caller of the dropped symbols; the only surviving references were in `DatabaseModule.kt`, `AppModule.kt`, `BackupRepository.kt` and `BackupDataTest.kt`, all of which this task edits. If any other file fails to compile, stop and report the full failing-class list before committing.
 
-- [ ] **Step 8: Commit the schema and schema JSON**
+- [ ] **Step 9: Commit the schema and schema JSON**
 
 ```bash
-git add app/schemas/com.danilkinkin.buckwheat.di.DatabaseModule/22.json app/src/main/java/com/danilkinkin/buckwheat/data app/src/main/java/com/danilkinkin/buckwheat/di app/src/test/java/com/danilkinkin/buckwheat/data/Migration21To22Test.kt
-git commit -m "feat(db): room 22 with family_transactions, drop governance tables"
+git add app/schemas/com.danilkinkin.buckwheat.di.DatabaseModule/22.json app/src/main/java/com/danilkinkin/buckwheat/data app/src/main/java/com/danilkinkin/buckwheat/di app/src/main/java/com/danilkinkin/buckwheat/backup app/src/test/java/com/danilkinkin/buckwheat/data/Migration21To22Test.kt app/src/test/java/com/danilkinkin/buckwheat/backup/BackupDataTest.kt
+git commit -m "feat(db): room 22 with family_transactions, drop governance tables, backup format v2"
 ```
 
 ---
