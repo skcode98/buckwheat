@@ -9,7 +9,6 @@ import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.settings.FakeSyncDirtyMarker
-import com.danilkinkin.buckwheat.sync.FamilySession
 import com.danilkinkin.buckwheat.sync.SyncTables
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
@@ -123,7 +122,7 @@ class SpendsRepositoryMirrorTest {
     }
 
     @Test
-    fun removeSpentDeletesTheMirrorRow() = runTest {
+    fun removeSpentQueuesATombstoneFromThePushedMirrorRow() = runTest {
         activateSession()
         setBudget()
         val spend = Transaction(
@@ -131,18 +130,41 @@ class SpendsRepositoryMirrorTest {
             type = TransactionType.SPENT,
             value = 10.toBigDecimal(),
             date = currentDateUseCase.value,
-            familyId = "family-1",
-            syncSeq = 7L,
         )
         pendingMutationDao.deleteAll()
 
         spendsRepository.addSpent(spend)
-        assertEquals("spend-1", requireNotNull(familyTransactionDao.getById("spend-1")).id)
+        val mirrorIndex = familyTransactionDao.rows.indexOfFirst { it.id == "spend-1" }
+        require(mirrorIndex >= 0)
+        // Production shape: the fresh personal row carries familyId=null / syncSeq=0 and only the
+        // mirror row acknowledges the server once a push has stamped its sync_seq.
+        familyTransactionDao.rows[mirrorIndex] = familyTransactionDao.rows[mirrorIndex].copy(syncSeq = 7L)
 
         spendsRepository.removeSpent(spend)
 
         assertNull(familyTransactionDao.getById("spend-1"))
         assertEquals(true, pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single().isDelete)
+    }
+
+    @Test
+    fun removeSpentBeforeFirstPushQueuesNoTombstone() = runTest {
+        activateSession()
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+        spendsRepository.removeSpent(spend)
+
+        // Nothing has ever reached the server, so the queued upsert is dropped and no tombstone
+        // takes its place.
+        assertEquals(0, pendingMutationDao.count())
+        assertNull(familyTransactionDao.getById("spend-1"))
     }
 
     @Test
@@ -307,6 +329,11 @@ class FakeFamilyTransactionDao : FamilyTransactionDao {
     override suspend fun updateMemberId(id: String, memberId: String) {
         val index = rows.indexOfFirst { it.id == id }
         if (index >= 0) rows[index] = rows[index].copy(memberId = memberId)
+    }
+
+    override suspend fun updateCategory(id: String, category: String?) {
+        val index = rows.indexOfFirst { it.id == id }
+        if (index >= 0) rows[index] = rows[index].copy(category = category)
     }
 
     override suspend fun deleteRowsWhereMemberDiffersFrom(memberId: String): Int {

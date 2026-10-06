@@ -142,8 +142,13 @@ class SpendsRepository @Inject constructor(
     }
 
     private suspend fun mirrorRemove(recordId: String) {
-        if (familySessionStore?.current() == null) return
-        familyTransactionDao?.deleteById(recordId)
+        val session = familySessionStore?.current() ?: return
+        val dao = familyTransactionDao ?: return
+        val mirror = dao.getById(recordId)
+        if (mirror != null && mirror.syncSeq > 0L) {
+            markDeleted(SyncTables.TRANSACTIONS, recordId, session.familyId, mirror.syncSeq)
+        }
+        dao.deleteById(recordId)
     }
 
     fun getAllTransactions(): Flow<List<Transaction>> = transactionDao.getAll()

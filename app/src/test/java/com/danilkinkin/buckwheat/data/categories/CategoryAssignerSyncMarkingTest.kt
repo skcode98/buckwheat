@@ -3,9 +3,12 @@ package com.danilkinkin.buckwheat.data.categories
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
+import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.FakeBudgetPeriodDao
+import com.danilkinkin.buckwheat.di.FakeFamilyTransactionDao
+import com.danilkinkin.buckwheat.di.FakeSessionStore
 import com.danilkinkin.buckwheat.di.FakeTransactionDao
 import com.danilkinkin.buckwheat.settings.FakeSyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
@@ -30,12 +33,16 @@ class CategoryAssignerSyncMarkingTest {
     private lateinit var transactionDao: FakeTransactionDao
     private lateinit var budgetPeriodDao: FakeBudgetPeriodDao
     private lateinit var marker: FakeSyncDirtyMarker
+    private lateinit var familySessionStore: FakeSessionStore
+    private lateinit var familyTransactionDao: FakeFamilyTransactionDao
 
     @Before
     fun setUp() {
         transactionDao = FakeTransactionDao()
         budgetPeriodDao = FakeBudgetPeriodDao()
         marker = FakeSyncDirtyMarker()
+        familySessionStore = FakeSessionStore()
+        familyTransactionDao = FakeFamilyTransactionDao()
     }
 
     private fun assigner(): CategoryAssigner = CategoryAssigner(
@@ -43,6 +50,21 @@ class CategoryAssignerSyncMarkingTest {
         transactionDao = transactionDao,
         budgetPeriodDao = budgetPeriodDao,
         syncDirtyMarker = marker,
+        familySessionStore = familySessionStore,
+        familyTransactionDao = familyTransactionDao,
+    )
+
+    private fun mirror(id: String, comment: String, category: String? = null) = FamilyTransaction(
+        id = id,
+        type = TransactionType.SPENT,
+        value = BigDecimal("10"),
+        date = Date(1_700_000_000_000L),
+        comment = comment,
+        category = category,
+        memberId = "member-1",
+        syncSeq = 5L,
+        updatedAt = 1L,
+        version = 1,
     )
 
     private fun spend(id: String, comment: String, category: String? = null) = Transaction(
@@ -165,5 +187,26 @@ class CategoryAssignerSyncMarkingTest {
         assigner().assignToUncategorized()
 
         assertTrue(marker.deletes.isEmpty())
+    }
+
+    @Test
+    fun `category assignment mirrors into family_transactions while a session is active`() = runTest {
+        familySessionStore.save("https://server", "token", "family-1", "member-1")
+        transactionDao.insert(spend("tx-1", "lunch at the cafe"))
+        familyTransactionDao.rows += mirror("tx-1", "lunch at the cafe")
+
+        assigner().assignToUncategorized()
+
+        assertEquals("FOOD", requireNotNull(familyTransactionDao.getById("tx-1")).category)
+    }
+
+    @Test
+    fun `category assignment leaves the mirror untouched without a session`() = runTest {
+        transactionDao.insert(spend("tx-1", "lunch at the cafe"))
+        familyTransactionDao.rows += mirror("tx-1", "lunch at the cafe")
+
+        assigner().assignToUncategorized()
+
+        assertNull(requireNotNull(familyTransactionDao.getById("tx-1")).category)
     }
 }

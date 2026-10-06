@@ -2,9 +2,11 @@ package com.danilkinkin.buckwheat.data.categories
 
 import android.content.Context
 import com.danilkinkin.buckwheat.data.dao.BudgetPeriodDao
+import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
+import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import com.danilkinkin.buckwheat.sync.SyncDirtyMarker
 import com.danilkinkin.buckwheat.sync.SyncTables
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -24,6 +26,8 @@ class CategoryAssigner @Inject constructor(
     private val transactionDao: TransactionDao,
     private val budgetPeriodDao: BudgetPeriodDao,
     private val syncDirtyMarker: SyncDirtyMarker,
+    private val familySessionStore: FamilySessionStore? = null,
+    private val familyTransactionDao: FamilyTransactionDao? = null,
 ) {
     suspend fun assignToUncategorized() {
         assignTransactions()
@@ -43,6 +47,7 @@ class CategoryAssigner @Inject constructor(
             transactionDao.updateCategory(id, category)
         }
         syncDirtyMarker.markUpserts(SyncTables.TRANSACTIONS, offlineAssigned.map { it.first })
+        mirrorCategories(offlineAssigned)
 
         val aiCandidates = uncategorized.filter {
             offlineCategoryOrNull(it.comment) == null
@@ -54,6 +59,15 @@ class CategoryAssigner @Inject constructor(
             transactionDao.updateCategory(id, category.name)
         }
         syncDirtyMarker.markUpserts(SyncTables.TRANSACTIONS, assigned.keys)
+        mirrorCategories(assigned.map { (id, category) -> id to category.name })
+    }
+
+    private suspend fun mirrorCategories(assignments: List<Pair<String, String>>) {
+        if (familySessionStore?.current() == null) return
+        val dao = familyTransactionDao ?: return
+        assignments.forEach { (id, category) ->
+            dao.updateCategory(id, category)
+        }
     }
 
     // Historical spends live in archived_transactions (a separate table with its own uid space),
