@@ -8,7 +8,6 @@ import com.danilkinkin.buckwheat.data.dao.RecurringDao
 import com.danilkinkin.buckwheat.data.dao.SavedCategoryDao
 import com.danilkinkin.buckwheat.data.dao.SavedTagDao
 import com.danilkinkin.buckwheat.data.dao.SavingsGoalDao
-
 import com.danilkinkin.buckwheat.data.dao.TransactionDao
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
@@ -57,7 +56,6 @@ class SyncUpsertWritesEveryColumnTest {
     private lateinit var recurring: RecurringDao
     private lateinit var goals: SavingsGoalDao
 
-
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
@@ -70,7 +68,6 @@ class SyncUpsertWritesEveryColumnTest {
         tags = db.savedTagDao()
         recurring = db.recurringDao()
         goals = db.savingsGoalDao()
-
     }
 
     @After

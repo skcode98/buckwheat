@@ -58,7 +58,6 @@ class SyncPayloadContractTest {
             SyncTables.SAVED_TAGS -> tag.businessPayload()
             SyncTables.RECURRING_TEMPLATES -> recurring.businessPayload()
             SyncTables.SAVINGS_GOALS -> goal.businessPayload()
-
             else -> throw AssertionError("no payload producer is registered for $table")
         }
         return payload.keys().asSequence().toSet()

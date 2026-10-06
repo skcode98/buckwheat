@@ -89,7 +89,6 @@ private suspend fun SyncStampDao.stamp(table: String, recordId: String, now: Lon
         SyncTables.SAVED_TAGS -> stampSavedTag(recordId, now)
         SyncTables.RECURRING_TEMPLATES -> stampRecurringTemplate(recordId, now)
         SyncTables.SAVINGS_GOALS -> stampSavingsGoal(recordId, now)
-
         else -> Unit
     }
 }
