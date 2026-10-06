@@ -19,8 +19,7 @@ import org.robolectric.annotation.Config
  * three indices the sync pull path filters on.
  *
  * Built the same way as `Migration20To21Test`: create at the old version, seed, migrate by hand.
- * Validating against the exported 22 schema needs an asset that only exists after the first
- * successful build with `version = 22`.
+ * The final test additionally validates the migrated output against the exported 22 schema asset.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -65,6 +64,12 @@ class Migration21To22Test {
                 assertEquals("coffee", it.getString(0))
             }
         }.close()
+    }
+
+    @Test
+    fun theMigratedDatabaseMatchesTheV22Schema() {
+        helper.createDatabase(TEST_DB, 21).close()
+        helper.runMigrationsAndValidate(TEST_DB, 22, true, Migration21to22)
     }
 
     companion object {
