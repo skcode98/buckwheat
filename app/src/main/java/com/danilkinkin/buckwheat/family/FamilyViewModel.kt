@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.math.BigDecimal
 import java.util.Date
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -68,13 +70,15 @@ class FamilyViewModel @Inject constructor(
     // wants spends only, so the filter lives here instead of at each call site.
     internal val rows: StateFlow<List<FamilyTransaction>> = period
         .flatMapLatest { range ->
+            // Room forbids main-thread queries: this DAO call must hop off the collector context
+            // (viewModelScope = Main.immediate) or the family sheet crashes on open.
             flow {
                 emit(
                     familyTransactionDao
                         .getAllInPeriod(range.start, range.endInclusive ?: Date(Long.MAX_VALUE))
                         .filter { it.type == TransactionType.SPENT },
                 )
-            }
+            }.flowOn(Dispatchers.IO)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
