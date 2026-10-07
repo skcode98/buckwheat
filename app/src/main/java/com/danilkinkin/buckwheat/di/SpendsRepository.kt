@@ -124,6 +124,12 @@ class SpendsRepository @Inject constructor(
         val session = familySessionStore?.current() ?: return
         val dao = familyTransactionDao ?: return
         val row = transactionDao.getById(recordId) ?: return
+        // The personal row never carries an ack (SyncStampDao stamps only version/updated_at), so
+        // copying its sync_seq would reset an already-acknowledged mirror row to 0 — and
+        // mirrorRemove queues a tombstone only for sync_seq > 0, so the next pull would resurrect
+        // the row. Keep the mirror's ack state; version/updated_at still travel freshly stamped
+        // from the personal row read back after markUpsert.
+        val ackedSeq = dao.getById(recordId)?.syncSeq?.takeIf { it > 0L } ?: row.syncSeq
         dao.insert(
             FamilyTransaction(
                 id = row.id,
@@ -133,7 +139,7 @@ class SpendsRepository @Inject constructor(
                 comment = row.comment,
                 category = row.category,
                 memberId = session.memberId,
-                syncSeq = row.syncSeq,
+                syncSeq = ackedSeq,
                 updatedAt = row.updatedAt,
                 deletedAt = row.deletedAt,
                 version = row.version,

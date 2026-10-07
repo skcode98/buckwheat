@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.data.dao.FamilyTransactionDao
 import com.danilkinkin.buckwheat.data.entities.FamilyTransaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.sync.FamilyMember
 import com.danilkinkin.buckwheat.sync.FamilySession
 import com.danilkinkin.buckwheat.sync.FamilySessionStore
@@ -61,10 +62,18 @@ class FamilyViewModel @Inject constructor(
         PeriodRange(start = start, endInclusive = finish)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PeriodRange(Date(0), Date(0)))
 
+    // The mirror table also holds INCOME / SET_DAILY_BUDGET marker rows (budget changes, daily
+    // budget changes): they are state, not spending. Every consumer below — totals, per-member
+    // shares, the transaction count, and the sheets that fold these rows into member/day figures —
+    // wants spends only, so the filter lives here instead of at each call site.
     internal val rows: StateFlow<List<FamilyTransaction>> = period
         .flatMapLatest { range ->
             flow {
-                emit(familyTransactionDao.getAllInPeriod(range.start, range.endInclusive ?: Date(Long.MAX_VALUE)))
+                emit(
+                    familyTransactionDao
+                        .getAllInPeriod(range.start, range.endInclusive ?: Date(Long.MAX_VALUE))
+                        .filter { it.type == TransactionType.SPENT },
+                )
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

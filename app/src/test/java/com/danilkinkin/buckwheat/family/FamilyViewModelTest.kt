@@ -44,6 +44,15 @@ private fun spent(id: String, memberId: String, value: String, date: Date) =
         memberId = memberId,
     )
 
+private fun marker(id: String, type: TransactionType, memberId: String, value: String, date: Date) =
+    FamilyTransaction(
+        id = id,
+        type = type,
+        value = value.toBigDecimal(),
+        date = date,
+        memberId = memberId,
+    )
+
 class FakeSessionStore(
     private val initial: FamilySession?,
     private val roster: List<FamilyMember> = listOf(
@@ -158,5 +167,40 @@ class FamilyViewModelTest {
     fun namesComeFromTheRosterNotTheRawMemberId() = runTest {
         val viewModel = FamilyViewModel(FakeFamilyTransactionDao(), sessionStore = FakeSessionStore(session(MEMBER_ID)), spendsRepository = FakeSpendsRepository(DAY, DAY))
         assertEquals("Ren", viewModel.members.value.single { it.id == MEMBER_ID }.displayName)
+    }
+
+    @Test
+    fun budgetMarkersAreExcludedFromEveryFamilyTotal() = runTest {
+        val dao = FakeFamilyTransactionDao(
+            rows = listOf(
+                spent("a", memberId = "me", value = "10.00", date = DAY),
+                spent("b", memberId = "them", value = "20.00", date = DAY),
+                marker("income", TransactionType.INCOME, memberId = "me", value = "100000.00", date = DAY),
+                marker("daily", TransactionType.SET_DAILY_BUDGET, memberId = "me", value = "500.00", date = DAY),
+            ),
+        )
+        val viewModel = FamilyViewModel(dao, sessionStore = FakeSessionStore(session(MEMBER_ID)), spendsRepository = FakeSpendsRepository(DAY, DAY))
+        assertEquals(BigDecimal("30.00"), viewModel.familyTotal.value)
+        assertEquals(BigDecimal("10.00"), viewModel.ownSpend.value)
+        assertEquals(
+            mapOf("me" to BigDecimal("10.00"), "them" to BigDecimal("20.00")),
+            viewModel.spendByMember.value,
+        )
+        assertEquals(2, viewModel.transactionCount.value)
+    }
+
+    @Test
+    fun markersAloneLeaveTheFamilyEmpty() = runTest {
+        val dao = FakeFamilyTransactionDao(
+            rows = listOf(
+                marker("income", TransactionType.INCOME, memberId = "me", value = "100000.00", date = DAY),
+                marker("daily", TransactionType.SET_DAILY_BUDGET, memberId = "me", value = "500.00", date = DAY),
+            ),
+        )
+        val viewModel = FamilyViewModel(dao, sessionStore = FakeSessionStore(session(MEMBER_ID)), spendsRepository = FakeSpendsRepository(DAY, DAY))
+        assertEquals(BigDecimal.ZERO, viewModel.familyTotal.value)
+        assertEquals(BigDecimal.ZERO, viewModel.ownSpend.value)
+        assertEquals(emptyMap<String, BigDecimal>(), viewModel.spendByMember.value)
+        assertEquals(0, viewModel.transactionCount.value)
     }
 }

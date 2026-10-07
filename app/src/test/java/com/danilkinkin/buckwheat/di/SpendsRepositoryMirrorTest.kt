@@ -180,6 +180,42 @@ class SpendsRepositoryMirrorTest {
     }
 
     @Test
+    fun editingAnAckedSpendKeepsTheMirrorSeqSoTheDeleteStillQueuesATombstone() = runTest {
+        activateSession()
+        setBudget()
+        val spend = Transaction(
+            id = "spend-1",
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        pendingMutationDao.deleteAll()
+
+        spendsRepository.addSpent(spend)
+        val mirrorIndex = familyTransactionDao.rows.indexOfFirst { it.id == "spend-1" }
+        require(mirrorIndex >= 0)
+        // Production shape after a successful push: the mirror row acknowledges the server with
+        // sync_seq = 7 while the personal row stays at 0.
+        familyTransactionDao.rows[mirrorIndex] = familyTransactionDao.rows[mirrorIndex].copy(syncSeq = 7L)
+
+        // A local edit of the already-synced spend (the editor's path: addSpent with the same id).
+        spendsRepository.addSpent(spend.copy(value = 20.toBigDecimal()))
+
+        val edited = requireNotNull(familyTransactionDao.getById("spend-1"))
+        assertEquals(7L, edited.syncSeq)
+        // The Task 5.5 stamping must survive the rewrite: version/updated_at still read back
+        // from the freshly stamped personal row.
+        val personal = requireNotNull(transactionDao.getById("spend-1"))
+        assertEquals(personal.updatedAt, edited.updatedAt)
+        assertEquals(personal.version, edited.version)
+
+        spendsRepository.removeSpent(spend.copy(value = 20.toBigDecimal()))
+
+        assertNull(familyTransactionDao.getById("spend-1"))
+        assertEquals(true, pendingMutationDao.forTable(SyncTables.TRANSACTIONS).single().isDelete)
+    }
+
+    @Test
     fun removeSpentBeforeFirstPushQueuesNoTombstone() = runTest {
         activateSession()
         setBudget()
