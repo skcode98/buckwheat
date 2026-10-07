@@ -51,6 +51,15 @@ class FamilySyncRegistrar @Inject constructor(
         membersCache.clear()
     }
 
+    /** Leaves the family: server-side leave, then local sign-out. Never throws. */
+    suspend fun leave(): Boolean {
+        val session = sessionStore.current() ?: return false
+        val left = runCatching { familyApiFactory.create(session.baseUrl).leave(session.token) }
+            .getOrDefault(false)
+        if (left) signOut()
+        return left
+    }
+
     private suspend fun persist(baseUrl: String, credentials: FamilyCredentials): FamilySession {
         membersCache.clear()
         sessionStore.save(

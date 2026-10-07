@@ -40,6 +40,16 @@ class FamilySyncCoordinator @Inject constructor(
 
     suspend fun members(): List<FamilyMember>? = registrar.members()
 
+    /** Leaves the family then clears every local trace; true when the server leave succeeded. */
+    suspend fun leave(): Boolean {
+        val left = registrar.leave()
+        if (left) {
+            database.reset()
+            SyncScheduler.cancel(context)
+        }
+        return left
+    }
+
     private suspend fun activate(session: FamilySession) {
         database.enrolAll(
             memberId = session.memberId,

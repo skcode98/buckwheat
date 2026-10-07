@@ -23,6 +23,10 @@ import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.BudgetIsOverDescr
 import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.NEW_DAY_BUDGET_DESCRIPTION_SHEET
 import com.danilkinkin.buckwheat.editor.toolbar.restBudgetPill.NewDayBudgetDescription
 import com.danilkinkin.buckwheat.effects.Confetti
+import com.danilkinkin.buckwheat.family.FAMILY_SHEET
+import com.danilkinkin.buckwheat.family.FamilySheet
+import com.danilkinkin.buckwheat.family.MEMBER_DETAIL_SHEET
+import com.danilkinkin.buckwheat.family.MemberDetailSheet
 import com.danilkinkin.buckwheat.analytics.ANALYTICS_SHEET
 import com.danilkinkin.buckwheat.analytics.Analytics
 import com.danilkinkin.buckwheat.analytics.CATEGORY_HISTORY_SHEET
@@ -367,6 +371,27 @@ BottomSheetWrapper(
         name = SEARCH_HISTORY_SHEET,
     ) { state ->
         SearchHistorySheet()
+    }
+
+    BottomSheetWrapper(
+        name = FAMILY_SHEET,
+    ) { state ->
+        FamilySheet(
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            },
+        )
+    }
+
+    BottomSheetWrapper(
+        name = MEMBER_DETAIL_SHEET,
+    ) { state ->
+        MemberDetailSheet(
+            memberId = state.args["memberId"] as? String ?: "",
+            onClose = {
+                coroutineScope.launch { state.hide() }
+            },
+        )
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {

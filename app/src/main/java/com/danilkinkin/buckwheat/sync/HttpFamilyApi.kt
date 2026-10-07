@@ -38,6 +38,7 @@ interface FamilyApi {
     suspend fun joinFamily(code: String, displayName: String): FamilyCredentials
     suspend fun whoami(token: String): WhoAmI
     suspend fun members(token: String): List<FamilyMember>
+    suspend fun leave(token: String): Boolean = false
 }
 
 class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
@@ -61,6 +62,13 @@ class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
 
     override suspend fun members(token: String): List<FamilyMember> =
         decodeMembers(get(familyEndpoint(baseUrl, "members"), token))
+
+    override suspend fun leave(token: String): Boolean = try {
+        post(familyEndpoint(baseUrl, "leave"), token, JSONObject())
+        true
+    } catch (_: IOException) {
+        false
+    }
 
     private suspend fun post(url: String, token: String?, body: JSONObject): String =
         withContext(Dispatchers.IO) {

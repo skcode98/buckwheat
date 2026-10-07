@@ -7,6 +7,7 @@ import com.danilkinkin.buckwheat.settingsDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -27,6 +28,8 @@ data class FamilySession(
 interface FamilySessionStore {
     fun session(): Flow<FamilySession?>
 
+    fun members(): Flow<List<FamilyMember>> = flowOf(emptyList())
+
     suspend fun current(): FamilySession?
 
     suspend fun token(): String?
@@ -42,6 +45,7 @@ interface FamilySessionStore {
 
 class DataStoreFamilySessionStore @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val membersCache: FamilyMembersCache,
 ) : FamilySessionStore {
 
     override fun session(): Flow<FamilySession?> = context.settingsDataStore.data.map { prefs ->
@@ -61,6 +65,8 @@ class DataStoreFamilySessionStore @Inject constructor(
             )
         }
     }
+
+    override fun members(): Flow<List<FamilyMember>> = membersCache.members()
 
     override suspend fun current(): FamilySession? = session().first()
 

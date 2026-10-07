@@ -30,6 +30,7 @@ import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.base.TextRow
 import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.data.AppViewModel
+import com.danilkinkin.buckwheat.family.FAMILY_SHEET
 import com.danilkinkin.buckwheat.patterns.PATTERN_INSIGHTS_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.rememberImportCSV
@@ -232,6 +233,21 @@ fun Settings(
                         },
                     )
                 }
+                TextRow(
+                    icon = painterResource(R.drawable.ic_share),
+                    text = stringResource(R.string.family_title),
+                    endContent = if (enrolled) {
+                        { SyncStatusChip(syncStatus) }
+                    } else {
+                        null
+                    },
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(FAMILY_SHEET)
+                        )
+                    },
+                )
                 val importCSV = rememberImportCSV()
                 TextRow(
                     icon = painterResource(R.drawable.ic_file_download),
