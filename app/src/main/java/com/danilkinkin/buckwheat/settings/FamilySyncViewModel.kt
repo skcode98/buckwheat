@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.settingsDataStore
-import com.danilkinkin.buckwheat.sync.FamilyMember
-import com.danilkinkin.buckwheat.sync.FamilyMembersCache
 import com.danilkinkin.buckwheat.sync.FamilySession
 import com.danilkinkin.buckwheat.sync.FamilySessionStore
 import com.danilkinkin.buckwheat.sync.FamilySyncCoordinator
@@ -36,18 +34,14 @@ private const val SERVER_URL_PERSIST_DELAY_MS = 400L
 class FamilySyncViewModel @Inject constructor(
     private val coordinator: FamilySyncCoordinator,
     private val sessionStore: FamilySessionStore,
-    private val cache: FamilyMembersCache,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
     val session: StateFlow<FamilySession?> = sessionStore.session()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    /**
-     * Seeded from the cache rather than from the network so the roster is already on screen offline,
-     * and a failed refresh leaves it alone instead of blanking it.
-     */
-    val members: StateFlow<List<FamilyMember>> = cache.members()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val joinCode: StateFlow<String?> = session
+        .map { it?.joinCode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _serverUrl = MutableStateFlow("")
     val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
@@ -67,18 +61,6 @@ class FamilySyncViewModel @Inject constructor(
     private val _messages = Channel<String>(Channel.CONFLATED)
     val messages: Flow<String> = _messages.receiveAsFlow()
 
-    private val _mintedInvite = MutableStateFlow<String?>(null)
-    val mintedInvite: StateFlow<String?> = _mintedInvite.asStateFlow()
-
-    private val _mintedInviteExpiresAt = MutableStateFlow<String?>(null)
-    val mintedInviteExpiresAt: StateFlow<String?> = _mintedInviteExpiresAt.asStateFlow()
-
-    private val _membersLoading = MutableStateFlow(false)
-    val membersLoading: StateFlow<Boolean> = _membersLoading.asStateFlow()
-
-    private val _membersFailed = MutableStateFlow(false)
-    val membersFailed: StateFlow<Boolean> = _membersFailed.asStateFlow()
-
     private var persistServerUrlJob: Job? = null
 
     init {
@@ -88,10 +70,7 @@ class FamilySyncViewModel @Inject constructor(
                 .filterNotNull()
                 .map { it.memberId }
                 .distinctUntilChanged()
-                .collect {
-                    refreshMemberName()
-                    refreshMembers()
-                }
+                .collect { refreshMemberName() }
         }
     }
 
@@ -110,11 +89,6 @@ class FamilySyncViewModel @Inject constructor(
 
     fun onInviteCodeChange(value: String) {
         _inviteCode.value = value.trim()
-    }
-
-    fun clearMintedInvite() {
-        _mintedInvite.value = null
-        _mintedInviteExpiresAt.value = null
     }
 
     fun enrol() {
@@ -144,45 +118,20 @@ class FamilySyncViewModel @Inject constructor(
         ) { _inviteCode.value = "" }
     }
 
-    fun mintInvite() {
-        if (_busy.value) return
-        if (session.value == null) {
-            _messages.trySend(appContext.getString(R.string.family_sync_error_no_session))
-            return
-        }
-        viewModelScope.launch {
-            _busy.value = true
-            runCatching { coordinator.invite() }
-                .onSuccess { minted ->
-                    if (minted == null) {
-                        _messages.send(appContext.getString(R.string.family_sync_error_no_session))
-                    } else {
-                        _mintedInvite.value = minted.code
-                        _mintedInviteExpiresAt.value = minted.expiresAt
-                    }
-                }
-                .onFailure { failure -> _messages.send(describe(failure)) }
-            _busy.value = false
-        }
+    fun syncNow() {
+        viewModelScope.launch { coordinator.syncNow() }
     }
 
     fun signOut() {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
-            clearMintedInvite()
             _memberName.value = ""
-            _membersFailed.value = false
             runCatching { coordinator.signOut() }
                 .onSuccess { _messages.send(appContext.getString(R.string.family_sync_signed_out)) }
                 .onFailure { failure -> _messages.send(describe(failure)) }
             _busy.value = false
         }
-    }
-
-    fun refreshMembers() {
-        if (_membersLoading.value) return
-        viewModelScope.launch { loadMembers() }
     }
 
     private suspend fun prefillServerUrl() {
@@ -204,14 +153,6 @@ class FamilySyncViewModel @Inject constructor(
 
     private suspend fun refreshMemberName() {
         _memberName.value = runCatching { coordinator.whoami()?.displayName }.getOrNull().orEmpty()
-    }
-
-    private suspend fun loadMembers() {
-        _membersLoading.value = true
-        // A null roster is only the absence of a session, which the caller already knows, so it is not
-        // a failure. The roster itself comes back through the cache, which the registrar just wrote.
-        _membersFailed.value = runCatching { coordinator.members() }.isFailure
-        _membersLoading.value = false
     }
 
     private fun validatedUrl(): String? {

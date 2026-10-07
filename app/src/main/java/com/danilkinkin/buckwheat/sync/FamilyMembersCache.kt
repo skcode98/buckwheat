@@ -60,7 +60,7 @@ internal fun encodeCachedMembers(members: List<FamilyMember>): String {
             JSONObject()
                 .put("id", member.id)
                 .put("displayName", member.displayName)
-                .put("isOwner", member.isOwner)
+                .put("departed", member.departed)
                 .put("joinedAt", member.joinedAt)
         )
     }
@@ -88,7 +88,7 @@ internal fun decodeCachedMembers(raw: String?): List<FamilyMember> {
                 FamilyMember(
                     id = id,
                     displayName = displayName,
-                    isOwner = entry.optBoolean("isOwner", false),
+                    departed = entry.optBoolean("departed", false),
                     joinedAt = entry.optNullableString("joinedAt").orEmpty(),
                 )
             )

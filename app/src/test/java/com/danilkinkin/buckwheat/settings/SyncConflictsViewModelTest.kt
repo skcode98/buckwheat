@@ -1,6 +1,7 @@
 package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.sync.ConflictNotice
+import com.danilkinkin.buckwheat.sync.InMemoryFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.SyncStateStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -90,7 +91,7 @@ class SyncConflictsViewModelTest {
 
     @Test
     fun `starts empty when nothing stored`() = runTest(dispatcher) {
-        val viewModel = SyncConflictsViewModel(FakeSyncStateStore())
+        val viewModel = SyncConflictsViewModel(FakeSyncStateStore(), InMemoryFamilyMembersCache())
 
         assertEquals(emptyList<ConflictNotice>(), activeConflicts(viewModel))
     }
@@ -103,7 +104,7 @@ class SyncConflictsViewModelTest {
             ConflictNotice("saved_tags", "tag-1", "member-3"),
         )
         store.replaceConflicts(stored)
-        val viewModel = SyncConflictsViewModel(store)
+        val viewModel = SyncConflictsViewModel(store, InMemoryFamilyMembersCache())
 
         assertEquals(stored, activeConflicts(viewModel))
     }
@@ -112,7 +113,7 @@ class SyncConflictsViewModelTest {
     fun `dismiss updates the exposed conflicts`() = runTest(dispatcher) {
         val store = FakeSyncStateStore()
         store.replaceConflicts(listOf(ConflictNotice("budget_periods", "period-1", "member-2")))
-        val viewModel = SyncConflictsViewModel(store)
+        val viewModel = SyncConflictsViewModel(store, InMemoryFamilyMembersCache())
         assertEquals(1, activeConflicts(viewModel).size)
 
         viewModel.dismiss()
@@ -126,7 +127,7 @@ class SyncConflictsViewModelTest {
         val store = FakeSyncStateStore()
         store.storedCursor = 42L
         store.replaceConflicts(listOf(ConflictNotice("savings_goals", "goal-1", "member-2")))
-        val viewModel = SyncConflictsViewModel(store)
+        val viewModel = SyncConflictsViewModel(store, InMemoryFamilyMembersCache())
 
         viewModel.dismiss()
         dispatcher.scheduler.advanceUntilIdle()

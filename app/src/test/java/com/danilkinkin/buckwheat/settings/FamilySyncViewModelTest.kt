@@ -16,7 +16,6 @@ import com.danilkinkin.buckwheat.sync.FamilySyncCoordinator
 import com.danilkinkin.buckwheat.sync.FamilySyncRegistrar
 import com.danilkinkin.buckwheat.sync.InMemoryFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.LocalRecord
-import com.danilkinkin.buckwheat.sync.MintedInvite
 import com.danilkinkin.buckwheat.sync.SyncApply
 import com.danilkinkin.buckwheat.sync.SyncClock
 import com.danilkinkin.buckwheat.sync.SyncDatabase
@@ -75,20 +74,15 @@ class FamilySyncViewModelTest {
     }
 
     private fun viewModel(): FamilySyncViewModel {
-        // One cache shared by the registrar and the ViewModel, because in production they resolve the
-        // same @Singleton. Two instances would let the registrar write a roster the ViewModel can never
-        // observe, which would make the roster look permanently empty and pass a test that means nothing.
-        val cache = InMemoryFamilyMembersCache()
         val coordinator = FamilySyncCoordinator(
             context = context,
-            registrar = FamilySyncRegistrar(sessionStore, api, cache),
+            registrar = FamilySyncRegistrar(sessionStore, api, InMemoryFamilyMembersCache()),
             database = database,
             clock = SyncClock { 700L },
         )
         return FamilySyncViewModel(
             coordinator,
             sessionStore,
-            cache,
             context,
         )
     }
@@ -99,6 +93,7 @@ class FamilySyncViewModelTest {
             token = "token-1",
             familyId = "family-1",
             memberId = "member-1",
+            joinCode = "",
         )
     )
 
@@ -196,36 +191,17 @@ class FamilySyncViewModelTest {
     }
 
     @Test
-    fun mintingAnInviteStoresTheCode() = runTest(dispatcher) {
-        sessionStore = connectedStore()
+    fun enrollingStoresTheJoinCode() = runTest(dispatcher) {
         val viewModel = viewModel()
-        val messages = watch(viewModel)
+        backgroundScope.launch { viewModel.joinCode.collect() }
+        runCurrent()
+        viewModel.onServerUrlChange("https://sync.example")
+        viewModel.onDisplayNameChange("Ada")
+
+        viewModel.enrol()
         advanceUntilIdle()
 
-        viewModel.mintInvite()
-        advanceUntilIdle()
-
-        assertEquals("CODE-1", viewModel.mintedInvite.value)
-        assertTrue(messages.isEmpty())
-
-        viewModel.clearMintedInvite()
-        assertNull(viewModel.mintedInvite.value)
-    }
-
-    @Test
-    fun mintingAnInviteWithoutASessionIsRefused() = runTest(dispatcher) {
-        val viewModel = viewModel()
-        val messages = watch(viewModel)
-        advanceUntilIdle()
-
-        viewModel.mintInvite()
-        advanceUntilIdle()
-
-        assertNull(viewModel.mintedInvite.value)
-        assertEquals(
-            listOf(context.getString(com.danilkinkin.buckwheat.R.string.family_sync_error_no_session)),
-            messages,
-        )
+        assertEquals("ABCD2345", viewModel.joinCode.value)
     }
 
     @Test
@@ -309,36 +285,43 @@ class FamilySyncViewModelTest {
         var gate: CompletableDeferred<Unit>? = null
 
         override fun create(baseUrl: String): FamilyApi = object : FamilyApi {
-            override suspend fun createFamily(displayName: String): FamilyCredentials {
-                failure?.let { throw it }
-                gate?.await()
-                created.add(displayName)
-                return FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
-            }
+        override suspend fun createFamily(displayName: String): FamilyCredentials {
+            failure?.let { throw it }
+            gate?.await()
+            created.add(displayName)
+            return FamilyCredentials(
+                token = "token-1",
+                familyId = "family-1",
+                memberId = "member-1",
+                joinCode = "ABCD2345",
+            )
+        }
 
-            override suspend fun joinFamily(code: String, displayName: String): FamilyCredentials {
-                failure?.let { throw it }
-                joined.add(code to displayName)
-                return FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
-            }
+        override suspend fun joinFamily(code: String, displayName: String): FamilyCredentials {
+            failure?.let { throw it }
+            joined.add(code to displayName)
+            return FamilyCredentials(
+                token = "token-1",
+                familyId = "family-1",
+                memberId = "member-1",
+                joinCode = "ABCD2345",
+            )
+        }
 
-            override suspend fun whoami(token: String) =
-                WhoAmI(memberId = "member-1", familyId = "family-1", displayName = "Ada")
+        override suspend fun whoami(token: String) =
+            WhoAmI(memberId = "member-1", familyId = "family-1", displayName = "Ada")
 
-            override suspend fun mintInvite(token: String) =
-                MintedInvite(code = "CODE-1", expiresAt = "2030-01-01T00:00:00Z")
-
-            override suspend fun members(token: String): List<FamilyMember> {
-                failure?.let { throw it }
-                return listOf(
-                    FamilyMember(
-                        id = "member-1",
-                        displayName = "Ada",
-                        isOwner = true,
-                        joinedAt = "2026-01-01T00:00:00Z",
-                    )
+        override suspend fun members(token: String): List<FamilyMember> {
+            failure?.let { throw it }
+            return listOf(
+                FamilyMember(
+                    id = "member-1",
+                    displayName = "Ada",
+                    departed = false,
+                    joinedAt = "2026-01-01T00:00:00Z",
                 )
-            }
+            )
+        }
         }
     }
 

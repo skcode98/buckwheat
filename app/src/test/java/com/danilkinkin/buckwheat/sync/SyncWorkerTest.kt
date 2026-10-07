@@ -62,6 +62,7 @@ class SyncWorkerTest {
                     token = it,
                     familyId = "family-1",
                     memberId = "member-1",
+                    joinCode = "",
                 )
             }
         },

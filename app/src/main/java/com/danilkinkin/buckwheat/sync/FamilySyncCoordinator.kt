@@ -36,7 +36,7 @@ class FamilySyncCoordinator @Inject constructor(
 
     suspend fun whoami(): WhoAmI? = registrar.whoami()
 
-    suspend fun invite(): MintedInvite? = registrar.invite()
+    suspend fun syncNow() = SyncScheduler.syncNow(context)
 
     suspend fun members(): List<FamilyMember>? = registrar.members()
 

@@ -27,8 +27,8 @@ class FakeSessionStore(
 
     override suspend fun baseUrl(): String? = state.value?.baseUrl
 
-    override suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String) {
-        val stored = FamilySession(baseUrl, token, familyId, memberId)
+    override suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String, joinCode: String) {
+        val stored = FamilySession(baseUrl, token, familyId, memberId, joinCode)
         saved.add(stored)
         state.value = stored
     }

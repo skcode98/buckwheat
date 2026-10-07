@@ -81,6 +81,14 @@ class FamilySyncCoordinatorTest {
     }
 
     @Test
+    fun syncNowSchedulesAnImmediateSync() = runBlocking {
+        coordinator().syncNow()
+
+        val info = workManager.getWorkInfosForUniqueWork(SyncScheduler.ONE_SHOT_NAME).get()
+        assertEquals(1, info.size)
+    }
+
+    @Test
     fun joiningPushesTheExistingLocalRows() = runTest {
         val session = coordinator().join("https://sync.example", "CODE-1", "Grace")
 
@@ -130,16 +138,13 @@ class FamilySyncCoordinatorTest {
     private object StaticFamilyApiFactory : FamilyApiFactory {
         override fun create(baseUrl: String): FamilyApi = object : FamilyApi {
             override suspend fun createFamily(displayName: String) =
-                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
+                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1", joinCode = "")
 
             override suspend fun joinFamily(code: String, displayName: String) =
-                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
+                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1", joinCode = "")
 
             override suspend fun whoami(token: String): WhoAmI =
                 WhoAmI(memberId = "member-1", familyId = "family-1", displayName = "Ada")
-
-            override suspend fun mintInvite(token: String): MintedInvite =
-                MintedInvite(code = "CODE-1", expiresAt = "2030-01-01T00:00:00Z")
 
             override suspend fun members(token: String): List<FamilyMember> = emptyList()
         }

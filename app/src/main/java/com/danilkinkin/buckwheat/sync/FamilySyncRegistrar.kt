@@ -25,11 +25,6 @@ class FamilySyncRegistrar @Inject constructor(
         return familyApiFactory.create(session.baseUrl).whoami(session.token)
     }
 
-    suspend fun invite(): MintedInvite? {
-        val session = sessionStore.current() ?: return null
-        return familyApiFactory.create(session.baseUrl).mintInvite(session.token)
-    }
-
     /**
      * The roster, or null when there is no session. A failed refresh falls back to the cached roster
      * instead of propagating, IOException or not: a stale name is better than an empty screen, because
@@ -63,6 +58,7 @@ class FamilySyncRegistrar @Inject constructor(
             token = credentials.token,
             familyId = credentials.familyId,
             memberId = credentials.memberId,
+            joinCode = credentials.joinCode,
         )
         // Fetch the roster straight away rather than waiting for the caller to notice it is empty.
         //
@@ -78,6 +74,7 @@ class FamilySyncRegistrar @Inject constructor(
             token = credentials.token,
             familyId = credentials.familyId,
             memberId = credentials.memberId,
+            joinCode = credentials.joinCode,
         )
     }
 }

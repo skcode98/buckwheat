@@ -17,11 +17,7 @@ data class FamilyCredentials(
     val familyId: String,
     val memberId: String,
     val token: String,
-)
-
-data class MintedInvite(
-    val code: String,
-    val expiresAt: String,
+    val joinCode: String,
 )
 
 data class WhoAmI(
@@ -33,7 +29,7 @@ data class WhoAmI(
 data class FamilyMember(
     val id: String,
     val displayName: String,
-    val isOwner: Boolean,
+    val departed: Boolean,
     val joinedAt: String,
 )
 
@@ -41,7 +37,6 @@ interface FamilyApi {
     suspend fun createFamily(displayName: String): FamilyCredentials
     suspend fun joinFamily(code: String, displayName: String): FamilyCredentials
     suspend fun whoami(token: String): WhoAmI
-    suspend fun mintInvite(token: String): MintedInvite
     suspend fun members(token: String): List<FamilyMember>
 }
 
@@ -63,9 +58,6 @@ class HttpFamilyApi(private val baseUrl: String) : FamilyApi {
 
     override suspend fun whoami(token: String): WhoAmI =
         decodeWhoAmI(post(familyEndpoint(baseUrl, "whoami"), token, JSONObject()))
-
-    override suspend fun mintInvite(token: String): MintedInvite =
-        decodeInvite(post(familyEndpoint(baseUrl, "invite"), token, JSONObject()))
 
     override suspend fun members(token: String): List<FamilyMember> =
         decodeMembers(get(familyEndpoint(baseUrl, "members"), token))
@@ -155,6 +147,7 @@ internal fun decodeCredentials(body: String): FamilyCredentials {
         familyId = json.getString("familyId"),
         memberId = json.getString("memberId"),
         token = json.getString("token"),
+        joinCode = json.optString("joinCode", ""),
     )
 }
 
@@ -167,16 +160,8 @@ internal fun decodeWhoAmI(body: String): WhoAmI {
     )
 }
 
-internal fun decodeInvite(body: String): MintedInvite {
-    val json = jsonOrThrow(body, "invite response")
-    return MintedInvite(
-        code = json.getString("code"),
-        expiresAt = json.getString("expiresAt"),
-    )
-}
-
 /**
- * `{"members":[{"id":..,"displayName":..,"isOwner":..,"joinedAt":..}]}`. An element without an id or a
+ * `{"members":[{"id":..,"displayName":..,"departed":..,"joinedAt":..}]}`. An element without an id or a
  * display name is dropped rather than thrown away with it, because one unusable member must not hide
  * the rest of the roster: this list is what every transaction's `memberId` is attributed against.
  */
@@ -192,8 +177,8 @@ internal fun decodeMembers(body: String): List<FamilyMember> {
                 FamilyMember(
                     id = id,
                     displayName = displayName,
-                    isOwner = entry.optBoolean("isOwner", false),
-                    joinedAt = entry.optNullableString("joinedAt").orEmpty(),
+                    departed = entry.optBoolean("departed", false),
+                    joinedAt = entry.optString("joinedAt"),
                 )
             )
         }

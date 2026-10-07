@@ -36,7 +36,6 @@ const val SYNC_CONFLICTS_SHEET = "syncConflicts"
 @Composable
 fun SyncConflictsSheet(
     viewModel: SyncConflictsViewModel = hiltViewModel(),
-    familyViewModel: FamilySyncViewModel = hiltViewModel(),
     memberNames: Map<String, String> = emptyMap(),
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
@@ -45,10 +44,10 @@ fun SyncConflictsSheet(
     val showDetailLabel = stringResource(R.string.family_sync_conflict_show_detail)
 
     // The sheet is opened from a static registration list, so it cannot be handed the roster from the
-    // call site. It resolves the same ViewModel the Family Sync sheet uses, which is the same instance
-    // because both resolve against the same owner. An explicit map still wins, which is what makes this
+    // call site. The ViewModel reads the same cache the registrar and the sync engine write, so the
+    // names match every other family surface. An explicit map still wins, which is what makes this
     // previewable and testable without a ViewModel.
-    val roster by familyViewModel.members.collectAsStateWithLifecycle()
+    val roster by viewModel.roster.collectAsStateWithLifecycle()
     val names = remember(roster, memberNames) {
         if (memberNames.isNotEmpty()) memberNames else roster.associate { it.id to it.displayName }
     }

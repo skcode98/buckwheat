@@ -15,7 +15,6 @@ import com.danilkinkin.buckwheat.sync.FamilySyncCoordinator
 import com.danilkinkin.buckwheat.sync.FamilySyncRegistrar
 import com.danilkinkin.buckwheat.sync.InMemoryFamilyMembersCache
 import com.danilkinkin.buckwheat.sync.LocalRecord
-import com.danilkinkin.buckwheat.sync.MintedInvite
 import com.danilkinkin.buckwheat.sync.SyncApply
 import com.danilkinkin.buckwheat.sync.SyncClock
 import com.danilkinkin.buckwheat.sync.SyncDatabase
@@ -34,7 +33,6 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,18 +69,17 @@ class FamilySyncServerUrlTest {
         token = "token-1",
         familyId = "family-1",
         memberId = "member-1",
+        joinCode = "",
     )
 
     private fun viewModel(): FamilySyncViewModel {
-        // Shared instance, so the registrar and the ViewModel see the same roster as they do in production.
-        val cache = InMemoryFamilyMembersCache()
         val coordinator = FamilySyncCoordinator(
             context = context,
-            registrar = FamilySyncRegistrar(sessionStore, InviteFamilyApi, cache),
+            registrar = FamilySyncRegistrar(sessionStore, StaticFamilyApi, InMemoryFamilyMembersCache()),
             database = NoSyncDatabase,
             clock = SyncClock { 700L },
         )
-        return FamilySyncViewModel(coordinator, sessionStore, cache, context)
+        return FamilySyncViewModel(coordinator, sessionStore, context)
     }
 
     @Test
@@ -125,37 +122,16 @@ class FamilySyncServerUrlTest {
         assertEquals("https://moved.example", sessionStore.session?.baseUrl)
     }
 
-    @Test
-    fun aMintedInviteKeepsItsExpiry() = runTest(dispatcher) {
-        sessionStore = FakeSessionStore(connectedSession())
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.mintInvite()
-        advanceUntilIdle()
-
-        assertEquals("CODE-1", viewModel.mintedInvite.value)
-        assertEquals(EXPIRES_AT, viewModel.mintedInviteExpiresAt.value)
-
-        viewModel.clearMintedInvite()
-
-        assertNull(viewModel.mintedInvite.value)
-        assertNull(viewModel.mintedInviteExpiresAt.value)
-    }
-
-    private object InviteFamilyApi : FamilyApiFactory {
+    private object StaticFamilyApi : FamilyApiFactory {
         override fun create(baseUrl: String): FamilyApi = object : FamilyApi {
             override suspend fun createFamily(displayName: String) =
-                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
+                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1", joinCode = "")
 
             override suspend fun joinFamily(code: String, displayName: String) =
-                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1")
+                FamilyCredentials(token = "token-1", familyId = "family-1", memberId = "member-1", joinCode = "")
 
             override suspend fun whoami(token: String) =
                 WhoAmI(memberId = "member-1", familyId = "family-1", displayName = "Ada")
-
-            override suspend fun mintInvite(token: String) =
-                MintedInvite(code = "CODE-1", expiresAt = EXPIRES_AT)
 
             override suspend fun members(token: String): List<FamilyMember> = emptyList()
         }
@@ -173,9 +149,5 @@ class FamilySyncServerUrlTest {
         override suspend fun enrolAll(memberId: String, familyId: String, enrolledAt: Long) = Unit
 
         override suspend fun reset() = Unit
-    }
-
-    private companion object {
-        const val EXPIRES_AT = "2030-01-01T00:00:00Z"
     }
 }

@@ -18,6 +18,7 @@ class SyncEngineTest {
         familyId = "family-1",
         memberId = "member-1",
         baseUrl = "https://sync.example",
+        joinCode = "",
     )
     private fun engine(
         database: FakeSyncDatabase = this.database,
@@ -529,7 +530,7 @@ class SyncEngineTest {
         val member = FamilyMember(
             id = "remote-1",
             displayName = "Remote",
-            isOwner = false,
+            departed = false,
             joinedAt = "2026-01-01T00:00:00Z",
         )
 
@@ -540,8 +541,6 @@ class SyncEngineTest {
             error("not under test")
 
         override suspend fun whoami(token: String): WhoAmI = error("not under test")
-
-        override suspend fun mintInvite(token: String): MintedInvite = error("not under test")
 
         override suspend fun members(token: String): List<FamilyMember> = listOf(member)
     }

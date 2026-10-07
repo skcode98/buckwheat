@@ -14,12 +14,14 @@ val syncBaseUrlStoreKey = stringPreferencesKey("syncBaseUrl")
 val syncTokenStoreKey = stringPreferencesKey("syncToken")
 val syncFamilyIdStoreKey = stringPreferencesKey("syncFamilyId")
 val syncMemberIdStoreKey = stringPreferencesKey("syncMemberId")
+val syncJoinCodeStoreKey = stringPreferencesKey("syncFamilyJoinCode")
 
 data class FamilySession(
     val baseUrl: String,
     val token: String,
     val familyId: String,
     val memberId: String,
+    val joinCode: String,
 )
 
 interface FamilySessionStore {
@@ -31,7 +33,7 @@ interface FamilySessionStore {
 
     suspend fun baseUrl(): String?
 
-    suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String)
+    suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String, joinCode: String = "")
 
     suspend fun setBaseUrl(baseUrl: String)
 
@@ -55,6 +57,7 @@ class DataStoreFamilySessionStore @Inject constructor(
                 token = token,
                 familyId = familyId,
                 memberId = memberId,
+                joinCode = prefs[syncJoinCodeStoreKey].orEmpty(),
             )
         }
     }
@@ -65,12 +68,13 @@ class DataStoreFamilySessionStore @Inject constructor(
 
     override suspend fun baseUrl(): String? = current()?.baseUrl
 
-    override suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String) {
+    override suspend fun save(baseUrl: String, token: String, familyId: String, memberId: String, joinCode: String) {
         context.settingsDataStore.edit { prefs ->
             prefs[syncBaseUrlStoreKey] = baseUrl.trim().trimEnd('/')
             prefs[syncTokenStoreKey] = token
             prefs[syncFamilyIdStoreKey] = familyId
             prefs[syncMemberIdStoreKey] = memberId
+            prefs[syncJoinCodeStoreKey] = joinCode
         }
     }
 
@@ -85,6 +89,7 @@ class DataStoreFamilySessionStore @Inject constructor(
             prefs.remove(syncTokenStoreKey)
             prefs.remove(syncFamilyIdStoreKey)
             prefs.remove(syncMemberIdStoreKey)
+            prefs.remove(syncJoinCodeStoreKey)
         }
     }
 }
