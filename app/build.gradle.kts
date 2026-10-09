@@ -1,13 +1,5 @@
 import java.util.Properties
 
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dagger.hilt.android.plugin")
-    id("com.google.devtools.ksp")
-    id("org.jetbrains.kotlin.plugin.compose") version "2.2.0"
-}
-
 // Release signing credentials. Kept out of the repo (see .gitignore): if keystore.properties
 // is missing, release builds fall back to the debug key so local/test builds still work.
 val keystoreProperties =
@@ -17,6 +9,14 @@ val keystoreProperties =
             load(file.inputStream())
         }
     }
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    id("dagger.hilt.android.plugin")
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.compose)
+}
 
 android {
     compileSdk = 36
@@ -33,6 +33,7 @@ android {
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")
         arg("dagger.hilt.disableModulesHaveInstallInCheck", "true")
+        arg("room.incremental", "true")
     }
 
     buildTypes {
@@ -96,73 +97,68 @@ android {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("androidx.fragment:fragment:1.5.4")
-    implementation("androidx.activity:activity-compose:1.10.1")
-    implementation("androidx.compose.runtime:runtime:1.8.3")
-    implementation("androidx.compose.foundation:foundation:1.8.3")
-    implementation("androidx.compose.foundation:foundation-layout:1.8.3")
-    implementation("androidx.compose.ui:ui-util:1.8.3")
-    implementation("androidx.compose.material3:material3-window-size-class:1.3.2")
-    implementation("androidx.compose.animation:animation:1.8.3")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.8.3")
-    implementation("androidx.compose.runtime:runtime-livedata:1.8.3")
-    implementation("androidx.compose.material3:material3:1.3.2")
-    implementation("androidx.compose.material:material:1.8.3")
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
-    implementation("androidx.recyclerview:recyclerview:1.4.0")
-    implementation("androidx.room:room-runtime:2.7.2")
-    implementation("androidx.room:room-ktx:2.7.2")
-    implementation("androidx.room:room-paging:2.7.2")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.9.2")
-    implementation("androidx.glance:glance-appwidget:1.1.1")
-    implementation("androidx.glance:glance-appwidget-preview:1.1.1")
-    implementation("androidx.glance:glance-preview:1.1.1")
-    implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation("androidx.biometric:biometric:1.1.0")
-    implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")
-    implementation("com.google.dagger:dagger:2.57")
-    implementation("com.google.dagger:hilt-android:2.57")
-    implementation("org.apache.commons:commons-csv:1.14.0")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    ksp("androidx.room:room-compiler:2.7.2")
-    ksp("androidx.hilt:hilt-compiler:1.2.0")
-    ksp("com.google.dagger:dagger-compiler:2.57")
-    ksp("com.google.dagger:hilt-android-compiler:2.57")
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // Core
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.coroutines.android)
+
+    // AndroidX
+    implementation(libs.appcompat)
+    implementation(libs.fragment)
+    implementation(libs.activity.compose)
+
+    // Compose
+    implementation(libs.bundles.compose)
+    implementation(libs.compose.material3.window.size)
+    implementation(libs.compose.ui.tooling.preview)
+
+    // DataStore
+    implementation(libs.datastore.preferences)
+
+    // RecyclerView
+    implementation(libs.recyclerview)
+
+    // Room
+    implementation(libs.bundles.room)
+    ksp(libs.room.compiler)
+
+    // Hilt
+    implementation(libs.bundles.hilt)
+
+    // Lifecycle
+    implementation(libs.bundles.lifecycle)
+
+    // Glance
+    implementation(libs.bundles.glance)
+
+    // Core
+    implementation(libs.core.splashscreen)
+    implementation(libs.biometric)
+
+    // Accompanist
+    implementation(libs.accompanist.systemuicontroller)
+
+    // Dagger/Hilt
+    implementation(libs.dagger)
+    implementation(libs.hilt.android)
+    ksp(libs.bundles.hilt.ksp)
+    ksp(libs.bundles.dagger.ksp)
+
+    // Utils
+    implementation(libs.commons.csv)
+    implementation(libs.coil.compose)
+
+    // Desugar
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    // Work
+    implementation(libs.work.runtime.ktx)
 
     // Debug
-    debugImplementation("androidx.compose.ui:ui-tooling:1.8.3")
-    debugImplementation("androidx.compose.ui:ui-test-manifest:1.8.3")
+    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
 
     // Testing
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20231013")
-    testImplementation("org.robolectric:robolectric:4.15.1")
-    testImplementation("androidx.test:core:1.6.1")
-    testImplementation("androidx.test.ext:junit:1.2.1")
-    implementation("androidx.work:work-runtime-ktx:2.7.1")
-    testImplementation("androidx.work:work-testing:2.7.1")
-    testImplementation("androidx.test:runner:1.6.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    // Compose UI tests on the JVM (Robolectric) — this laptop has no emulator, so the
-    // createComposeRule() harness runs against Robolectric's virtual device instead.
-    testImplementation("androidx.compose.ui:ui-test-junit4:1.8.3")
-    testImplementation("androidx.compose.ui:ui-test-manifest:1.8.3")
-
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    androidTestImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test:core:1.6.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.test:rules:1.6.1")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.compose.ui:ui-test:1.8.3")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.8.3")
-    androidTestImplementation("com.google.dagger:hilt-android-testing:2.57")
-    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.57")
+    testImplementation(libs.bundles.testing)
+    androidTestImplementation(libs.bundles.android.test)
+    kspAndroidTest(libs.hilt.android.compiler)
 }
