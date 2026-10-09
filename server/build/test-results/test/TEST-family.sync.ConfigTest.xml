@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.ConfigTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:11:20.080Z" hostname="MSI" time="0.187">
+  <properties/>
+  <testcase name="anUppercaseSslModeInTheUriIsReplaced" classname="family.sync.ConfigTest" time="0.096"/>
+  <testcase name="aBlankUserInTheEnvironmentFallsBackToTheConnectionString" classname="family.sync.ConfigTest" time="0.002"/>
+  <testcase name="aMissingDatabaseUrlIsRefused" classname="family.sync.ConfigTest" time="0.06"/>
+  <testcase name="anExistingJdbcUrlKeepsItsScheme" classname="family.sync.ConfigTest" time="0.007"/>
+  <testcase name="aMissingPasswordIsRefused" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="theUserDefaultsToPostgresWhenNoUserIsAvailableAnywhere" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="unrelatedQueryParametersSurvive" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="theUserIsReadFromTheConnectionStringWhenTheEnvironmentOmitsIt" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="aUriWithoutAPortKeepsThePortOff" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="theSslModeCanBeDisabledForLocalDatabases" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="theEnvironmentOverridesTheConnectionStringUser" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="aPostgresUriIsConvertedToAJdbcUrl" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="aSupabaseUriHonoursTheConfiguredSslMode" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="aUrlWithoutASchemeIsRefused" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="aSupabaseUriKeepsExactlyOneSslMode" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="anExistingSslModeInTheUrlIsNotOverwritten" classname="family.sync.ConfigTest" time="0.005"/>
+  <testcase name="theSslModeDefaultsToRequire" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="thePortDefaultsToEightThousandEighty" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="credentialsAreDroppedFromTheUrlBecauseHikariSuppliesThem" classname="family.sync.ConfigTest" time="0.001"/>
+  <testcase name="aBlankPasswordIsRefused" classname="family.sync.ConfigTest" time="0.0"/>
+  <testcase name="theServerPortIsReadFromTheEnvironment" classname="family.sync.ConfigTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

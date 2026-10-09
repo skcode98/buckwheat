@@ -173,8 +173,8 @@ fun MainScreen(
         } else {
             contentWidth / 2f
         }
-            .coerceAtMost(with(localDensity) { 500.dp.toPx() })
-            .coerceAtMost(contentHeight / 2)
+            .coerceAtMost(with(localDensity) { 400.dp.toPx() })
+            .coerceAtMost(contentHeight * 0.4f)
 
         val isShowSystemKeyboard =
             systemKeyboardHeight != 0.dp && appViewModel.showSystemKeyboard.value

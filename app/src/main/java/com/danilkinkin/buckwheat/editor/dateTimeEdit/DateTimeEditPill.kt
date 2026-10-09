@@ -35,6 +35,9 @@ fun DateTimeEditPill(
     val startPeriodDate by spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
     val finishPeriodDate by spendsViewModel.finishPeriodDate.collectAsStateWithLifecycle()
 
+    // Hide custom keyboard when opening date/time pickers
+    val hideKeyboard = { appViewModel.showSystemKeyboard.value = false }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -45,7 +48,10 @@ fun DateTimeEditPill(
             modifier = Modifier
                 .offset(x = 8.dp)
                 .clip(CircleShape)
-                .clickable { isPickDate = true }
+                .clickable {
+                    hideKeyboard()
+                    isPickDate = true
+                }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -54,7 +60,10 @@ fun DateTimeEditPill(
         Row(
             modifier = Modifier
                 .clip(CircleShape)
-                .clickable { isPickTime = true }
+                .clickable {
+                    hideKeyboard()
+                    isPickTime = true
+                }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

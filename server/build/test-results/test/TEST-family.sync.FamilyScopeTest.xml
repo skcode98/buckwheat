@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.FamilyScopeTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:11:40.647Z" hostname="MSI" time="3.525">
+  <properties/>
+  <testcase name="anUnknownTokenIsRefused" classname="family.sync.FamilyScopeTest" time="0.169"/>
+  <testcase name="theLifetimeIsOptInAndReadFromTheEnvironment" classname="family.sync.FamilyScopeTest" time="0.174"/>
+  <testcase name="aTokenIsNeverStoredInPlainText" classname="family.sync.FamilyScopeTest" time="0.203"/>
+  <testcase name="revokingATokenThatWasNeverIssuedIsHarmless" classname="family.sync.FamilyScopeTest" time="0.211"/>
+  <testcase name="aTokenInsideItsLifetimeStillResolves" classname="family.sync.FamilyScopeTest" time="0.194"/>
+  <testcase name="revokingATokenStopsItResolving" classname="family.sync.FamilyScopeTest" time="0.209"/>
+  <testcase name="aTamperedTokenIsRefused" classname="family.sync.FamilyScopeTest" time="0.328"/>
+  <testcase name="aTokenThatOutlivedItsLifetimeIsRefused" classname="family.sync.FamilyScopeTest" time="0.35"/>
+  <testcase name="aValidTokenResolvesToItsMemberAndFamily" classname="family.sync.FamilyScopeTest" time="0.356"/>
+  <testcase name="twoTokensForTheSameMemberAreBothValidAndDistinct" classname="family.sync.FamilyScopeTest" time="0.356"/>
+  <testcase name="anEmptyTokenIsRefused" classname="family.sync.FamilyScopeTest" time="0.303"/>
+  <testcase name="revokingOneTokenLeavesTheOtherValid" classname="family.sync.FamilyScopeTest" time="0.339"/>
+  <testcase name="aTokenFromOneFamilyCannotResolveAnotherFamily" classname="family.sync.FamilyScopeTest" time="0.332"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

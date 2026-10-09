@@ -67,8 +67,6 @@ fun Wallet(
 
     val openConfirmFinishBudgetDialog = remember { mutableStateOf(false) }
 
-    if (spends === null) return
-
     val navigationBarHeight = LocalWindowInsets.current.calculateBottomPadding()
         .coerceAtLeast(16.dp)
 
@@ -200,7 +198,7 @@ fun Wallet(
                         appViewModel.openSheet(PathState(DEFAULT_RECALC_BUDGET_CHOOSER))
                     },
                     endCaption = when (restedBudgetDistributionMethod) {
-                        RestedBudgetDistributionMethod.ASK, null -> stringResource(
+                        RestedBudgetDistributionMethod.ASK -> stringResource(
                             R.string.always_ask
                         )
                         RestedBudgetDistributionMethod.REST -> stringResource(
@@ -218,7 +216,6 @@ fun Wallet(
                         appViewModel.openSheet(PathState(CURRENCY_EDITOR))
                     },
                     endCaption = when (val c = currency) {
-                        null -> ""
                         else -> when (c.type) {
                             ExtendCurrency.Type.FROM_LIST -> if (c.value != null) "${
                                 Currency.getInstance(
@@ -312,9 +309,7 @@ fun Wallet(
                                 val currentDateToValue = dateToValue.value
                                 val currentCurrency = currency
                                 if (currentDateToValue != null) {
-                                    if (currentCurrency != null) {
-                                        spendsViewModel.changeDisplayCurrency(currentCurrency)
-                                    }
+                                    spendsViewModel.changeDisplayCurrency(currentCurrency)
 
                                     val newStartDate = startDateToValue.value
                                         ?.takeIf { it.time > 0L }

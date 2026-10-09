@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.sync.PushMergeTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:12:26.091Z" hostname="MSI" time="0.008">
+  <properties/>
+  <testcase name="aBrandNewRecordIsAccepted" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="aPayloadThatIsNotAnObjectIsInvalid" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="everyRejectionCarriesAReasonTheClientCanRender" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="anOversizedCommentIsInvalid" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aMatchingVersionIsAccepted" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="theLosingWriteIsNamedAfterTheMemberWhoWon" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aBigIntAtItsLimitIsAccepted" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aTombstoneIsAcceptedEvenWhenItIsStaleInEveryOtherWay" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aMissingNullableColumnBecomesNull" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aNumericPostgresWouldRejectIsInvalid" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="aStaleVersionWithAnEqualTimestampLoses" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aNewerVersionIsAccepted" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="anAcceptedWriteNeverMovesTheStoredVersionBackwards" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="everyRealTransactionTypeIsAccepted" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aStaleVersionWithANewerTimestampWins" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aMissingRequiredColumnIsIncomplete" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="aTransactionPayloadIsReadInColumnOrder" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="anUnknownTransactionTypeIsInvalid" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="ordinaryAmountsSurviveNumericValidation" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aStoredTombstoneBeatsANewerLiveRecord" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="anIntegerTooWideForTheColumnIsInvalid" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aTombstoneDefaultIsWritableForEveryColumnType" classname="family.sync.sync.PushMergeTest" time="0.001"/>
+  <testcase name="aStaleVersionWithAnOlderTimestampLoses" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <testcase name="aCommentAtTheTextLimitIsStillAccepted" classname="family.sync.sync.PushMergeTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

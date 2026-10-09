@@ -32,27 +32,28 @@ class CategoryCapTracker @Inject constructor(
 
     suspend fun checkCategoryCapAlert(newTransaction: Transaction) {
         notificationMutex.withLock {
-        if (newTransaction.type != TransactionType.SPENT) return
-        val prefs = context.budgetDataStore.data.first()
-        val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
-        val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
-        if (newTransaction.date.before(start) || newTransaction.date.after(finish)) return
+            if (newTransaction.type != TransactionType.SPENT) return
+            val prefs = context.budgetDataStore.data.first()
+            val start = prefs[startPeriodDateStoreKey]?.let { Date(it) } ?: return
+            val finish = prefs[finishPeriodDateStoreKey]?.let { Date(it) } ?: return
+            if (newTransaction.date.before(start) || newTransaction.date.after(finish)) return
 
-        val key = categoryKey(newTransaction)
-        val categoryName = categoryNameOf(key)
-        val caps = settingsRepository.getCategoryCaps().first()
-        val cap = caps[categoryName] ?: return
-        val total = periodCategoryTotal(start, finish, key)
+            val key = categoryKey(newTransaction)
+            val categoryName = categoryNameOf(key)
+            // Read caps and notified atomically within mutex to prevent race conditions
+            val caps = settingsRepository.getCategoryCaps().first()
+            val cap = caps[categoryName] ?: return
+            val total = periodCategoryTotal(start, finish, key)
 
-        val newBucket = categoryCapBucket(total, cap)
-        val notified = settingsRepository.getCategoryCapNotified()
-        val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
-        if (newlyReached == 0) return
+            val newBucket = categoryCapBucket(total, cap)
+            val notified = settingsRepository.getCategoryCapNotified()
+            val newlyReached = highestNewlyReachedCapBucket(notified[categoryName] ?: 0, newBucket)
+            if (newlyReached == 0) return
 
-        val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
-            ?: ExtendCurrency.none()
-        CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
-        settingsRepository.setCategoryCapNotified(notified + (categoryName to newlyReached))
+            val currency = prefs[currencyStoreKey]?.let { ExtendCurrency.getInstance(it) }
+                ?: ExtendCurrency.none()
+            CategoryCapNotifier.notify(context, key, newlyReached, total, cap, currency)
+            settingsRepository.setCategoryCapNotified(notified + (categoryName to newlyReached))
         }
     }
 
@@ -66,6 +67,7 @@ class CategoryCapTracker @Inject constructor(
 
             val key = categoryKey(removed)
             val categoryName = categoryNameOf(key)
+            // Read caps and notified atomically within mutex to prevent race conditions
             val caps = settingsRepository.getCategoryCaps().first()
             val cap = caps[categoryName] ?: return@withLock
             val total = periodCategoryTotal(start, finish, key)

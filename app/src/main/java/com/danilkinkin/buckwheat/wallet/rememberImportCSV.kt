@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.apache.commons.csv.CSVFormat
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -79,6 +80,9 @@ fun rememberImportCSV(
                     val amount = parseAmountToBigDecimal(amountStr)
                         ?.setScale(2, RoundingMode.HALF_EVEN)
                         ?: continue
+
+                    // Reject negative amounts - they would create negative spends
+                    if (amount <= BigDecimal.ZERO) continue
 
                     val date = parseDate(dateStr, dateFormatters)
                     if (date == null) continue

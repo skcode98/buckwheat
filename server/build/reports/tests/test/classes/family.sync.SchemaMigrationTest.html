@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=edge"/>
+<title>Test results - Class family.sync.SchemaMigrationTest</title>
+<link href="../css/base-style.css" rel="stylesheet" type="text/css"/>
+<link href="../css/style.css" rel="stylesheet" type="text/css"/>
+<script src="../js/report.js" type="text/javascript"></script>
+</head>
+<body>
+<div id="content">
+<h1>Class family.sync.SchemaMigrationTest</h1>
+<div class="breadcrumbs">
+<a href="../index.html">all</a> &gt; 
+<a href="../packages/family.sync.html">family.sync</a> &gt; SchemaMigrationTest</div>
+<div id="summary">
+<table>
+<tr>
+<td>
+<div class="summaryGroup">
+<table>
+<tr>
+<td>
+<div class="infoBox" id="tests">
+<div class="counter">14</div>
+<p>tests</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="failures">
+<div class="counter">0</div>
+<p>failures</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="ignored">
+<div class="counter">0</div>
+<p>ignored</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="duration">
+<div class="counter">31.423s</div>
+<p>duration</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</td>
+<td>
+<div class="infoBox success" id="successRate">
+<div class="percent">100%</div>
+<p>successful</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a href="#">Tests</a>
+</li>
+<li>
+<a href="#">Standard output</a>
+</li>
+</ul>
+<div class="tab">
+<h2>Tests</h2>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Duration</th>
+<th>Result</th>
+</tr>
+</thead>
+<tr>
+<td class="success">aPreExistingSchemaIsAdoptedRatherThanRecreated</td>
+<td class="success">12.988s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">aSchemaMissingFamilyTablesIsNotAdopted</td>
+<td class="success">18.182s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">aSingleSequenceBacksEverySyncedTable</td>
+<td class="success">0.019s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">everyFamilyTableHasRowLevelSecurityEnabled</td>
+<td class="success">0.021s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">everyPayloadColumnExistsInItsTable</td>
+<td class="success">0.114s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">everySyncedTableCarriesTheSyncColumns</td>
+<td class="success">0.040s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">familyStateIsOneRowPerFamily</td>
+<td class="success">0.010s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">migrationCreatesEverySyncedTable</td>
+<td class="success">0.006s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">savedNamesAreIndexedPerFamilyAndAreNotUnique</td>
+<td class="success">0.005s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">savingsGoalsCarryTheirName</td>
+<td class="success">0.006s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">theBaselineVersionNeverSkipsAShippedMigration</td>
+<td class="success">0.002s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">theSequenceIsStrictlyIncreasing</td>
+<td class="success">0.011s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">theSharedSequenceExists</td>
+<td class="success">0.009s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">transactionsAndArchivedRowsCarryAMemberId</td>
+<td class="success">0.010s</td>
+<td class="success">passed</td>
+</tr>
+</table>
+</div>
+<div class="tab">
+<h2>Standard output</h2>
+<span class="code">
+<pre>06:41:52.585 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The files belonging to this database system will be owned by user &quot;suraj&quot;.
+06:41:52.585 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - This user must also own the server process.
+06:41:52.586 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:52.586 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The database cluster will be initialized with locale &quot;English_India.1252&quot;.
+06:41:52.586 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The default text search configuration will be set to &quot;english&quot;.
+06:41:52.587 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:52.587 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Data page checksums are disabled.
+06:41:52.587 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:52.587 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - fixing permissions on existing directory C:/Users/suraj/AppData/Local/Temp/epg4865065389047999979 ... ok
+06:41:52.605 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating subdirectories ... ok
+06:41:52.608 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting dynamic shared memory implementation ... windows
+06:41:52.813 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default max_connections ... 100
+06:41:52.924 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default shared_buffers ... 128MB
+06:41:52.926 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default time zone ... Asia/Calcutta
+06:41:52.936 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating configuration files ... ok
+06:41:55.475 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - running bootstrap script ... ok
+06:41:59.415 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - performing post-bootstrap initialization ... ok
+06:42:03.752 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - syncing data to disk ... ok
+06:42:03.753 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:03.753 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Success. You can now start the database server using:
+06:42:03.753 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:03.754 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -     ^&quot;C^:^\Users^\suraj^\AppData^\Local^\Temp^\embedded^-pg^\PG^-b95a81b3f867f51765631fc19cc132c3^\bin^\pg^_ctl^&quot; -D ^&quot;C^:^\Users^\suraj^\AppData^\Local^\Temp^\epg4865065389047999979^&quot; -l logfile start
+06:42:03.754 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:03.759 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 0c738d25-89dc-45c3-8689-18ddc9db3610 initdb completed in 00:00:11.375
+06:42:03.766 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 0c738d25-89dc-45c3-8689-18ddc9db3610 postmaster started as Process[pid=2172, exitValue=&quot;not exited&quot;] on port 65360.  Waiting up to PT10S for server startup to finish.
+06:42:03.920 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - waiting for server to start....2026-10-03 06:42:03.920 IST [2556] LOG:  starting PostgreSQL 14.15, compiled by Visual C++ build 1942, 64-bit
+06:42:03.925 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:03.926 IST [2556] LOG:  listening on IPv6 address &quot;::1&quot;, port 65360
+06:42:03.926 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:03.926 IST [2556] LOG:  listening on IPv4 address &quot;127.0.0.1&quot;, port 65360
+06:42:03.979 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:03.979 IST [1312] LOG:  database system was shut down at 2026-10-03 06:41:59 IST
+06:42:04.041 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.041 IST [2556] LOG:  database system is ready to accept connections
+06:42:04.075 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -  done
+06:42:04.076 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - server started
+06:42:04.107 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 0c738d25-89dc-45c3-8689-18ddc9db3610 postmaster startup finished in 00:00:00.347
+06:42:04.108 WARN  com.zaxxer.hikari.HikariConfig - HikariPool-2 - idleTimeout is close to or more than maxLifetime, disabling it.
+06:42:04.109 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Starting...
+06:42:04.148 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Start completed.
+06:42:04.374 INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://localhost:65360/postgres?user=postgres (PostgreSQL 14.15)
+06:42:04.390 INFO  o.f.c.i.s.JdbcTableSchemaHistory - Schema history table &quot;public&quot;.&quot;flyway_schema_history&quot; does not exist yet
+06:42:04.391 INFO  o.f.core.internal.command.DbValidate - Successfully validated 5 migrations (execution time 00:00.009s)
+06:42:04.401 INFO  o.f.c.i.s.JdbcTableSchemaHistory - Creating Schema History table &quot;public&quot;.&quot;flyway_schema_history&quot; with baseline ...
+06:42:04.419 INFO  o.f.core.internal.command.DbBaseline - Successfully baselined schema with version: 3
+06:42:04.467 INFO  o.f.core.internal.command.DbMigrate - Current version of schema &quot;public&quot;: 3
+06:42:04.472 INFO  o.f.core.internal.command.DbMigrate - Migrating schema &quot;public&quot; to version &quot;4 - index saved names by family&quot;
+06:42:04.492 INFO  o.f.core.internal.command.DbMigrate - Migrating schema &quot;public&quot; to version &quot;5 - family pool and assignments&quot;
+06:42:04.578 INFO  o.f.core.internal.command.DbMigrate - Successfully applied 2 migrations to schema &quot;public&quot;, now at version v5 (execution time 00:00.078s)
+06:42:04.622 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.622 IST [2556] LOG:  received fast shutdown request
+06:42:04.622 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.623 IST [2556] LOG:  aborting any active transactions
+06:42:04.623 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.623 IST [5580] FATAL:  terminating connection due to administrator command
+06:42:04.623 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.623 IST [11568] FATAL:  terminating connection due to administrator command
+06:42:04.630 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.630 IST [2556] LOG:  background worker &quot;logical replication launcher&quot; (PID 12916) exited with exit code 1
+06:42:04.641 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.642 IST [4252] LOG:  shutting down
+06:42:04.728 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:04.728 IST [2556] LOG:  database system is shut down
+06:42:04.742 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - waiting for server to shut down.... done
+06:42:04.742 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - server stopped
+06:42:04.746 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 0c738d25-89dc-45c3-8689-18ddc9db3610 shut down postmaster in 00:00:00.160
+06:42:05.485 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The files belonging to this database system will be owned by user &quot;suraj&quot;.
+06:42:05.485 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - This user must also own the server process.
+06:42:05.485 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:05.486 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The database cluster will be initialized with locale &quot;English_India.1252&quot;.
+06:42:05.486 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The default text search configuration will be set to &quot;english&quot;.
+06:42:05.486 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:05.486 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Data page checksums are disabled.
+06:42:05.486 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:05.487 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - fixing permissions on existing directory C:/Users/suraj/AppData/Local/Temp/epg14731903854800619332 ... ok
+06:42:05.494 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating subdirectories ... ok
+06:42:05.494 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting dynamic shared memory implementation ... windows
+06:42:05.557 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default max_connections ... 100
+06:42:05.624 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default shared_buffers ... 128MB
+06:42:05.625 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default time zone ... Asia/Calcutta
+06:42:05.630 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating configuration files ... ok
+06:42:06.999 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - running bootstrap script ... ok
+06:42:10.262 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - performing post-bootstrap initialization ... ok
+06:42:22.431 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - syncing data to disk ... ok
+06:42:22.431 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:22.431 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Success. You can now start the database server using:
+06:42:22.431 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:22.431 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -     ^&quot;C^:^\Users^\suraj^\AppData^\Local^\Temp^\embedded^-pg^\PG^-b95a81b3f867f51765631fc19cc132c3^\bin^\pg^_ctl^&quot; -D ^&quot;C^:^\Users^\suraj^\AppData^\Local^\Temp^\epg14731903854800619332^&quot; -l logfile start
+06:42:22.432 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:42:22.438 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 24fda347-1206-4055-9429-b7cf21902de9 initdb completed in 00:00:17.064
+06:42:22.444 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 24fda347-1206-4055-9429-b7cf21902de9 postmaster started as Process[pid=13972, exitValue=&quot;not exited&quot;] on port 65371.  Waiting up to PT10S for server startup to finish.
+06:42:22.603 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - waiting for server to start....2026-10-03 06:42:22.603 IST [9700] LOG:  starting PostgreSQL 14.15, compiled by Visual C++ build 1942, 64-bit
+06:42:22.608 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:22.609 IST [9700] LOG:  listening on IPv6 address &quot;::1&quot;, port 65371
+06:42:22.609 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:22.609 IST [9700] LOG:  listening on IPv4 address &quot;127.0.0.1&quot;, port 65371
+06:42:22.660 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:22.660 IST [15012] LOG:  database system was shut down at 2026-10-03 06:42:10 IST
+06:42:22.715 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:22.715 IST [1912] FATAL:  the database system is starting up
+06:42:22.721 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:22.722 IST [9700] LOG:  database system is ready to accept connections
+06:42:22.753 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -  done
+06:42:22.754 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - server started
+06:42:22.896 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 24fda347-1206-4055-9429-b7cf21902de9 postmaster startup finished in 00:00:00.457
+06:42:22.896 WARN  com.zaxxer.hikari.HikariConfig - HikariPool-3 - idleTimeout is close to or more than maxLifetime, disabling it.
+06:42:22.896 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Starting...
+06:42:22.929 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Start completed.
+06:42:22.990 INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://localhost:65371/postgres?user=postgres (PostgreSQL 14.15)
+06:42:22.999 INFO  o.f.c.i.s.JdbcTableSchemaHistory - Schema history table &quot;public&quot;.&quot;flyway_schema_history&quot; does not exist yet
+06:42:23.001 INFO  o.f.core.internal.command.DbValidate - Successfully validated 5 migrations (execution time 00:00.004s)
+06:42:23.046 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.046 IST [9700] LOG:  received fast shutdown request
+06:42:23.046 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.046 IST [9700] LOG:  aborting any active transactions
+06:42:23.047 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.047 IST [12440] FATAL:  terminating connection due to administrator command
+06:42:23.056 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.056 IST [9700] LOG:  background worker &quot;logical replication launcher&quot; (PID 4348) exited with exit code 1
+06:42:23.057 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.057 IST [14192] LOG:  shutting down
+06:42:23.099 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:42:23.099 IST [9700] LOG:  database system is shut down
+06:42:23.170 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - waiting for server to shut down.... done
+06:42:23.170 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - server stopped
+06:42:23.173 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 24fda347-1206-4055-9429-b7cf21902de9 shut down postmaster in 00:00:00.161
+</pre>
+</span>
+</div>
+</div>
+<div id="footer">
+<p>
+<div>
+<label class="hidden" id="label-for-line-wrapping-toggle" for="line-wrapping-toggle">Wrap lines
+<input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
+</label>
+</div>Generated by 
+<a href="https://www.gradle.org">Gradle 8.14.3</a> at 03-Oct-2026, 6:42:28 am</p>
+</div>
+</div>
+</body>
+</html>
