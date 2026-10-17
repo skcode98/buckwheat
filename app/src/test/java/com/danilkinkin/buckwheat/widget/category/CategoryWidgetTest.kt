@@ -104,6 +104,27 @@ class CategoryWidgetTest {
     }
 
     @Test
+    fun overCapCategoriesReportRealPercentAndSortAboveAtCapOnes() {
+        val rows = categoryWidgetRows(
+            spends = listOf(
+                spent(1, "250", "FOOD"), // cap 100 -> 250%
+                spent(2, "100", "HEALTH"), // cap 100 -> 100%
+            ),
+            caps = mapOf("FOOD" to BigDecimal("100"), "HEALTH" to BigDecimal("100")),
+        )
+
+        val food = rows.single { (it.key as CategoryKey.BuiltIn).category == SpendCategory.FOOD }
+        val health = rows.single { (it.key as CategoryKey.BuiltIn).category == SpendCategory.HEALTH }
+        assertEquals(250, food.percent)
+        assertEquals(100, health.percent)
+        assertEquals(1f, food.fraction, 0.001f)
+        assertEquals(
+            listOf("FOOD", "HEALTH"),
+            rows.map { (it.key as CategoryKey.BuiltIn).category.name },
+        )
+    }
+
+    @Test
     fun maxRowsTruncatesKeepingTheOrder() {
         val rows = categoryWidgetRows(
             spends = listOf(

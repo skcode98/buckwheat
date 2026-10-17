@@ -11,14 +11,17 @@ const val CATEGORY_CAP_NEAR_BUCKET = 1
 const val CATEGORY_CAP_REACHED_BUCKET = 2
 const val CATEGORY_CAP_NEAR_PERCENT = 80
 
-// Whole percent of the cap already spent, floored (0 for a non-positive cap).
+// Whole percent of the cap already spent, floored (0 for a non-positive cap). Not capped at
+// 100: over-cap spending is reported as-is (e.g. 130) so callers can surface the overage. Use
+// categoryBatteryFraction for the saturated 0..1 fill, and clamp the percent where a hard 100
+// is required.
 fun categoryCapPercent(progress: BigDecimal, cap: BigDecimal): Int {
     if (cap <= BigDecimal.ZERO) return 0
     return progress
         .multiply(BigDecimal(100))
         .divide(cap, 0, RoundingMode.FLOOR)
         .toInt()
-        .coerceIn(0, 100)
+        .coerceAtLeast(0)
 }
 
 // Fill fraction (0..1) of the category battery pill. The filled part shows the budget used
