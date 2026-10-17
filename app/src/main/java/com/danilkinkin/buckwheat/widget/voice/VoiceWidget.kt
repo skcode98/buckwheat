@@ -490,6 +490,8 @@ fun VoiceWidgetContent() {
                     }
                 }
 
+                BubbleSummonButton(context)
+
                 when (feedbackState) {
                     VoiceFeedbackState.LISTENING,
                     VoiceFeedbackState.PROCESSING,
@@ -543,6 +545,37 @@ private fun MicButton(context: Context) {
                 modifier = GlanceModifier.size(24.dp),
                 provider = provider,
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
+                contentDescription = null,
+            )
+        }
+    }
+}
+
+// Small companion button that summons the floating voice bubble overlay for voice input
+// while reading other apps. Glance 1.1.1 has no long-press action, so this is a plain tap
+// button (design decision Q8/B).
+@Composable
+@GlanceComposable
+private fun BubbleSummonButton(context: Context) {
+    Box(
+        modifier = GlanceModifier
+            .padding(start = 8.dp)
+            .size(32.dp)
+            .background(
+                ColorProvider(
+                    GlanceTheme.colors.primary.getColor(context).copy(alpha = 0.15f),
+                ),
+            )
+            .cornerRadius(16.dp)
+            .clickable(actionRunCallback<BubbleWidgetCallback>()),
+        contentAlignment = Alignment.Center,
+    ) {
+        val provider = drawableProvider(context, R.drawable.ic_widgets)
+        if (provider != null) {
+            Image(
+                modifier = GlanceModifier.size(18.dp),
+                provider = provider,
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
                 contentDescription = null,
             )
         }
