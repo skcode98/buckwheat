@@ -14,10 +14,26 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.danilkinkin.buckwheat.MainActivity
@@ -82,7 +98,7 @@ class BubbleOverlayService : Service() {
 
         when (intent?.action) {
             ACTION_SHOW -> showBubble()
-            ACTION_HIDE -> removeBubbleAndStop()
+            ACTION_HIDE -> dismissBubble()
             else -> {
                 // Service recreated by the system: START_NOT_STICKY, but guard anyway.
                 if (!Settings.canDrawOverlays(this)) {
@@ -113,12 +129,15 @@ class BubbleOverlayService : Service() {
         // lastPosition() is a DataStore read (suspend), so resolve it off the current call.
         bubblePending = true
         scope.launch {
-            val position = runCatching {
-                bubbleSettings(this@BubbleOverlayService).lastPosition().first()
-            }.getOrNull()
-            if (stopped) return@launch
-            addBubbleView(position)
-            bubblePending = false
+            try {
+                val position = runCatching {
+                    bubbleSettings(this@BubbleOverlayService).lastPosition().first()
+                }.getOrNull()
+                if (stopped) return@launch
+                addBubbleView(position)
+            } finally {
+                bubblePending = false
+            }
         }
     }
 
@@ -130,10 +149,30 @@ class BubbleOverlayService : Service() {
             setContent {
                 BuckwheatTheme {
                     val state by uiState.collectAsState()
-                    BubbleContent(
-                        state = state,
-                        onTap = { onBubbleTap() },
-                    )
+                    var offsetX by remember { mutableFloatStateOf(0f) }
+                    var offsetY by remember { mutableFloatStateOf(0f) }
+
+                    Box(
+                        modifier = Modifier
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { onDragStart() },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        offsetX += dragAmount.x
+                                        offsetY += dragAmount.y
+                                        onDragMove(offsetX, offsetY)
+                                    },
+                                    onDragEnd = { onDragEnd(offsetX, offsetY, velocity = 0f) },
+                                    onDragCancel = { onDragEnd(offsetX, offsetY, velocity = 0f) },
+                                )
+                            },
+                    ) {
+                        BubbleContent(
+                            state = state,
+                            onTap = { onBubbleTap() },
+                        )
+                    }
                 }
             }
         }
@@ -197,8 +236,16 @@ class BubbleOverlayService : Service() {
 
         sessionRunning = true
         scope.launch {
-            runVoiceSession(ServiceSessionHost(), ::onSessionState)
-            sessionRunning = false
+            try {
+                runVoiceSession(ServiceSessionHost(), ::onSessionState)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = BubbleUiState(BubbleFeedbackState.ERROR, ServiceSessionHost().captionSaveFailed())
+                scheduleAutoReset()
+            } finally {
+                sessionRunning = false
+            }
         }
     }
 
@@ -348,13 +395,6 @@ class BubbleOverlayService : Service() {
         bubbleView = null
     }
 
-    private fun removeBubbleAndStop() {
-        stopped = true
-        removeBubbleView()
-        stopForeground(Service.STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
     private fun stopSelfAndExit() {
         stopped = true
         removeBubbleView()
@@ -362,9 +402,152 @@ class BubbleOverlayService : Service() {
         stopSelf()
     }
 
+    private var dragStartX = 0
+    private var dragStartY = 0
+    private var dismissTargetView: ComposeView? = null
+
+    private fun currentParams(): WindowManager.LayoutParams? =
+        bubbleView?.layoutParams as? WindowManager.LayoutParams
+
+    private fun onDragStart() {
+        val params = currentParams() ?: return
+        dragStartX = params.x
+        dragStartY = params.y
+        showDismissTarget()
+    }
+
+    private fun onDragMove(dragDx: Float, dragDy: Float) {
+        val params = currentParams() ?: return
+        val metrics = resources.displayMetrics
+        val bubblePx = (BUBBLE_SIZE_DP * metrics.density)
+        val marginPx = (8 * metrics.density)
+        params.x = (dragStartX + dragDx).toInt()
+        params.y = clampY(
+            currentY = dragStartY + dragDy,
+            screenHeight = metrics.heightPixels.toFloat(),
+            bubbleHeight = bubblePx,
+            topInsetPx = marginPx,
+            bottomInsetPx = marginPx,
+        ).toInt()
+        runCatching { windowManager.updateViewLayout(bubbleView, params) }
+    }
+
+    private fun onDragEnd(dragDx: Float, dragDy: Float, velocity: Float) {
+        removeDismissTarget()
+        val params = currentParams() ?: return
+        val metrics = resources.displayMetrics
+        val bubblePx = (BUBBLE_SIZE_DP * metrics.density)
+        val marginPx = (8 * metrics.density)
+
+        if (isFlingDismiss(dragDy * 10f, FLING_THRESHOLD_PX * metrics.density)) {
+            dismissBubble()
+            return
+        }
+
+        // Dismiss-target hit test: the target is centered at screen bottom; compare the
+        // bubble's final center against the target rect in window coordinates is not
+        // possible cross-window, so use the raw drag end position on screen instead.
+        val endY = dragStartY + dragDy
+        val targetTop = metrics.heightPixels - (120 * metrics.density)
+        val centerX = dragStartX + dragDx + bubblePx / 2f
+        val targetLeft = metrics.widthPixels / 2f - (60 * metrics.density)
+        val targetRight = metrics.widthPixels / 2f + (60 * metrics.density)
+        if (
+            isOverDismissTarget(
+                x = centerX,
+                y = endY + bubblePx / 2f,
+                targetLeft = targetLeft,
+                targetTop = targetTop,
+                targetRight = targetRight,
+                targetBottom = metrics.heightPixels.toFloat(),
+            )
+        ) {
+            dismissBubble()
+            return
+        }
+
+        params.x = snapX(
+            currentX = (dragStartX + dragDx).toFloat(),
+            screenWidth = metrics.widthPixels.toFloat(),
+            bubbleWidth = bubblePx,
+            marginPx = marginPx,
+        ).toInt()
+        params.y = clampY(
+            currentY = endY,
+            screenHeight = metrics.heightPixels.toFloat(),
+            bubbleHeight = bubblePx,
+            topInsetPx = marginPx,
+            bottomInsetPx = marginPx,
+        ).toInt()
+        runCatching { windowManager.updateViewLayout(bubbleView, params) }
+        scope.launch {
+            bubbleSettings(this@BubbleOverlayService).savePosition(params.x.toFloat(), params.y.toFloat())
+        }
+    }
+
+    // Small X target pinned bottom-center, visible only while dragging. Its own touch
+    // listener dismisses when the dragged bubble is released over it — since the bubble
+    // window is WRAP_CONTENT the target must be its own window to receive no stray touches
+    // when idle; it is removed the moment the drag ends.
+    private fun showDismissTarget() {
+        if (dismissTargetView != null) return
+        val metrics = resources.displayMetrics
+        val view = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                BuckwheatTheme {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "dismiss bubble",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = (16 * metrics.density).toInt()
+        }
+        runCatching { windowManager.addView(view, params) }
+        dismissTargetView = view
+    }
+
+    private fun removeDismissTarget() {
+        dismissTargetView?.let { runCatching { windowManager.removeView(it) } }
+        dismissTargetView = null
+    }
+
+    private fun dismissBubble() {
+        scope.launch {
+            val params = currentParams()
+            if (params != null) {
+                bubbleSettings(this@BubbleOverlayService)
+                    .savePosition(params.x.toFloat(), params.y.toFloat())
+            }
+            removeDismissTarget()
+            removeBubbleView()
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
     companion object {
         const val ACTION_SHOW = "com.danilkinkin.buckwheat.overlay.SHOW"
         const val ACTION_HIDE = "com.danilkinkin.buckwheat.overlay.HIDE"
         private const val NOTIFICATION_ID = 410
+        private const val FLING_THRESHOLD_PX = 1.5f
     }
 }
