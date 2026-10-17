@@ -135,7 +135,9 @@ class BubbleOverlayService : Service() {
                     bubbleSettings(this@BubbleOverlayService).lastPosition().first()
                 }.getOrNull()
                 if (stopped) return@launch
-                addBubbleView(position)
+                // addView can throw (BadTokenException, or permission revoked during the
+                // DataStore read above); never let it escape the scope's default handler.
+                runCatching { addBubbleView(position) }.onFailure { stopSelfAndExit() }
             } finally {
                 bubblePending = false
             }
