@@ -180,6 +180,14 @@ class Application : Application(), Configuration.Provider {
                 description = getString(R.string.voice_widget_channel_description)
             }
             notificationManager.createNotificationChannel(voiceWidgetChannel)
+
+            val bubbleChannel = NotificationChannel(
+                "bubble_overlay",
+                getString(R.string.bubble_channel_name),
+                NotificationManager.IMPORTANCE_MIN,
+            )
+            bubbleChannel.setShowBadge(false)
+            notificationManager.createNotificationChannel(bubbleChannel)
         }
     }
 }
