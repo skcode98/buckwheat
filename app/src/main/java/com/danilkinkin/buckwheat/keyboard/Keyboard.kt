@@ -47,6 +47,7 @@ import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
 import com.danilkinkin.buckwheat.overlay.BubbleLauncher
+import com.danilkinkin.buckwheat.overlay.bubbleSettings
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
@@ -54,6 +55,7 @@ import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.util.Date
@@ -400,15 +402,18 @@ fun Keyboard(
                     .clip(CircleShape)
                     .background(colorButton)
                     .clickable {
-                        if (Settings.canDrawOverlays(context)) {
-                            BubbleLauncher.show(context)
-                        } else {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}"),
-                                ),
-                            )
+                        coroutineScope.launch {
+                            if (!bubbleSettings(context).isEnabled().first()) return@launch
+                            if (Settings.canDrawOverlays(context)) {
+                                BubbleLauncher.show(context)
+                            } else {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
                         }
                     },
                 contentAlignment = Alignment.Center,
