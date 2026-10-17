@@ -212,6 +212,10 @@
   <string name="bubble_notification_text">Voice bubble is active — tap the bubble to add a spend</string>
   <string name="bubble_save_failed">Couldn\'t save spend</string>
   <string name="bubble_dismiss">dismiss bubble</string>
+  <string name="bubble_setting_title">Floating voice bubble</string>
+  <string name="bubble_setting_description">Show a floating mic bubble over other apps to add spends by voice</string>
+  <string name="bubble_show">Show bubble</string>
+  <string name="bubble_hide">Hide bubble</string>
   <string name="voice_widget_failed">Voice input failed</string>
   <string name="voice_widget_ai_off">AI off: %1$s</string>
   <string name="theme_label">Theme</string>
