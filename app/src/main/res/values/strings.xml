@@ -211,6 +211,7 @@
   <string name="bubble_channel_name">Voice bubble</string>
   <string name="bubble_notification_text">Voice bubble is active — tap the bubble to add a spend</string>
   <string name="bubble_save_failed">Couldn\'t save spend</string>
+  <string name="bubble_dismiss">dismiss bubble</string>
   <string name="voice_widget_failed">Voice input failed</string>
   <string name="voice_widget_ai_off">AI off: %1$s</string>
   <string name="theme_label">Theme</string>
