@@ -7,7 +7,7 @@ on:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: "github.workflow-${{ github.ref }}"
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -39,4 +39,22 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo 'placeholder'
+          python3 -c "$(cat <<'PYTHON'
+          # Placeholder analysis step
+          pass
+          PYTHON
+          )"
+
+      - name: Summary stub
+        if: always()
+        run: echo "Unit tests completed"
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            app/build/test-results/
+            app/build/reports/tests/
+          if-no-files-found: ignore
