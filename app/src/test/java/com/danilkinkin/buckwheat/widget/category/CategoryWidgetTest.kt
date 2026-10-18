@@ -273,6 +273,19 @@ class CategoryWidgetTest {
     }
 
     @Test
+    fun visiblePillsKeepFullListForSmallAndMediumSizes() {
+        val pills = listOf(
+            CategoryWidgetPill("Food", "🍔", BigDecimal("100"), BigDecimal("200"), 6, false),
+            CategoryWidgetPill("Health", "❤️", BigDecimal("50"), null, 1, false),
+            CategoryWidgetPill("Travel", "✈️", BigDecimal("10"), null, 2, false),
+            CategoryWidgetPill("Bills", "🧾", BigDecimal("5"), null, 3, false),
+        )
+
+        assertEquals(pills, visibleCategoryPills(pills, CategoryWidget.smallMode))
+        assertEquals(pills, visibleCategoryPills(pills, CategoryWidget.mediumMode))
+    }
+
+    @Test
     fun effectiveDesignFallsBackToGlobalWhenOverrideBlank() {
         assertEquals(
             CategoryWidgetDesign.BATTERY.name,
