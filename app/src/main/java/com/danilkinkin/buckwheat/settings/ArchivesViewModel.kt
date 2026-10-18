@@ -36,8 +36,8 @@ class ArchivesViewModel @Inject constructor(
         list.firstOrNull { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val selectedPeriodTransactions: StateFlow<List<ArchivedTransaction>> = _selectedPeriodId.flatMapLatest { id ->
-        if (id != null) budgetPeriodDao.getTransactionsForPeriod(id) else flowOf(emptyList())
+    val selectedPeriodSpends: StateFlow<List<ArchivedTransaction>> = _selectedPeriodId.flatMapLatest { id ->
+        if (id != null) budgetPeriodDao.getSpendsForPeriod(id) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun updatePeriodDates(periodId: Int, startDate: Date, finishDate: Date) = viewModelScope.launch {
