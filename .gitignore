@@ -27,3 +27,4 @@ keystore.properties
 .opencode/plans/
 .superpowers/
 compile_output.txt
+.kotlin/
