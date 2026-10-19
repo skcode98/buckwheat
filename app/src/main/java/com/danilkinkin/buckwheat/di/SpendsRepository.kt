@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.RestedBudgetDistributionMethod
+import com.danilkinkin.buckwheat.data.normalizePeriodStart
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.util.DAY
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -215,7 +216,11 @@ class SpendsRepository @Inject constructor(
         // Also check for archived transactions (e.g. from CSV imports for past periods)
         val hasArchivedTransactions = budgetPeriodDao.getAllArchived().first()
             .any { it.type == TransactionType.SPENT }
-        val startDate = roundToDay(newStartDate ?: getCurrentDateUseCase())
+        val startDate = normalizePeriodStart(
+            newStartDate ?: getCurrentDateUseCase(),
+            newFinishDate,
+            getCurrentDateUseCase(),
+        )
         if (oldSpent > BigDecimal.ZERO || hasStoredTransactions || hasArchivedTransactions) {
             archiveCurrentPeriod(startDate)
         }
@@ -338,7 +343,11 @@ class SpendsRepository @Inject constructor(
             it[lastChangeDailyBudgetDateStoreKey] = roundToDay(getCurrentDateUseCase()).time
             it[finishPeriodDateStoreKey] = Date(roundToDay(newFinishDate).time + DAY - 1000).time
             if (newStartDate != null) {
-                it[startPeriodDateStoreKey] = roundToDay(newStartDate).time
+                it[startPeriodDateStoreKey] = normalizePeriodStart(
+                    newStartDate,
+                    newFinishDate,
+                    getCurrentDateUseCase(),
+                ).time
             }
             it.remove(finishPeriodActualDateStoreKey)
 

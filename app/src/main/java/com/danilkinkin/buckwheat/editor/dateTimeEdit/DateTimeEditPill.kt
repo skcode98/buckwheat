@@ -96,12 +96,17 @@ fun DateTimeEditPill(
     }
 
     if (isPickDate) {
+        val window = pickerWindow(
+            periodStart = startPeriodDate?.toLocalDate(),
+            periodFinish = finishPeriodDate?.toLocalDate(),
+            today = LocalDate.now(),
+        )
         DatePickerDialog(
             initDate = cachedDate.toLocalDate(),
-            disableBeforeDate = startPeriodDate?.toLocalDate(),
-            disableAfterDate = LocalDate.now(),
-            showBeforeDate = startPeriodDate?.toLocalDate(),
-            showAfterDate = finishPeriodDate?.toLocalDate(),
+            disableBeforeDate = window.disableBeforeDate,
+            disableAfterDate = window.disableAfterDate,
+            showBeforeDate = window.showBeforeDate,
+            showAfterDate = window.showAfterDate,
             onSelect = { newDate ->
                 val calendarNew = Calendar.getInstance()
                 calendarNew.time = newDate.toDate()
