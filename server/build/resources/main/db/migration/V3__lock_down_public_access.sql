@@ -1,0 +1,14 @@
+alter table families enable row level security;
+alter table members enable row level security;
+alter table invites enable row level security;
+alter table member_tokens enable row level security;
+alter table budget_periods enable row level security;
+alter table transactions enable row level security;
+alter table archived_transactions enable row level security;
+alter table family_state enable row level security;
+alter table period_limits enable row level security;
+alter table saved_categories enable row level security;
+alter table saved_tags enable row level security;
+alter table recurring_templates enable row level security;
+alter table savings_goals enable row level security;
+alter table family_settings enable row level security;

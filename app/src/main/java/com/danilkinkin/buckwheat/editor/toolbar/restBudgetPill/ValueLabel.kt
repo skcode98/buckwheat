@@ -27,7 +27,7 @@ fun ValueLabel(
         targetState = budgetState
     ) { targetState ->
         when (targetState) {
-            DaileBudgetState.NORMAL, null -> {
+            DaileBudgetState.NORMAL -> {
                 AnimatedNumber(
                     value = todayBudget,
                     style = MaterialTheme.typography.headlineLarge.copy(

@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.SyncRouteTest" tests="67" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:12:23.747Z" hostname="MSI" time="2.342">
+  <properties/>
+  <testcase name="aDepartedMembersSpendsAreNotClaimable" classname="family.sync.SyncRouteTest" time="0.095"/>
+  <testcase name="aGovernedTableHasARule" classname="family.sync.SyncRouteTest" time="0.001"/>
+  <testcase name="anArchivedTombstoneWithAnEmptyPayloadIsAccepted" classname="family.sync.SyncRouteTest" time="0.042"/>
+  <testcase name="aRejectedWriteLeavesTheStoredValueAlone" classname="family.sync.SyncRouteTest" time="0.03"/>
+  <testcase name="aTombstoneForARowTheServerNeverSawIsAcceptedAndWritesNothing" classname="family.sync.SyncRouteTest" time="0.022"/>
+  <testcase name="aMemberMayStillEditAndDeleteTheirOwnSpend" classname="family.sync.SyncRouteTest" time="0.028"/>
+  <testcase name="aTombstoneLeavesTheStoredBusinessValuesAlone" classname="family.sync.SyncRouteTest" time="0.03"/>
+  <testcase name="aMemberMayNotRecordAHouseholdExpense" classname="family.sync.SyncRouteTest" time="0.017"/>
+  <testcase name="aRecordAlreadySeenIsNotSentAgainWhenTheCursorIsAdvanced" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <testcase name="theHeadMayNotRaiseARequestThatIsAlreadyAnswered" classname="family.sync.SyncRouteTest" time="0.02"/>
+  <testcase name="anUnauthenticatedSyncIsRejected" classname="family.sync.SyncRouteTest" time="0.006"/>
+  <testcase name="aRecordPushedByOneMemberIsReadableByTheOther" classname="family.sync.SyncRouteTest" time="0.025"/>
+  <testcase name="aBucketIsOneOfTheTwoItIsAllowedToBe" classname="family.sync.SyncRouteTest" time="0.001"/>
+  <testcase name="theTargetMayNotAimTheirOwnRequestSomewhereElse" classname="family.sync.SyncRouteTest" time="0.037"/>
+  <testcase name="theTargetMayNotRestateTheAmountWhileAnswering" classname="family.sync.SyncRouteTest" time="0.032"/>
+  <testcase name="theHeadMayNotRaiseARequestAimedAtThemselves" classname="family.sync.SyncRouteTest" time="0.021"/>
+  <testcase name="nobodyMayDeleteARequestThatHasBeenAnswered" classname="family.sync.SyncRouteTest" time="0.047"/>
+  <testcase name="aDifferentFamilyCannotSeeTheRecord" classname="family.sync.SyncRouteTest" time="0.035"/>
+  <testcase name="aMemberMayNotForgeAnAnsweredRequestAimedAtThemselves" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <testcase name="anUnknownTableIsRejected" classname="family.sync.SyncRouteTest" time="0.019"/>
+  <testcase name="theSurvivorCanActuallySetThePoolAfterwards" classname="family.sync.SyncRouteTest" time="0.039"/>
+  <testcase name="aMemberMayNotDeleteARequestTheyAlreadyAnswered" classname="family.sync.SyncRouteTest" time="0.035"/>
+  <testcase name="aMemberMayNotDeleteThePoolOrTheSplit" classname="family.sync.SyncRouteTest" time="0.058"/>
+  <testcase name="aRequestStatusIsOneOfTheThreeItIsAllowedToBe" classname="family.sync.SyncRouteTest" time="0.0"/>
+  <testcase name="aCrossFamilyCollisionDoesNotSinkTheRestOfTheBatch" classname="family.sync.SyncRouteTest" time="0.056"/>
+  <testcase name="aMalformedChangeStopsTheBatchBeforeAnythingIsWritten" classname="family.sync.SyncRouteTest" time="0.025"/>
+  <testcase name="aRecordCannotBeOverwrittenByAnotherFamily" classname="family.sync.SyncRouteTest" time="0.045"/>
+  <testcase name="aRequestAndItsAnswerRoundTrip" classname="family.sync.SyncRouteTest" time="0.031"/>
+  <testcase name="aTagWithNoMemberColumnCarriesNoMember" classname="family.sync.SyncRouteTest" time="0.022"/>
+  <testcase name="aPushedRecordIsAcceptedAndComesBack" classname="family.sync.SyncRouteTest" time="0.024"/>
+  <testcase name="aMemberMayStillRecordAnOrdinarySpend" classname="family.sync.SyncRouteTest" time="0.018"/>
+  <testcase name="pullingTheSameWindowTwiceReturnsTheSameRecord" classname="family.sync.SyncRouteTest" time="0.03"/>
+  <testcase name="anOwnerMayAllocateASliceAndItRoundTrips" classname="family.sync.SyncRouteTest" time="0.022"/>
+  <testcase name="aMemberMayNotReallocateSomebodyElsesSlice" classname="family.sync.SyncRouteTest" time="0.016"/>
+  <testcase name="theLastMemberLeavingIsNotAnError" classname="family.sync.SyncRouteTest" time="0.021"/>
+  <testcase name="theCursorStaysPutWhenThereIsNothingToPull" classname="family.sync.SyncRouteTest" time="0.018"/>
+  <testcase name="theTargetMayAnswerTheirOwnRequest" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <testcase name="nobodyElseMayAnswerARequest" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <testcase name="aMemberMayNotPromoteAPersonalSpendIntoTheHouseholdTier" classname="family.sync.SyncRouteTest" time="0.024"/>
+  <testcase name="anAnsweredRequestCannotBeAnsweredAgain" classname="family.sync.SyncRouteTest" time="0.032"/>
+  <testcase name="aNumericPostgresWouldRejectIsRejected" classname="family.sync.SyncRouteTest" time="0.02"/>
+  <testcase name="anOversizedCommentIsRejected" classname="family.sync.SyncRouteTest" time="0.018"/>
+  <testcase name="anOwnerMaySetThePool" classname="family.sync.SyncRouteTest" time="0.025"/>
+  <testcase name="theCursorAdvancesToTheSeqOfTheRecordsItSent" classname="family.sync.SyncRouteTest" time="0.025"/>
+  <testcase name="anOrdinaryMemberLeavingDoesNotChangeWhoTheHeadIs" classname="family.sync.SyncRouteTest" time="0.038"/>
+  <testcase name="theHeadMayRaiseARequestForSomebodyElse" classname="family.sync.SyncRouteTest" time="0.032"/>
+  <testcase name="theEarliestRemainingMemberIsPromotedWhenTheHeadLeaves" classname="family.sync.SyncRouteTest" time="0.039"/>
+  <testcase name="aStaleWriteIsRejectedAndNamesTheWinner" classname="family.sync.SyncRouteTest" time="0.031"/>
+  <testcase name="thePoolRoundTrips" classname="family.sync.SyncRouteTest" time="0.03"/>
+  <testcase name="aMemberMayNotRaiseARequest" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <testcase name="aPullIsCappedAndPagesUntilNothingIsLeft" classname="family.sync.SyncRouteTest" time="0.494"/>
+  <testcase name="aStaleWriteFromAnotherMemberIsRefusedForBeingTheirs" classname="family.sync.SyncRouteTest" time="0.033"/>
+  <testcase name="aMemberMayNotOverwriteOrDeleteSomebodyElsesSpend" classname="family.sync.SyncRouteTest" time="0.041"/>
+  <testcase name="aMemberMayNotDeleteAHouseholdExpense" classname="family.sync.SyncRouteTest" time="0.033"/>
+  <testcase name="aSavingsGoalNameSurvivesTheRoundTrip" classname="family.sync.SyncRouteTest" time="0.035"/>
+  <testcase name="aTombstoneWithAnEmptyPayloadIsAccepted" classname="family.sync.SyncRouteTest" time="0.03"/>
+  <testcase name="aMemberMayNotSetThePool" classname="family.sync.SyncRouteTest" time="0.021"/>
+  <testcase name="aSavingsGoalWithoutANameIsRejected" classname="family.sync.SyncRouteTest" time="0.023"/>
+  <testcase name="everyGovernedTableIsLookedUp" classname="family.sync.SyncRouteTest" time="0.001"/>
+  <testcase name="aTombstoneForATagTheServerNeverSawIsAcceptedAndWritesNothing" classname="family.sync.SyncRouteTest" time="0.029"/>
+  <testcase name="aSavingsGoalNameReachesTheOtherMember" classname="family.sync.SyncRouteTest" time="0.027"/>
+  <testcase name="thePayloadSurvivesTheRoundTrip" classname="family.sync.SyncRouteTest" time="0.024"/>
+  <testcase name="anOwnerMayRecordAHouseholdExpense" classname="family.sync.SyncRouteTest" time="0.023"/>
+  <testcase name="aMemberMayNotRewriteAHouseholdExpenseAsAPersonalOne" classname="family.sync.SyncRouteTest" time="0.029"/>
+  <testcase name="anUnknownTransactionTypeIsRejected" classname="family.sync.SyncRouteTest" time="0.023"/>
+  <testcase name="aTombstoneIsStoredAndReturned" classname="family.sync.SyncRouteTest" time="0.035"/>
+  <testcase name="aTargetMayNotPushTheirOwnRequestBackToPending" classname="family.sync.SyncRouteTest" time="0.026"/>
+  <system-out><![CDATA[06:42:23.754 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.755 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.755 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.755 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.846 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.847 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.847 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.847 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.888 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.889 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.889 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.889 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.918 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.920 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:23.920 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.920 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.939 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.940 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.941 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.941 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.969 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.970 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.970 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.970 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:23.997 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:23.998 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:23.998 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:23.998 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.014 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.015 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.015 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.016 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.041 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.042 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.042 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.042 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.060 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.062 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.062 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.062 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.066 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.068 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.072 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.072 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.093 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.094 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.094 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.094 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.131 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.132 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.137 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.137 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.163 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.164 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.165 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.165 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.185 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.188 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:42:24.188 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.188 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.231 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.232 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.232 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.232 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.266 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.268 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:42:24.268 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.268 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.292 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.293 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.294 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.294 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.311 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.312 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.312 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.312 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.352 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.353 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.354 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.354 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.388 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.389 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.389 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.390 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.443 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.444 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.444 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.445 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.499 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.501 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.501 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.501 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.524 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.525 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.526 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.526 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.570 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.571 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.571 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.572 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.601 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.603 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:42:24.604 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.604 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.622 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.623 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.624 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.624 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.646 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.647 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.647 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.647 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.664 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.665 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.666 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.666 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.693 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.694 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.694 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.694 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.716 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.717 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.719 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.719 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.732 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.732 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.734 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.734 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.754 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.754 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.755 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.755 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.771 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.773 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.773 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.773 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.797 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.798 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.798 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.798 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.823 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.824 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.824 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.824 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.847 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.848 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.849 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.849 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.879 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.880 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.880 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.880 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.899 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.901 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.905 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.905 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.919 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.920 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.923 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.923 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.943 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.944 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:24.944 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.944 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:24.968 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:24.970 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:24.973 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:24.973 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.007 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.009 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.009 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.009 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.038 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.040 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.040 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.040 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.076 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.077 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.081 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.081 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.107 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.108 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.108 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.109 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.138 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.140 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.140 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.140 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.163 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.164 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.165 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.165 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.657 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.658 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.658 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.658 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.691 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.692 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.692 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.692 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.731 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.732 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.733 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.733 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.765 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.766 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.769 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.769 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.800 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.802 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:42:25.803 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.803 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.829 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.830 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.832 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.833 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.850 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.852 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.853 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.853 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.875 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.877 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.877 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.877 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.905 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.906 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:25.906 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.906 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.931 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.932 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.933 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.933 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.956 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.957 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.958 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.958 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:25.979 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:25.980 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:25.980 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:25.980 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:26.008 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:26.010 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:42:26.010 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:26.010 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:26.031 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:26.032 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:42:26.033 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:26.033 INFO  io.ktor.test - Responding at https://localhost:443
+06:42:26.066 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:42:26.068 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:42:26.068 INFO  io.ktor.test - Responding at http://localhost:80
+06:42:26.068 INFO  io.ktor.test - Responding at https://localhost:443
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

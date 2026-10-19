@@ -1,0 +1,12 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava NO-SOURCE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :startScripts
+> Task :installDist
+
+BUILD SUCCESSFUL in 7s
+5 actionable tasks: 2 executed, 3 up-to-date
+EXITCODE=0 

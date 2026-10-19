@@ -31,8 +31,8 @@ const val FINISH_DATE_SELECTOR_SHEET = "finishDateSelector"
 
 /**
  * Default bounds for the date picker when a caller does not constrain them.
- * Enables selecting a period start up to two months in the past and a finish
- * up to two months ahead.
+ * Enables selecting a period start up to two months earlier and a finish up to
+ * two months later than today, so short and slightly back-dated periods stay editable.
  */
 internal fun defaultPickerWindow(now: LocalDate = LocalDate.now()): Pair<Date, Date> {
     return Pair(
@@ -62,6 +62,8 @@ fun FinishDateSelector(
                 selectDate = selectDate,
                 disableBeforeDate = disableBeforeDate ?: pickerBefore,
                 disableAfterDate = disableAfterDate ?: pickerAfter,
+                showBeforeDate = disableBeforeDate ?: pickerBefore,
+                showAfterDate = disableAfterDate ?: pickerAfter,
             )
         }
 

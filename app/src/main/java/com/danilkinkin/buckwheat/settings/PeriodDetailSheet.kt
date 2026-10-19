@@ -49,8 +49,8 @@ import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.PathState
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
-import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
+import com.danilkinkin.buckwheat.history.categoryLabelFor
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.wallet.FINISH_DATE_SELECTOR_SHEET
@@ -68,7 +68,7 @@ fun PeriodDetailSheet(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val period by archivesViewModel.selectedPeriod.collectAsStateWithLifecycle()
-    val transactions by archivesViewModel.selectedPeriodTransactions.collectAsStateWithLifecycle()
+    val spends by archivesViewModel.selectedPeriodSpends.collectAsStateWithLifecycle()
     val allCategories by categoriesManagementViewModel.allCategories.collectAsStateWithLifecycle()
     val categoryEmojis = remember(allCategories) {
         allCategories.associate { it.name to it.emoji }
@@ -139,7 +139,6 @@ fun PeriodDetailSheet(
                         .padding(bottom = navigationBarHeight),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                 ) {
-                    val spends = transactions.filter { it.type == TransactionType.SPENT }
                     val summarySpends = spends.map { it.toTransaction() }
 
                     item {
@@ -215,10 +214,11 @@ fun PeriodDetailSheet(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    items(transactions, key = { it.uid }) { tx ->
+                    items(spends, key = { it.uid }) { tx ->
                         ArchivedTransactionItem(
                             transaction = tx,
                             currency = currency,
+                            categoryEmojis = categoryEmojis,
                         )
                         Divider()
                     }
@@ -309,12 +309,22 @@ private fun PeriodBudgetEditor(
     }
 }
 
+// Display label for an archived spend row: its comment, or the category name when the comment is
+// blank, so no spend row renders as an unnamed date+value pair. Mirrors the main History timeline.
+internal fun archivedSpendLabel(comment: String, categoryLabel: String?): String =
+    comment.ifBlank { categoryLabel.orEmpty() }
+
 @Composable
 private fun ArchivedTransactionItem(
     transaction: ArchivedTransaction,
     currency: ExtendCurrency,
+    categoryEmojis: Map<String, String>,
 ) {
     val context = LocalContext.current
+    val label = archivedSpendLabel(
+        transaction.comment,
+        categoryLabelFor(context, transaction.toTransaction(), categoryEmojis)?.second,
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -327,9 +337,9 @@ private fun ArchivedTransactionItem(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
-            if (transaction.comment.isNotEmpty()) {
+            if (label.isNotEmpty()) {
                 Text(
-                    text = transaction.comment,
+                    text = label,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }

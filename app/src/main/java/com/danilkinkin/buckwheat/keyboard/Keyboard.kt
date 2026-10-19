@@ -3,7 +3,9 @@ package com.danilkinkin.buckwheat.keyboard
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -44,6 +46,8 @@ import com.danilkinkin.buckwheat.di.TUTORS
 import com.danilkinkin.buckwheat.editor.EditMode
 import com.danilkinkin.buckwheat.editor.EditStage
 import com.danilkinkin.buckwheat.editor.EditorViewModel
+import com.danilkinkin.buckwheat.overlay.BubbleLauncher
+import com.danilkinkin.buckwheat.overlay.bubbleSettings
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.colorButton
 import com.danilkinkin.buckwheat.util.getFloatDivider
@@ -51,6 +55,7 @@ import com.danilkinkin.buckwheat.util.join
 import com.danilkinkin.buckwheat.util.parseAmountToBigDecimal
 import com.danilkinkin.buckwheat.util.prettyDate
 import com.danilkinkin.buckwheat.util.tryConvertStringToNumber
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.util.Date
@@ -387,6 +392,36 @@ fun Keyboard(
                     contentDescription = strVoiceInput,
                     tint = if (isListening) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(colorButton)
+                    .clickable {
+                        coroutineScope.launch {
+                            if (!bubbleSettings(context).isEnabled().first()) return@launch
+                            if (Settings.canDrawOverlays(context)) {
+                                BubbleLauncher.show(context)
+                            } else {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_widgets),
+                    contentDescription = stringResource(R.string.bubble_setting_title),
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp),
                 )
             }

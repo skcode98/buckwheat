@@ -27,6 +27,7 @@ import com.danilkinkin.buckwheat.data.categories.CategoryKey
 import com.danilkinkin.buckwheat.data.categories.transactionMatchesCategory
 import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
 import com.danilkinkin.buckwheat.data.entities.Transaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.data.entities.toTransaction
 import com.danilkinkin.buckwheat.di.TUTORIAL_STAGE
 import com.danilkinkin.buckwheat.di.TUTORS
@@ -37,6 +38,7 @@ import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.util.numberFormat
 import com.danilkinkin.buckwheat.util.toLocalDate
+import androidx.compose.runtime.derivedStateOf
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,7 +72,6 @@ fun History(
         allCategories.associate { it.name to it.emoji }
     }
 
-    var historyList by remember { mutableStateOf<List<RowEntity>>(emptyList()) }
     val budget = spendsViewModel.budget.collectAsStateWithLifecycle()
     val currency = spendsViewModel.currency.collectAsStateWithLifecycle()
     val startPeriodDate = spendsViewModel.startPeriodDate.collectAsStateWithLifecycle()
@@ -83,10 +84,10 @@ fun History(
     val periodSpends by spendsViewModel.periodSpends.collectAsStateWithLifecycle()
     val archivedTransactions by spendsViewModel.archivedTransactions.collectAsStateWithLifecycle()
 
-    LaunchedEffect(searchQuery, onlyDay, onlyCategoryKey, allSpends, periodSpends, archivedTransactions) {
-        val sourceSpends = if (onlyCategoryKey != null && showAllPeriods) allSpends else periodSpends
-        historyList = loadHistoryRows(
-            dispatcher = Dispatchers.Default,
+    val sourceSpends = if (onlyCategoryKey != null && showAllPeriods) allSpends else periodSpends
+
+    val historyList = derivedStateOf {
+        loadHistoryRowsSync(
             periodSpends = sourceSpends,
             archivedTransactions = archivedTransactions,
             searchQuery = searchQuery,
@@ -102,7 +103,7 @@ fun History(
         onDispose {
             appViewModel.lockSwipeable.value = false
 
-            if (historyList.isNotEmpty() && isUserTrySwipe) {
+            if (historyList.value.isNotEmpty() && isUserTrySwipe) {
                 appViewModel.passTutorial(TUTORS.SWIPE_EDIT_SPENT)
             }
 
@@ -114,7 +115,7 @@ fun History(
         animationSpec = TweenSpec(250),
     )
 
-    val animatedList = updateAnimatedItemsState(newList = historyList)
+    val animatedList = updateAnimatedItemsState(newList = historyList.value)
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -215,7 +216,7 @@ fun History(
                 }
             }
 
-            if (historyList.isEmpty()) {
+            if (historyList.value.isEmpty()) {
                 NoSpends(Modifier.weight(1f))
             }
         }
@@ -270,29 +271,33 @@ internal fun composeHistoryRows(
 
     val entries = buildList {
         periodSpends.forEach { tx ->
-            add(
-                HistoryEntry(
-                    "spent-${tx.uid}",
-                    tx.date,
-                    toDay(tx.date),
-                    tx.value,
-                    tx.comment,
-                    tx,
-                )
-            )
-        }
-        if (searching || onlyCategoryKey != null) {
-            archivedTransactions.forEach { tx ->
+            if (tx.type == TransactionType.SPENT) {
                 add(
                     HistoryEntry(
-                        "spent-archived-${tx.uid}",
+                        "spent-${tx.uid}",
                         tx.date,
                         toDay(tx.date),
                         tx.value,
                         tx.comment,
-                        tx.toTransaction(),
+                        tx,
                     )
                 )
+            }
+        }
+        if (searching || onlyCategoryKey != null) {
+            archivedTransactions.forEach { tx ->
+                if (tx.type == TransactionType.SPENT) {
+                    add(
+                        HistoryEntry(
+                            "spent-archived-${tx.uid}",
+                            tx.date,
+                            toDay(tx.date),
+                            tx.value,
+                            tx.comment,
+                            tx.toTransaction(),
+                        )
+                    )
+                }
             }
         }
     }.filter { entry ->
@@ -319,6 +324,24 @@ internal fun composeHistoryRows(
     }.reversed()
 }
 
+internal fun loadHistoryRowsSync(
+    periodSpends: List<Transaction>,
+    archivedTransactions: List<ArchivedTransaction>,
+    searchQuery: String,
+    onlyDay: LocalDate? = null,
+    onlyCategoryKey: CategoryKey? = null,
+    toDay: (Date) -> LocalDate = { it.toLocalDate() },
+): List<RowEntity> {
+    return composeHistoryRows(
+        periodSpends = periodSpends,
+        archivedTransactions = archivedTransactions,
+        searchQuery = searchQuery,
+        onlyDay = onlyDay,
+        onlyCategoryKey = onlyCategoryKey,
+        toDay = toDay,
+    )
+}
+
 internal suspend fun loadHistoryRows(
     dispatcher: CoroutineDispatcher,
     periodSpends: List<Transaction>,
@@ -328,7 +351,7 @@ internal suspend fun loadHistoryRows(
     onlyCategoryKey: CategoryKey? = null,
     toDay: (Date) -> LocalDate = { it.toLocalDate() },
 ): List<RowEntity> = withContext(dispatcher) {
-    composeHistoryRows(
+    loadHistoryRowsSync(
         periodSpends = periodSpends,
         archivedTransactions = archivedTransactions,
         searchQuery = searchQuery,

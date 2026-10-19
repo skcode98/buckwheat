@@ -57,6 +57,7 @@ import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.base.LocalBottomSheetScrollState
 import com.danilkinkin.buckwheat.data.ExtendCurrency
 import com.danilkinkin.buckwheat.data.categories.SpendCategory
+import com.danilkinkin.buckwheat.data.categories.categoryCapPercent
 import com.danilkinkin.buckwheat.editor.category.categoryDisplayName
 import com.danilkinkin.buckwheat.history.SwipeActions
 import com.danilkinkin.buckwheat.history.SwipeActionsConfig
@@ -211,7 +212,7 @@ private fun CategoryCapCard(
 
     val hasCap = cap != null && cap > BigDecimal.ZERO
     val fraction = if (hasCap) (spent.toFloat() / cap!!.toFloat()).coerceIn(0f, 1f) else 0f
-    val fractionDisplay = (fraction * 100).toInt()
+    val capPercent = if (hasCap) categoryCapPercent(spent, cap!!) else 0
 
     Card(
         shape = swipeAnimatedCardShape(state),
@@ -285,7 +286,7 @@ private fun CategoryCapCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "$fractionDisplay% ${stringResource(R.string.category_caps_used)}",
+                        text = "$capPercent% ${stringResource(R.string.category_caps_used)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

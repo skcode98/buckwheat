@@ -126,27 +126,30 @@ class BudgetCalculator @Inject constructor(
 
         var restBudget = budget - spent
 
+        // Cap skippedDays at restDays to prevent negative "not spent" when skippedDays > restDays
+        val effectiveSkippedDays = minOf(skippedDays, restDays)
+
         val howMuchNotSpent = if (restDays == 0) {
             restBudget - spentFromDailyBudget
         } else if (excludeSkippedPart) {
             restBudget
-                .minus(dailyBudget * skippedDays.toBigDecimal())
+                .minus(dailyBudget * effectiveSkippedDays.toBigDecimal())
                 .divide(
                     (restDays).coerceAtLeast(1).toBigDecimal(),
                     2,
                     RoundingMode.HALF_EVEN,
                 )
-                .multiply((skippedDays).coerceAtLeast(0).toBigDecimal())
+                .multiply((effectiveSkippedDays).coerceAtLeast(0).toBigDecimal())
                 .plus(dailyBudget - spentFromDailyBudget)
         } else {
             restBudget
                 .minus(dailyBudget)
                 .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
+                    (restDays + effectiveSkippedDays - 1).coerceAtLeast(1).toBigDecimal(),
                     2,
                     RoundingMode.HALF_EVEN,
                 )
-                .multiply((skippedDays).coerceAtLeast(0).toBigDecimal())
+                .multiply((effectiveSkippedDays).coerceAtLeast(0).toBigDecimal())
                 .plus(dailyBudget - spentFromDailyBudget)
         }
 
@@ -157,6 +160,7 @@ class BudgetCalculator @Inject constructor(
                     + "rest budget: $restBudget "
                     + "restDays: $restDays "
                     + "skippedDays: $skippedDays "
+                    + "effectiveSkippedDays: $effectiveSkippedDays "
                     + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
                     + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
                     + "dailyBudget: $dailyBudget "
@@ -188,11 +192,14 @@ class BudgetCalculator @Inject constructor(
 
         var restBudget = budget - spent
 
+        // Cap skippedDays at restDays to prevent negative daily budget when skippedDays > restDays
+        val effectiveSkippedDays = minOf(skippedDays, restDays)
+
         val nextDailyBudget = if (restDays == 0) {
             restBudget - spentFromDailyBudget
         } else if (excludeSkippedPart) {
             restBudget
-                .minus(dailyBudget * skippedDays.toBigDecimal())
+                .minus(dailyBudget * effectiveSkippedDays.toBigDecimal())
                 .divide(
                     (restDays).coerceAtLeast(1).toBigDecimal(),
                     2,
@@ -202,7 +209,7 @@ class BudgetCalculator @Inject constructor(
             restBudget
                 .minus(dailyBudget)
                 .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
+                    (restDays + effectiveSkippedDays - 1).coerceAtLeast(1).toBigDecimal(),
                     2,
                     RoundingMode.HALF_EVEN,
                 )
@@ -215,6 +222,7 @@ class BudgetCalculator @Inject constructor(
                     + "rest budget: $restBudget "
                     + "restDays: $restDays "
                     + "skippedDays: $skippedDays "
+                    + "effectiveSkippedDays: $effectiveSkippedDays "
                     + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
                     + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
                     + "dailyBudget: $dailyBudget "
@@ -243,17 +251,20 @@ class BudgetCalculator @Inject constructor(
         ).coerceAtLeast(0) - 1
         val restBudget = budget - spent
 
+        // Cap skippedDays at restDays to prevent negative saved when skippedDays > restDays
+        val effectiveSkippedDays = minOf(skippedDays, restDays)
+
         val howMuchSaved = if (restDays == 0) {
             restBudget - spentFromDailyBudget
         } else {
             restBudget
                 .minus(dailyBudget)
                 .divide(
-                    (restDays + skippedDays - 1).coerceAtLeast(1).toBigDecimal(),
+                    (restDays + effectiveSkippedDays - 1).coerceAtLeast(1).toBigDecimal(),
                     2,
                     RoundingMode.HALF_EVEN,
                 )
-                .multiply((skippedDays - 1).coerceAtLeast(0).toBigDecimal())
+                .multiply((effectiveSkippedDays - 1).coerceAtLeast(0).toBigDecimal())
                 .plus(dailyBudget - spentFromDailyBudget)
         }
 
@@ -264,6 +275,7 @@ class BudgetCalculator @Inject constructor(
                     + "rest budget: $restBudget "
                     + "restDays: $restDays "
                     + "skippedDays: $skippedDays "
+                    + "effectiveSkippedDays: $effectiveSkippedDays "
                     + "lastChangeDailyBudgetDate: $lastChangeDailyBudgetDate "
                     + "getCurrentDateUseCase: ${getCurrentDateUseCase()} "
                     + "dailyBudget: $dailyBudget "

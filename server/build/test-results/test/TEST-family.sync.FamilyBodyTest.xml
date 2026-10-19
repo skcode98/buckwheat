@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.FamilyBodyTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:11:20.284Z" hostname="MSI" time="20.359">
+  <properties/>
+  <testcase name="createRejectsAMalformedBodyWithBadRequest" classname="family.sync.FamilyBodyTest" time="17.565"/>
+  <testcase name="joinRejectsAMissingDisplayNameField" classname="family.sync.FamilyBodyTest" time="0.169"/>
+  <testcase name="aRejectedBodyCreatesNoFamily" classname="family.sync.FamilyBodyTest" time="0.17"/>
+  <testcase name="joinRejectsABodyThatIsNotAJsonObject" classname="family.sync.FamilyBodyTest" time="0.187"/>
+  <testcase name="joinRejectsAMalformedBodyWithBadRequest" classname="family.sync.FamilyBodyTest" time="0.152"/>
+  <testcase name="aRejectedBodyNeverConsumesTheInvite" classname="family.sync.FamilyBodyTest" time="0.202"/>
+  <testcase name="anAbsurdlyLongInviteCodeIsRefused" classname="family.sync.FamilyBodyTest" time="0.144"/>
+  <testcase name="joinRejectsANonStringCodeField" classname="family.sync.FamilyBodyTest" time="0.157"/>
+  <testcase name="anOversizedJoinBodyIsRefusedBeforeItCanClaimAnInvite" classname="family.sync.FamilyBodyTest" time="0.194"/>
+  <testcase name="anAbsurdlyLongDisplayNameIsRefused" classname="family.sync.FamilyBodyTest" time="0.167"/>
+  <testcase name="joinRejectsABlankCodeField" classname="family.sync.FamilyBodyTest" time="0.161"/>
+  <testcase name="joinRejectsAnEmptyBodyWithBadRequest" classname="family.sync.FamilyBodyTest" time="0.172"/>
+  <testcase name="aBodyOverTheCapIsRefusedAsTooLarge" classname="family.sync.FamilyBodyTest" time="0.163"/>
+  <testcase name="joinRejectsAMissingCodeField" classname="family.sync.FamilyBodyTest" time="0.201"/>
+  <testcase name="aBodyInsideTheCapIsStillAccepted" classname="family.sync.FamilyBodyTest" time="0.177"/>
+  <testcase name="aDisplayNameAtTheLimitIsAccepted" classname="family.sync.FamilyBodyTest" time="0.185"/>
+  <testcase name="createRejectsABodyThatIsNotAJsonObject" classname="family.sync.FamilyBodyTest" time="0.19"/>
+  <system-out><![CDATA[06:41:20.854 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Detected a Windows x86_64 system
+06:41:20.864 INFO  i.z.t.d.p.e.DefaultPostgresBinaryResolver - Detected distribution: 'Unknown'
+06:41:20.867 INFO  i.z.t.d.p.e.DefaultPostgresBinaryResolver - System specific postgres binaries found: 'postgres-windows-x86_64.txz'
+06:41:21.078 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Postgres binaries at C:\Users\suraj\AppData\Local\Temp\embedded-pg\PG-b95a81b3f867f51765631fc19cc132c3
+06:41:22.112 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The files belonging to this database system will be owned by user "suraj".
+06:41:22.113 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - This user must also own the server process.
+06:41:22.113 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:22.351 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The database cluster will be initialized with locale "English_India.1252".
+06:41:22.352 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - The default text search configuration will be set to "english".
+06:41:22.352 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:22.352 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Data page checksums are disabled.
+06:41:22.352 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:22.353 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - fixing permissions on existing directory C:/Users/suraj/AppData/Local/Temp/epg6423858842969978040 ... ok
+06:41:22.368 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating subdirectories ... ok
+06:41:22.370 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting dynamic shared memory implementation ... windows
+06:41:22.493 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default max_connections ... 100
+06:41:22.587 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default shared_buffers ... 128MB
+06:41:22.605 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - selecting default time zone ... Asia/Calcutta
+06:41:22.614 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - creating configuration files ... ok
+06:41:24.619 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - running bootstrap script ... ok
+06:41:29.540 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - performing post-bootstrap initialization ... ok
+06:41:34.363 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - syncing data to disk ... ok
+06:41:34.363 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:34.363 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - Success. You can now start the database server using:
+06:41:34.363 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:34.363 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -     ^"C^:^\Users^\suraj^\AppData^\Local^\Temp^\embedded^-pg^\PG^-b95a81b3f867f51765631fc19cc132c3^\bin^\pg^_ctl^" -D ^"C^:^\Users^\suraj^\AppData^\Local^\Temp^\epg6423858842969978040^" -l logfile start
+06:41:34.364 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 
+06:41:34.368 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 8bd0c421-cedc-44c5-859e-0cf9e0854327 initdb completed in 00:00:13.284
+06:41:34.382 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 8bd0c421-cedc-44c5-859e-0cf9e0854327 postmaster started as Process[pid=9992, exitValue="not exited"] on port 65344.  Waiting up to PT10S for server startup to finish.
+06:41:34.562 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - waiting for server to start....2026-10-03 06:41:34.563 IST [12004] LOG:  starting PostgreSQL 14.15, compiled by Visual C++ build 1942, 64-bit
+06:41:34.568 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:41:34.568 IST [12004] LOG:  listening on IPv6 address "::1", port 65344
+06:41:34.568 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:41:34.568 IST [12004] LOG:  listening on IPv4 address "127.0.0.1", port 65344
+06:41:34.625 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:41:34.626 IST [5716] LOG:  database system was shut down at 2026-10-03 06:41:29 IST
+06:41:34.696 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 2026-10-03 06:41:34.697 IST [12004] LOG:  database system is ready to accept connections
+06:41:34.703 INFO  i.z.t.d.p.embedded.EmbeddedPostgres -  done
+06:41:34.703 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - server started
+06:41:34.854 INFO  i.z.t.d.p.embedded.EmbeddedPostgres - 8bd0c421-cedc-44c5-859e-0cf9e0854327 postmaster startup finished in 00:00:00.478
+06:41:34.864 WARN  com.zaxxer.hikari.HikariConfig - HikariPool-1 - idleTimeout is close to or more than maxLifetime, disabling it.
+06:41:34.866 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+06:41:34.933 INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+06:41:35.543 INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://localhost:65344/postgres?user=postgres (PostgreSQL 14.15)
+06:41:35.619 INFO  o.f.c.i.s.JdbcTableSchemaHistory - Schema history table "public"."flyway_schema_history" does not exist yet
+06:41:35.627 INFO  o.f.core.internal.command.DbValidate - Successfully validated 5 migrations (execution time 00:00.033s)
+06:41:35.651 INFO  o.f.c.i.s.JdbcTableSchemaHistory - Creating Schema History table "public"."flyway_schema_history" ...
+06:41:35.803 INFO  o.f.core.internal.command.DbMigrate - Current version of schema "public": << Empty Schema >>
+06:41:35.858 INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "1 - initial schema"
+06:41:36.222 INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "2 - savings goals name"
+06:41:36.241 INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "3 - lock down public access"
+06:41:36.270 INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "4 - index saved names by family"
+06:41:36.301 INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "5 - family pool and assignments"
+06:41:36.389 INFO  o.f.core.internal.command.DbMigrate - Successfully applied 5 migrations to schema "public", now at version v5 (execution time 00:00.424s)
+06:41:37.482 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:37.611 INFO  io.ktor.test - Application started in 0.147 seconds.
+06:41:37.614 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:37.615 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.007 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.009 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:38.010 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.010 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.172 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.176 INFO  io.ktor.test - Application started in 0.005 seconds.
+06:41:38.177 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.177 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.351 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.352 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:38.353 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.353 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.519 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.520 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:38.521 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.521 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.684 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.685 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:38.686 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.686 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:38.867 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:38.868 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:38.869 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:38.869 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.022 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.025 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:41:39.026 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.026 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.182 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.184 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:39.184 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.184 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.383 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.384 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:39.385 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.385 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.548 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.549 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:41:39.550 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.550 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.717 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.719 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:39.719 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.719 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:39.880 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:39.882 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:39.882 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:39.882 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:40.084 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:40.086 INFO  io.ktor.test - Application started in 0.002 seconds.
+06:41:40.086 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:40.086 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:40.250 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:40.251 INFO  io.ktor.test - Application started in 0.001 seconds.
+06:41:40.252 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:40.252 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:40.431 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:40.434 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:41:40.434 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:40.434 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:40.633 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:40.635 INFO  io.ktor.test - Application started in 0.003 seconds.
+06:41:40.635 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:40.636 INFO  io.ktor.test - Responding at https://localhost:443
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

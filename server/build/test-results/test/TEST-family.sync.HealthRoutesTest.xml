@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="family.sync.HealthRoutesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-03T01:11:44.178Z" hostname="MSI" time="0.086">
+  <properties/>
+  <testcase name="healthReportsOkWhenReachedRepeatedly" classname="family.sync.HealthRoutesTest" time="0.034"/>
+  <testcase name="healthStillAnswersUnderATightRequestBodyCap" classname="family.sync.HealthRoutesTest" time="0.029"/>
+  <testcase name="healthReportsOk" classname="family.sync.HealthRoutesTest" time="0.022"/>
+  <system-out><![CDATA[06:41:44.190 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:44.196 INFO  io.ktor.test - Application started in 0.008 seconds.
+06:41:44.197 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:44.197 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:44.225 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:44.232 INFO  io.ktor.test - Application started in 0.007 seconds.
+06:41:44.232 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:44.232 INFO  io.ktor.test - Responding at https://localhost:443
+06:41:44.249 INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+06:41:44.253 INFO  io.ktor.test - Application started in 0.005 seconds.
+06:41:44.254 INFO  io.ktor.test - Responding at http://localhost:80
+06:41:44.256 INFO  io.ktor.test - Responding at https://localhost:443
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

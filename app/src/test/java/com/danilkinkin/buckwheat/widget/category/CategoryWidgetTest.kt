@@ -104,6 +104,27 @@ class CategoryWidgetTest {
     }
 
     @Test
+    fun overCapCategoriesReportRealPercentAndSortAboveAtCapOnes() {
+        val rows = categoryWidgetRows(
+            spends = listOf(
+                spent(1, "250", "FOOD"), // cap 100 -> 250%
+                spent(2, "100", "HEALTH"), // cap 100 -> 100%
+            ),
+            caps = mapOf("FOOD" to BigDecimal("100"), "HEALTH" to BigDecimal("100")),
+        )
+
+        val food = rows.single { (it.key as CategoryKey.BuiltIn).category == SpendCategory.FOOD }
+        val health = rows.single { (it.key as CategoryKey.BuiltIn).category == SpendCategory.HEALTH }
+        assertEquals(250, food.percent)
+        assertEquals(100, health.percent)
+        assertEquals(1f, food.fraction, 0.001f)
+        assertEquals(
+            listOf("FOOD", "HEALTH"),
+            rows.map { (it.key as CategoryKey.BuiltIn).category.name },
+        )
+    }
+
+    @Test
     fun maxRowsTruncatesKeepingTheOrder() {
         val rows = categoryWidgetRows(
             spends = listOf(
@@ -249,6 +270,19 @@ class CategoryWidgetTest {
                 globalName = CategoryWidgetDesign.BATTERY.name,
             ),
         )
+    }
+
+    @Test
+    fun visiblePillsKeepFullListForSmallAndMediumSizes() {
+        val pills = listOf(
+            CategoryWidgetPill("Food", "🍔", BigDecimal("100"), BigDecimal("200"), 6, false),
+            CategoryWidgetPill("Health", "❤️", BigDecimal("50"), null, 1, false),
+            CategoryWidgetPill("Travel", "✈️", BigDecimal("10"), null, 2, false),
+            CategoryWidgetPill("Bills", "🧾", BigDecimal("5"), null, 3, false),
+        )
+
+        assertEquals(pills, visibleCategoryPills(pills, CategoryWidget.smallMode))
+        assertEquals(pills, visibleCategoryPills(pills, CategoryWidget.mediumMode))
     }
 
     @Test
