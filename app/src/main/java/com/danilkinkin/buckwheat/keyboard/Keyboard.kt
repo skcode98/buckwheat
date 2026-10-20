@@ -110,8 +110,8 @@ fun Keyboard(
             val edited = editorViewModel.editedTransaction
             if (edited != null) {
                 val first = records.first()
-                spendsViewModel.removeSpent(edited, silent = true)
-                spendsViewModel.addSpent(
+                spendsViewModel.editSpent(
+                    edited,
                     edited.copy(
                         value = first.amount,
                         date = first.date,
@@ -650,23 +650,19 @@ fun Keyboard(
                                 debugProgress = 0
 
                                 if (editorViewModel.canCommitEditingSpent()) {
-                                        if (mode == EditMode.EDIT) {
-                                            val edited = editorViewModel.editedTransaction ?: return@KeyboardButton
-                                            val newVersionOfSpent =
-                                                edited.copy(
-                                                    value = editorViewModel.currentSpent,
-                                                    date = editorViewModel.currentDate,
-                                                    comment = (editorViewModel.currentComment.value
-                                                        ?: "").trim(),
-                                                    category = editorViewModel.currentCategory.value
-                                                )
+                                         if (mode == EditMode.EDIT) {
+                                             val edited = editorViewModel.editedTransaction ?: return@KeyboardButton
+                                             val newVersionOfSpent =
+                                                 edited.copy(
+                                                     value = editorViewModel.currentSpent,
+                                                     date = editorViewModel.currentDate,
+                                                     comment = (editorViewModel.currentComment.value
+                                                         ?: "").trim(),
+                                                     category = editorViewModel.currentCategory.value
+                                                 )
 
-                                            spendsViewModel.removeSpent(
-                                                edited,
-                                                silent = true
-                                            )
-                                            spendsViewModel.addSpent(newVersionOfSpent)
-                                        } else {
+                                             spendsViewModel.editSpent(edited, newVersionOfSpent)
+                                         } else {
                                             spendsViewModel.addSpent(
                                                 Transaction(
                                                     type = TransactionType.SPENT,
