@@ -272,9 +272,15 @@ class SpendsViewModel @Inject constructor(
         }
     }
 
+    fun editSpent(oldTransaction: Transaction, newTransaction: Transaction) {
+        viewModelScope.launch {
+            spendsRepository.editSpent(oldTransaction, newTransaction)
+        }
+    }
+
     fun removeSpent(transactionForRemove: Transaction, silent: Boolean = false) {
         viewModelScope.launch {
-            spendsRepository.removeSpent(transactionForRemove)
+            spendsRepository.removeSpent(transactionForRemove, silent)
 
             if (!silent) {
                 lastRemovedTransaction.value = transactionForRemove

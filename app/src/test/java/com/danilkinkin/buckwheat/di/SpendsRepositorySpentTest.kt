@@ -154,4 +154,68 @@ class SpendsRepositorySpentTest : SpendsRepositoryTestBase() {
 
         assert(spendsRepository.getSpentFromDailyBudget().first() == 10.toBigDecimal().setScale(2))
     }
+
+    // Edit today's spent value atomically (old value subtracted, new added)
+    @Test
+    fun editSpentValueTest() = runTest {
+        setBudget()
+
+        val spend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        spendsRepository.addSpent(spend)
+
+        val edited = spend.copy(value = 25.toBigDecimal())
+        spendsRepository.editSpent(spend, edited)
+
+        val spends = spendsRepository.getAllSpends().first()
+        assert(spends.size == 1)
+        assert(spends.contains(edited))
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 25.toBigDecimal().setScale(2))
+    }
+
+    // Edit today's spent comment keeps counter unchanged
+    @Test
+    fun editSpentCommentOnlyTest() = runTest {
+        setBudget()
+
+        val spend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        spendsRepository.addSpent(spend)
+
+        val edited = spend.copy(comment = "coffee")
+        spendsRepository.editSpent(spend, edited)
+
+        val spends = spendsRepository.getAllSpends().first()
+        assert(spends.size == 1)
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 10.toBigDecimal().setScale(2))
+    }
+
+    // Edit today's spent does not drift the counter (regression: separate remove+add race)
+    @Test
+    fun editSpentDoesNotDoubleCountTest() = runTest {
+        setBudget()
+
+        val spend = Transaction(
+            type = TransactionType.SPENT,
+            value = 10.toBigDecimal(),
+            date = currentDateUseCase.value,
+        )
+        spendsRepository.addSpent(spend)
+
+        spendsRepository.editSpent(spend, spend.copy(value = 15.toBigDecimal()))
+        val afterFirst = spendsRepository.getSpentFromDailyBudget().first()
+        assert(afterFirst == 15.toBigDecimal().setScale(2))
+
+        val second = spendsRepository.getAllSpends().first().first()
+        spendsRepository.editSpent(second, second.copy(value = 5.toBigDecimal()))
+
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 5.toBigDecimal().setScale(2))
+        assert(spendsRepository.getAllSpends().first().size == 1)
+    }
 }

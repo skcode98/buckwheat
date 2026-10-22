@@ -693,7 +693,68 @@ class SpendsRepository @Inject constructor(
         }
     }
 
-    suspend fun removeSpent(transactionForRemove: Transaction) {
+    suspend fun editSpent(oldTransaction: Transaction, newTransaction: Transaction) {
+        // Read all needed DataStore values FIRST, before any modifications
+        val prefs = context.budgetDataStore.data.first()
+        val startPeriodDate = prefs[startPeriodDateStoreKey]
+            ?.let { value -> Date(value) } ?: return
+        val finishPeriodDate = prefs[finishPeriodDateStoreKey]
+            ?.let { value -> Date(value) } ?: return
+
+        // If both transactions are outside current period, just update DB
+        val oldOutside = oldTransaction.date.before(startPeriodDate) || oldTransaction.date.after(finishPeriodDate)
+        val newOutside = newTransaction.date.before(startPeriodDate) || newTransaction.date.after(finishPeriodDate)
+        if (oldOutside && newOutside) {
+            transactionDao.deleteById(oldTransaction.uid)
+            transactionDao.insert(newTransaction)
+            categoryCapTracker.resyncCategoryCapNotified(oldTransaction)
+            categoryCapTracker.checkCategoryCapAlert(newTransaction)
+            return
+        }
+
+        val lastChangeDailyBudgetDate = prefs[lastChangeDailyBudgetDateStoreKey]
+            ?.let { value -> Date(value) }
+        val foldRanToday = lastChangeDailyBudgetDate !== null
+                && isSameDay(lastChangeDailyBudgetDate, getCurrentDateUseCase())
+        val oldIsToday = isSameDay(oldTransaction.date, getCurrentDateUseCase())
+        val newIsToday = isSameDay(newTransaction.date, getCurrentDateUseCase())
+        val bothToday = (oldIsToday || !foldRanToday) && (newIsToday || !foldRanToday) && oldIsToday && newIsToday
+
+        var newSpentFromDailyBudget: BigDecimal? = null
+        var newDailyBudget: BigDecimal? = null
+        var newSpent: BigDecimal? = null
+        var newOverspendNotified = false
+
+        if (bothToday) {
+            val spentFromDailyBudget = prefs[spentFromDailyBudgetStoreKey]?.toBigDecimal() ?: return
+            val dailyBudget = prefs[dailyBudgetStoreKey]?.toBigDecimal() ?: return
+            val delta = newTransaction.value.subtract(oldTransaction.value)
+            newSpentFromDailyBudget = (spentFromDailyBudget + delta).coerceAtLeast(BigDecimal.ZERO)
+            newOverspendNotified = newSpentFromDailyBudget!! > dailyBudget
+        } else {
+            removeSpent(oldTransaction, silent = true)
+            addSpent(newTransaction)
+            return
+        }
+
+        try {
+            context.budgetDataStore.edit {
+                it[spentFromDailyBudgetStoreKey] = newSpentFromDailyBudget!!.toString()
+                it[overspendNotifiedStoreKey] = newOverspendNotified
+            }
+        } catch (e: Exception) {
+            Log.e("SpendsRepository", "editSpent DataStore update failed", e)
+            context.errorForReport = e.stackTraceToString()
+            return
+        }
+
+        transactionDao.deleteById(oldTransaction.uid)
+        transactionDao.insert(newTransaction)
+        categoryCapTracker.resyncCategoryCapNotified(oldTransaction)
+        categoryCapTracker.checkCategoryCapAlert(newTransaction)
+    }
+
+    suspend fun removeSpent(transactionForRemove: Transaction, silent: Boolean = false) {
         // Read all needed DataStore values FIRST, before any modifications
         val prefs = context.budgetDataStore.data.first()
         val startPeriodDate = prefs[startPeriodDateStoreKey]
