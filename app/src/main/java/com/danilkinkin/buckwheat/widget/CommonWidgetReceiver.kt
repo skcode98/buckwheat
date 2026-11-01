@@ -217,7 +217,7 @@ abstract class WidgetReceiver : GlanceAppWidgetReceiver() {
                         .multiply(BigDecimal(100))
                         .divide(budget, 0, RoundingMode.FLOOR)
                         .toInt()
-                        .coerceIn(0, 100)
+                        .coerceAtLeast(0)
                 } else {
                     0
                 }

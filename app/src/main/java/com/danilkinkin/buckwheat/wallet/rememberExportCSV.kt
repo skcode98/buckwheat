@@ -42,9 +42,10 @@ fun rememberExportCSV(
 
     val fileNamePattern = stringResource(R.string.export_to_csv_file_name)
 
-    val fileName = if (startPeriodDate != null && finishPeriodDate != null) {
-        val fromDate = startPeriodDate!!.toLocalDate()
-        val toDate = LocalDate.now().coerceAtMost(finishPeriodDate!!.toLocalDate())
+    val fileName = if (finishPeriodDate != null) {
+        val finishDate = finishPeriodDate!!
+        val fromDate = startPeriodDate.toLocalDate()
+        val toDate = LocalDate.now().coerceAtMost(finishDate.toLocalDate())
 
         buildAutoExportFileName(fileNamePattern, fromDate, toDate)
     } else {

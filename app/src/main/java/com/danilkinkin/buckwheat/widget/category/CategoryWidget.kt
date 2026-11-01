@@ -30,6 +30,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.background
 import androidx.glance.appwidget.provideContent
 import androidx.glance.currentState
@@ -70,6 +71,13 @@ enum class CategoryWidgetDesign { BATTERY, COMPACT }
 // unit-testable.
 fun effectiveCategoryWidgetDesign(overrideName: String?, globalName: String): String =
     overrideName?.takeIf { it.isNotBlank() } ?: globalName
+
+// Every widget size renders the full pill list; overflow is handled by vertical scrolling
+// (LazyColumn) instead of the old per-size truncation, so a small widget never hides
+// categories. Pure so the no-truncation behavior is unit-testable (Glance composition
+// itself is not — see VoiceWidgetRenderTest). The size argument is kept as the seam where
+// per-size rendering logic would live if ever needed again.
+fun visibleCategoryPills(pills: List<CategoryWidgetPill>, size: DpSize): List<CategoryWidgetPill> = pills
 
 private val batteryAmber = Color(0xFFE6A23C)
 private val batteryAmberText = Color(0xFF1A1A1A)
@@ -147,13 +155,7 @@ fun CategoryWidgetContent() {
     }
     val restColor = toPaletteWithTheme(harmonizeWithColor(Color(0xFF222222), primaryColor), isNight)
 
-    val maxRows = when (size) {
-        CategoryWidget.smallMode -> 2
-        CategoryWidget.mediumMode -> 3
-        CategoryWidget.largeMode -> 5
-        else -> Int.MAX_VALUE
-    }
-    val visiblePills = pills.take(maxRows)
+    val visiblePills = visibleCategoryPills(pills, size)
 
     Column(
         modifier = GlanceModifier
@@ -223,18 +225,24 @@ fun CategoryWidgetContent() {
             )
             Spacer(modifier = GlanceModifier.defaultWeight())
         } else {
-            visiblePills.forEach { pill ->
-                Spacer(modifier = GlanceModifier.height(4.dp))
-                CategoryPill(
-                    context = context,
-                    pill = pill,
-                    paletteColors = paletteColors,
-                    restColor = restColor,
-                    isCompact = isCompact,
-                    currency = currency,
-                    primaryColor = primaryColor,
-                    secondaryColor = secondaryColor,
-                )
+            LazyColumn(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .defaultWeight(),
+            ) {
+                items(visiblePills.size, itemId = { it.toLong() }) { index ->
+                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    CategoryPill(
+                        context = context,
+                        pill = visiblePills[index],
+                        paletteColors = paletteColors,
+                        restColor = restColor,
+                        isCompact = isCompact,
+                        currency = currency,
+                        primaryColor = primaryColor,
+                        secondaryColor = secondaryColor,
+                    )
+                }
             }
         }
     }

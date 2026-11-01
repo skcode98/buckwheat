@@ -49,6 +49,8 @@ import com.danilkinkin.buckwheat.sync.syncMemberIdStoreKey
 import com.danilkinkin.buckwheat.sync.syncTokenStoreKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import com.danilkinkin.buckwheat.util.toLocalDate
+import java.time.LocalDate
 import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -164,8 +166,12 @@ class BackupRepository @Inject constructor(
         val periodFinishEnabled = restoredSettings[periodFinishEnabledStoreKey] ?: false
         if (periodFinishEnabled) {
             val finishDateMillis = context.budgetDataStore.data.first()[finishPeriodDateStoreKey]
-            if (finishDateMillis != null && finishDateMillis > Date().time) {
-                PeriodFinishScheduler.schedule(context, Date(finishDateMillis))
+            if (finishDateMillis != null) {
+                val finishDate = Date(finishDateMillis).toLocalDate()
+                val today = LocalDate.now()
+                if (!finishDate.isBefore(today)) {
+                    PeriodFinishScheduler.schedule(context, Date(finishDateMillis))
+                }
             }
         } else {
             PeriodFinishScheduler.cancel(context)

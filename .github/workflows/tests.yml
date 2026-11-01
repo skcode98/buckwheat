@@ -1,0 +1,343 @@
+﻿name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --continue
+
+      - name: Generate test analysis
+        if: always()
+        shell: bash
+        run: |
+          python3 -c "$(cat <<'PYTHON'
+          import json, os, glob
+          from datetime import datetime, timezone
+          import xml.etree.ElementTree as ET
+
+          def to_ms(s):
+              try:
+                  return int(round(float(s) * 1000))
+              except Exception:
+                  return 0
+
+          def extract_text(elem):
+              t = elem.text or ''
+              for c in elem:
+                  t += '\n' + extract_text(c)
+              return t.strip() or None
+
+          base = 'com.danilkinkin.buckwheat'
+          paths = sorted(glob.glob('app/build/test-results/testDebugUnitTest/**/*.xml', recursive=True))
+          tests = []
+          groups_map = {}
+          for p in paths:
+              try:
+                  root = ET.parse(p).getroot()
+              except Exception:
+                  continue
+              if root.tag == 'testsuites':
+                  suites = root.findall('testsuite')
+              elif root.tag == 'testsuite':
+                  suites = [root]
+              else:
+                  suites = root.findall('.//testsuite')
+              if not suites:
+                  suites = [root]
+              for s in suites:
+                  for tc in s.findall('.//testcase'):
+                      name = tc.get('name') or ''
+                      cname = tc.get('classname') or ''
+                      pkg = cname.rsplit('.', 1)[0] if '.' in cname else cname
+                      g = 'other'
+                      if pkg.startswith(base + '.'):
+                          seg = pkg[len(base) + 1:].split('.')[0]
+                          if seg:
+                              g = seg
+                      dur = to_ms(tc.get('time') or 0)
+                      status = 'passed'
+                      fm = None
+                      st = None
+                      so = None
+                      se = None
+                      if tc.find('skipped') is not None:
+                          status = 'skipped'
+                      f = tc.find('failure')
+                      e = tc.find('error')
+                      if f is not None:
+                          status = 'failed'
+                          fm = f.get('message') or extract_text(f)
+                          st = extract_text(f)
+                      if e is not None:
+                          status = 'error'
+                          fm = e.get('message') or extract_text(e)
+                          st = extract_text(e)
+                      so_el = tc.find('system-out')
+                      se_el = tc.find('system-err')
+                      if so_el is not None:
+                          so = extract_text(so_el)
+                      if se_el is not None:
+                          se = extract_text(se_el)
+                      t = {'name': name, 'className': cname, 'packageName': pkg, 'group': g, 'durationMs': dur, 'status': status, 'failureMessage': fm, 'stackTrace': st, 'stdout': so, 'stderr': se}
+                      tests.append(t)
+                      gm = groups_map.setdefault(g, {'name': g, 'packagePrefix': base + '.' + g if g != 'other' else base, 'tests': 0, 'passed': 0, 'failed': 0, 'skipped': 0, 'errors': 0, 'durationMs': 0, 'classes': {}})
+                      cm = gm['classes'].setdefault(cname, {'name': cname, 'tests': 0, 'passed': 0, 'failed': 0, 'skipped': 0, 'errors': 0, 'durationMs': 0})
+                      gm['tests'] += 1
+                      cm['tests'] += 1
+                      gm['durationMs'] += dur
+                      cm['durationMs'] += dur
+                      if status == 'passed':
+                          gm['passed'] += 1
+                          cm['passed'] += 1
+                      elif status == 'failed':
+                          gm['failed'] += 1
+                          cm['failed'] += 1
+                      elif status == 'skipped':
+                          gm['skipped'] += 1
+                          cm['skipped'] += 1
+                      elif status == 'error':
+                          gm['errors'] += 1
+                          cm['errors'] += 1
+
+          tot = {'tests': len(tests), 'passed': 0, 'failed': 0, 'skipped': 0, 'errors': 0, 'durationMs': 0}
+          for x in tests:
+              tot['durationMs'] += x['durationMs']
+              tot['errors' if x['status'] == 'error' else x['status']] += 1
+          groups_list = []
+          for g in groups_map.values():
+              cls_list = []
+              for c in g['classes'].values():
+                  cls_list.append({'name': c['name'], 'tests': c['tests'], 'passed': c['passed'], 'failed': c['failed'], 'skipped': c['skipped'], 'errors': c['errors'], 'durationMs': c['durationMs']})
+              groups_list.append({'name': g['name'], 'packagePrefix': g['packagePrefix'], 'tests': g['tests'], 'passed': g['passed'], 'failed': g['failed'], 'skipped': g['skipped'], 'errors': g['errors'], 'durationMs': g['durationMs'], 'classes': cls_list})
+          byTest = sorted(tests, key=lambda e: e['durationMs'], reverse=True)[:5]
+          byClass = {}
+          for g in groups_map.values():
+              for c in g['classes'].values():
+                  byClass[c['name']] = {'name': c['name'], 'class': c['name'], 'group': g['name'], 'durationMs': c['durationMs']}
+          byClassL = sorted(byClass.values(), key=lambda e: e['durationMs'], reverse=True)[:5]
+          byGroupL = sorted(groups_list, key=lambda e: e['durationMs'], reverse=True)[:5]
+          meta = {'runId': os.environ.get('GITHUB_RUN_ID'), 'commit': os.environ.get('GITHUB_SHA'), 'branch': os.environ.get('GITHUB_REF_NAME'), 'event': os.environ.get('GITHUB_EVENT_NAME'), 'workflow': os.environ.get('GITHUB_WORKFLOW'), 'generatedAt': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), 'totalDurationMs': tot['durationMs']}
+          res = {'meta': meta, 'totals': tot, 'groups': groups_list, 'tests': tests, 'slowest': {'byTest': byTest, 'byClass': byClassL, 'byGroup': byGroupL}}
+          open('test-analysis.json', 'w', encoding='utf-8').write(json.dumps(res, ensure_ascii=False, indent=2))
+          md = ['# Unit Test Analysis', '']
+          md.append(f"- Run ID: {meta['runId']}")
+          md.append(f"- Commit: {meta['commit']}")
+          md.append(f"- Branch: {meta['branch']}")
+          md.append(f"- Event: {meta['event']}")
+          md.append(f"- Workflow: {meta['workflow']}")
+          md.append(f"- Generated: {meta['generatedAt']}")
+          md.append(f"- Total Duration (ms): {meta['totalDurationMs']}")
+          md.append('')
+          md.append('## Totals')
+          md.append('| tests | passed | failed | skipped | errors | durationMs |')
+          md.append('|---|---|---|---|---|---|')
+          md.append(f"| {tot['tests']} | {tot['passed']} | {tot['failed']} | {tot['skipped']} | {tot['errors']} | {tot['durationMs']} |")
+          md.append('')
+          md.append('## Groups')
+          md.append('| group | packagePrefix | tests | passed | failed | skipped | errors | durationMs |')
+          md.append('|---|---|---|---|---|---|---|---|')
+          for g in sorted(groups_list, key=lambda e: e['durationMs'], reverse=True):
+              md.append(f"| {g['name']} | {g['packagePrefix']} | {g['tests']} | {g['passed']} | {g['failed']} | {g['skipped']} | {g['errors']} | {g['durationMs']} |")
+          md.append('')
+          md.append('## Per-Group Breakdown')
+          for g in sorted(groups_list, key=lambda e: e['durationMs'], reverse=True):
+              md.append(f"### {g['name']}")
+              md.append('| class | tests | passed | failed | skipped | errors | durationMs |')
+              md.append('|---|---|---|---|---|---|---|')
+              for c in sorted(g['classes'], key=lambda e: e['durationMs'], reverse=True):
+                  md.append(f"| {c['name']} | {c['tests']} | {c['passed']} | {c['failed']} | {c['skipped']} | {c['errors']} | {c['durationMs']} |")
+              md.append('')
+          md.append('## Slowest')
+          md.append('### By Test')
+          md.append('| name | class | group | durationMs |')
+          md.append('|---|---|---|---|')
+          for x in byTest:
+              md.append(f"| {x['name']} | {x['className']} | {x['group']} | {x['durationMs']} |")
+          md.append('### By Class')
+          md.append('| class | group | durationMs |')
+          md.append('|---|---|---|')
+          for x in byClassL:
+              md.append(f"| {x['class']} | {x['group']} | {x['durationMs']} |")
+          md.append('### By Group')
+          md.append('| group | durationMs |')
+          md.append('|---|---|')
+          for x in byGroupL:
+              md.append(f"| {x['name']} | {x['durationMs']} |")
+          md.append('')
+          md.append('## Failures')
+          fail = [t for t in tests if t['status'] == 'failed' or t['status'] == 'error']
+          if not fail:
+              md.append('None')
+          else:
+              for i, f in enumerate(fail, 1):
+                  md.append(f"### {i}. {f['className']}#{f['name']} ({f['group']})")
+                  if f['failureMessage']:
+                      md.append('```')
+                      md.append(str(f['failureMessage']))
+                      md.append('```')
+                  if f['stackTrace']:
+                      md.append('```')
+                      md.append(str(f['stackTrace']))
+                      md.append('```')
+          md.append('')
+          md.append('## Artifacts')
+          md.append('- `unit-test-results-xml`: raw JUnit XML results')
+          md.append('- `unit-test-reports-html`: Gradle HTML test reports')
+          md.append('- `unit-test-analysis`: `test-analysis.json` and `test-analysis.md`')
+          open('test-analysis.md', 'w', encoding='utf-8').write('\n'.join(md))
+          PYTHON
+          )"
+
+      - name: Write summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f test-analysis.md ]; then
+            echo "## Unit Test Results" >> "$GITHUB_STEP_SUMMARY"
+            sed -n '1,80p' test-analysis.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "[Full analysis](./test-analysis.json) and [Markdown](./test-analysis.md) uploaded as artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Summary stub
+        if: always()
+        run: echo "Unit tests completed"
+
+      - name: Upload unit test XML results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-xml
+          path: app/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: warn
+
+      - name: Upload unit test HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-html
+          path: app/build/reports/tests/testDebugUnitTest/**
+          if-no-files-found: warn
+
+      - name: Upload unit test analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-analysis
+          path: |
+            test-analysis.json
+            test-analysis.md
+          if-no-files-found: warn
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            app/build/test-results/
+            app/build/reports/tests/
+          if-no-files-found: ignore
+
+
+  android-tests:
+    name: Android Instrumentation Tests
+    runs-on: macos-latest
+    timeout-minutes: 40
+    needs: [unit-tests]
+    if: |
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-android-tests')) ||
+      (github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Run Android instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect
+          heap-size: 2048M
+          disk-size: 4096M
+          script: ./gradlew connectedDebugAndroidTest --continue
+      - name: Write summary (android)
+        if: always()
+        shell: bash
+        run: |
+          if [ -f test-analysis.md ]; then
+            echo "## Android Instrumentation Test Results" >> "$GITHUB_STEP_SUMMARY"
+            sed -n "1,80p" test-analysis.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "[Full analysis](./test-analysis.json) and [Markdown](./test-analysis.md) uploaded as artifacts." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload android test XML results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results-xml
+          path: |
+            app/build/test-results/connectedDebugAndroidTest/*.xml
+            app/build/outputs/androidTest-results/**/*.xml
+          if-no-files-found: warn
+
+      - name: Upload android test HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports-html
+          path: |
+            app/build/reports/androidTests/connected/**
+          if-no-files-found: warn
+
+      - name: Upload android test analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-analysis
+          path: |
+            test-analysis.json
+            test-analysis.md
+          if-no-files-found: warn

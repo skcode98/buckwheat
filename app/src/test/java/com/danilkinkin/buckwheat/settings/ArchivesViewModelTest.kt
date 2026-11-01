@@ -1,9 +1,14 @@
 package com.danilkinkin.buckwheat.settings
 
 import com.danilkinkin.buckwheat.data.entities.BudgetPeriod
+import com.danilkinkin.buckwheat.data.entities.ArchivedTransaction
+import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.di.FakeBudgetPeriodDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import java.math.BigDecimal
+import java.util.Date
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -17,8 +22,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.math.BigDecimal
-import java.util.Date
 
 // Archives edits the period rows with targeted SQL UPDATEs that leave the sync columns alone, so
 // a bump applied after them is what makes the change pushable.
@@ -120,5 +123,49 @@ class ArchivesViewModelTest {
 
         assertTrue(marker.upserts.isEmpty())
         assertTrue(marker.deletes.isEmpty())
+    }
+
+    @Test
+    fun selectedPeriodSpendsEmitsOnlySpentRecords() = runTest(dispatcher) {
+        budgetPeriodDao.insertArchivedTransactions(
+            listOf(
+                ArchivedTransaction(
+                    periodId = "period-1",
+                    type = TransactionType.INCOME,
+                    value = BigDecimal("1000"),
+                    date = Date(0),
+                    comment = "income",
+                ),
+                ArchivedTransaction(
+                    periodId = "period-1",
+                    type = TransactionType.SET_DAILY_BUDGET,
+                    value = BigDecimal("50"),
+                    date = Date(1),
+                    comment = "budget",
+                ),
+                ArchivedTransaction(
+                    periodId = "period-1",
+                    type = TransactionType.SPENT,
+                    value = BigDecimal("20"),
+                    date = Date(2),
+                    comment = "lunch",
+                ),
+                ArchivedTransaction(
+                    periodId = "period-2",
+                    type = TransactionType.SPENT,
+                    value = BigDecimal("5"),
+                    date = Date(3),
+                    comment = "other period",
+                ),
+            )
+        )
+
+        val selectedViewModel = viewModel()
+        selectedViewModel.selectPeriod("period-1")
+        val spends = selectedViewModel.selectedPeriodSpends.first { it.isNotEmpty() }
+
+        assertEquals(1, spends.size)
+        assertTrue(spends.all { it.type == TransactionType.SPENT })
+        assertEquals("lunch", spends.single().comment)
     }
 }

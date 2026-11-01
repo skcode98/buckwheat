@@ -61,12 +61,12 @@ class CategoryCapsTest {
     }
 
     @Test
-    fun `percent is floored and clamped`() {
+    fun `percent is floored and reports over-cap spending`() {
         assertEquals(0, categoryCapPercent(BigDecimal.ZERO, BigDecimal("100")))
         assertEquals(0, categoryCapPercent(BigDecimal.ZERO, BigDecimal.ZERO))
         assertEquals(50, categoryCapPercent(BigDecimal("50.0"), BigDecimal("100")))
         assertEquals(49, categoryCapPercent(BigDecimal("49.99"), BigDecimal("100")))
-        assertEquals(100, categoryCapPercent(BigDecimal("150"), BigDecimal("100")))
+        assertEquals(150, categoryCapPercent(BigDecimal("150"), BigDecimal("100")))
         assertEquals(100, categoryCapPercent(BigDecimal("100.5"), BigDecimal("100")))
     }
 

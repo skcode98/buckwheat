@@ -208,7 +208,8 @@ fun SpendCategoriesCard(
 }
 
 // Thin progress bar under a category chip when a cap is configured. Turns amber at/above
-// 80% and red once the cap is reached; the label shows the percent of the cap spent.
+// 80% and red once the cap is reached; the label shows the percent of the cap spent, reporting
+// over-cap spending as-is (e.g. "130% of cap") while the bar itself stays saturated.
 @Composable
 internal fun CapProgressBar(
     progress: BigDecimal,
@@ -234,7 +235,7 @@ internal fun CapProgressBar(
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            text = if (percent >= 100) {
+            text = if (percent == 100) {
                 stringResource(R.string.category_cap_reached_label)
             } else {
                 stringResource(R.string.category_cap_progress, percent)

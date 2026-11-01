@@ -144,6 +144,7 @@ fun Settings(
                     },
                 )
                 VoiceWidgetDesignSetting(appViewModel = appViewModel)
+                BubbleOverlaySetting()
                 CategoryWidgetDesignSetting(appViewModel = appViewModel)
                 TryWidget(onTried = {
                     onTriedWidget()
