@@ -1,5 +1,6 @@
 package com.danilkinkin.buckwheat.settings
 
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,10 +58,8 @@ fun restoreBackupFlow(
     var pendingRestoreJson by remember { mutableStateOf<String?>(null) }
     var isRestoring by remember { mutableStateOf(false) }
 
-    val openBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    fun handleSelectedBackup(uri: Uri?) {
+        if (uri == null) return
 
         coroutineScope.launch {
             try {
@@ -78,6 +77,15 @@ fun restoreBackupFlow(
             }
         }
     }
+
+    val openBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = ::handleSelectedBackup,
+    )
+    val getBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = ::handleSelectedBackup,
+    )
 
     if (showRestoreConfirm) {
         AlertDialog(
@@ -140,5 +148,17 @@ fun restoreBackupFlow(
         )
     }
 
-    return { openBackupLauncher.launch(RESTORE_MIME_TYPES) }
+    return {
+        try {
+            openBackupLauncher.launch(RESTORE_MIME_TYPES)
+        } catch (e: ActivityNotFoundException) {
+            try {
+                getBackupLauncher.launch("*/*")
+            } catch (fallbackException: ActivityNotFoundException) {
+                fallbackException.addSuppressed(e)
+                context.errorForReport = fallbackException.stackTraceToString()
+                appViewModel.showSnackbar(snackBarRestoreFailed)
+            }
+        }
+    }
 }
