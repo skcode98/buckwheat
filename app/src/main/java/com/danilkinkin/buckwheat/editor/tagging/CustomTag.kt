@@ -154,6 +154,7 @@ fun CustomTag(
     val close = {
         isEdit = false
         isShowSuggestions = false
+        renderPopup = false
         onEdit(false)
         appViewModel.showSystemKeyboard.value = false
         appViewModel.lockDraggable.value = false
@@ -272,6 +273,7 @@ fun CustomTag(
             Popup(
                 popupPositionProvider = popupPositionProvider,
                 onDismissRequest = {
+                    close()
                 },
             ) {
                 val dismissEvent = remember {
