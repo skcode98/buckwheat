@@ -88,6 +88,14 @@ class BubbleOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
         startForeground(NOTIFICATION_ID, ongoingNotification())
 
         // Pre-load the currency so the non-suspend captionAdded() can format amounts

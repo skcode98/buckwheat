@@ -30,6 +30,7 @@ import androidx.lifecycle.lifecycleScope
 import com.danilkinkin.buckwheat.base.balloon.BalloonProvider
 import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.home.MainScreen
+import com.danilkinkin.buckwheat.overlay.BubbleLauncher
 import dagger.hilt.android.AndroidEntryPoint
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.ui.AppLockScreen
@@ -62,7 +63,16 @@ class MainActivity : FragmentActivity() {
     private val appLockViewModel: AppLockViewModel by viewModels()
 
     private val micPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val showBubble = intent?.getBooleanExtra(
+                BubbleLauncher.EXTRA_SHOW_AFTER_MIC_PERMISSION,
+                false,
+            ) == true
+            intent?.removeExtra(BubbleLauncher.EXTRA_SHOW_AFTER_MIC_PERMISSION)
+            if (showBubble && permissions[Manifest.permission.RECORD_AUDIO] == true) {
+                BubbleLauncher.show(this)
+            }
+        }
 
     override fun onStart() {
         super.onStart()
