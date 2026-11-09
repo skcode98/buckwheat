@@ -2,7 +2,6 @@ package com.danilkinkin.buckwheat.overlay
 
 import android.app.Notification
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -36,6 +35,8 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewTreeLifecycleOwner
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -68,7 +69,7 @@ import kotlin.coroutines.resume
 // (Settings, Keyboard screen, voice widget tap) while the app is visible, which is the
 // same while-in-use exemption the widget's commit service relies on.
 @AndroidEntryPoint
-class BubbleOverlayService : Service() {
+class BubbleOverlayService : LifecycleService() {
 
     @Inject
     lateinit var databaseRepository: SpendsRepository
@@ -88,6 +89,8 @@ class BubbleOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+
         if (
             ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -156,6 +159,7 @@ class BubbleOverlayService : Service() {
         if (stopped || bubbleView != null) return
 
         val view = ComposeView(this).apply {
+            ViewTreeLifecycleOwner.set(this, this@BubbleOverlayService)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {
@@ -514,6 +518,7 @@ class BubbleOverlayService : Service() {
         if (dismissTargetView != null) return
         val metrics = resources.displayMetrics
         val view = ComposeView(this).apply {
+            ViewTreeLifecycleOwner.set(this, this@BubbleOverlayService)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {

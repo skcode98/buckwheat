@@ -126,6 +126,7 @@ dependencies {
 
     // Lifecycle
     implementation(libs.bundles.lifecycle)
+    implementation(libs.lifecycle.service)
 
     // Glance
     implementation(libs.bundles.glance)
