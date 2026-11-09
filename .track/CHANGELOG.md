@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 — Restore backup picker failure handling
+
+Hardened `settings/RestoreBackupFlow.kt` while preserving the existing worktree change that tries `GetContent` before `OpenDocument`. Picker launch now falls back on any exception rather than only `ActivityNotFoundException`; if both contracts fail, the app logs the failure, stores its stack trace in `errorForReport`, and shows the restore-failed snackbar. Added non-content diagnostic logs for click, picker result, file read, and restore failures. A selected URI that cannot be opened is now surfaced instead of silently doing nothing. IDE diagnostics and `git diff --check` passed; Gradle compilation is blocked in this container because no Android SDK is installed/configured (`ANDROID_HOME`/`sdk.dir`).
+
 ## 2026-08-16 — Spending Patterns: Phase 4 page UI + entry points (uncommitted)
 
 Phase 4 of `.track/SPENDING_PATTERNS_PLAN.md`: the full Spending Patterns sheet on top of the Phase 3 ViewModel. All five phases of the plan are now implemented.

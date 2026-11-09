@@ -2,6 +2,10 @@
 
 > **Security rules for all agents: see `.track/SECURITY.md`** (binding). No hardcoded external links/emails; API key excluded from all backups; `exported` stays false unless the OS requires it; no analytics SDKs.
 
+## Restore Picker
+- Restore flow: `app/src/main/java/com/danilkinkin/buckwheat/settings/RestoreBackupFlow.kt`. It tries `GetContent` first, then `OpenDocument`; diagnostics use the `BackupRestore` Logcat tag and never include backup contents.
+- Current Linux dev container has JDK 21 but no Android SDK or `ANDROID_HOME`/`sdk.dir`, so Gradle compile cannot reach Kotlin compilation until an SDK is configured.
+
 ## Build Commands
 ```powershell
 # Quick compile check (faster than full build)

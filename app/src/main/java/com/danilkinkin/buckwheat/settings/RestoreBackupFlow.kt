@@ -1,7 +1,7 @@
 package com.danilkinkin.buckwheat.settings
 
-import android.content.ActivityNotFoundException
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
@@ -59,31 +59,35 @@ fun restoreBackupFlow(
     var isRestoring by remember { mutableStateOf(false) }
 
     fun handleSelectedBackup(uri: Uri?) {
-        if (uri == null) return
+        if (uri == null) {
+            Log.i("BackupRestore", "Backup picker was cancelled")
+            return
+        }
 
         coroutineScope.launch {
             try {
+                Log.i("BackupRestore", "Backup file selected; reading content")
                 val json = context.contentResolver.openInputStream(uri)
                     ?.bufferedReader(Charsets.UTF_8)
                     ?.use { it.readText() }
+                    ?: throw IllegalStateException("Unable to open selected backup file")
 
-                if (json != null) {
-                    pendingRestoreJson = json
-                    showRestoreConfirm = true
-                }
+                pendingRestoreJson = json
+                showRestoreConfirm = true
             } catch (e: Exception) {
+                Log.e("BackupRestore", "Failed to read selected backup file", e)
                 context.errorForReport = e.stackTraceToString()
                 appViewModel.showSnackbar(snackBarRestoreFailed)
             }
         }
     }
 
-    val openBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = ::handleSelectedBackup,
-    )
     val getBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
+        onResult = ::handleSelectedBackup,
+    )
+    val openBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
         onResult = ::handleSelectedBackup,
     )
 
@@ -122,6 +126,7 @@ fun restoreBackupFlow(
                                     appViewModel.showSnackbar(snackBarRestoreInvalid)
                                 }
                             } catch (e: Exception) {
+                                Log.e("BackupRestore", "Failed to restore backup", e)
                                 context.errorForReport = e.stackTraceToString()
                                 appViewModel.showSnackbar(snackBarRestoreFailed)
                                 isRestoring = false
@@ -149,13 +154,16 @@ fun restoreBackupFlow(
     }
 
     return {
+        Log.i("BackupRestore", "Restore button clicked; launching backup picker")
         try {
-            openBackupLauncher.launch(RESTORE_MIME_TYPES)
-        } catch (e: ActivityNotFoundException) {
+            getBackupLauncher.launch("*/*")
+        } catch (e: Exception) {
+            Log.w("BackupRestore", "GetContent picker launch failed; trying OpenDocument", e)
             try {
-                getBackupLauncher.launch("*/*")
-            } catch (fallbackException: ActivityNotFoundException) {
+                openBackupLauncher.launch(RESTORE_MIME_TYPES)
+            } catch (fallbackException: Exception) {
                 fallbackException.addSuppressed(e)
+                Log.e("BackupRestore", "All backup picker launch attempts failed", fallbackException)
                 context.errorForReport = fallbackException.stackTraceToString()
                 appViewModel.showSnackbar(snackBarRestoreFailed)
             }
