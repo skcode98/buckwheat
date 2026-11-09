@@ -2,6 +2,7 @@ package com.danilkinkin.buckwheat.overlay
 
 import android.app.Notification
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -86,7 +87,7 @@ class BubbleOverlayService : LifecycleService() {
     private var sessionRunning = false
     private var resetJob: kotlinx.coroutines.Job? = null
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)

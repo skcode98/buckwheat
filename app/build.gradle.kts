@@ -126,6 +126,7 @@ dependencies {
 
     // Lifecycle
     implementation(libs.bundles.lifecycle)
+    implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.lifecycle.service)
 
     // Glance
