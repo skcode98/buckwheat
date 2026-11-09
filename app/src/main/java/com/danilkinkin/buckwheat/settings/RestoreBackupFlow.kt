@@ -177,17 +177,17 @@ fun restoreBackupFlow(
     return {
         Log.i("BackupRestore", "Restore button clicked; launching backup picker")
         try {
-            getBackupLauncher?.launch("*/*")
+            openBackupLauncher?.launch(RESTORE_MIME_TYPES)
                 ?: run {
-                    Log.e("BackupRestore", "GetContent launcher was not registered")
+                    Log.e("BackupRestore", "OpenDocument launcher was not registered")
                     appViewModel.showSnackbar(snackBarRestoreFailed)
                 }
         } catch (e: Exception) {
-            Log.w("BackupRestore", "GetContent picker launch failed; trying OpenDocument", e)
+            Log.w("BackupRestore", "OpenDocument picker launch failed; trying GetContent", e)
             try {
-                openBackupLauncher?.launch(RESTORE_MIME_TYPES)
+                getBackupLauncher?.launch("*/*")
                     ?: run {
-                        Log.e("BackupRestore", "OpenDocument launcher was not registered")
+                        Log.e("BackupRestore", "GetContent launcher was not registered")
                         appViewModel.showSnackbar(snackBarRestoreFailed)
                     }
             } catch (fallbackException: Exception) {
