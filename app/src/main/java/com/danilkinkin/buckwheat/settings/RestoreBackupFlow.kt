@@ -2,13 +2,17 @@ package com.danilkinkin.buckwheat.settings
 
 import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +50,7 @@ fun restoreBackupFlow(
     onRestoreSuccess: () -> Unit = {},
     appViewModel: AppViewModel = hiltViewModel(),
     backupRestoreViewModel: BackupRestoreViewModel = hiltViewModel(),
+    activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
 ): () -> Unit {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -82,14 +87,30 @@ fun restoreBackupFlow(
         }
     }
 
-    val getBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-        onResult = ::handleSelectedBackup,
-    )
-    val openBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = ::handleSelectedBackup,
-    )
+    var getBackupLauncher: ManagedActivityResultLauncher<String, Uri?>? = null
+    var openBackupLauncher: ManagedActivityResultLauncher<Array<String>, Uri?>? = null
+
+    if (activityResultRegistryOwner != null) {
+        CompositionLocalProvider(LocalActivityResultRegistryOwner provides activityResultRegistryOwner) {
+            getBackupLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.GetContent(),
+                onResult = ::handleSelectedBackup,
+            )
+            openBackupLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument(),
+                onResult = ::handleSelectedBackup,
+            )
+        }
+    } else {
+        getBackupLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+            onResult = ::handleSelectedBackup,
+        )
+        openBackupLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+            onResult = ::handleSelectedBackup,
+        )
+    }
 
     if (showRestoreConfirm) {
         AlertDialog(
@@ -156,11 +177,19 @@ fun restoreBackupFlow(
     return {
         Log.i("BackupRestore", "Restore button clicked; launching backup picker")
         try {
-            getBackupLauncher.launch("*/*")
+            getBackupLauncher?.launch("*/*")
+                ?: run {
+                    Log.e("BackupRestore", "GetContent launcher was not registered")
+                    appViewModel.showSnackbar(snackBarRestoreFailed)
+                }
         } catch (e: Exception) {
             Log.w("BackupRestore", "GetContent picker launch failed; trying OpenDocument", e)
             try {
-                openBackupLauncher.launch(RESTORE_MIME_TYPES)
+                openBackupLauncher?.launch(RESTORE_MIME_TYPES)
+                    ?: run {
+                        Log.e("BackupRestore", "OpenDocument launcher was not registered")
+                        appViewModel.showSnackbar(snackBarRestoreFailed)
+                    }
             } catch (fallbackException: Exception) {
                 fallbackException.addSuppressed(e)
                 Log.e("BackupRestore", "All backup picker launch attempts failed", fallbackException)

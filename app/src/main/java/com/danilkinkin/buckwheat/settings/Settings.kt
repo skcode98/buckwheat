@@ -57,6 +57,7 @@ fun Settings(
     appViewModel: AppViewModel = hiltViewModel(),
     appLockViewModel: AppLockViewModel = hiltViewModel(),
     onTriedWidget: () -> Unit = {},
+    activityResultRegistryOwner: androidx.activity.result.ActivityResultRegistryOwner? = null,
 ) {
     val localBottomSheetScrollState = LocalBottomSheetScrollState.current
 
@@ -215,7 +216,9 @@ fun Settings(
                     modifier = Modifier.clickable { importCSV() },
                     endIcon = painterResource(R.drawable.ic_arrow_right),
                 )
-                BackupRestoreSetting()
+                BackupRestoreSetting(
+                    activityResultRegistryOwner = activityResultRegistryOwner,
+                )
                 TextRow(
                     text = stringResource(R.string.version, BuildConfig.VERSION_NAME),
                 )

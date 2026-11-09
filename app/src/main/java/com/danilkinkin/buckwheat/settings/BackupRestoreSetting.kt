@@ -1,7 +1,10 @@
 package com.danilkinkin.buckwheat.settings
 
 import android.net.Uri
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +33,7 @@ import java.time.format.DateTimeFormatter
 fun BackupRestoreSetting(
     appViewModel: AppViewModel = hiltViewModel(),
     backupRestoreViewModel: BackupRestoreViewModel = hiltViewModel(),
+    activityResultRegistryOwner: ActivityResultRegistryOwner? = null,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -42,6 +46,7 @@ fun BackupRestoreSetting(
     val launchRestore = restoreBackupFlow(
         appViewModel = appViewModel,
         backupRestoreViewModel = backupRestoreViewModel,
+        activityResultRegistryOwner = activityResultRegistryOwner,
     )
 
     val createBackupLauncher = rememberLauncherForActivityResult(
