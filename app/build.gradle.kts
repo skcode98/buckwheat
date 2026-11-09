@@ -126,8 +126,7 @@ dependencies {
 
     // Lifecycle
     implementation(libs.bundles.lifecycle)
-    implementation(libs.lifecycle.runtime.ktx)
-    implementation(libs.lifecycle.runtime.android)
+    implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.service)
 
     // Glance
