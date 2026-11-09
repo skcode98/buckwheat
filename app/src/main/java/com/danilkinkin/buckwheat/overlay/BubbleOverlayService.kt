@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -160,7 +160,7 @@ class BubbleOverlayService : LifecycleService() {
         if (stopped || bubbleView != null) return
 
         val view = ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, this@BubbleOverlayService)
+            setViewTreeLifecycleOwner(this@BubbleOverlayService)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {
@@ -519,7 +519,7 @@ class BubbleOverlayService : LifecycleService() {
         if (dismissTargetView != null) return
         val metrics = resources.displayMetrics
         val view = ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, this@BubbleOverlayService)
+            setViewTreeLifecycleOwner(this@BubbleOverlayService)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {
