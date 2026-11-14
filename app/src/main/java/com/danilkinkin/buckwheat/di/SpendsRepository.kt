@@ -458,6 +458,35 @@ class SpendsRepository @Inject constructor(
 
     suspend fun howMuchSaved(): BigDecimal = budgetCalculator.howMuchSaved()
 
+    // Self-heal: rebuild the period spend counters from the stored transaction rows so an
+    // interrupted add/edit/remove (e.g. an app kill mid-write) never leaves the daily counters
+    // permanently drifted. In-period SPENT rows dated today rebuild `spentFromDailyBudget`;
+    // in-period rows from earlier days rebuild `spent`. Out-of-period rows are ignored.
+    suspend fun reconcileCounters() {
+        val prefs = context.budgetDataStore.data.first()
+        val startPeriodDate = prefs[startPeriodDateStoreKey]
+            ?.let { value -> Date(value) } ?: return
+        val finishPeriodDate = prefs[finishPeriodDateStoreKey]
+            ?.let { value -> Date(value) } ?: return
+
+        val today = getCurrentDateUseCase()
+        val inPeriodSpends = transactionDao.getAllNow()
+            .filter { it.type == TransactionType.SPENT }
+            .filter { !it.date.before(startPeriodDate) && !it.date.after(finishPeriodDate) }
+
+        val newSpentFromDailyBudget = inPeriodSpends
+            .filter { isSameDay(it.date, today) }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
+        val newSpent = inPeriodSpends
+            .filter { !isSameDay(it.date, today) }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.value }
+
+        context.budgetDataStore.edit {
+            it[spentStoreKey] = newSpent.toString()
+            it[spentFromDailyBudgetStoreKey] = newSpentFromDailyBudget.toString()
+        }
+    }
+
     suspend fun addSpent(newTransaction: Transaction) {
         // Read all needed DataStore values FIRST, before any modifications
         val prefs = context.budgetDataStore.data.first()

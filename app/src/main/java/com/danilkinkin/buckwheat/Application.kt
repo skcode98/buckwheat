@@ -24,6 +24,7 @@ import com.danilkinkin.buckwheat.widget.WidgetRefreshScheduler
 import androidx.work.Configuration
 import com.danilkinkin.buckwheat.widget.voice.VoiceWidgetNotifications
 import com.danilkinkin.buckwheat.di.roundValuesStoreKey
+import com.danilkinkin.buckwheat.di.SpendsRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +32,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @HiltAndroidApp
 class Application : Application(), Configuration.Provider {
+    @Inject lateinit var spendsRepository: SpendsRepository
+
     private val configScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun getWorkManagerConfiguration(): Configuration = Configuration.Builder().build()
@@ -50,6 +54,10 @@ class Application : Application(), Configuration.Provider {
         }
 
         createNotificationChannel()
+
+        configScope.launch {
+            spendsRepository.reconcileCounters()
+        }
 
         WidgetRefreshScheduler.schedule(this)
 

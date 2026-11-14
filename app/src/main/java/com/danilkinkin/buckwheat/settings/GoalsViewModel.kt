@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import com.danilkinkin.buckwheat.data.entities.SavingsGoal
 import com.danilkinkin.buckwheat.data.entities.Transaction
@@ -65,30 +66,55 @@ class GoalsViewModel @Inject constructor(
         if (amount <= BigDecimal.ZERO) return
         viewModelScope.launch {
             allocationMutex.withLock {
-                val goal = savingsGoalDao.getById(goalId) ?: return@withLock
-                val budgetRest = spendsRepository.howMuchBudgetRest()
-                if (budgetRest < amount) {
-                    _allocationErrors.tryEmit(appContext.getString(com.danilkinkin.buckwheat.R.string.goal_allocate_insufficient_budget))
-                    return@withLock
-                }
-                val newAmount = goal.currentAmount + amount
-                val completed = newAmount >= goal.targetAmount
-                val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
-                savingsGoalDao.update(updatedGoal)
-                if (completed && !goal.completed) {
-                    _goalCompletedEvents.tryEmit(updatedGoal)
-                }
-                spendsRepository.addSpent(
-                    Transaction(
-                        type = TransactionType.SPENT,
-                        value = amount,
-                        date = Date(),
-                        comment = "\u2192 ${goal.name}",
-                    )
-                )
-                notifyMilestone(goal.id, updatedGoal)
+                allocateLocked(goalId, amount)
             }
         }
+    }
+
+    // Moves whatever is left of today's daily allowance into the goal. The leftover is
+    // `dailyBudget - spentFromDailyBudget` (never negative); when nothing is left this is a
+    // no-op. Reuses the same mutex-guarded allocation path so it can't race a manual allocation.
+    fun autoAllocateLeftoverToGoal(goalId: Long): Job {
+        return viewModelScope.launch {
+            allocationMutex.withLock {
+                val goal = savingsGoalDao.getById(goalId) ?: return@withLock
+                if (goal.completed) return@withLock
+
+                val leftover = dailyLeftover(
+                    spendsRepository.getDailyBudget().first(),
+                    spendsRepository.getSpentFromDailyBudget().first(),
+                )
+                val remaining = (goal.targetAmount - goal.currentAmount).max(BigDecimal.ZERO)
+                val amount = leftover.min(remaining)
+                if (amount <= BigDecimal.ZERO) return@withLock
+                allocateLocked(goalId, amount)
+            }
+        }
+    }
+
+    private suspend fun allocateLocked(goalId: Long, amount: BigDecimal) {
+        val goal = savingsGoalDao.getById(goalId) ?: return
+        val budgetRest = spendsRepository.howMuchBudgetRest()
+        if (budgetRest < amount) {
+            _allocationErrors.tryEmit(appContext.getString(com.danilkinkin.buckwheat.R.string.goal_allocate_insufficient_budget))
+            return
+        }
+        val newAmount = goal.currentAmount + amount
+        val completed = newAmount >= goal.targetAmount
+        val updatedGoal = goal.copy(currentAmount = newAmount, completed = completed)
+        savingsGoalDao.update(updatedGoal)
+        if (completed && !goal.completed) {
+            _goalCompletedEvents.tryEmit(updatedGoal)
+        }
+        spendsRepository.addSpent(
+            Transaction(
+                type = TransactionType.SPENT,
+                value = amount,
+                date = Date(),
+                comment = "\u2192 ${goal.name}",
+            )
+        )
+        notifyMilestone(goal.id, updatedGoal)
     }
 
     // Posts a progress nudge when the allocation crossed a milestone that has not been

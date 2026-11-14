@@ -233,6 +233,10 @@ fun GoalsSheet(
                             goal = goal,
                             currency = currency,
                             onAllocate = { showAllocateDialog = goal.id },
+                            onAutoAllocate = {
+                                viewModel.autoAllocateLeftoverToGoal(goal.id)
+                                Unit
+                            },
                             state = state,
                         )
                     }
@@ -634,6 +638,7 @@ private fun GoalCard(
     goal: SavingsGoal,
     currency: ExtendCurrency,
     onAllocate: () -> Unit,
+    onAutoAllocate: () -> Unit,
     state: DismissState,
 ) {
     val context = LocalContext.current
@@ -749,14 +754,25 @@ private fun GoalCard(
                 Spacer(Modifier.height(8.dp))
 
                 if (!goal.completed) {
-                    OutlinedButton(
-                        onClick = onAllocate,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.goal_allocate),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onAllocate,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.goal_allocate),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                        TextButton(
+                            onClick = onAutoAllocate,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.goal_allocate_leftover),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
                     }
                 }
             }

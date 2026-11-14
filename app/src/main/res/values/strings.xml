@@ -480,6 +480,7 @@
   <string name="goal_allocate_prompt">How much to allocate?</string>
   <string name="goal_allocate_hint">Amount</string>
   <string name="goal_allocate">Allocate</string>
+  <string name="goal_allocate_leftover">Use leftover</string>
   <string name="goal_allocate_insufficient_budget">Not enough budget remaining</string>
   <string name="goal_completed">Completed!</string>
   <string name="goal_delete_desc">Delete goal</string>
