@@ -17,7 +17,10 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The Robolectric-based suite takes well over 30 minutes on a cold CI runner
+    # (it has to fetch the android-all-instrumented jars and boot several SDKs),
+    # so the previous 30 minute limit cancelled otherwise healthy runs.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout

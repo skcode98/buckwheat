@@ -77,7 +77,13 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.jvmArgs("-ea") }
+            // Framework stubs such as android.util.Log throw "not mocked" by default, which makes
+            // otherwise pure unit tests fail on their logging calls. Returning defaults keeps the
+            // JVM test source set usable without a full Robolectric runner on every class.
+            isReturnDefaultValues = true
+            all {
+                it.jvmArgs("-ea")
+            }
         }
     }
 

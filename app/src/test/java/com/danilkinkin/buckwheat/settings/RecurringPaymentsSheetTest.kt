@@ -60,17 +60,21 @@ class RecurringPaymentsSheetTest {
 
         compose.onNodeWithText("Ask").performClick()
 
-        compose.waitUntil(timeoutMillis = 5_000) {
-            runBlocking {
-                harness.settingsRepository.getRecurringAutoApplyMode().first() == RecurringAutoApplyMode.ASK
+        // Saving the mode suspends on DataStore, so pump the main looper between reads instead of
+        // only polling Compose idleness.
+        var persistedMode: RecurringAutoApplyMode? = null
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            compose.waitForIdle()
+            persistedMode = runBlocking {
+                harness.settingsRepository.getRecurringAutoApplyMode().first()
             }
+            if (persistedMode == RecurringAutoApplyMode.ASK) break
+            Thread.sleep(25)
         }
 
         compose.onNodeWithText("Ask").assertIsSelected()
         compose.onNodeWithText("Auto").assertIsNotSelected()
-        assertEquals(
-            RecurringAutoApplyMode.ASK,
-            runBlocking { harness.settingsRepository.getRecurringAutoApplyMode().first() },
-        )
+        assertEquals(RecurringAutoApplyMode.ASK, persistedMode)
     }
 }

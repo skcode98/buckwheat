@@ -1,16 +1,19 @@
 package com.danilkinkin.buckwheat.di
 
 import android.content.Context
+import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.danilkinkin.buckwheat.budgetDataStore
 import com.danilkinkin.buckwheat.data.categories.CategoryAssigner
 import com.danilkinkin.buckwheat.data.categories.CategoryAssignmentScheduler
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
+import com.danilkinkin.buckwheat.settingsDataStore
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import com.danilkinkin.buckwheat.util.toLocalDateTime
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -32,6 +35,12 @@ abstract class SpendsRepositoryTestBase {
     @Before
     fun init() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        // preferencesDataStore() caches a single DataStore per process, so preferences written by
+        // an earlier test class would otherwise leak in and skew the budget maths below.
+        runBlocking {
+            context.budgetDataStore.edit { it.clear() }
+            context.settingsDataStore.edit { it.clear() }
+        }
         val transactionDao = FakeTransactionDao()
         spendsRepository = SpendsRepository(
             context = context,

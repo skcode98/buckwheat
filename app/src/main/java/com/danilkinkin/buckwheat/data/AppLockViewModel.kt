@@ -45,10 +45,16 @@ class AppLockViewModel @Inject constructor(
     private var lockoutUntilMillis = 0L
     private var lockoutTickerJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            refresh()
-        }
+    private val initialRefresh = viewModelScope.launch {
+        refresh()
+    }
+
+    /**
+     * Suspends until the state loaded in [init] has been applied. Tests and callers that need
+     * the persisted lock state can await it instead of racing the initial [refresh].
+     */
+    suspend fun awaitInitialized() {
+        initialRefresh.join()
     }
 
     suspend fun refresh() {
@@ -102,13 +108,17 @@ class AppLockViewModel @Inject constructor(
     private fun startLockoutTicker() {
         lockoutTickerJob?.cancel()
         lockoutTickerJob = viewModelScope.launch {
-            while (true) {
-                if (!isLocked) return@launch
-                val remaining = ((lockoutUntilMillis - System.currentTimeMillis()) / 1000L)
-                    .toInt()
-                    .coerceAtLeast(0)
+            // Count down from the remaining lockout instead of re-reading the wall clock on every
+            // tick. The loop therefore always terminates once the lockout elapses, which also keeps
+            // it from spinning forever under virtual-time test dispatchers.
+            var remaining = ((lockoutUntilMillis - System.currentTimeMillis()) / 1000L)
+                .toInt()
+                .coerceAtLeast(0)
+            lockoutSecondsLeft = remaining
+            while (remaining > 0 && isLocked) {
+                delay(1_000)
+                remaining -= 1
                 lockoutSecondsLeft = remaining
-                delay(1000)
             }
         }
     }

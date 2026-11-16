@@ -6,8 +6,15 @@ import com.danilkinkin.buckwheat.di.serializeCategoryCapNotified
 import com.danilkinkin.buckwheat.di.serializeCategoryCaps
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.math.BigDecimal
 
+// The cap codecs percent-encode category keys with android.net.Uri, so these otherwise pure
+// assertions need a Robolectric-provided framework implementation.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class CategoryCapsTest {
 
     @Test

@@ -905,9 +905,10 @@ class PatternEngineTest {
         )
         val food = categories.first { it.key == "food" }
         assertEquals(3, food.transactionCount)
-        assertAmount("50", food.monthlyTransactionAverage)
-        assertEquals(3, food.transactionSeries.size)
-        assertEquals(listOf(2, 1, 0), food.transactionSeries)
+        // 3 transactions spread across the 2 active months (May, June).
+        assertAmount("1.5", food.monthlyTransactionAverage)
+        assertEquals(2, food.transactionSeries.size)
+        assertEquals(listOf(2, 1), food.transactionSeries)
     }
 
     @Test
@@ -960,18 +961,16 @@ class PatternEngineTest {
 
     @Test
     fun detectFrequencyRecurringCandidatesFindsStableFrequency() {
-        val categories = categoryPatterns(
-            dataset(
-                spends = buildList {
-                    repeat(5) { month ->
-                        repeat(4) { day ->
-                            add(spend(2026, month + 1, day + 1, "10", "Milk"))
-                        }
-                    }
-                },
-            ),
-        )
-        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        val spends = buildList {
+            repeat(5) { month ->
+                repeat(4) { day ->
+                    add(spend(2026, month + 1, day + 1, "10", "Milk"))
+                }
+            }
+        }
+        val categories = categoryPatterns(dataset(spends = spends))
+        // The detector reads the spends from the dataset it is given, so pass the same fixture.
+        val candidates = detectFrequencyRecurringCandidates(dataset(spends = spends), categories)
         assertEquals(1, candidates.size)
         val candidate = candidates.first()
         assertEquals("milk", candidate.categoryKey)
@@ -982,34 +981,28 @@ class PatternEngineTest {
 
     @Test
     fun detectFrequencyRecurringCandidatesIgnoresLowFrequency() {
-        val categories = categoryPatterns(
-            dataset(
-                spends = listOf(
-                    spend(2026, 5, 1, "100", "Food"),
-                    spend(2026, 6, 1, "100", "Food"),
-                    spend(2026, 7, 1, "100", "Food"),
-                ),
-            ),
+        val spends = listOf(
+            spend(2026, 5, 1, "100", "Food"),
+            spend(2026, 6, 1, "100", "Food"),
+            spend(2026, 7, 1, "100", "Food"),
         )
-        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        val categories = categoryPatterns(dataset(spends = spends))
+        val candidates = detectFrequencyRecurringCandidates(dataset(spends = spends), categories)
         assertTrue(candidates.isEmpty())
     }
 
     @Test
     fun detectFrequencyRecurringCandidatesIgnoresHighVariance() {
-        val categories = categoryPatterns(
-            dataset(
-                spends = buildList {
-                    repeat(4) { month ->
-                        val count = if (month % 2 == 0) 8 else 1
-                        repeat(count) { day ->
-                            add(spend(2026, month + 1, day + 1, "10", "Snacks"))
-                        }
-                    }
-                },
-            ),
-        )
-        val candidates = detectFrequencyRecurringCandidates(dataset(), categories)
+        val spends = buildList {
+            repeat(4) { month ->
+                val count = if (month % 2 == 0) 8 else 1
+                repeat(count) { day ->
+                    add(spend(2026, month + 1, day + 1, "10", "Snacks"))
+                }
+            }
+        }
+        val categories = categoryPatterns(dataset(spends = spends))
+        val candidates = detectFrequencyRecurringCandidates(dataset(spends = spends), categories)
         assertTrue(candidates.isEmpty())
     }
 

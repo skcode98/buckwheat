@@ -1,14 +1,20 @@
-package com.danilkinkin.buckwheat.di
+﻿package com.danilkinkin.buckwheat.di
 
 import com.danilkinkin.buckwheat.data.entities.Transaction
 import com.danilkinkin.buckwheat.data.entities.TransactionType
 import com.danilkinkin.buckwheat.util.toDate
 import com.danilkinkin.buckwheat.util.toLocalDate
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 
 class SpendsRepositoryCarryForwardTest : SpendsRepositoryTestBase() {
+
+    private fun assertMoney(label: String, expected: String, actual: BigDecimal) {
+        assertEquals("$label: expected $expected but was $actual", 0, actual.compareTo(BigDecimal(expected)))
+    }
 
     // How much saved
     @Test
@@ -24,17 +30,29 @@ class SpendsRepositoryCarryForwardTest : SpendsRepositoryTestBase() {
 
         rewindTime(1)
 
-        assert(spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget() == 90.toBigDecimal().setScale(2))
+        assertMoney(
+            "saved after day 1",
+            "90",
+            spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget(),
+        )
 
         distributeBudget()
         rewindTime(1)
 
-        assert(spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget() == 110.toBigDecimal().setScale(2))
+        assertMoney(
+            "saved after day 2 distribution",
+            "110",
+            spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget(),
+        )
 
         distributeBudget()
         rewindTime(2)
 
-        assert(spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget() == 247.5.toBigDecimal().setScale(2))
+        assertMoney(
+            "saved after day 4 distribution",
+            "247.5",
+            spendsRepository.howMuchNotSpent() - spendsRepository.nextDayBudget(),
+        )
     }
 
     // The carry-forward ("You saved") must not go negative while the balance is positive,
@@ -62,10 +80,13 @@ class SpendsRepositoryCarryForwardTest : SpendsRepositoryTestBase() {
         spendsRepository.markDailyBudgetDistributionHandled()
 
         // Balance is still positive
-        assert(spendsRepository.howMuchBudgetRest() > BigDecimal.ZERO)
+        assertTrue(
+            "balance should stay positive but was ${spendsRepository.howMuchBudgetRest()}",
+            spendsRepository.howMuchBudgetRest() > BigDecimal.ZERO,
+        )
 
         // The saved carry-forward stays positive
-        assert(spendsRepository.howMuchSaved() == 90.toBigDecimal().setScale(2))
+        assertMoney("saved carry-forward", "90", spendsRepository.howMuchSaved())
     }
 
     // Same guard as carryForwardStaysPositiveAfterDistributionHandledToday but with the
@@ -90,7 +111,10 @@ class SpendsRepositoryCarryForwardTest : SpendsRepositoryTestBase() {
 
         spendsRepository.markDailyBudgetDistributionHandled()
 
-        assert(spendsRepository.howMuchBudgetRest() > BigDecimal.ZERO)
-        assert(spendsRepository.howMuchSaved() == 5.75.toBigDecimal().setScale(2))
+        assertTrue(
+            "balance should stay positive but was ${spendsRepository.howMuchBudgetRest()}",
+            spendsRepository.howMuchBudgetRest() > BigDecimal.ZERO,
+        )
+        assertMoney("saved carry-forward", "5.75", spendsRepository.howMuchSaved())
     }
 }
