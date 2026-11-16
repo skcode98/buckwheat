@@ -83,6 +83,10 @@ android {
             isReturnDefaultValues = true
             all {
                 it.jvmArgs("-ea")
+                // preferencesDataStore() caches one DataStore per process, so state (and stale file
+                // handles) leaks between test classes sharing a JVM. A fresh JVM per class keeps the
+                // repository tests deterministic.
+                it.forkEvery = 1
             }
         }
     }
