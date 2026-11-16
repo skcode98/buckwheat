@@ -54,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
@@ -254,7 +253,7 @@ fun CustomTag(
             }
         }
 
-        if (renderPopup) {
+        if (renderPopup && value.text.isNotBlank()) {
             val filteredItems = tags.filter {
                 it.contains(value.text, ignoreCase = true)
             }
@@ -431,19 +430,13 @@ fun CommentEditor(
     onChange: (comment: TextFieldValue) -> Unit,
     onApply: () -> Unit,
 ) {
-    var focusIsTracking by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
 
     TextField(
         modifier = modifier
             .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .onFocusChanged { focusState ->
-                if (!focusState.hasFocus && focusIsTracking) {
-                    onApply()
-                }
-            },
+            .focusRequester(focusRequester),
         value = value,
         onValueChange = {
             onChange(it)
@@ -487,7 +480,6 @@ fun CommentEditor(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
-        focusIsTracking = true
     }
 }
 
