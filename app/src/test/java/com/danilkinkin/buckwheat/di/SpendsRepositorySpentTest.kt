@@ -32,7 +32,9 @@ class SpendsRepositorySpentTest : SpendsRepositoryTestBase() {
 
         spendsRepository.addSpent(spend)
 
-        assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2))
+        assert(spendsRepository.getSpentFromDailyBudget().first() == 0.toBigDecimal().setScale(2)) {
+            "previous-day spend leaked into today's counter: spentFromDailyBudget=${spendsRepository.getSpentFromDailyBudget().first()} spent=${spendsRepository.getSpent().first()} now=${currentDateUseCase.value}"
+        }
         assert(spendsRepository.nextDayBudget() == 110.toBigDecimal().setScale(2))
         assert(spendsRepository.getSpent().first() == 10.toBigDecimal().setScale(2))
     }

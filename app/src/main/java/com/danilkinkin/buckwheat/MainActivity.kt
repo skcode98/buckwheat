@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -44,8 +46,35 @@ import syncOverrideLocale
 import java.util.*
 import javax.inject.Inject
 
-val Context.budgetDataStore by preferencesDataStore("budget")
-val Context.settingsDataStore by preferencesDataStore("settings")
+// preferencesDataStore() delegates cache one DataStore per delegate instance, so a plain
+// top-level `by` would bind a single DataStore to whichever Context first touched it.
+// Robolectric gives every test method a fresh Application with a fresh data dir, which
+// would leave that cached instance writing into a directory the test framework already
+// deleted (rename failures) and leaking values between tests. Keying the cache by
+// applicationContext keeps production's one-instance-per-file behaviour while giving
+// every test its own instance.
+private val dataStoreCache = mutableMapOf<Context, MutableMap<String, DataStore<Preferences>>>()
+private val dataStoreCacheLock = Any()
+
+private object DataStoreKeyRef {
+    val key: Unit get() = Unit
+}
+
+private fun Context.dataStore(name: String): DataStore<Preferences> =
+    synchronized(dataStoreCacheLock) {
+        dataStoreCache
+            .getOrPut(applicationContext) { mutableMapOf() }
+            .getOrPut(name) {
+                preferencesDataStore(name)
+                    .getValue(applicationContext, DataStoreKeyRef::key)
+            }
+    }
+
+val Context.budgetDataStore: DataStore<Preferences>
+    get() = dataStore("budget")
+
+val Context.settingsDataStore: DataStore<Preferences>
+    get() = dataStore("settings")
 var Context.appTheme by mutableStateOf(ThemeMode.SYSTEM)
 var Context.appLocale: Locale? by mutableStateOf(null)
 var Context.systemLocale: Locale? by mutableStateOf(null)

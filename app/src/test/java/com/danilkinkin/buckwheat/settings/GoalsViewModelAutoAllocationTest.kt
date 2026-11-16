@@ -19,6 +19,7 @@ import com.danilkinkin.buckwheat.di.SpendsRepository
 import com.danilkinkin.buckwheat.util.toDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -136,7 +137,13 @@ class GoalsViewModelAutoAllocationTest {
         viewModel.autoAllocateLeftoverToGoal(goalId).join()
 
         val goal = checkNotNull(goalDao.getById(goalId))
-        assertEquals(0, goal.currentAmount.compareTo(BigDecimal.ZERO))
+        assertEquals(
+            "leftover was not zero: currentAmount=${goal.currentAmount} " +
+                "spentFromDailyBudget=${spendsRepository.getSpentFromDailyBudget().first()} " +
+                "dailyBudget=${spendsRepository.getDailyBudget().first()}",
+            0,
+            goal.currentAmount.compareTo(BigDecimal.ZERO),
+        )
     }
 
     @Test

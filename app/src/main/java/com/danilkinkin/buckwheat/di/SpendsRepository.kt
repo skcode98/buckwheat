@@ -637,7 +637,11 @@ class SpendsRepository @Inject constructor(
             ?.let { Date(it) }
 
         if (currentPeriodStart == null || currentPeriodFinish == null) {
-            categorized.forEach { addSpent(it) }
+            // No active period: addSpent() would drop these rows because the period prefs
+            // are missing, but an import must never lose data. Persist the rows as-is
+            // (offline keyword category already applied above) so they survive until a
+            // period is set up.
+            categorized.forEach { transactionDao.insert(it) }
             categoryAssignmentScheduler.schedule()
             return
         }
