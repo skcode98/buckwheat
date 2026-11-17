@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -258,14 +257,18 @@ fun CustomTag(
         // Rendered in the same window as the editor (not a separate popup window):
         // a popup window added/relaid-out while the IME is up steals focus from the
         // text field on several ROMs and hides the keyboard on every keystroke.
+        // Aligned to the bottom of the anchor and pushed up by the anchor height plus
+        // a gap, so the list opens above the field like the old popup window did and
+        // never lands under the keyboard.
         if (showMenu) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(y = 48.dp)
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = 52.dp)
+                    .heightIn(max = 240.dp)
                     .fillMaxWidth(),
             ) {
                 LazyColumn(
