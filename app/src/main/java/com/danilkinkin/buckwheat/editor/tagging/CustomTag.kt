@@ -13,6 +13,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,9 +56,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -68,13 +67,20 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
+import com.danilkinkin.buckwheat.base.balloon.detectTapUnconsumed
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.data.SpendsViewModel
 import com.danilkinkin.buckwheat.editor.EditStage
@@ -108,12 +114,15 @@ fun CustomTag(
         )
     }
     var isShowSuggestions by remember { mutableStateOf(false) }
-    var anchorTopPx by remember { mutableStateOf(0) }
-    var anchorHeightPx by remember { mutableStateOf(0) }
+    var renderPopup by remember { mutableStateOf(false) }
 
-    // The suggestion list must appear the moment the editor opens; do not depend
-    // on the AnimatedContent transition settling.
-    LaunchedEffect(isEdit) { isShowSuggestions = isEdit }
+    // The popup must be created as soon as the editor opens. Previously it was
+    // only created once the AnimatedContent transition had settled, and a stray
+    // dispose could switch it off for good, so the list never appeared.
+    LaunchedEffect(isEdit) {
+        isShowSuggestions = isEdit
+        renderPopup = isEdit
+    }
 
     LaunchedEffect(Unit) {
         editorViewModel.stage.collect {
@@ -152,34 +161,20 @@ fun CustomTag(
     val close = {
         isEdit = false
         isShowSuggestions = false
+        renderPopup = false
         onEdit(false)
         appViewModel.showSystemKeyboard.value = false
         appViewModel.lockDraggable.value = false
         editorViewModel.currentComment.value = value.text.trim()
     }
 
-    // Every tag is listed regardless of the typed text, so the suggestion list is
-    // never empty while the user is typing. The menu only appears once there is
-    // something to type, so no menu exists while the keyboard is being opened for
-    // an empty field.
-    val filteredItems = tags
-    val showMenu = isShowSuggestions &&
-        value.text.isNotBlank() &&
-        filteredItems.isNotEmpty() &&
-        !(filteredItems.size == 1 && filteredItems[0] == value.text)
-
-    ExposedDropdownMenuBox(expanded = showMenu, onExpandedChange = {}) {
-        Box {
+    ExposedDropdownMenuBox(expanded = isShowSuggestions, onExpandedChange = {}) {
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .menuAnchor()
-                .onGloballyPositioned {
-                    anchorTopPx = it.positionInWindow().y.toInt()
-                    anchorHeightPx = it.size.height
-                }
                 .clip(CircleShape)
                 .then(if (isEdit) {
                     Modifier
@@ -240,10 +235,6 @@ fun CustomTag(
                             )
                         }
                     ) { targetIsEdit ->
-                        if (this.transition.currentState == this.transition.targetState && targetIsEdit) {
-                            isShowSuggestions = true
-                        }
-
                         if (targetIsEdit) {
                             CommentEditor(
                                 value = value,
@@ -266,55 +257,82 @@ fun CustomTag(
             }
         }
 
-        // Rendered in the same window as the editor (not a separate popup window):
-        // a popup window added/relaid-out while the IME is up steals focus from the
-        // text field on several ROMs and hides the keyboard on every keystroke.
-        // The menu is drawn above the anchor with a negative offset measured from
-        // its own height: aligning it to the box bottom instead would let the menu
-        // stretch the box and land below the field, under the keyboard.
-        if (showMenu) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 4.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 240.dp)
-                    .layout { measurable, constraints ->
-                        // Draw the menu without letting it size the toolbar: a
-                        // wrap-content parent would stretch to the menu height and
-                        // push the list off-screen. Open above the field when there
-                        // is room, otherwise below it.
-                        val placeable = measurable.measure(constraints)
-                        val gapPx = with(localDensity) { 8.dp.roundToPx() }
-                        val above = anchorTopPx >= placeable.height + gapPx
-                        layout(0, 0) {
-                            placeable.placeRelative(
-                                0,
-                                if (above) {
-                                    -(placeable.height + gapPx)
-                                } else {
-                                    anchorHeightPx + gapPx
-                                },
-                            )
-                        }
-                    },
+        if (renderPopup && value.text.isNotBlank()) {
+            // Show every tag regardless of the typed text, like the original app.
+            val filteredItems = tags
+
+            val topBarHeight = LocalWindowInsets.current.calculateTopPadding()
+
+            val height = remember { mutableStateOf(1000.dp) }
+            val popupPositionProvider = DropdownMenuPositionProvider(
+                DpOffset(0.dp, 8.dp),
+                localDensity,
+                topBarHeight,
+            ) { parentBounds, menuBounds ->
+                height.value = with(localDensity) { menuBounds.height.toDp() }
+            }
+
+            Popup(
+                popupPositionProvider = popupPositionProvider,
+                onDismissRequest = {
+                    close()
+                },
             ) {
-                LazyColumn(
-                    userScrollEnabled = true,
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                val dismissEvent = remember {
+                    mutableStateOf(false)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(height.value)
+                        .pointerInput(Unit) {
+                            detectTapUnconsumed {
+                                if (!dismissEvent.value) close()
+                                dismissEvent.value = false
+                            }
+                        },
+                    contentAlignment = Alignment.BottomCenter,
                 ) {
-                    filteredItems.forEach {
-                        itemSuggest(it) {
-                            value = TextFieldValue(
-                                it,
-                                TextRange(it.length),
-                            )
+                    AnimatedVisibility(
+                        visible = isShowSuggestions,
+                        enter = expandVertically(tween(150)),
+                        exit = shrinkVertically(tween(150)),
+                    ) {
+                        if (filteredItems.isNotEmpty() && !(filteredItems.size == 1 && filteredItems[0] == value.text)) {
+                            Surface(
+                                modifier = Modifier
+                                    .width(extendWidth)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures {
+                                            dismissEvent.value = true
+                                        }
+                                    },
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+
+                                LazyColumn(
+                                    userScrollEnabled = true,
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                ) {
+                                    filteredItems.forEach {
+                                        itemSuggest(it) {
+                                            dismissEvent.value = true
+                                            value = TextFieldValue(
+                                                it,
+                                                TextRange(it.length),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
+
+            LaunchedEffect(Unit) {
+                isShowSuggestions = true
+            }
         }
     }
 }
@@ -342,6 +360,61 @@ private fun LazyListScope.itemSuggest(
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+internal data class DropdownMenuPositionProvider(
+    val contentOffset: DpOffset,
+    val density: Density,
+    val topBarHeight: Dp,
+    val onPositionCalculated: (IntRect, IntRect) -> Unit = { _, _ -> }
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        // The min margin above and below the menu, relative to the screen.
+        val verticalMargin = with(density) { 48.dp.roundToPx() }
+        val topBarHeight = with(density) { topBarHeight.roundToPx() }
+        // The content offset specified using the dropdown offset parameter.
+        val contentOffsetX = with(density) { contentOffset.x.roundToPx() }
+        val contentOffsetY = with(density) { contentOffset.y.roundToPx() }
+
+        // Compute horizontal position.
+        val toRight = anchorBounds.left + contentOffsetX
+        val toLeft = anchorBounds.right - contentOffsetX - popupContentSize.width
+        val toDisplayRight = windowSize.width - popupContentSize.width
+        val toDisplayLeft = 0
+        val x = if (layoutDirection == LayoutDirection.Ltr) {
+            sequenceOf(
+                toRight,
+                toLeft,
+                // If the anchor gets outside of the window on the left, we want to position
+                // toDisplayLeft for proximity to the anchor. Otherwise, toDisplayRight.
+                if (anchorBounds.left >= 0) toDisplayRight else toDisplayLeft
+            )
+        } else {
+            sequenceOf(
+                toLeft,
+                toRight,
+                // If the anchor gets outside of the window on the right, we want to position
+                // toDisplayRight for proximity to the anchor. Otherwise, toDisplayLeft.
+                if (anchorBounds.right <= windowSize.width) toDisplayLeft else toDisplayRight
+            )
+        }.firstOrNull {
+            it >= 0 && it + popupContentSize.width <= windowSize.width
+        } ?: toLeft
+
+        // Compute vertical position.
+        val yBottom = anchorBounds.top - contentOffsetY
+
+        onPositionCalculated(
+            anchorBounds,
+            IntRect(x, topBarHeight, x + popupContentSize.width, yBottom)
+        )
+        return IntOffset(x, topBarHeight)
     }
 }
 
