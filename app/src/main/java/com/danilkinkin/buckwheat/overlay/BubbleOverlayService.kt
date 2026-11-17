@@ -36,8 +36,16 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.danilkinkin.buckwheat.MainActivity
 import com.danilkinkin.buckwheat.R
 import com.danilkinkin.buckwheat.data.ExtendCurrency
@@ -80,6 +88,31 @@ class BubbleOverlayService : LifecycleService() {
     private var bubbleView: ComposeView? = null
     private var bubblePending = false
     private var stopped = false
+
+    // A Service has no built-in ViewModelStore/SavedStateRegistry owners, and ComposeViews added
+    // via WindowManager crash at attach time ("View which doesn't propagate
+    // ViewTreeSavedStateRegistryOwner") without them. This owner supplies both for the overlay
+    // views' whole lifetime; its lifecycle is the service's own.
+    private val overlayOwner = OverlayOwner(this)
+
+    /**
+     * Standalone owner bundle for window-manager ComposeViews: lifecycle delegates to the
+     * service, plus an empty saved-state registry and a view-model store cleared on destroy.
+     */
+    private class OverlayOwner(
+        lifecycleOwner: LifecycleOwner,
+    ) : LifecycleOwner by lifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+        override val viewModelStore = ViewModelStore()
+
+        private val savedStateRegistryController = SavedStateRegistryController.create(this)
+
+        init {
+            savedStateRegistryController.performRestore(null)
+        }
+
+        override val savedStateRegistry: SavedStateRegistry
+            get() = savedStateRegistryController.savedStateRegistry
+    }
     @Volatile
     private var cachedCurrency: ExtendCurrency? = null
     private val _uiState = MutableStateFlow(BubbleUiState(BubbleFeedbackState.IDLE))
@@ -125,6 +158,7 @@ class BubbleOverlayService : LifecycleService() {
 
     override fun onDestroy() {
         stopped = true
+        overlayOwner.viewModelStore.clear()
         removeDismissTarget()
         removeBubbleView()
         scope.cancel()
@@ -160,7 +194,9 @@ class BubbleOverlayService : LifecycleService() {
         if (stopped || bubbleView != null) return
 
         val view = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@BubbleOverlayService)
+            setViewTreeLifecycleOwner(overlayOwner)
+            setViewTreeViewModelStoreOwner(overlayOwner)
+            setViewTreeSavedStateRegistryOwner(overlayOwner)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {
@@ -519,7 +555,9 @@ class BubbleOverlayService : LifecycleService() {
         if (dismissTargetView != null) return
         val metrics = resources.displayMetrics
         val view = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@BubbleOverlayService)
+            setViewTreeLifecycleOwner(overlayOwner)
+            setViewTreeViewModelStoreOwner(overlayOwner)
+            setViewTreeSavedStateRegistryOwner(overlayOwner)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 BuckwheatTheme {
