@@ -55,7 +55,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -106,7 +108,12 @@ fun CustomTag(
         )
     }
     var isShowSuggestions by remember { mutableStateOf(false) }
-    var menuHeightPx by remember { mutableStateOf(0) }
+    var anchorTopPx by remember { mutableStateOf(0) }
+    var anchorHeightPx by remember { mutableStateOf(0) }
+
+    // The suggestion list must appear the moment the editor opens; do not depend
+    // on the AnimatedContent transition settling.
+    LaunchedEffect(isEdit) { isShowSuggestions = isEdit }
 
     LaunchedEffect(Unit) {
         editorViewModel.stage.collect {
@@ -169,6 +176,10 @@ fun CustomTag(
             contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .menuAnchor()
+                .onGloballyPositioned {
+                    anchorTopPx = it.positionInWindow().y.toInt()
+                    anchorHeightPx = it.size.height
+                }
                 .clip(CircleShape)
                 .then(if (isEdit) {
                     Modifier
@@ -267,11 +278,27 @@ fun CustomTag(
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset { IntOffset(0, -(menuHeightPx + with(localDensity) { 8.dp.roundToPx() })) }
-                    .onGloballyPositioned { menuHeightPx = it.size.height }
+                    .fillMaxWidth()
                     .heightIn(max = 240.dp)
-                    .fillMaxWidth(),
+                    .layout { measurable, constraints ->
+                        // Draw the menu without letting it size the toolbar: a
+                        // wrap-content parent would stretch to the menu height and
+                        // push the list off-screen. Open above the field when there
+                        // is room, otherwise below it.
+                        val placeable = measurable.measure(constraints)
+                        val gapPx = with(localDensity) { 8.dp.roundToPx() }
+                        val above = anchorTopPx >= placeable.height + gapPx
+                        layout(0, 0) {
+                            placeable.placeRelative(
+                                0,
+                                if (above) {
+                                    -(placeable.height + gapPx)
+                                } else {
+                                    anchorHeightPx + gapPx
+                                },
+                            )
+                        }
+                    },
             ) {
                 LazyColumn(
                     userScrollEnabled = true,
