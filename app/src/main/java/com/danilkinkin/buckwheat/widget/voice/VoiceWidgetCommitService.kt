@@ -166,7 +166,7 @@ class VoiceWidgetCommitService : Service() {
                         RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                         RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
                     )
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
                 }
             )
