@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.danilkinkin.buckwheat.LocalWindowInsets
 import com.danilkinkin.buckwheat.R
@@ -274,9 +275,11 @@ fun CustomTag(
 
             Popup(
                 popupPositionProvider = popupPositionProvider,
-                onDismissRequest = {
-                    close()
-                },
+                properties = PopupProperties(focusable = false),
+                // Keyboard taps are delivered to this window as "outside" touches.
+                // Closing the editor here would dismiss it (and the IME) on every
+                // keystroke; dismissal happens via the popup area or the apply button.
+                onDismissRequest = { },
             ) {
                 val dismissEvent = remember {
                     mutableStateOf(false)
