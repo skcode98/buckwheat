@@ -13,7 +13,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -259,8 +258,9 @@ fun CustomTag(
         }
 
         if (renderPopup && value.text.isNotBlank()) {
-            // Show every tag regardless of the typed text, like the original app.
-            val filteredItems = tags
+            val filteredItems = tags.filter {
+                it.contains(value.text, ignoreCase = true)
+            }
 
             val topBarHeight = LocalWindowInsets.current.calculateTopPadding()
 
@@ -305,11 +305,7 @@ fun CustomTag(
                             Surface(
                                 modifier = Modifier
                                     .width(extendWidth)
-                                    .pointerInput(Unit) {
-                                        detectTapGestures {
-                                            dismissEvent.value = true
-                                        }
-                                    },
+                                    .heightIn(max = 240.dp),
                                 shape = RoundedCornerShape(16.dp)
                             ) {
 
