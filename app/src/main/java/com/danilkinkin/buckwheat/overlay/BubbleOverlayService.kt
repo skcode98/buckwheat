@@ -379,6 +379,10 @@ class BubbleOverlayService : LifecycleService() {
                         )
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                        putExtra(
+                            RecognizerIntent.EXTRA_CALLING_PACKAGE,
+                            this@BubbleOverlayService.packageName,
+                        )
                     }
                 )
                 continuation.invokeOnCancellation { recognizer.destroy() }
