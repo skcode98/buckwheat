@@ -36,6 +36,8 @@ import com.danilkinkin.buckwheat.patterns.PatternsSheet
 import com.danilkinkin.buckwheat.recalcBudget.RECALCULATE_DAILY_BUDGET_SHEET
 import com.danilkinkin.buckwheat.recalcBudget.RecalcBudget
 import com.danilkinkin.buckwheat.settings.*
+import com.danilkinkin.buckwheat.screenshotimport.SCREENSHOT_IMPORT_SHEET
+import com.danilkinkin.buckwheat.screenshotimport.ScreenshotImportSheet
 import com.danilkinkin.buckwheat.wallet.*
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -362,6 +364,12 @@ fun BottomSheets(
         name = SEARCH_HISTORY_SHEET,
     ) { state ->
         SearchHistorySheet()
+    }
+
+    BottomSheetWrapper(
+        name = SCREENSHOT_IMPORT_SHEET,
+    ) {
+        ScreenshotImportSheet()
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {

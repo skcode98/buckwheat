@@ -29,6 +29,7 @@ import com.danilkinkin.buckwheat.base.TextRow
 import com.danilkinkin.buckwheat.data.AppLockViewModel
 import com.danilkinkin.buckwheat.data.AppViewModel
 import com.danilkinkin.buckwheat.patterns.PATTERN_INSIGHTS_SHEET
+import com.danilkinkin.buckwheat.screenshotimport.SCREENSHOT_IMPORT_SHEET
 import com.danilkinkin.buckwheat.ui.BuckwheatTheme
 import com.danilkinkin.buckwheat.wallet.rememberImportCSV
 
@@ -214,6 +215,16 @@ fun Settings(
                     icon = painterResource(R.drawable.ic_file_download),
                     text = stringResource(R.string.import_csv),
                     modifier = Modifier.clickable { importCSV() },
+                    endIcon = painterResource(R.drawable.ic_arrow_right),
+                )
+                TextRow(
+                    icon = painterResource(R.drawable.ic_file_download),
+                    text = stringResource(R.string.screenshot_import_title),
+                    modifier = Modifier.clickable {
+                        appViewModel.openSheet(
+                            com.danilkinkin.buckwheat.data.PathState(SCREENSHOT_IMPORT_SHEET)
+                        )
+                    },
                     endIcon = painterResource(R.drawable.ic_arrow_right),
                 )
                 BackupRestoreSetting(

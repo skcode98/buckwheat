@@ -158,6 +158,7 @@ dependencies {
     // Utils
     implementation(libs.commons.csv)
     implementation(libs.coil.compose)
+    implementation(libs.mlkit.text.recognition)
 
     // Desugar
     coreLibraryDesugaring(libs.desugar.jdk.libs)

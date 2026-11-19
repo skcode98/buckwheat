@@ -610,4 +610,29 @@
   <string name="categories_chart_use_tags">Use tags to see chart by categories</string>
   <string name="patterns_show_all_tags">Show all %1$d tags ▾</string>
   <string name="year">Year</string>
+
+  <!-- Screenshot spend import -->
+  <string name="screenshot_import_title">Import from screenshot</string>
+  <string name="screenshot_import_description">Pick or capture a receipt/payment screenshot. Text is extracted on-device, then parsed into spend records for you to review one by one before adding.</string>
+  <string name="screenshot_import_pick">Pick image</string>
+  <string name="screenshot_import_capture">Take photo</string>
+  <string name="screenshot_import_processing">Processing screenshot…</string>
+  <string name="screenshot_import_extracting">Extracting text…</string>
+  <string name="screenshot_import_parsing">Finding spend records…</string>
+  <string name="screenshot_import_no_text">No text found in the image</string>
+  <string name="screenshot_import_no_records">No spend records found. You can add one manually.</string>
+  <string name="screenshot_import_ocr_failed">Couldn\'t read text from the image</string>
+  <string name="screenshot_import_parse_failed">Couldn\'t parse spend records</string>
+  <string name="screenshot_import_progress">Record %1$d of %2$d • %3$d added</string>
+  <string name="screenshot_import_ai_note">AI note: %1$s (offline parsing used when needed)</string>
+  <string name="screenshot_import_amount">Amount</string>
+  <string name="screenshot_import_comment">Comment</string>
+  <string name="screenshot_import_commit">Add this record</string>
+  <string name="screenshot_import_skip">Skip</string>
+  <string name="screenshot_import_delete">Delete</string>
+  <string name="screenshot_import_next">Next</string>
+  <string name="screenshot_import_add_manual">Add manually</string>
+  <string name="screenshot_import_done">Finished. %1$d record(s) added.</string>
+  <string name="screenshot_import_import_another">Import another screenshot</string>
+  <string name="screenshot_import_try_again">Try again</string>
 </resources>
