@@ -281,7 +281,7 @@ fun Keyboard(
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                         context.getString(R.string.voice_permission_denied)
 
-                    else -> context.getString(R.string.voice_recognition_failed)
+                    else -> "${context.getString(R.string.voice_recognition_failed)} ($error)"
                 }
             }
 

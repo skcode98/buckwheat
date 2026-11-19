@@ -400,16 +400,21 @@ class BubbleOverlayService : LifecycleService() {
 
         override fun captionNoBudget(): String = getString(R.string.voice_widget_no_budget)
 
-        override fun captionRecognitionError(errorCode: Int): String = getString(
-            when (errorCode) {
+        override fun captionRecognitionError(errorCode: Int): String {
+            val resId = when (errorCode) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
                 -> R.string.voice_no_speech
 
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> R.string.voice_permission_denied
-                else -> R.string.voice_couldnt_understand
-            },
-        )
+                else -> null
+            }
+            return if (resId != null) {
+                getString(resId)
+            } else {
+                "${getString(R.string.voice_couldnt_understand)} ($errorCode)"
+            }
+        }
 
         override fun captionParseFailed(): String = getString(R.string.voice_couldnt_understand)
 

@@ -173,17 +173,21 @@ class VoiceWidgetCommitService : Service() {
             continuation.invokeOnCancellation { recognizer.destroy() }
         }
 
-    private fun errorMessage(context: Context, errorCode: Int): String =
-        context.getString(
-            when (errorCode) {
-                SpeechRecognizer.ERROR_NO_MATCH,
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
-                -> R.string.voice_no_speech
+    private fun errorMessage(context: Context, errorCode: Int): String {
+        val resId = when (errorCode) {
+            SpeechRecognizer.ERROR_NO_MATCH,
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+            -> R.string.voice_no_speech
 
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> R.string.voice_permission_denied
-                else -> R.string.voice_couldnt_understand
-            }
-        )
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> R.string.voice_permission_denied
+            else -> null
+        }
+        return if (resId != null) {
+            context.getString(resId)
+        } else {
+            "${context.getString(R.string.voice_couldnt_understand)} ($errorCode)"
+        }
+    }
 
     // AI-first parsing with silent fallback to the offline parser (mirrors the in-app flow).
     // The AI failure reason is carried back so the caller can surface why AI didn't power the
