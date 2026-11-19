@@ -149,50 +149,47 @@ fun Keyboard(
         }
     }
 
-    val recognitionAvailable = remember {
+    val recognitionAvailable = remember(context) {
         SpeechRecognizer.isRecognitionAvailable(context)
-    }
-    val speechRecognizer = remember {
-        if (recognitionAvailable) {
-            SpeechRecognizer.createSpeechRecognizer(context)
-        } else {
-            null
-        }
     }
 
     val strVoiceInput = stringResource(R.string.voice_input)
     val strVoiceListening = stringResource(R.string.voice_listening)
     val strVoiceProcessing = stringResource(R.string.voice_processing)
 
-    val speechIntent = remember {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-        }
+    val activeRecognizer = remember { object { var recognizer: SpeechRecognizer? = null } }
+
+    fun stopActiveRecognizer() {
+        activeRecognizer.recognizer?.destroy()
+        activeRecognizer.recognizer = null
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) {
-            voiceStatus = null
-            isListening = true
-            voiceSession += 1
-            speechRecognizer?.startListening(speechIntent)
-        } else {
-            voiceStatus = context.getString(R.string.voice_permission_denied)
-        }
+    DisposableEffect(Unit) {
+        onDispose { stopActiveRecognizer() }
     }
 
-    DisposableEffect(speechRecognizer) {
-        val recognizer = speechRecognizer
-        recognizer?.setRecognitionListener(object : RecognitionListener {
+    fun startVoiceSession() {
+        voiceStatus = null
+        voiceAiError = null
+        if (isListening || isProcessing) return
+        if (!recognitionAvailable) {
+            voiceStatus = context.getString(R.string.voice_unavailable)
+            return
+        }
+
+        stopActiveRecognizer()
+
+        val session = voiceSession + 1
+        voiceSession = session
+        isListening = true
+
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        activeRecognizer.recognizer = recognizer
+        recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
+                if (session != voiceSession) return
                 isListening = false
+                stopActiveRecognizer()
                 if (isProcessing) return
                 val matches = results?.getStringArrayList(
                     SpeechRecognizer.RESULTS_RECOGNITION
@@ -202,7 +199,6 @@ fun Keyboard(
                     return
                 }
                 val text = matches[0]
-                val session = voiceSession
                 isProcessing = true
                 voiceStatus = context.getString(R.string.voice_processing)
                 coroutineScope.launch {
@@ -274,7 +270,9 @@ fun Keyboard(
             }
 
             override fun onError(error: Int) {
+                if (session != voiceSession) return
                 isListening = false
+                stopActiveRecognizer()
                 voiceStatus = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
@@ -296,8 +294,25 @@ fun Keyboard(
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
-        onDispose {
-            recognizer?.destroy()
+        recognizer.startListening(
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            startVoiceSession()
+        } else {
+            voiceStatus = context.getString(R.string.voice_permission_denied)
         }
     }
 
@@ -366,19 +381,13 @@ fun Keyboard(
                         // listening (or while a result is still being committed) would call
                         // startListening() again and crash the recognition session.
                         if (isListening || isProcessing) return@clickable
-                        if (!recognitionAvailable || speechRecognizer == null) {
-                            voiceStatus = context.getString(R.string.voice_unavailable)
-                            return@clickable
-                        }
                         if (
                             ContextCompat.checkSelfPermission(
                                 context,
                                 Manifest.permission.RECORD_AUDIO,
                             ) == PackageManager.PERMISSION_GRANTED
                         ) {
-                            isListening = true
-                            voiceSession += 1
-                            speechRecognizer.startListening(speechIntent)
+                            startVoiceSession()
                         } else {
                             permissionLauncher.launch(
                                 Manifest.permission.RECORD_AUDIO
